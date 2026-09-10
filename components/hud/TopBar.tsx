@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, Settings2, Crosshair, Home } from "lucide-react";
+import { Search, Settings2, Crosshair, Home, Droplets } from "lucide-react";
 import { useNow } from "@/lib/hooks/useNow";
 import { useGlobe } from "@/lib/store/globe";
 import { formatDistance, formatLatLon } from "@/lib/globe/geo";
@@ -24,6 +24,7 @@ export default function TopBar() {
   const ready = useGlobe((s) => s.ready);
   const setSearchOpen = useGlobe((s) => s.setSearchOpen);
   const setSettingsOpen = useGlobe((s) => s.setSettingsOpen);
+  const waterOpen = useGlobe((s) => s.waterReportOpen);
   const live = isLive(clock.offsetMs);
   const mission = now ? now + clock.offsetMs : 0;
 
@@ -101,6 +102,24 @@ export default function TopBar() {
           <Search className="size-3.5" />
           Search
           <span className="hud-kbd">⌘K</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            const st = useGlobe.getState();
+            if (!waterOpen) {
+              st.setLayer("water", true);
+              st.setLayer("groundwater", true);
+            }
+            st.setWaterReportOpen(!waterOpen);
+          }}
+          className={`flex items-center gap-2 px-3 py-2 text-[11px] uppercase tracking-wider hover:bg-accent hover:text-primary ${
+            waterOpen ? "text-primary" : "text-foreground/80"
+          }`}
+          title="Community water report for the current view"
+        >
+          <Droplets className="size-3.5" />
+          Water
         </button>
         <button
           type="button"

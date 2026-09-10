@@ -30,10 +30,11 @@ export default function AboutButton() {
             <section>
               <div className="hud-label mb-1">Rules of engagement</div>
               <ul className="list-disc space-y-1 pl-4 text-foreground/90">
-                <li>Only public infrastructure and public events: aircraft, ships, satellites, earthquakes, open-data cameras, rocket launches.</li>
+                <li>Only public infrastructure and public events: aircraft, ships, satellites, earthquakes, open-data cameras, rocket launches, and the water systems communities depend on: rivers, lakes, reservoirs, aquifers, drought.</li>
                 <li>No face recognition, no person tracking, no search for named individuals. Nothing here identifies a human being.</li>
                 <li>Camera positions are operator-published and coarse; no camera orientation is ever drawn because none is published.</li>
-                <li>The traffic layer is a labelled simulation on real roads. Every other layer is a live public feed; nothing is invented.</li>
+                <li>The traffic layer is a labelled simulation on real roads. The turbidity layer is a labelled estimate: Dogliotti (2015) physics run in your browser on real Sentinel-2 pixels, the teacher that TurbidityVision distils, not the distilled model and not a measurement. Every other layer is a live public feed; nothing is invented.</li>
+                <li>Water-quality screens compare a gauge&apos;s latest reading with cited EPA freshwater thresholds and print the formula; the community water report prints its weights and the terms it lacked. None of it is advice on whether water is safe to drink.</li>
                 <li>API keys you enter stay in this browser and only reach this app&apos;s own /api routes or the vendor SDK they belong to.</li>
               </ul>
             </section>
@@ -48,6 +49,7 @@ export default function AboutButton() {
                         {l.label}
                       </span>
                       {l.simulated && <span className="ml-2 text-[9px] tracking-widest text-warn">SIMULATED</span>}
+                      {l.estimate && <span className="ml-2 text-[9px] tracking-widest text-warn">ESTIMATE</span>}
                       <span className="text-muted-foreground"> · {l.attribution}</span>
                       <div className="text-foreground/75">{l.description}</div>
                     </span>

@@ -15,6 +15,7 @@ import type { LayerId } from "@/lib/layers/types";
 import { useGlobe } from "@/lib/store/globe";
 import { geocode, heightForPlace } from "@/components/hud/SearchCommand";
 import { formatDistance, formatLatLon } from "@/lib/globe/geo";
+import { buildWaterReport, speakReport } from "@/lib/water/report";
 
 export interface JsonSchema {
   type: "object";
@@ -55,6 +56,27 @@ const LAYER_ALIASES: Record<string, LayerId> = {
   launches: "launches",
   rockets: "launches",
   rocket: "launches",
+  water: "water",
+  rivers: "water",
+  river: "water",
+  lakes: "water",
+  lake: "water",
+  reservoirs: "water",
+  reservoir: "water",
+  gauges: "water",
+  "stream gauges": "water",
+  floods: "water",
+  flooding: "water",
+  hydrology: "water",
+  groundwater: "groundwater",
+  aquifers: "groundwater",
+  aquifer: "groundwater",
+  wells: "groundwater",
+  drought: "groundwater",
+  turbidity: "turbidity",
+  sediment: "turbidity",
+  "water quality": "turbidity",
+  "satellite water": "turbidity",
 };
 
 export function resolveLayer(word: string | undefined): LayerId | null {
@@ -190,6 +212,30 @@ export const COMMANDS: CommandDef[] = [
     run: async () => {
       homeView();
       return "Pulling back to orbit.";
+    },
+  },
+  {
+    name: "water_report",
+    description:
+      "Community water report for a place or the current view: drought class, reservoir levels, stream gauge flood status and quality screening, groundwater wells and aquifers, satellite turbidity, and an explicit supply-stress estimate.",
+    parameters: {
+      type: "object",
+      properties: {
+        place: { type: "string", description: "Optional place to fly to first, e.g. 'San Antonio'" },
+      },
+    },
+    run: async (a) => {
+      const st = useGlobe.getState();
+      let prefix = "";
+      if (a.place) prefix = (await goToPlace(String(a.place), 120)) + " ";
+      st.setLayer("water", true);
+      st.setLayer("groundwater", true);
+      st.setWaterReportOpen(true);
+      // Give the layers a moment to land before reading them.
+      await new Promise((r) => setTimeout(r, a.place ? 6000 : 1500));
+      const v = useGlobe.getState().view;
+      const report = buildWaterReport(v.lon, v.lat);
+      return prefix + speakReport(report);
     },
   },
   {

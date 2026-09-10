@@ -10,6 +10,7 @@ import { periodMs, satPosition, type SatExtra } from "@/lib/layers/satellites";
 import { satWorker } from "./satWorker";
 import type { LaunchExtra } from "@/lib/layers/launches";
 import { vehiclePosition, type VehicleExtra } from "@/lib/layers/traffic";
+import { groundwaterStyle, turbidityStyle, waterStyle } from "./waterStyles";
 
 /** Dead-reckon a moving surface/air object from its last report for up to 90 s. */
 function extrapolate(
@@ -263,6 +264,9 @@ export const STYLES: Partial<Record<LayerId, LayerStyle>> = {
   cameras: camerasStyle,
   traffic: trafficStyle,
   launches: launchesStyle,
+  water: waterStyle,
+  groundwater: groundwaterStyle,
+  turbidity: turbidityStyle,
 };
 
 /** Camera range (m) to sit at when following an object of a given layer. */
@@ -274,4 +278,7 @@ export const FOLLOW_RANGE: Record<LayerId, number> = {
   cameras: 2_500,
   traffic: 2_000,
   launches: 400_000,
+  water: 15_000,
+  groundwater: 15_000,
+  turbidity: 6_000,
 };

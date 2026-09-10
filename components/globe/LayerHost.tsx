@@ -15,6 +15,7 @@ import { STYLES } from "@/lib/globe/styles";
 import { satWorker } from "@/lib/globe/satWorker";
 import { useGlobe } from "@/lib/store/globe";
 import { useSettings, type Prefs } from "@/lib/store/settings";
+import { useNow } from "@/lib/hooks/useNow";
 
 /** Which preferences each layer's fetch() depends on (changes trigger a refetch). */
 const OPTION_KEYS: Partial<Record<LayerDefinition["id"], Array<keyof Prefs>>> = {
@@ -69,6 +70,11 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
   const keys = useSettings((s) => s.keys);
   const prefs = useSettings((s) => s.prefs);
   const labels = prefs.labels;
+  const clockOffset = useGlobe((s) => s.clock.offsetMs);
+  // Time-dependent layers (satellite scenes) re-fetch when the mission clock
+  // crosses into another UTC day; a coarse minute tick is plenty for that.
+  const minute = useNow(60_000);
+  const missionDay = def.timeDependent ? Math.floor((minute + clockOffset) / 86_400_000) : 0;
 
   const rendererRef = useRef<LayerRenderer | null>(null);
 
@@ -107,12 +113,13 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
   // TanStack re-reads queryFn on every render, so the closure always carries
   // the latest settled view, keys and prefs without touching refs in render.
   const query = useQuery({
-    queryKey: ["layer", def.id, vk, optionsKey],
+    queryKey: ["layer", def.id, vk, optionsKey, missionDay],
     queryFn: ({ signal }) =>
       def.fetch({
         keys,
         view,
         now: Date.now(),
+        missionTime: Date.now() + useGlobe.getState().clock.offsetMs,
         signal,
         options: { ...prefs } as unknown as Record<string, unknown>,
       }),

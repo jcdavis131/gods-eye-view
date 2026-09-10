@@ -2,7 +2,21 @@
 // Procedurally drawn HUD glyphs for billboards. Everything is generated on a
 // canvas at runtime so the app ships no binary sprite assets. Cached by key.
 
-export type IconKind = "plane" | "heli" | "ship" | "sat" | "cam" | "pad" | "rocket" | "quake" | "car" | "dot";
+export type IconKind =
+  | "plane"
+  | "heli"
+  | "ship"
+  | "sat"
+  | "cam"
+  | "pad"
+  | "rocket"
+  | "quake"
+  | "car"
+  | "dot"
+  | "gauge"
+  | "well"
+  | "dam"
+  | "chip";
 
 const cache = new Map<string, HTMLCanvasElement>();
 
@@ -141,6 +155,37 @@ function draw(kind: IconKind, color: string, size: number): HTMLCanvasElement {
       inner.arc(0, 0, 4, 0, Math.PI * 2);
       ctx.fill(inner);
       return canvas;
+    }
+    case "gauge": {
+      // water drop: a stream / reservoir gauge
+      path.moveTo(0, -13);
+      path.bezierCurveTo(6, -4, 10, 2, 10, 6);
+      path.arc(0, 6, 10, 0, Math.PI, false);
+      path.bezierCurveTo(-10, 2, -6, -4, 0, -13);
+      path.closePath();
+      break;
+    }
+    case "well": {
+      // groundwater well: casing ring over a shaft
+      path.rect(-2, -4, 4, 16);
+      path.moveTo(9, -8);
+      path.arc(0, -8, 9, 0, Math.PI * 2);
+      break;
+    }
+    case "dam": {
+      // dam wall: wide trapezoid with a crest
+      path.moveTo(-12, 10);
+      path.lineTo(-5, -10);
+      path.lineTo(5, -10);
+      path.lineTo(12, 10);
+      path.closePath();
+      path.rect(-7, -13, 14, 3);
+      break;
+    }
+    case "chip": {
+      // turbidity chip: a square swatch
+      path.rect(-9, -9, 18, 18);
+      break;
     }
     case "dot":
     default: {

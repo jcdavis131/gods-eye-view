@@ -47,6 +47,11 @@ export default function LayerPanel() {
                       SIMULATED
                     </span>
                   )}
+                  {l.estimate && (
+                    <span className="rounded border border-warn/50 px-1 text-[8px] tracking-widest text-warn" title={l.estimate}>
+                      ESTIMATE
+                    </span>
+                  )}
                   <span className="min-w-[44px] text-right text-[12px] tabular-nums text-foreground/90">
                     {on && st ? st.count.toLocaleString() : "—"}
                   </span>

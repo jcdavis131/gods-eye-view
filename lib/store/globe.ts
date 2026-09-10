@@ -69,6 +69,8 @@ interface GlobeState {
   setSettingsOpen: (open: boolean) => void;
   searchOpen: boolean;
   setSearchOpen: (open: boolean) => void;
+  waterReportOpen: boolean;
+  setWaterReportOpen: (open: boolean) => void;
 }
 
 const defaultLayers = Object.fromEntries(
@@ -129,6 +131,8 @@ export const useGlobe = create<GlobeState>()((set) => ({
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   searchOpen: false,
   setSearchOpen: (searchOpen) => set({ searchOpen }),
+  waterReportOpen: false,
+  setWaterReportOpen: (waterReportOpen) => set({ waterReportOpen }),
 }));
 
 /** Mission time = wall clock + operator offset. */

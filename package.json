@@ -21,6 +21,7 @@
     "class-variance-authority": "^0.7.1",
     "cmdk": "^1.1.1",
     "cn": "^0.2.6",
+    "geotiff": "^3.0.5",
     "lucide-react": "^1.44.0",
     "next": "16.3.4",
     "react": "19.2.8",

@@ -42,3 +42,6 @@ next-env.d.ts
 
 # Cesium runtime assets are copied from node_modules by scripts/copy-cesium.mjs
 /public/cesium
+
+# turbidity-check compile scratch
+.tmp-turb/

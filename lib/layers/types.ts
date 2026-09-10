@@ -15,7 +15,10 @@ export type LayerId =
   | "earthquakes"
   | "cameras"
   | "traffic"
-  | "launches";
+  | "launches"
+  | "water"
+  | "groundwater"
+  | "turbidity";
 
 export const LAYER_IDS: LayerId[] = [
   "aircraft",
@@ -25,6 +28,9 @@ export const LAYER_IDS: LayerId[] = [
   "cameras",
   "traffic",
   "launches",
+  "water",
+  "groundwater",
+  "turbidity",
 ];
 
 /** Properties every feature carries, whatever the layer. */
@@ -76,6 +82,8 @@ export interface FetchContext {
   view: ViewState;
   /** Epoch ms of the wall clock at fetch time. */
   now: number;
+  /** Epoch ms of the mission clock (wall clock + timeline offset). */
+  missionTime?: number;
   signal?: AbortSignal;
   /** Free-form layer options coming from the settings store (e.g. satellite groups). */
   options: Record<string, unknown>;
@@ -106,6 +114,10 @@ export interface LayerDefinition {
   viewKey?: (view: ViewState) => string;
   /** Marks the whole layer as a simulation (traffic). Shown loudly in the UI. */
   simulated?: boolean;
+  /** Re-fetch when the mission clock moves to another day (satellite scenes). */
+  timeDependent?: boolean;
+  /** Short caption for estimate layers: what the numbers are and are not. */
+  estimate?: string;
   attribution: string;
   fetch: (ctx: FetchContext) => Promise<FetchResult>;
 }

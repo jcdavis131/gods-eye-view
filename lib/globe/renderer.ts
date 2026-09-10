@@ -12,7 +12,7 @@
 // BillboardCollection are designed for exactly this.
 
 import type * as CesiumNS from "cesium";
-import type { LineString } from "geojson";
+import type { MultiLineString, MultiPolygon, Polygon } from "geojson";
 import { getCesium } from "./cesium";
 import { getGlow, getIcon, iconKey, type IconKind } from "./icons";
 import { DEG } from "./geo";
@@ -28,6 +28,23 @@ export interface StyledLine {
   alpha?: number;
   dashed?: boolean;
   glow?: boolean;
+}
+
+export interface StyledPolygon {
+  /** Outer ring first, then holes; each ring a list of [lon, lat]. */
+  rings: number[][][];
+  color?: string;
+  /** 0..1 alpha */
+  alpha?: number;
+}
+
+export interface OverlaySpec {
+  image: HTMLCanvasElement;
+  west: number;
+  south: number;
+  east: number;
+  north: number;
+  alpha?: number;
 }
 
 export interface LayerStyle {
@@ -57,6 +74,12 @@ export interface LayerStyle {
   translucencyByDistance?: [number, number, number, number];
   /** Extra per-feature gate for labels (on top of hover / selection / labelMax). */
   labelWhen?: (f: LayerFeature, timeMs: number) => boolean;
+  /** Features that keep a label regardless of labelMax (major rivers, matched chips). */
+  labelAlways?: (f: LayerFeature) => boolean;
+  /** Filled ground polygons for a feature (drought classes). */
+  polygons?: (f: LayerFeature) => StyledPolygon[] | null;
+  /** One raster overlay derived from the whole collection (turbidity map). */
+  overlay?: (features: LayerFeature[]) => OverlaySpec | null;
 }
 
 export interface PickId {
@@ -74,6 +97,8 @@ interface Item {
   lastHistoryAt: number;
   pos?: CesiumNS.Cartesian3;
   color: string;
+  ground?: CesiumNS.GroundPrimitive;
+  anchor?: LonLatAlt;
 }
 
 const colorCache = new Map<string, CesiumNS.Color>();
@@ -101,6 +126,9 @@ export class LayerRenderer {
   private readonly labels: CesiumNS.LabelCollection;
   private readonly polylines: CesiumNS.PolylineCollection;
   private readonly fx: CesiumNS.BillboardCollection;
+  private readonly ground: CesiumNS.PrimitiveCollection;
+  private readonly groundOk: boolean;
+  private overlayLayer: CesiumNS.ImageryLayer | null = null;
   private readonly items = new Map<string, Item>();
   private selectedId: string | null = null;
   private hoverId: string | null = null;
@@ -124,6 +152,8 @@ export class LayerRenderer {
     this.fx = scene.primitives.add(new C.BillboardCollection({ scene }));
     this.billboards = scene.primitives.add(new C.BillboardCollection({ scene }));
     this.labels = scene.primitives.add(new C.LabelCollection({ scene }));
+    this.ground = scene.groundPrimitives.add(new C.PrimitiveCollection());
+    this.groundOk = C.GroundPrimitive.isSupported(scene);
   }
 
   get show() {
@@ -136,6 +166,8 @@ export class LayerRenderer {
     this.labels.show = v;
     this.polylines.show = v;
     this.fx.show = v;
+    this.ground.show = v;
+    if (this.overlayLayer) this.overlayLayer.show = v;
   }
 
   setLabelsEnabled(on: boolean) {
@@ -170,8 +202,12 @@ export class LayerRenderer {
       seen.add(id);
       const existing = this.items.get(id);
       if (existing) {
-        existing.feature = f;
-        this.applyStatic(existing, now);
+        // Layers that memoise static features (hydrography, drought) hand back
+        // the same objects; nothing to redraw for those.
+        if (existing.feature !== f) {
+          existing.feature = f;
+          this.applyStatic(existing, now);
+        }
       } else {
         const item: Item = {
           feature: f,
@@ -192,7 +228,29 @@ export class LayerRenderer {
       }
     }
     this.refreshLabels();
+    this.applyOverlay();
     this.tick(now, true);
+  }
+
+  private applyOverlay() {
+    if (!this.style.overlay) return;
+    const C = getCesium();
+    const spec = this.style.overlay([...this.features()]);
+    if (this.overlayLayer) {
+      this.viewer.imageryLayers.remove(this.overlayLayer, true);
+      this.overlayLayer = null;
+    }
+    if (!spec) return;
+    const provider = new C.SingleTileImageryProvider({
+      url: spec.image.toDataURL("image/png"),
+      rectangle: C.Rectangle.fromDegrees(spec.west, spec.south, spec.east, spec.north),
+      tileWidth: spec.image.width,
+      tileHeight: spec.image.height,
+    });
+    this.overlayLayer = this.viewer.imageryLayers.addImageryProvider(provider);
+    this.overlayLayer.alpha = spec.alpha ?? 0.85;
+    this.overlayLayer.magnificationFilter = C.TextureMagnificationFilter.NEAREST;
+    this.overlayLayer.show = this._show;
   }
 
   private currentTimeMs(): number {
@@ -207,11 +265,8 @@ export class LayerRenderer {
       const [lon, lat, alt] = f.geometry.coordinates;
       return [lon, lat, alt ?? f.properties.altitude ?? 0];
     }
-    if (f.geometry.type === "LineString") {
-      const c = f.geometry.coordinates[0];
-      return [c[0], c[1], c[2] ?? 0];
-    }
-    return null;
+    if (!item.anchor) item.anchor = anchorOf(f) ?? undefined;
+    return item.anchor ?? null;
   }
 
   private applyStatic(item: Item, timeMs: number) {
@@ -221,7 +276,7 @@ export class LayerRenderer {
     const color = cssColor(item.color);
     const pick: PickId = { layer: this.layer, id: f.properties.id };
     const kind = this.style.icon?.(f) ?? null;
-    const lineOnly = f.geometry.type === "LineString" && !kind;
+    const lineOnly = f.geometry.type !== "Point" && !kind;
 
     if (lineOnly) {
       // Pure polyline feature (roads, tracks): no marker, position = first vertex.
@@ -233,8 +288,8 @@ export class LayerRenderer {
         this.billboards.remove(item.billboard);
         item.billboard = undefined;
       }
-      const c = (f.geometry as LineString).coordinates[0];
-      item.pos = C.Cartesian3.fromDegrees(c[0], c[1], c[2] ?? 0);
+      item.anchor = anchorOf(f) ?? undefined;
+      item.pos = item.anchor ? C.Cartesian3.fromDegrees(item.anchor[0], item.anchor[1], item.anchor[2]) : undefined;
     } else if (kind) {
       if (item.point) {
         this.points.remove(item.point);
@@ -292,6 +347,42 @@ export class LayerRenderer {
     const lines = this.style.lines?.(f, timeMs);
     if (lines) {
       for (const l of lines) item.lines.push(this.addLine(l, pick));
+    }
+
+    // Filled ground polygons (drought classes).
+    if (item.ground) {
+      this.ground.remove(item.ground);
+      item.ground = undefined;
+    }
+    const polys = this.style.polygons?.(f);
+    if (polys && polys.length && this.groundOk) {
+      const instances: CesiumNS.GeometryInstance[] = [];
+      for (const p of polys) {
+        const hierarchy = toHierarchy(p.rings);
+        if (!hierarchy) continue;
+        instances.push(
+          new C.GeometryInstance({
+            geometry: new C.PolygonGeometry({
+              polygonHierarchy: hierarchy,
+              vertexFormat: C.PerInstanceColorAppearance.FLAT_VERTEX_FORMAT,
+            }),
+            attributes: {
+              color: C.ColorGeometryInstanceAttribute.fromColor(cssColor(p.color ?? this.style.color, p.alpha ?? 0.3)),
+            },
+            id: pick,
+          }),
+        );
+      }
+      if (instances.length) {
+        item.ground = this.ground.add(
+          new C.GroundPrimitive({
+            geometryInstances: instances,
+            appearance: new C.PerInstanceColorAppearance({ flat: true, translucent: true }),
+            asynchronous: true,
+            allowPicking: true,
+          }),
+        );
+      }
     }
 
     if (!this.style.position && !lineOnly) this.place(item, timeMs);
@@ -387,6 +478,8 @@ export class LayerRenderer {
     const occ = horizonOccluder(cam);
     for (const item of this.items.values()) {
       if (!item.pos) continue;
+      // Polylines and ground fills are depth-tested by the globe itself.
+      if (!item.point && !item.billboard && !item.label) continue;
       const visible = occ(item.pos);
       if (item.point && item.point.show !== visible) item.point.show = visible;
       if (item.billboard && item.billboard.show !== visible) item.billboard.show = visible;
@@ -406,6 +499,7 @@ export class LayerRenderer {
     const id = item.feature.properties.id;
     if (id === this.selectedId || id === this.hoverId) return true;
     if (!this.labelsEnabled) return false;
+    if (this.style.labelAlways?.(item.feature)) return true;
     if (this.style.labelWhen && !this.style.labelWhen(item.feature, this.lastTime || Date.now())) return false;
     return this.items.size <= (this.style.labelMax ?? 60);
   }
@@ -545,14 +639,27 @@ export class LayerRenderer {
     if (item.billboard) this.billboards.remove(item.billboard);
     if (item.label) this.labels.remove(item.label);
     for (const l of item.lines) this.polylines.remove(l);
+    if (item.ground) this.ground.remove(item.ground);
   }
 
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
+    // React unmounts the globe before the layer bridges; a destroyed viewer
+    // has already released every collection below.
+    if (this.viewer.isDestroyed()) {
+      this.items.clear();
+      return;
+    }
     const p = this.viewer.scene.primitives;
     for (const c of [this.points, this.billboards, this.labels, this.polylines, this.fx]) {
       if (p.contains(c)) p.remove(c);
+    }
+    const g = this.viewer.scene.groundPrimitives;
+    if (g.contains(this.ground)) g.remove(this.ground);
+    if (this.overlayLayer) {
+      this.viewer.imageryLayers.remove(this.overlayLayer, true);
+      this.overlayLayer = null;
     }
     this.items.clear();
   }
@@ -593,4 +700,79 @@ export function northAxis(pos: CesiumNS.Cartesian3): CesiumNS.Cartesian3 {
   const col = C.Matrix4.getColumn(northMatrix, 1, new C.Cartesian4());
   const n = new C.Cartesian3(col.x, col.y, col.z);
   return C.Cartesian3.normalize(n, n);
+}
+
+/** A representative position for a non-point feature: label anchor and pick focus. */
+export function anchorOf(f: LayerFeature): LonLatAlt | null {
+  const g = f.geometry;
+  const mid = (line: number[][]): LonLatAlt | null => {
+    if (!Array.isArray(line)) return null;
+    const c = line[Math.floor(line.length / 2)];
+    return Array.isArray(c) ? [c[0], c[1], c[2] ?? 0] : null;
+  };
+  const bbox = (ring: number[][]) => {
+    let w = Infinity;
+    let s = Infinity;
+    let e = -Infinity;
+    let n = -Infinity;
+    for (const c of ring) {
+      if (!Array.isArray(c)) continue;
+      if (c[0] < w) w = c[0];
+      if (c[0] > e) e = c[0];
+      if (c[1] < s) s = c[1];
+      if (c[1] > n) n = c[1];
+    }
+    return Number.isFinite(w) ? { w, s, e, n } : null;
+  };
+  const centre = (ring: number[][]): LonLatAlt | null => {
+    const b = bbox(ring);
+    return b ? [(b.w + b.e) / 2, (b.s + b.n) / 2, 0] : null;
+  };
+  switch (g.type) {
+    case "Point":
+      return [g.coordinates[0], g.coordinates[1], g.coordinates[2] ?? 0];
+    case "LineString":
+      return mid(g.coordinates);
+    case "MultiLineString": {
+      let best: number[][] = [];
+      for (const part of (g as MultiLineString).coordinates) if (Array.isArray(part) && part.length > best.length) best = part;
+      return mid(best);
+    }
+    case "Polygon":
+      return centre((g as Polygon).coordinates[0] ?? []);
+    case "MultiPolygon": {
+      let best: number[][] = [];
+      let bestArea = -1;
+      for (const poly of (g as MultiPolygon).coordinates) {
+        const ring = poly[0] ?? [];
+        const b = bbox(ring);
+        if (!b) continue;
+        const area = (b.e - b.w) * (b.n - b.s);
+        if (area > bestArea) {
+          bestArea = area;
+          best = ring;
+        }
+      }
+      return centre(best);
+    }
+    default:
+      return null;
+  }
+}
+
+/** GeoJSON rings -> Cesium polygon hierarchy (outer + holes), null when degenerate. */
+function toHierarchy(rings: number[][][]): CesiumNS.PolygonHierarchy | null {
+  const C = getCesium();
+  const toPositions = (ring: number[][]) => {
+    const flat: number[] = [];
+    for (const c of ring) flat.push(c[0], c[1]);
+    return C.Cartesian3.fromDegreesArray(flat);
+  };
+  const outer = rings[0];
+  if (!outer || outer.length < 4) return null;
+  const holes: CesiumNS.PolygonHierarchy[] = [];
+  for (let i = 1; i < rings.length; i++) {
+    if (rings[i].length >= 4) holes.push(new C.PolygonHierarchy(toPositions(rings[i])));
+  }
+  return new C.PolygonHierarchy(toPositions(outer), holes);
 }

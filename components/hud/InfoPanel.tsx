@@ -10,6 +10,11 @@ import { flyToSelection, startFollowing, stopFollowing } from "@/lib/globe/camer
 import { getRenderer } from "@/lib/globe/registry";
 import { getCesium } from "@/lib/globe/cesium";
 import { isLive } from "@/lib/globe/clock";
+import GaugeHistory from "./GaugeHistory";
+import type { GaugeExtra } from "@/lib/layers/water";
+import type { WellExtra } from "@/lib/layers/groundwater";
+import type { ChipExtra } from "@/lib/layers/turbidity";
+import { turbidityHex } from "@/lib/water/overlay";
 
 function useRefresh(ms: number) {
   const [, set] = useState(0);
@@ -29,7 +34,7 @@ export default function InfoPanel() {
 
   if (!selected || !feature) {
     return (
-      <aside className="pointer-events-auto absolute right-3 top-[76px] z-30 hidden w-[300px] md:block">
+      <aside className="pointer-events-auto hidden w-full md:block">
         <div className="hud-panel">
           <div className="flex items-center justify-between border-b border-border px-3 py-2">
             <span className="hud-label">Signal log</span>
@@ -73,16 +78,22 @@ export default function InfoPanel() {
     lonlat = [lon, lat, alt ?? 0];
   }
   const details = Object.entries(p.details ?? {}).filter(([, v]) => v != null && v !== "" && v !== false);
-  const isLiveLayer = !p.simulated && p.layer !== "satellites" && p.layer !== "launches";
+  const isLiveLayer =
+    !p.simulated && p.layer !== "satellites" && p.layer !== "launches" && p.layer !== "water" && p.layer !== "groundwater" && p.layer !== "turbidity";
+  const gauge = p.layer === "water" && (p.kind === "gauge" || p.kind === "reservoir") && p.id.startsWith("usgs:") ? (p.extra as GaugeExtra) : null;
+  const well = p.layer === "groundwater" && p.kind === "well" ? (p.extra as WellExtra) : null;
+  const chip = p.layer === "turbidity" ? (p.extra as ChipExtra) : null;
+  const estimate = p.layer === "turbidity" ? "ESTIMATE" : null;
 
   return (
-    <aside className="pointer-events-auto absolute right-3 top-[76px] z-30 w-[320px] max-w-[calc(100vw-24px)]">
+    <aside className="pointer-events-auto w-full">
       <div className="hud-panel">
         <div className="flex items-start justify-between gap-2 border-b border-border px-3 py-2">
           <div className="min-w-0">
             <div className="hud-label" style={{ color }}>
               {def?.label ?? p.layer} · {p.kind ?? "object"}
               {p.simulated && <span className="ml-2 text-warn">SIMULATED</span>}
+              {estimate && <span className="ml-2 text-warn">{estimate}</span>}
             </div>
             <div className="hud-display truncate text-[18px] font-semibold leading-tight text-foreground">
               {p.name}
@@ -109,6 +120,20 @@ export default function InfoPanel() {
         )}
 
         {p.imageUrl && <CameraStill key={p.imageUrl} url={p.imageUrl} name={p.name} />}
+
+        {chip && (
+          <div className="flex items-center gap-3 border-b border-border px-3 py-2">
+            <span
+              className="block size-8 shrink-0 border border-black/60"
+              style={{ background: turbidityHex(chip.stats.median) }}
+              aria-hidden
+            />
+            <div className="text-[10px] leading-snug text-muted-foreground">
+              Dogliotti (2015) physics on Sentinel-2 water pixels. The distilled TurbidityVision model is not bundled; this is
+              the teacher it learns from. {chip.lowConfidence ? "Low confidence: spread exceeds the median." : ""}
+            </div>
+          </div>
+        )}
 
         <dl className="grid grid-cols-[92px_1fr] gap-x-2 gap-y-1 px-3 py-2 text-[11px]">
           {lonlat && (
@@ -139,6 +164,19 @@ export default function InfoPanel() {
             <Row key={k} k={k} v={v} />
           ))}
         </dl>
+
+        {gauge?.primary && (
+          <GaugeHistory key={`${gauge.site}:${gauge.primary}`} site={gauge.site} param={gauge.primary} latest={gauge.readings[gauge.primary]?.value} />
+        )}
+        {well && (
+          <GaugeHistory
+            key={`${well.site}:${well.primary}`}
+            site={well.site}
+            param={well.primary}
+            latest={well.readings[well.primary]?.value}
+            invert={well.primary === "72019"}
+          />
+        )}
 
         <div className="flex gap-1 border-t border-border p-2">
           <button

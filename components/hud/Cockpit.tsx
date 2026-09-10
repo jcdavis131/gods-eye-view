@@ -8,6 +8,7 @@ import HudFrame from "./HudFrame";
 import TopBar from "./TopBar";
 import LayerPanel from "./LayerPanel";
 import InfoPanel from "./InfoPanel";
+import WaterReportPanel from "./WaterReportPanel";
 import Timeline from "./Timeline";
 import SettingsDialog from "./SettingsDialog";
 import SearchCommand from "./SearchCommand";
@@ -91,7 +92,10 @@ export default function Cockpit() {
       <HudFrame />
       <TopBar />
       <LayerPanel />
-      <InfoPanel />
+      <div className="pointer-events-none absolute right-3 top-[76px] z-30 flex w-[320px] max-w-[calc(100vw-24px)] flex-col gap-2">
+        <WaterReportPanel />
+        <InfoPanel />
+      </div>
       <Timeline />
       <SettingsDialog />
       <SearchCommand />

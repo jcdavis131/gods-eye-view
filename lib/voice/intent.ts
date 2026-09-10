@@ -10,7 +10,7 @@ export interface Intent {
 }
 
 const LAYER_WORDS =
-  "aircraft|airplanes|planes|flights|flight|jets|ships|ship|vessels|boats|satellites|satellite|sats|earthquakes|quakes|seismic|cameras|webcams|cctv|traffic|cars|launches|rockets|rocket";
+  "aircraft|airplanes|planes|flights|flight|jets|ships|ship|vessels|boats|satellites|satellite|sats|earthquakes|quakes|seismic|cameras|webcams|cctv|traffic|cars|launches|rockets|rocket|water quality|satellite water|stream gauges|water|rivers|river|lakes|lake|reservoirs|reservoir|gauges|floods|flooding|hydrology|groundwater|aquifers|aquifer|wells|drought|turbidity|sediment";
 
 const num = (s: string) => {
   const words: Record<string, number> = {
@@ -45,6 +45,10 @@ export function parseIntent(raw: string): Intent | null {
   }
   if (/^(home|zoom out|overview|show (me )?(the )?(whole )?(earth|globe|world|planet)|pull back)/.test(t)) {
     return { command: "home_view", args: {} };
+  }
+  // "water report", "water report for san antonio", "how is the water in austin"
+  if ((m = t.match(/^(?:water report|water status|how(?:'s| is) the water|is the water (?:ok|safe))(?:\s+(?:for|in|near|around|over|at)\s+(.+))?$/))) {
+    return { command: "water_report", args: { place: m[1]?.trim() || undefined } };
   }
   if (/^(where am i|what am i looking at|describe|status|report|sitrep)/.test(t)) {
     return { command: "describe_view", args: {} };
