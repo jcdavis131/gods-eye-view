@@ -113,3 +113,7 @@ export async function GET(req: NextRequest) {
     return jsonError(err);
   }
 }
+
+// Upstreams here can take tens of seconds (Overpass, Launch Library); keep the
+// serverless function alive long enough on Vercel.
+export const maxDuration = 60;
