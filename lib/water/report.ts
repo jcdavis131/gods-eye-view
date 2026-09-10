@@ -290,7 +290,7 @@ export function buildWaterReport(lon: number, lat: number, now = Date.now()): Wa
       tItems.push({
         id: f.properties.id,
         layer: "turbidity",
-        name: `gauge ${x.insitu.name ?? x.insitu.site}`,
+        name: `gauge ${x.insitu.name ?? x.insitu.site} (${Math.round(x.insitu.distanceM)} m)`,
         distanceKm: d,
         value: `est. ${x.stats.median.toFixed(1)} vs gauge ${x.insitu.atOverpass ? x.insitu.atOverpass.value.toFixed(1) + " FNU at overpass" : x.insitu.latest.value + " FNU latest"}`,
       });

@@ -19,17 +19,20 @@ import { lowConfidence, turbidityClass, type ChipStats } from "@/lib/water/dogli
 import { turbidityWorker } from "@/lib/water/turbidityWorker";
 import type { Chip, SceneInfo } from "@/lib/water/turbidity.worker";
 import type { UtmZone } from "@/lib/water/utm";
-import { bboxAround } from "@/lib/globe/geo";
+import { bboxAround, haversine } from "@/lib/globe/geo";
 import type { BaseProps, FetchContext, FetchResult, LayerDefinition, LayerFeature, ViewState } from "./types";
 import { proxy } from "./aircraft";
 
 export const TURBIDITY_MAX_HEIGHT_M = 300_000;
 const LOOKBACK_DAYS = 90;
 const MAX_CLOUD = 40;
+const MATCH_RADIUS_M = 1000;
 
 export interface InSitu {
   site: string;
   name?: string;
+  /** Metres from the gauge to the matched chip's centre (chips are 640 m wide). */
+  distanceM: number;
   latest: { value: number; unit: string; time: string };
   /** Mean of USGS instantaneous values within ±2 h of the overpass, when available. */
   atOverpass?: { value: number; n: number; from: string; to: string };
@@ -115,12 +118,25 @@ async function fetchTurbidity(ctx: FetchContext): Promise<FetchResult> {
   const overpass = Date.parse(scene.datetime);
   const from = new Date(overpass - 2 * 3600_000).toISOString().slice(0, 19) + "Z";
   const to = new Date(overpass + 2 * 3600_000).toISOString().slice(0, 19) + "Z";
+  // A gauge on a 20 m river rarely sits inside a water chip (the explainer
+  // found 8-9 water pixels per window on the San Antonio River), so match the
+  // nearest chip within MATCH_RADIUS_M and print the distance.
   const insituByChip = new Map<string, InSitu>();
   await Promise.all(
     gauges.map(async (g) => {
-      const chip = chips.find((c) => g.lon >= c.west && g.lon <= c.east && g.lat >= c.south && g.lat <= c.north);
+      let chip: Chip | undefined;
+      let best = MATCH_RADIUS_M;
+      for (const c of chips) {
+        const d = haversine(g.lat, g.lon, c.lat, c.lon);
+        if (d < best) {
+          best = d;
+          chip = c;
+        }
+      }
       if (!chip) return;
-      const rec: InSitu = { site: g.site, name: g.name, latest: { value: g.value, unit: g.unit.replace(/^_/, ""), time: g.time } };
+      const prev = insituByChip.get(`${chip.i},${chip.j}`);
+      if (prev && prev.distanceM <= best) return;
+      const rec: InSitu = { site: g.site, name: g.name, distanceM: best, latest: { value: g.value, unit: g.unit.replace(/^_/, ""), time: g.time } };
       try {
         const m = await proxy<Array<[string, number, string]>>(
           `/api/water?op=matchup&site=${g.site}&param=63680&from=${from}&to=${to}`,
@@ -154,7 +170,7 @@ async function fetchTurbidity(ctx: FetchContext): Promise<FetchResult> {
       "stac item": scene.stacUrl,
     };
     if (insitu) {
-      details["USGS gauge in chip"] = `${insitu.name ?? insitu.site}`;
+      details["USGS gauge"] = `${insitu.name ?? insitu.site} · ${Math.round(insitu.distanceM)} m from the chip centre`;
       details["gauge latest"] = `${insitu.latest.value} ${insitu.latest.unit} at ${insitu.latest.time.replace("T", " ").slice(0, 16)}Z`;
       if (insitu.atOverpass) {
         const d = st.median - insitu.atOverpass.value;
