@@ -4,6 +4,8 @@
 
 A photorealistic 3D globe that fuses live public signals: every aircraft broadcasting ADS-B, ships on AIS, satellites propagated from CelesTrak elements, earthquakes as USGS reports them, open-data public cameras, upcoming rocket launches. Dark HUD, scanlines, cinematic camera, voice control. Starts with **zero API keys**. MIT licensed.
 
+**Live:** https://gods-eye-view-rust.vercel.app (deploys from `master`). One hosting caveat: OpenSky refuses Vercel's egress, so the zoomed-out aircraft view there falls back to adsb.lol around the view centre plus the military feed; run it locally or add OpenSky credentials for the full global picture.
+
 ![God's Eye View boot screen](docs/screenshot-boot.jpg)
 
 | Night side, NASA Black Marble | Public camera dossier | Replay: ISS orbit at T−90 min | Traffic simulation |
