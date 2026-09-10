@@ -1,0 +1,107 @@
+"use client";
+// Mission timeline: scrub ±24 h around now, change the clock rate, go live.
+// Satellites and launches propagate to any time; live layers (aircraft,
+// ships, cameras, earthquakes) hold their last known state and are flagged.
+
+import { Pause, Play, Radio } from "lucide-react";
+import { useGlobe } from "@/lib/store/globe";
+import { goLive, isLive, setAnimate, setMissionTime, setMultiplier } from "@/lib/globe/clock";
+import { fmtUtc } from "./TopBar";
+import { useNow } from "@/lib/hooks/useNow";
+
+const RANGE_MS = 24 * 3600 * 1000;
+const RATES = [1, 10, 60, 600, 3600];
+
+export default function Timeline() {
+  const clock = useGlobe((s) => s.clock);
+  const now = useNow(1000);
+  const live = isLive(clock.offsetMs);
+  const pct = ((clock.offsetMs + RANGE_MS) / (2 * RANGE_MS)) * 100;
+  const mission = now ? now + clock.offsetMs : 0;
+
+  return (
+    <div className="pointer-events-auto absolute inset-x-3 bottom-3 z-30 md:inset-x-auto md:left-1/2 md:w-[720px] md:max-w-[calc(100vw-24px)] md:-translate-x-1/2">
+      <div className="hud-panel px-3 py-2">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => goLive()}
+            className={`flex items-center gap-1.5 border px-2 py-1 text-[10px] uppercase tracking-widest ${
+              live ? "border-primary/60 bg-primary/15 text-primary" : "border-border text-foreground/70 hover:text-primary"
+            }`}
+            title="Snap the mission clock to now"
+          >
+            <Radio className="size-3" />
+            Live
+          </button>
+          <button
+            type="button"
+            onClick={() => setAnimate(!clock.animate)}
+            className="border border-border p-1 text-foreground/70 hover:text-primary"
+            title={clock.animate ? "Pause clock" : "Run clock"}
+          >
+            {clock.animate ? <Pause className="size-3" /> : <Play className="size-3" />}
+          </button>
+          <div className="flex items-center gap-0.5">
+            {RATES.map((r) => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => setMultiplier(r)}
+                className={`px-1.5 py-1 text-[10px] tabular-nums ${
+                  clock.multiplier === r ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {r}×
+              </button>
+            ))}
+          </div>
+          <div className="ml-auto text-[11px] tabular-nums text-foreground/90">
+            {fmtUtc(mission)}
+            <span className={`ml-2 text-[9px] tracking-widest ${live ? "text-primary" : "text-warn"}`}>
+              {live ? "T+0" : `${clock.offsetMs > 0 ? "+" : "−"}${fmtOffset(Math.abs(clock.offsetMs))}`}
+            </span>
+          </div>
+        </div>
+        <div className="relative mt-2 h-6">
+          {/* ticks */}
+          <div className="pointer-events-none absolute inset-x-0 top-1/2 h-px bg-border" />
+          {[-24, -12, -6, 0, 6, 12, 24].map((h) => (
+            <div
+              key={h}
+              className="pointer-events-none absolute top-0 flex -translate-x-1/2 flex-col items-center"
+              style={{ left: `${((h + 24) / 48) * 100}%` }}
+            >
+              <div className={`h-2 w-px ${h === 0 ? "bg-primary" : "bg-border"}`} />
+              <div className="mt-2 text-[8px] tabular-nums text-muted-foreground">{h === 0 ? "NOW" : `${h > 0 ? "+" : ""}${h}h`}</div>
+            </div>
+          ))}
+          <input
+            type="range"
+            min={-RANGE_MS}
+            max={RANGE_MS}
+            step={60_000}
+            value={Math.max(-RANGE_MS, Math.min(RANGE_MS, clock.offsetMs))}
+            onChange={(e) => setMissionTime(Date.now() + Number(e.target.value))}
+            className="timeline-range absolute inset-x-0 top-1/2 h-4 w-full -translate-y-1/2 cursor-ew-resize appearance-none bg-transparent"
+            aria-label="Mission time offset"
+          />
+          <div
+            className="pointer-events-none absolute top-1/2 h-3 w-0.5 -translate-x-1/2 -translate-y-1/2 bg-warn shadow-[0_0_6px_var(--warn)]"
+            style={{ left: `${Math.max(0, Math.min(100, pct))}%`, opacity: live ? 0 : 1 }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function fmtOffset(ms: number): string {
+  const s = Math.round(ms / 1000);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}h${String(m).padStart(2, "0")}m`;
+  if (m > 0) return `${m}m${String(sec).padStart(2, "0")}s`;
+  return `${sec}s`;
+}

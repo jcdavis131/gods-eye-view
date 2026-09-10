@@ -1,0 +1,273 @@
+"use client";
+// How each layer is drawn. Data layers (lib/layers/*) know nothing about
+// Cesium; this file maps their GeoJSON onto glyphs, colours, labels and, for
+// moving things, a position-at-time function.
+
+import type { LayerId } from "@/lib/layers/types";
+import type { LayerStyle } from "./renderer";
+import { destination } from "./geo";
+import { periodMs, satPosition, type SatExtra } from "@/lib/layers/satellites";
+import type { LaunchExtra } from "@/lib/layers/launches";
+import { vehiclePosition, type VehicleExtra } from "@/lib/layers/traffic";
+
+/** Dead-reckon a moving surface/air object from its last report for up to 90 s. */
+function extrapolate(
+  lon: number,
+  lat: number,
+  alt: number,
+  heading: number | undefined,
+  speed: number | undefined,
+  observedAt: number | undefined,
+  timeMs: number,
+  maxSeconds = 90,
+): [number, number, number] {
+  if (heading == null || speed == null || observedAt == null) return [lon, lat, alt];
+  const dt = (timeMs - observedAt) / 1000;
+  if (dt <= 0 || dt > maxSeconds) return [lon, lat, alt];
+  const [nlon, nlat] = destination(lat, lon, heading, speed * dt);
+  return [nlon, nlat, alt];
+}
+
+export const aircraftStyle: LayerStyle = {
+  color: "#4DD8FF",
+  icon: (f) => (f.properties.kind === "rotorcraft" ? "heli" : "plane"),
+  iconSize: 26,
+  colorFor: (f) => {
+    if (f.properties.kind === "military") return "#FFB000";
+    if ((f.properties.altitude ?? 1) < 1) return "#7A8A94";
+    return "#4DD8FF";
+  },
+  label: (f) => f.properties.name,
+  labelMax: 90,
+  trail: true,
+  tickMs: 250,
+  // Full glyph up close; a 4 px speck from orbit so a global view reads as a
+  // density map instead of a blue smear.
+  scaleByDistance: [2e5, 1.0, 4e6, 0.16],
+  translucencyByDistance: [1.5e6, 1.0, 1.2e7, 0.6],
+  position: (f, t) => {
+    if (f.geometry.type !== "Point") return null;
+    const [lon, lat, alt] = f.geometry.coordinates;
+    const p = f.properties;
+    return extrapolate(lon, lat, alt ?? p.altitude ?? 0, p.heading, p.speed, p.observedAt, t);
+  },
+};
+
+const SAT_COLORS: Record<string, string> = {
+  station: "#FFFFFF",
+  military: "#FFB000",
+  navigation: "#9AD1FF",
+  constellation: "#8C8CA8",
+  "earth-observation": "#B8F5D8",
+  geostationary: "#D9C2FF",
+  science: "#FFD9F2",
+  new: "#5EF2C2",
+  satellite: "#E6E6FA",
+};
+
+export const satellitesStyle: LayerStyle = {
+  color: "#E6E6FA",
+  icon: (f) => (f.properties.kind === "station" ? "sat" : null),
+  iconSize: 22,
+  pointSize: (f) => (f.properties.kind === "constellation" ? 3 : f.properties.kind === "military" ? 6 : 4.5),
+  colorFor: (f) => SAT_COLORS[f.properties.kind ?? "satellite"] ?? "#E6E6FA",
+  label: (f) => f.properties.name,
+  labelMax: 40,
+  tickMs: 1000,
+  position: (f, t) => {
+    const extra = f.properties.extra as SatExtra | undefined;
+    if (!extra) return null;
+    return satPosition(extra.omm, t);
+  },
+  selectedLines: (f, t) => {
+    const extra = f.properties.extra as SatExtra | undefined;
+    if (!extra) return null;
+    const period = periodMs(extra.omm);
+    const steps = 120;
+    const positions: [number, number, number][] = [];
+    for (let i = 0; i <= steps; i++) {
+      const p = satPosition(extra.omm, t - period / 2 + (period * i) / steps);
+      if (p) positions.push(p);
+    }
+    return positions.length > 2
+      ? [{ positions, color: SAT_COLORS[f.properties.kind ?? "satellite"], width: 1.2, alpha: 0.7, glow: true }]
+      : null;
+  },
+};
+
+const SHIP_COLORS: Record<string, string> = {
+  military: "#FFB000",
+  "law-enforcement": "#FFB000",
+  "search-and-rescue": "#FF6B3D",
+  tanker: "#F5B849",
+  cargo: "#79E6A8",
+  passenger: "#9AD1FF",
+  "high-speed": "#9AD1FF",
+  fishing: "#B8F5D8",
+  tug: "#C9D1A8",
+  pilot: "#C9D1A8",
+  towing: "#C9D1A8",
+  sailing: "#E6E6FA",
+  pleasure: "#E6E6FA",
+  vessel: "#79E6A8",
+};
+
+export const shipsStyle: LayerStyle = {
+  color: "#79E6A8",
+  icon: () => "ship",
+  iconSize: 18,
+  colorFor: (f) => SHIP_COLORS[f.properties.kind ?? "vessel"] ?? "#79E6A8",
+  label: (f) => f.properties.name,
+  labelMax: 60,
+  trail: true,
+  tickMs: 500,
+  scaleByDistance: [4e4, 1.0, 3e6, 0.35],
+  position: (f, t) => {
+    if (f.geometry.type !== "Point") return null;
+    const [lon, lat] = f.geometry.coordinates;
+    const p = f.properties;
+    return extrapolate(lon, lat, 0, p.heading, p.speed, p.observedAt, t, 180);
+  },
+};
+
+export const earthquakesStyle: LayerStyle = {
+  color: "#FF6B3D",
+  pointSize: (f) => {
+    const mag = (f.properties.extra as { mag?: number } | undefined)?.mag ?? 0;
+    return Math.max(4, 3 + mag * 2.6);
+  },
+  colorFor: (f) => {
+    const mag = (f.properties.extra as { mag?: number } | undefined)?.mag ?? 0;
+    if (mag >= 6) return "#FF2D2D";
+    if (mag >= 5) return "#FF4D3D";
+    if (mag >= 4) return "#FF6B3D";
+    if (mag >= 2.5) return "#FF9A5C";
+    return "#C77A5A";
+  },
+  label: (f) => f.properties.name,
+  labelMax: 30,
+};
+
+export const camerasStyle: LayerStyle = {
+  color: "#F5B849",
+  icon: () => "cam",
+  iconSize: 18,
+  colorFor: (f) => (f.properties.imageUrl ? "#F5B849" : "#8A7A55"),
+  label: (f) => f.properties.name,
+  labelMax: 0,
+  scaleByDistance: [1.5e4, 1.0, 6e5, 0.3],
+};
+
+const LAUNCH_COLORS: Record<string, string> = {
+  "in-flight": "#FF3DAE",
+  go: "#FF3DAE",
+  tbc: "#D95FA0",
+  tbd: "#9A5B80",
+  hold: "#F5B849",
+  previous: "#6E5266",
+  success: "#6E5266",
+  failure: "#7A3A3A",
+};
+
+const FLIGHT_MS = 10 * 60_000;
+
+export const launchesStyle: LayerStyle = {
+  color: "#FF3DAE",
+  icon: (f) => (f.properties.kind === "in-flight" ? "rocket" : "pad"),
+  iconSize: 22,
+  colorFor: (f) => LAUNCH_COLORS[f.properties.kind ?? "tbd"] ?? "#FF3DAE",
+  label: (f) => {
+    const x = f.properties.extra as LaunchExtra | undefined;
+    if (!x) return f.properties.name;
+    const dt = x.netMs - Date.now();
+    const abs = Math.abs(dt);
+    const d = Math.floor(abs / 86_400_000);
+    const h = Math.floor((abs % 86_400_000) / 3_600_000);
+    const m = Math.floor((abs % 3_600_000) / 60_000);
+    const tag = d > 0 ? `${d}d${h}h` : h > 0 ? `${h}h${String(m).padStart(2, "0")}` : `${m}m`;
+    return `${f.properties.name.split("|")[0].trim()} T${dt >= 0 ? "-" : "+"}${tag}`;
+  },
+  labelMax: 80,
+  // Only launches inside a ±12 h window (or in flight) get a standing label.
+  labelWhen: (f, t) => {
+    const x = f.properties.extra as LaunchExtra | undefined;
+    if (!x) return false;
+    return f.properties.kind === "in-flight" || Math.abs(x.netMs - t) < 12 * 3600_000;
+  },
+  tickMs: 250,
+  scaleByDistance: [5e5, 1.0, 2e7, 0.6],
+  position: (f, t) => {
+    if (f.geometry.type !== "Point") return null;
+    const [lon, lat] = f.geometry.coordinates;
+    const x = f.properties.extra as LaunchExtra | undefined;
+    if (!x?.trajectory) return [lon, lat, 0];
+    const dt = t - x.netMs;
+    if (dt < 0 || dt > FLIGHT_MS || x.status === "Failure" || x.status === "TBD") return [lon, lat, 0];
+    const track = x.trajectory.track;
+    const s = (dt / FLIGHT_MS) * (track.length - 1);
+    const i = Math.min(track.length - 2, Math.floor(s));
+    const k = s - i;
+    const a = track[i];
+    const b = track[i + 1];
+    return [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+  },
+  lines: (f, t) => {
+    const x = f.properties.extra as LaunchExtra | undefined;
+    if (!x?.trajectory) return null;
+    const dt = x.netMs - t;
+    // Only the launches happening within a day (either side) get an ascent arc,
+    // so the globe is not covered in thirty dashed lines.
+    if (dt > 24 * 3600_000 || dt < -24 * 3600_000) return null;
+    return [{ positions: x.trajectory.track, color: "#FF3DAE", alpha: 0.45, width: 1.5, dashed: true }];
+  },
+  selectedLines: (f) => {
+    const x = f.properties.extra as LaunchExtra | undefined;
+    if (!x?.trajectory) return null;
+    return [{ positions: x.trajectory.track, color: "#FF7AD1", alpha: 0.9, width: 2.5, glow: true }];
+  },
+};
+
+export const trafficStyle: LayerStyle = {
+  color: "#B48CFF",
+  pointSize: () => 3.5,
+  colorFor: (f) => (f.properties.kind === "road" ? "#7A5CC7" : "#B48CFF"),
+  labelMax: 0,
+  tickMs: 100,
+  position: (f, t) => {
+    if (f.properties.kind !== "vehicle") return null;
+    const v = f.properties.extra as VehicleExtra | undefined;
+    return v ? vehiclePosition(v, t) : null;
+  },
+  lines: (f) => {
+    if (f.geometry.type !== "LineString") return null;
+    return [
+      {
+        positions: f.geometry.coordinates as [number, number, number][],
+        color: "#B48CFF",
+        alpha: 0.22,
+        width: 1.2,
+      },
+    ];
+  },
+};
+
+export const STYLES: Partial<Record<LayerId, LayerStyle>> = {
+  aircraft: aircraftStyle,
+  ships: shipsStyle,
+  satellites: satellitesStyle,
+  earthquakes: earthquakesStyle,
+  cameras: camerasStyle,
+  traffic: trafficStyle,
+  launches: launchesStyle,
+};
+
+/** Camera range (m) to sit at when following an object of a given layer. */
+export const FOLLOW_RANGE: Record<LayerId, number> = {
+  aircraft: 30_000,
+  ships: 10_000,
+  satellites: 2_500_000,
+  earthquakes: 250_000,
+  cameras: 2_500,
+  traffic: 2_000,
+  launches: 400_000,
+};
