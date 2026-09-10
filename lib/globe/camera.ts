@@ -1,6 +1,7 @@
 "use client";
 // Cinematic camera moves used by the UI, search and voice commands.
 
+import type * as CesiumNS from "cesium";
 import { getCesium, getViewer } from "./cesium";
 import { getRenderer } from "./registry";
 import { FOLLOW_RANGE } from "./styles";
@@ -99,8 +100,17 @@ export function followTick() {
   const C = getCesium();
   const pos = getRenderer(selected.layer)?.getPosition(selected.id);
   if (!pos) return;
-  viewer.camera.lookAtTransform(C.Transforms.eastNorthUpToFixedFrame(pos));
+  // While a transform is active, camera.position is the operator's orbit
+  // offset in the target's local frame (the mouse orbits/zooms it). Re-frame
+  // around the target's new position and keep that offset, so the camera
+  // moves with the target. lookAtTransform without an offset would instead
+  // preserve the camera's *world* pose and never follow.
+  const offset = C.Cartesian3.clone(viewer.camera.position, followOffsetScratch);
+  viewer.camera.lookAtTransform(C.Transforms.eastNorthUpToFixedFrame(pos, undefined, followFrameScratch), offset);
 }
+
+let followOffsetScratch: CesiumNS.Cartesian3 | undefined;
+let followFrameScratch: CesiumNS.Matrix4 | undefined;
 
 /** Slow orbital drift for the idle cinematic mode. */
 export function cinematicTick(dtSeconds: number) {

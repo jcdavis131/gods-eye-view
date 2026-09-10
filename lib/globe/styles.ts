@@ -7,6 +7,7 @@ import type { LayerId } from "@/lib/layers/types";
 import type { LayerStyle } from "./renderer";
 import { destination } from "./geo";
 import { periodMs, satPosition, type SatExtra } from "@/lib/layers/satellites";
+import { satWorker } from "./satWorker";
 import type { LaunchExtra } from "@/lib/layers/launches";
 import { vehiclePosition, type VehicleExtra } from "@/lib/layers/traffic";
 
@@ -77,6 +78,9 @@ export const satellitesStyle: LayerStyle = {
   position: (f, t) => {
     const extra = f.properties.extra as SatExtra | undefined;
     if (!extra) return null;
+    // Worker-propagated when available (thousands of objects stay smooth);
+    // main-thread SGP4 otherwise.
+    if (satWorker.active) return satWorker.position(f.properties.id) ?? null;
     return satPosition(extra.omm, t);
   },
   selectedLines: (f, t) => {

@@ -12,6 +12,7 @@ import { getViewer } from "@/lib/globe/cesium";
 import { LayerRenderer } from "@/lib/globe/renderer";
 import { registerRenderer, unregisterRenderer } from "@/lib/globe/registry";
 import { STYLES } from "@/lib/globe/styles";
+import { satWorker } from "@/lib/globe/satWorker";
 import { useGlobe } from "@/lib/store/globe";
 import { useSettings, type Prefs } from "@/lib/store/settings";
 
@@ -39,13 +40,24 @@ export default function LayerHost() {
  * rate-limits at a handful of requests per second), so the view used for
  * query keys only updates once the camera has been still for a moment.
  */
-function useSettledView(delayMs = 700) {
+function useSettledView(delayMs = 700, followCadenceMs = 5000) {
   const live = useGlobe((s) => s.view);
+  const following = useGlobe((s) => s.following);
   const [settled, setSettled] = useState(live);
+  // Free camera: settle once it has been still for a moment.
   useEffect(() => {
+    if (following) return;
     const id = setTimeout(() => setSettled(live), delayMs);
     return () => clearTimeout(id);
-  }, [live, delayMs]);
+  }, [live, delayMs, following]);
+  // Following a moving target the camera never stops, so sample the live
+  // view on a fixed cadence instead; otherwise a long chase would keep
+  // polling around the place the chase started.
+  useEffect(() => {
+    if (!following) return;
+    const id = setInterval(() => setSettled(useGlobe.getState().view), followCadenceMs);
+    return () => clearInterval(id);
+  }, [following, followCadenceMs]);
   return settled;
 }
 
@@ -78,7 +90,9 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
 
   useEffect(() => {
     if (rendererRef.current) rendererRef.current.show = enabled;
-  }, [enabled]);
+    // The satellite propagation worker only needs to run while the layer shows.
+    if (def.id === "satellites") satWorker.setEnabled(enabled);
+  }, [enabled, def.id]);
 
   useEffect(() => {
     rendererRef.current?.setLabelsEnabled(labels);

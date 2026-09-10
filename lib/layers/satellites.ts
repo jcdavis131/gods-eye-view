@@ -6,6 +6,7 @@
 
 import type { Point } from "geojson";
 import * as sat from "@/lib/vendor/satellite";
+import { satWorker } from "@/lib/globe/satWorker";
 import type { FetchContext, FetchResult, LayerDefinition, LayerFeature } from "./types";
 import { proxy } from "./aircraft";
 
@@ -135,6 +136,13 @@ async function fetchSatellites(ctx: FetchContext): Promise<FetchResult> {
     }),
   );
 
+  // Hand the catalogue to the propagation worker (no-op where Workers are
+  // unavailable; the style then propagates on the main thread).
+  satWorker.load(
+    [...byId.values()].map(({ omm }) => [String(omm.NORAD_CAT_ID), omm] as const).map(([id, omm]) => ({ id, omm: omm as unknown as sat.OMMJsonObject })),
+    ctx.now,
+  );
+
   const features: LayerFeature<Point>[] = [];
   for (const { omm, groups: gs } of byId.values()) {
     const pos = satPosition(omm, ctx.now) ?? [0, 0, 0];
@@ -173,7 +181,7 @@ async function fetchSatellites(ctx: FetchContext): Promise<FetchResult> {
     note:
       failures.length > 0
         ? `groups failed: ${failures.join(", ")}`
-        : `${groups.length} group${groups.length === 1 ? "" : "s"} · SGP4 propagated`,
+        : `${groups.length} group${groups.length === 1 ? "" : "s"} · SGP4 ${typeof Worker !== "undefined" ? "in a worker" : "on main thread"}`,
   };
 }
 

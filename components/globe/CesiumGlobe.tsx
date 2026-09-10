@@ -10,6 +10,7 @@ import { addBaseImagery, addNightLights, setGoogleTiles, setTerrain } from "@/li
 import { allRenderers, getRenderer } from "@/lib/globe/registry";
 import type { PickId } from "@/lib/globe/renderer";
 import { cinematicTick, followTick } from "@/lib/globe/camera";
+import { satWorker } from "@/lib/globe/satWorker";
 import { useGlobe } from "@/lib/store/globe";
 import { useSettings } from "@/lib/store/settings";
 import type { ViewState } from "@/lib/layers/types";
@@ -178,6 +179,7 @@ export default function CesiumGlobe() {
         const dt = Math.min(0.1, (now - lastFrame) / 1000);
         lastFrame = now;
         const t = C.JulianDate.toDate(viewer!.clock.currentTime).getTime();
+        satWorker.tick(t);
         for (const r of allRenderers()) r.tick(t);
         const st = useGlobe.getState();
         if (st.following) {
