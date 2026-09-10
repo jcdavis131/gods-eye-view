@@ -4,7 +4,11 @@
 
 A photorealistic 3D globe that fuses live public signals: every aircraft broadcasting ADS-B, ships on AIS, satellites propagated from CelesTrak elements, earthquakes as USGS reports them, open-data public cameras, upcoming rocket launches. Dark HUD, scanlines, cinematic camera, voice control. Starts with **zero API keys**. MIT licensed.
 
-![God's Eye View boot screen](docs/screenshot-boot.png)
+![God's Eye View boot screen](docs/screenshot-boot.jpg)
+
+| Night side, NASA Black Marble | Public camera dossier | Replay: ISS orbit at T−90 min | Traffic simulation |
+| --- | --- | --- | --- |
+| ![night](docs/screenshot-night.jpg) | ![cameras](docs/screenshot-cameras.png) | ![replay](docs/screenshot-replay-iss.png) | ![traffic](docs/screenshot-traffic-sim.png) |
 
 ## Quick start
 

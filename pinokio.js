@@ -6,7 +6,6 @@ module.exports = {
   version: "3.0",
   title: "God's Eye View",
   description: "A spy satellite simulator in your browser, except the data is real. No API keys needed.",
-  icon: "icon.png",
   menu: async (kernel, info) => {
     const installed = info.exists("node_modules");
     const running = {

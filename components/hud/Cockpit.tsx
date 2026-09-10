@@ -37,17 +37,19 @@ export default function Cockpit() {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const [{ runCommand, COMMANDS }, { parseIntent }, camera, registry, { useSettings }] = await Promise.all([
+      const [{ runCommand, COMMANDS }, { parseIntent }, camera, registry, { useSettings }, cesium] = await Promise.all([
         import("@/lib/voice/commands"),
         import("@/lib/voice/intent"),
         import("@/lib/globe/camera"),
         import("@/lib/globe/registry"),
         import("@/lib/store/settings"),
+        import("@/lib/globe/cesium"),
       ]);
       if (cancelled) return;
       (window as unknown as { gev: unknown }).gev = {
         globe: useGlobe,
         settings: useSettings,
+        viewer: cesium.getViewer,
         layers: LAYERS,
         commands: COMMANDS.map((c) => c.name),
         run: runCommand,

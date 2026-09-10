@@ -42,5 +42,25 @@
     "typescript": "^5"
   },
   "description": "A spy satellite simulator in your browser, except the data is real.",
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jcdavis131/gods-eye-view.git"
+  },
+  "homepage": "https://github.com/jcdavis131/gods-eye-view#readme",
+  "bugs": {
+    "url": "https://github.com/jcdavis131/gods-eye-view/issues"
+  },
+  "keywords": [
+    "cesium",
+    "globe",
+    "ads-b",
+    "ais",
+    "satellites",
+    "sgp4",
+    "earthquakes",
+    "osint",
+    "nextjs",
+    "spy-satellite"
+  ]
 }

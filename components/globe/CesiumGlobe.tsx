@@ -63,10 +63,13 @@ export default function CesiumGlobe() {
       // Look & feel
       globe.baseColor = C.Color.fromCssColorString("#02060a");
       globe.enableLighting = true;
+      // Cesium measures these against the camera's distance from Earth's
+      // centre (~6.4e6 m at the surface). Small lighting fades keep the
+      // day/night terminator visible at every altitude. The night fades stay
+      // at Cesium's defaults: lowering them drives the ground atmosphere to
+      // full black and swallows the Black Marble city lights.
       globe.lightingFadeOutDistance = 1.2e5;
       globe.lightingFadeInDistance = 3.5e5;
-      globe.nightFadeOutDistance = 1.2e5;
-      globe.nightFadeInDistance = 3.5e5;
       globe.showGroundAtmosphere = prefs.atmosphere;
       if (scene.skyAtmosphere) scene.skyAtmosphere.show =prefs.atmosphere;
       scene.fog.enabled = true;
