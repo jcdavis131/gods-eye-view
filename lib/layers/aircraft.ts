@@ -202,19 +202,44 @@ async function fetchAircraft(ctx: FetchContext): Promise<FetchResult> {
     }
   };
 
+  let openSkyFailed: string | null = null;
   if (useOpenSky) {
     const bbox = ctx.view.bbox && !global ? `&bbox=${ctx.view.bbox.join(",")}` : "";
-    const env = await proxy<OpenSkyResponse>(`/api/aircraft?source=opensky${bbox}`, ctx);
-    for (const s of env.data.states ?? []) {
-      const f = fromOpenSky(s, env.source);
-      if (f && !features.has(f.properties.id)) features.set(f.properties.id, f);
+    try {
+      const env = await proxy<OpenSkyResponse>(`/api/aircraft?source=opensky${bbox}`, ctx);
+      for (const s of env.data.states ?? []) {
+        const f = fromOpenSky(s, env.source);
+        if (f && !features.has(f.properties.id)) features.set(f.properties.id, f);
+      }
+      sources.push(env.source);
+      if (env.data.rateRemaining != null) {
+        meta = { openskyCreditsRemaining: env.data.rateRemaining };
+        note = `OpenSky credits left today: ${env.data.rateRemaining}`;
+      }
+    } catch (err) {
+      // OpenSky refuses some hosting providers' egress (Vercel included) and
+      // exhausts its anonymous quota per IP. Degrade to what adsb.lol gives us
+      // around the view centre instead of showing nothing.
+      openSkyFailed = err instanceof Error ? err.message : String(err);
     }
-    sources.push(env.source);
-    if (env.data.rateRemaining != null) {
-      meta = { openskyCreditsRemaining: env.data.rateRemaining };
-      note = `OpenSky credits left today: ${env.data.rateRemaining}`;
+  }
+  if (useOpenSky && openSkyFailed) {
+    try {
+      const env = await proxy<ReadsbResponse>(
+        `/api/aircraft?source=adsblol&lat=${ctx.view.lat.toFixed(3)}&lon=${ctx.view.lon.toFixed(3)}&dist=250`,
+        ctx,
+      );
+      for (const a of env.data.ac ?? []) {
+        const f = fromReadsb(a, now, env.source);
+        if (f && !features.has(f.properties.id)) features.set(f.properties.id, f);
+      }
+      sources.push(env.source);
+    } catch {
+      /* fall through to the military overlay alone */
     }
-  } else {
+    note = `OpenSky unreachable from this host (${openSkyFailed.slice(0, 40)}) · showing adsb.lol 250 nm around view centre; zoom in for full coverage`;
+  }
+  if (!useOpenSky) {
     // Point query radius: cover the visible disc but never more than 250 nm.
     const distNm = Math.min(250, Math.max(40, (ctx.view.height * 1.2) / NM_M));
     const src = useAdsbx ? "adsbx" : "adsblol";
