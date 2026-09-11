@@ -6,7 +6,8 @@ import { useGlobe } from "@/lib/store/globe";
 import { timeAgo } from "@/lib/globe/geo";
 import { useEffect, useState } from "react";
 
-export default function LayerPanel() {
+/** `embedded`: render as a block inside the mobile sheet instead of pinned to the left edge. */
+export default function LayerPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const layers = useGlobe((s) => s.layers);
   const status = useGlobe((s) => s.status);
   const setLayer = useGlobe((s) => s.setLayer);
@@ -17,7 +18,7 @@ export default function LayerPanel() {
   }, []);
 
   return (
-    <aside className="pointer-events-auto absolute left-3 top-[76px] z-30 w-[268px] max-w-[calc(100vw-24px)]">
+    <aside className={embedded ? "pointer-events-auto w-full" : "pointer-events-auto absolute left-3 top-[76px] z-30 max-h-[calc(100vh-190px)] w-[268px] max-w-[calc(100vw-24px)] overflow-y-auto [scrollbar-width:thin]"}>
       <div className="hud-panel">
         <div className="flex items-center justify-between border-b border-border px-3 py-2">
           <span className="hud-label">Signal layers</span>

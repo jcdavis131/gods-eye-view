@@ -15,6 +15,11 @@ import ReleasesPanel from "./ReleasesPanel";
 import WatchlistPanel from "./WatchlistPanel";
 import ScreenerPanel from "./ScreenerPanel";
 import DeskLayout from "./DeskLayout";
+import MobileTopBar from "./MobileTopBar";
+import MobileNav from "./MobileNav";
+import MobileSheet from "./MobileSheet";
+import { useIsMobile } from "@/lib/hooks/useIsMobile";
+import { useMobile } from "@/lib/mobile/store";
 import ExploreDialog from "./ExploreDialog";
 import TourCaption from "./TourCaption";
 import { applyShare, parseShare, startUrlSync } from "@/lib/globe/share";
@@ -34,6 +39,8 @@ const CesiumGlobe = dynamic(() => import("@/components/globe/CesiumGlobe"), {
 });
 
 export default function Cockpit() {
+  const mobile = useIsMobile();
+  const layersOpen = useMobile((s) => s.layersOpen);
   const setLayer = useGlobe((s) => s.setLayer);
   const setSearchOpen = useGlobe((s) => s.setSearchOpen);
   const setSettingsOpen = useGlobe((s) => s.setSettingsOpen);
@@ -127,6 +134,32 @@ export default function Cockpit() {
       <HudFrame />
       {embed ? (
         <EmbedBadge />
+      ) : mobile ? (
+        <>
+          <MobileTopBar />
+          {/* Bottom stack: sheet with every open panel, compact timeline, nav strip. Nothing overlaps. */}
+          <div
+            className="mobile-stack pointer-events-none absolute inset-x-0 bottom-0 z-30 flex flex-col gap-2 px-2"
+            style={{ paddingBottom: "max(8px, env(safe-area-inset-bottom))" }}
+          >
+            <MobileSheet>
+              {layersOpen && <LayerPanel embedded />}
+              <WaterReportPanel />
+              <MarketReportPanel />
+              <IndicatorsPanel />
+              <ReleasesPanel />
+              <WatchlistPanel />
+              <ScreenerPanel />
+              <InfoPanel />
+            </MobileSheet>
+            <Timeline compact />
+            <MobileNav />
+          </div>
+          <TourCaption />
+          <SettingsDialog />
+          <SearchCommand />
+          <ExploreDialog />
+        </>
       ) : (
         <>
           <TopBar />

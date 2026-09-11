@@ -55,13 +55,14 @@ export default function TopBar() {
 
   return (
     <header className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-start justify-between gap-3 p-3">
+      {/* Widths: the actions strip is icon-only (titles + sr-only names) so twelve actions fit beside the clock; the subtitle and live contacts appear from 2xl, the clock readout from lg; the strip scrolls sideways before it ever clips. */}
       {/* brand */}
-      <div className="hud-panel pointer-events-auto flex items-center gap-4 px-4 py-2">
+      <div className="hud-panel pointer-events-auto flex shrink-0 items-center gap-4 px-4 py-2">
         <div>
-          <div className="hud-display text-[17px] font-semibold leading-none text-primary">
+          <div className="hud-display whitespace-nowrap text-[17px] font-semibold leading-none text-primary">
             God&apos;s Eye View
           </div>
-          <div className="hud-label mt-1 text-[9px]">
+          <div className="hud-label mt-1 hidden whitespace-nowrap text-[9px] 2xl:block">
             spy satellite simulator · the data is real
           </div>
         </div>
@@ -76,7 +77,7 @@ export default function TopBar() {
       </div>
 
       {/* clock + camera readout */}
-      <div className="hud-panel pointer-events-auto hidden items-center gap-5 px-4 py-2 md:flex">
+      <div className="hud-panel pointer-events-auto hidden shrink-0 items-center gap-5 whitespace-nowrap px-4 py-2 lg:flex">
         <div>
           <div className="hud-label">Mission clock</div>
           <div className="mt-0.5 flex items-center gap-2 text-[13px] tabular-nums text-foreground">
@@ -103,8 +104,8 @@ export default function TopBar() {
             <span className="ml-2 text-muted-foreground">ALT {formatDistance(view.height)}</span>
           </div>
         </div>
-        <div className="h-8 w-px bg-border" />
-        <div>
+        <div className="hidden h-8 w-px bg-border 2xl:block" />
+        <div className="hidden 2xl:block">
           <div className="hud-label">Live contacts</div>
           <div className="mt-0.5 text-[13px] tabular-nums text-primary">
             {liveCount.toLocaleString()}
@@ -113,7 +114,7 @@ export default function TopBar() {
       </div>
 
       {/* actions */}
-      <div className="hud-panel pointer-events-auto flex items-center gap-1 p-1">
+      <div className="hud-panel pointer-events-auto flex min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap p-1 [scrollbar-width:none]">
         <VoiceControl />
         <button
           type="button"
@@ -122,7 +123,7 @@ export default function TopBar() {
           title="Curated places, guided tour, exports"
         >
           <Compass className="size-3.5" />
-          Explore
+          <span className="sr-only">Explore</span>
         </button>
         <button
           type="button"
@@ -131,8 +132,8 @@ export default function TopBar() {
           title="Search flights, ships, satellites, places (Ctrl+K)"
         >
           <Search className="size-3.5" />
-          Search
-          <span className="hud-kbd">⌘K</span>
+          <span className="sr-only">Search</span>
+          <span className="hud-kbd hidden 2xl:inline">⌘K</span>
         </button>
         <button
           type="button"
@@ -150,7 +151,7 @@ export default function TopBar() {
           title="Community water report for the current view"
         >
           <Droplets className="size-3.5" />
-          Water
+          <span className="sr-only">Water</span>
         </button>
         <button
           type="button"
@@ -169,7 +170,7 @@ export default function TopBar() {
           title="Market report for the current view: home values, rents, wages, jobs, trade gateways"
         >
           <Landmark className="size-3.5" />
-          Market
+          <span className="sr-only">Market</span>
         </button>
         <button
           type="button"
@@ -179,7 +180,7 @@ export default function TopBar() {
           title="Named indicators with thresholds: river stages, freight, housing, energy, labour, trade"
         >
           <Activity className="size-3.5" />
-          Signals
+          <span className="sr-only">Signals</span>
         </button>
         <button
           type="button"
@@ -189,7 +190,7 @@ export default function TopBar() {
           title="Screener: rank and filter counties, states, ports, crossings, countries"
         >
           <Table2 className="size-3.5" />
-          Screen
+          <span className="sr-only">Screen</span>
         </button>
         <button
           type="button"
@@ -199,7 +200,7 @@ export default function TopBar() {
           title="Release calendar, loaded vintages, movers since the last release"
         >
           <CalendarDays className="size-3.5" />
-          Releases
+          <span className="sr-only">Releases</span>
         </button>
         <button
           type="button"
@@ -209,7 +210,7 @@ export default function TopBar() {
           title="Watchlists with rules, RSS/Atom feeds and webhooks"
         >
           <Bell className="size-3.5" />
-          Watch
+          <span className="sr-only">Watch</span>
         </button>
         <DeskToggle />
         <button
@@ -219,7 +220,7 @@ export default function TopBar() {
           title="Copy a link to exactly this view, layers, clock and selection"
         >
           <Link2 className="size-3.5" />
-          Share
+          <span className="sr-only">Share</span>
         </button>
         <button
           type="button"

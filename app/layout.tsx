@@ -41,6 +41,10 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   themeColor: "#03070a",
   colorScheme: "dark",
+  width: "device-width",
+  initialScale: 1,
+  // Let the HUD pad itself around the notch and the home indicator.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

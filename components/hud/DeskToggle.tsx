@@ -34,8 +34,8 @@ export default function DeskToggle() {
       title={on ? "Back to the HUD (D)" : "Desk mode: light, dense table + chart + report workspace (D)"}
     >
       <LayoutPanelLeft className="size-3.5" />
-      Desk
-      <span className="hud-kbd">D</span>
+      <span className="sr-only">Desk</span>
+      <span className="hud-kbd hidden 2xl:inline">D</span>
     </button>
   );
 }

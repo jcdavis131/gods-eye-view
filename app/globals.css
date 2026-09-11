@@ -604,3 +604,53 @@
     break-inside: avoid;
   }
 }
+
+/* ---------- Phone layout (below md) ----------
+   Cockpit swaps the pinned panels for a bottom stack: one sheet holding every
+   open panel, a compact timeline and a nav strip. The panels keep their
+   desktop markup; these rules relax the widths and inner max-heights so the
+   sheet is the only thing that scrolls. */
+.mobile-sheet-half {
+  max-height: min(48dvh, 480px);
+}
+.mobile-sheet-tall {
+  max-height: calc(100dvh - 190px);
+}
+.mobile-sheet .hud-panel {
+  width: 100% !important;
+  max-width: 100% !important;
+  max-height: none !important;
+}
+.mobile-sheet .mobile-sheet-body > * {
+  width: 100%;
+}
+/* Inner scroll regions become part of the sheet's single scroll. */
+.mobile-sheet .hud-panel .overflow-y-auto {
+  max-height: none !important;
+  overflow-y: visible !important;
+}
+/* Tables and code stay scrollable sideways inside the sheet. */
+.mobile-sheet table,
+.mobile-sheet pre {
+  max-width: 100%;
+}
+.mobile-nav {
+  -webkit-overflow-scrolling: touch;
+}
+.mobile-nav::-webkit-scrollbar,
+.mobile-nav div::-webkit-scrollbar {
+  display: none;
+}
+.mobile-nav div {
+  scrollbar-width: none;
+}
+/* Cesium's credit strip sits under the nav on phones; give it room. */
+@media (max-width: 767px) {
+  .cesium-viewer-bottom {
+    bottom: 128px !important;
+  }
+  /* Taller touch targets on the layer switches and the timeline scrubber. */
+  .timeline-range {
+    height: 28px;
+  }
+}
