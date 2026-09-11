@@ -1,11 +1,18 @@
 "use client";
 // Small SVG trace for any [label, value] series: home values by year,
 // monthly truck counts, container TEU by year. Marks the last point and,
-// optionally, a reference line.
+// optionally, a reference line. Accepts either [label, value] rows or the
+// Point[] of a lib/series Series (null values are skipped).
+
+import type { Point } from "@/lib/series/types";
 
 interface Props {
   title: string;
-  rows: Array<[string, number]>;
+  rows?: Array<[string, number]>;
+  /** A Series' points; used when `rows` is absent. Labels are ISO dates. */
+  points?: Point[];
+  /** Accessible name for the SVG; defaults to the title. */
+  ariaLabel?: string;
   color?: string;
   /** Format for the axis extremes and the latest value. */
   fmt?: (v: number) => string;
@@ -18,7 +25,15 @@ interface Props {
 
 const defaultFmt = (v: number) => (Math.abs(v) >= 1000 ? Math.round(v).toLocaleString() : Math.abs(v) >= 10 ? v.toFixed(1) : v.toFixed(2));
 
-export default function SeriesChart({ title, rows, color = "var(--primary)", fmt = defaultFmt, note, bars, reference }: Props) {
+/** [ISO date, value] rows from a Series' points, nulls dropped. */
+export function rowsFromPoints(points: Point[]): Array<[string, number]> {
+  const out: Array<[string, number]> = [];
+  for (const p of points) if (p.v != null && Number.isFinite(p.v)) out.push([new Date(p.t).toISOString().slice(0, 10), p.v]);
+  return out;
+}
+
+export default function SeriesChart({ title, rows: rowsIn, points, color = "var(--primary)", fmt = defaultFmt, note, bars, reference, ariaLabel }: Props) {
+  const rows = rowsIn ?? (points ? rowsFromPoints(points) : []);
   if (rows.length < 2) return <div className="px-3 py-1 text-[9px] text-muted-foreground">{title}: not enough published points to draw</div>;
   const vals = rows.map((r) => r[1]);
   let min = Math.min(...vals);
@@ -44,7 +59,7 @@ export default function SeriesChart({ title, rows, color = "var(--primary)", fmt
           {fmt(min)} – {fmt(max)}
         </span>
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="mt-1 block h-[54px] w-full" role="img" aria-label={title}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="mt-1 block h-[54px] w-full" role="img" aria-label={ariaLabel ?? title}>
         <line x1="0" y1={H - 4} x2={W} y2={H - 4} stroke="currentColor" strokeOpacity="0.15" />
         {bars ? (
           rows.map((r, i) => (

@@ -353,3 +353,254 @@
     transition: none;
   }
 }
+
+/* ---------- Desk mode ----------
+   lib/desk/store.ts sets data-mode="desk" and data-theme="light|dark" on <html>.
+   Nothing below applies when data-mode is absent, so the HUD is untouched.
+   Structure (density, fonts, no scanlines/glow) keys off data-mode; the light
+   palette keys off data-theme so a dark desk keeps the cockpit tokens. */
+[data-mode="desk"][data-theme="light"] {
+  /* Contrast on white: foreground 15:1, muted-foreground 7.5:1, primary 6.3:1, warn 6.2:1, alert 6.6:1 (WCAG AA for 11-12 px text). */
+  --background: #f4f6f8;
+  --foreground: #16202a;
+  --card: #ffffff;
+  --card-foreground: #16202a;
+  --popover: #ffffff;
+  --popover-foreground: #16202a;
+  --primary: #0b6e5c;
+  --primary-foreground: #ffffff;
+  --secondary: #e6f1ee;
+  --secondary-foreground: #0b4f43;
+  --muted: #eceff3;
+  --muted-foreground: #4a5563;
+  --accent: #dcefe9;
+  --accent-foreground: #0b4f43;
+  --destructive: #b42318;
+  --alert: #b42318;
+  --warn: #8a5300;
+  --border: #cdd4dc;
+  --input: #cdd4dc;
+  --ring: #0b6e5c;
+  --chart-1: #1d4ed8;
+  --chart-2: #0b6e5c;
+  --chart-3: #b45309;
+  --chart-4: #be185d;
+  --chart-5: #6d28d9;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #16202a;
+  --sidebar-primary: #0b6e5c;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #dcefe9;
+  --sidebar-accent-foreground: #0b4f43;
+  --sidebar-border: #cdd4dc;
+  --sidebar-ring: #0b6e5c;
+  color-scheme: light;
+}
+[data-mode="desk"][data-theme="light"] ::selection {
+  background: #bfe3d8;
+}
+[data-mode="desk"][data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: #b7c0ca;
+}
+[data-mode="desk"][data-theme="light"] .cesium-widget-credits,
+[data-mode="desk"][data-theme="light"] .cesium-widget-credits a {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Density and type: a system stack with tabular figures, tighter panels. */
+[data-mode="desk"] body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+[data-mode="desk"] .hud-display {
+  font-family: inherit;
+  letter-spacing: 0;
+  text-transform: none;
+}
+[data-mode="desk"] .hud-label {
+  color: var(--primary);
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+[data-mode="desk"] .hud-panel {
+  background: var(--card);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+[data-mode="desk"] .hud-panel::before,
+[data-mode="desk"] .hud-panel::after,
+[data-mode="desk"] .scanlines,
+[data-mode="desk"] .vignette,
+[data-mode="desk"] .hud-corner {
+  display: none;
+}
+[data-mode="desk"] .hud-dot {
+  box-shadow: none;
+}
+[data-mode="desk"] .reticle {
+  opacity: 0.6;
+}
+/* Cockpit's floating report column sits under the pane; hide it so reports
+   render once, in the Report tab. Integrator: add class "desk-hud-only" to
+   that column. The second selector is a fallback on its Tailwind classes. */
+[data-mode="desk"] .desk-hud-only,
+[data-mode="desk"] main > div.top-\[76px\] {
+  display: none;
+}
+/* Visible focus in both desk themes. */
+[data-mode="desk"] :focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+[data-mode="desk"] .desk-pane {
+  transition: width 160ms ease;
+  /* Cockpit's <main> is select-none; analysts copy from the pane. */
+  user-select: text;
+  -webkit-user-select: text;
+}
+[data-mode="desk"] .desk-layout[data-dragging] .desk-pane {
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-mode="desk"] .desk-pane {
+    transition: none;
+  }
+}
+.desk-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--card);
+  color: var(--foreground);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.desk-btn:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.desk-btn:disabled {
+  opacity: 0.5;
+}
+.desk-btn-primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+}
+.desk-btn-primary:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--primary) 85%, black);
+  color: var(--primary-foreground);
+}
+.desk-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 10px;
+  color: var(--foreground);
+}
+.desk-chip-on {
+  background: var(--accent);
+  border-color: var(--primary);
+  color: var(--accent-foreground);
+}
+.desk-grid th,
+.desk-grid td {
+  line-height: 1.2;
+}
+/* Reports laid out as documents: no viewport cap, no inner scroll, no
+   pink/blue brand tints on the light paper, tighter section padding. */
+.desk-doc .hud-panel {
+  max-height: none !important;
+  border-radius: 3px;
+}
+.desk-doc .hud-panel .overflow-y-auto {
+  overflow: visible !important;
+}
+.desk-doc .hud-panel .py-2 {
+  padding-block: 5px;
+}
+[data-mode="desk"][data-theme="light"] .desk-doc .hud-label[style] {
+  color: var(--primary) !important;
+}
+.desk-print-only {
+  display: none;
+}
+
+/* ---------- Print (desk mode) ----------
+   Hides the globe and the chrome; the right pane prints full width with a
+   page break between report sections. The HUD (no data-mode) prints as-is. */
+@media print {
+  html[data-mode="desk"],
+  [data-mode="desk"] body {
+    height: auto;
+    overflow: visible;
+    background: #fff;
+    color: #111;
+  }
+  [data-mode="desk"] main {
+    position: static;
+    height: auto;
+    overflow: visible;
+    background: #fff;
+  }
+  [data-mode="desk"] main > *:not(.desk-layout) {
+    display: none !important;
+  }
+  [data-mode="desk"] .desk-layout {
+    position: static;
+    inset: auto;
+  }
+  [data-mode="desk"] .desk-pane {
+    position: static;
+    width: 100% !important;
+    max-width: none !important;
+    border: 0;
+    background: #fff;
+    color: #111;
+  }
+  [data-mode="desk"] .desk-noprint,
+  [data-mode="desk"] .desk-handle {
+    display: none !important;
+  }
+  [data-mode="desk"] .desk-scroll,
+  [data-mode="desk"] .desk-pane .overflow-y-auto,
+  [data-mode="desk"] .desk-pane .overflow-auto {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+  [data-mode="desk"] .desk-doc {
+    display: block;
+  }
+  [data-mode="desk"] .desk-section {
+    break-inside: avoid;
+    break-after: page;
+  }
+  [data-mode="desk"] .desk-section:last-child {
+    break-after: auto;
+  }
+  [data-mode="desk"] .desk-doc button {
+    display: none;
+  }
+  [data-mode="desk"] .desk-notes {
+    display: none;
+  }
+  [data-mode="desk"] .desk-print-only {
+    display: block;
+  }
+  [data-mode="desk"] .desk-grid thead {
+    display: table-header-group;
+  }
+  [data-mode="desk"] .desk-grid tr {
+    break-inside: avoid;
+  }
+}
