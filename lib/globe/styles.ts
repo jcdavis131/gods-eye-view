@@ -13,6 +13,42 @@ import { vehiclePosition, type VehicleExtra } from "@/lib/layers/traffic";
 import { groundwaterStyle, turbidityStyle, waterStyle } from "./waterStyles";
 import { commerceStyle, realestateStyle, tradeStyle } from "./economyStyles";
 
+/** Distinctive major-group colours for the occupations layer: one hue per SOC major group. */
+const OCCUPATION_COLORS: Record<string, string> = {
+  "11-0000": "#F5B849", // Management
+  "13-0000": "#E8A33D", // Business & financial operations
+  "15-0000": "#4DD8FF", // Computer & mathematical
+  "17-0000": "#7DD3FC", // Architecture & engineering
+  "19-0000": "#A78BFA", // Life, physical & social science
+  "21-0000": "#F472B6", // Community & social service
+  "23-0000": "#FB7185", // Legal
+  "25-0000": "#FACC15", // Educational instruction & library
+  "27-0000": "#E879F9", // Arts, design, entertainment, sports & media
+  "29-0000": "#5EEAD4", // Healthcare practitioners & technical
+  "31-0000": "#6EE7B7", // Healthcare support
+  "33-0000": "#94A3B8", // Protective service
+  "35-0000": "#FB923C", // Food preparation & serving
+  "37-0000": "#A3A380", // Building & grounds cleaning & maintenance
+  "39-0000": "#F9A8D4", // Personal care & service
+  "41-0000": "#FCA5A5", // Sales & related
+  "43-0000": "#C4B5FD", // Office & administrative support
+  "45-0000": "#84CC16", // Farming, fishing & forestry
+  "47-0000": "#D97706", // Construction & extraction
+  "49-0000": "#B45309", // Installation, maintenance & repair
+  "51-0000": "#60A5FA", // Production
+  "53-0000": "#38BDF8", // Transportation & material moving
+};
+
+export const occupationsStyle: LayerStyle = {
+  color: "#7DD3A8",
+  icon: () => "jobs",
+  iconSize: 20,
+  colorFor: (f) => OCCUPATION_COLORS[f.properties.kind ?? ""] ?? "#7DD3A8",
+  label: (f) => f.properties.name,
+  labelMax: 24,
+  scaleByDistance: [3e5, 1.0, 8e6, 0.25],
+};
+
 /** Dead-reckon a moving surface/air object from its last report for up to 90 s. */
 function extrapolate(
   lon: number,
@@ -271,6 +307,7 @@ export const STYLES: Partial<Record<LayerId, LayerStyle>> = {
   trade: tradeStyle,
   commerce: commerceStyle,
   realestate: realestateStyle,
+  occupations: occupationsStyle,
 };
 
 /** Camera range (m) to sit at when following an object of a given layer. */
@@ -288,4 +325,5 @@ export const FOLLOW_RANGE: Record<LayerId, number> = {
   trade: 40_000,
   commerce: 150_000,
   realestate: 150_000,
+  occupations: 400_000,
 };

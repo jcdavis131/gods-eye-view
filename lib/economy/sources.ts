@@ -34,6 +34,8 @@ import {
 import wpiJson from "./data/wpi.json";
 import countriesJson from "./data/countries.json";
 import btsPortsJson from "./data/bts_ports.json";
+import msaIndexJson from "./data/msa_index.json";
+import msaJobsJson from "./data/msa_jobs.json";
 
 export const WPI: { source: string; pulled: string; ports: WpiPort[] } = wpiJson as unknown as { source: string; pulled: string; ports: WpiPort[] };
 export const COUNTRIES: { source: string; pulled: string; features: CountryFeatureIn[] } = countriesJson as unknown as {
@@ -763,4 +765,28 @@ export function witsPartners(iso3: string): Promise<Partners | null> {
     }
     return null;
   }).then((c) => c.value);
+}
+
+// ---------------------------------------------------------------- BLS OEWS MSA occupations (bundled, keyless)
+
+import type { MsaIndexEntry, MsaJobs } from "./features";
+
+export const OEWS_AS_OF = "May 2025";
+const OEWS_SOURCE = "BLS Occupational Employment and Wage Statistics, May 2025 (MSA) + Census TIGERweb CBSA centroids";
+
+const MSA_INDEX = msaIndexJson as unknown as MsaIndexEntry[];
+const MSA_JOBS = msaJobsJson as unknown as Record<string, { top: MsaJobs["top"]; major: MsaJobs["major"] }>;
+const MSA_BY_ID = new Map(MSA_INDEX.map((m) => [m.id, m]));
+
+/** Every MSA: id, name, state, centroid, employment, distinctive major group. Static for the year. */
+export function oewsMsaIndex(): { asOf: string; source: string; msas: MsaIndexEntry[] } {
+  return { asOf: OEWS_AS_OF, source: OEWS_SOURCE, msas: MSA_INDEX };
+}
+
+/** Occupation mix for one MSA (5-digit CBSA code): top 30 detailed occupations + major-group rollup. */
+export function oewsMsaJobs(msa: string): { asOf: string; source: string; data: MsaJobs } | null {
+  const meta = MSA_BY_ID.get(msa);
+  const j = MSA_JOBS[msa];
+  if (!meta || !j) return null;
+  return { asOf: OEWS_AS_OF, source: OEWS_SOURCE, data: { msa, name: meta.name, top: j.top, major: j.major } };
 }

@@ -7,6 +7,10 @@
 //   /api/economy?op=sectors&fips=48029        private-sector NAICS mix for a county (or a
 //                                             state: 48000), with location quotients
 //   /api/economy?op=context&fips=48029        sector mix plus metro, state and US home values
+//   /api/economy?op=msas                      every MSA: centroid, employment, most distinctive
+//                                             occupation group (BLS OEWS, May 2025)
+//   /api/economy?op=msa-jobs&msa=41700        occupation mix for one MSA: top 30 detailed
+//                                             occupations + 22 major groups, wages, location quotients
 //   /api/economy?op=ports&bbox=..&min=medium  World Port Index harbours in the box with BTS
 //                                             Port Performance volumes where published
 //   /api/economy?op=border                    every US land port of entry, 25 months of BTS counts
@@ -45,6 +49,8 @@ import {
   fred,
   FRED_SERIES,
   metroRow,
+  oewsMsaIndex,
+  oewsMsaJobs,
   qcewLatest,
   qcewSectors,
   stateLookup,
@@ -202,6 +208,23 @@ async function opSectors(fips: string): Promise<OpResult> {
   return { data: s, meta: { source: "BLS QCEW", fips }, ttlS: 6 * 3600 };
 }
 
+/** Every MSA with its centroid, employment and most distinctive occupation group. Static for the vintage. */
+async function opMsas(): Promise<OpResult> {
+  const r = oewsMsaIndex();
+  return {
+    data: r,
+    meta: { source: r.source, asOf: r.asOf, count: r.msas.length },
+    ttlS: 24 * 3600,
+  };
+}
+
+/** Occupation mix for one MSA: top 30 detailed occupations + the 22 major groups, with wages and location quotients. */
+async function opMsaJobs(msa: string): Promise<OpResult> {
+  const j = oewsMsaJobs(msa);
+  if (!j) return { data: null, meta: { source: "BLS OEWS", msa, error: "unknown MSA code" }, ttlS: 3600 };
+  return { data: j, meta: { source: j.source, asOf: j.asOf, msa }, ttlS: 24 * 3600 };
+}
+
 const SIZE_MIN: Record<string, number> = { large: 3, medium: 2, small: 1, all: 0 };
 
 async function opPorts(bbox: Bbox, min: string): Promise<OpResult> {
@@ -357,6 +380,13 @@ export async function GET(req: NextRequest) {
         if (!/^(\d{5}|US000)$/.test(fips)) return bad("fips=SSCCC (county) or SS000 (state) required");
         return respond(await opSectors(fips));
       }
+      case "msas":
+        return respond(await opMsas());
+      case "msa-jobs": {
+        const msa = q.get("msa") ?? "";
+        if (!/^\d{5}$/.test(msa)) return bad("msa=5-digit CBSA code required");
+        return respond(await opMsaJobs(msa));
+      }
       case "context": {
         const fips = q.get("fips") ?? "";
         if (!/^\d{5}$/.test(fips)) return bad("fips=SSCCC (county) or SS000 (state) required");
@@ -385,7 +415,7 @@ export async function GET(req: NextRequest) {
         return respond(await opReport(lon, lat, req.nextUrl.origin));
       }
       default:
-        return bad("unknown op: areas | sectors | context | ports | border | countries | partners | pulse | report");
+        return bad("unknown op: areas | sectors | context | msas | msa-jobs | ports | border | countries | partners | pulse | report");
     }
   } catch (err) {
     const res = jsonError(err);
