@@ -1,8 +1,9 @@
 // public/openapi.json must agree with the two routes it documents: every op
 // in the `op` enum has a `case "<op>"` in the route, and every case in the
 // route is documented. Also checks that the reserved placeholders exist and
-// that every $ref resolves.
-import { readFileSync } from "node:fs";
+// that every route handler under app/api has a documented path and that every
+// $ref resolves.
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -70,11 +71,17 @@ describe("public/openapi.json", () => {
     expect(s.WaterHistoryResponse["x-csv-columns"]).toEqual([...wat.HISTORY_COLUMNS]);
     expect(s.WaterMatchupResponse["x-csv-columns"]).toEqual([...wat.MATCHUP_COLUMNS]);
   });
-  it("reserves placeholders for the routes other workstreams add", () => {
-    for (const p of ["/api/series", "/api/economy/history", "/api/screen", "/api/indicators", "/api/releases", "/api/watch", "/api/companies", "/api/finance", "/api/mcp"]) {
-      expect(spec.paths[p]).toBeDefined();
-      const method = Object.values(spec.paths[p])[0];
-      expect(method.summary).toContain("reserved");
+  it("documents every route handler under app/api", () => {
+    const routes = readdirSync(path.join(root, "app", "api"), { recursive: true, encoding: "utf8" })
+      .filter((f) => f.endsWith("route.ts"))
+      .map((f) => "/api/" + f.replace(/\/?route\.ts$/, "").replace(/\\/g, "/"))
+      .map((f) => f.replace(/\/$/, ""));
+    // Thin browser proxies for the live layers are not part of the practitioner API.
+    const proxies = new Set(["/api/aircraft", "/api/cameras", "/api/earthquakes", "/api/geocode", "/api/launches", "/api/roads", "/api/satellites", "/api/ships", "/api/voice/elevenlabs"]);
+    for (const r of routes) {
+      if (proxies.has(r)) continue;
+      expect(spec.paths[r], r).toBeDefined();
+      for (const method of Object.values(spec.paths[r])) expect((method as { summary?: string }).summary ?? "").not.toContain("reserved");
     }
   });
   it("every $ref resolves to a component", () => {
