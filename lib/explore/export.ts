@@ -6,6 +6,7 @@ import { getRenderer } from "@/lib/globe/registry";
 import type { LayerFeature } from "@/lib/layers/types";
 import type { ChipExtra } from "@/lib/layers/turbidity";
 import type { GaugeExtra, ReservoirExtra } from "@/lib/water/features";
+import type { AreaExtra, CrossingExtra, PortExtra } from "@/lib/economy/features";
 import { useGlobe } from "@/lib/store/globe";
 
 export function downloadText(filename: string, text: string, mime = "text/plain") {
@@ -121,6 +122,102 @@ export function gaugesCsv(): { count: number; text: string } {
     }
   }
   return { count: n, text: rows.join("\n") };
+}
+
+/** Every county or state the two area layers hold, one row each, with every join. */
+export function areasCsv(): { count: number; text: string } {
+  const seen = new Map<string, { x: AreaExtra; anchor?: [number, number] }>();
+  for (const layer of ["realestate", "commerce"] as const) {
+    const r = getRenderer(layer);
+    if (!r) continue;
+    for (const f of r.features()) {
+      const x = f.properties.extra as AreaExtra;
+      const prev = seen.get(x.geoid);
+      if (!prev) seen.set(x.geoid, { x, anchor: f.properties.anchor });
+      else prev.x = { ...prev.x, jobs: prev.x.jobs ?? x.jobs, home: prev.x.home ?? x.home, rent: prev.x.rent ?? x.rent };
+    }
+  }
+  const rows: string[] = [
+    "geoid,level,name,state,metro,lon,lat,zhvi_usd,zhvi_as_of,zhvi_1y_pct,zhvi_5y_pct,zori_usd_month,zori_as_of,zori_1y_pct,price_to_rent,qcew_period,jobs,employers,avg_weekly_wage_usd,jobs_1y_pct,wage_1y_pct,qcew_suppressed",
+  ];
+  for (const { x, anchor } of seen.values()) {
+    const h = x.home;
+    const rt = x.rent;
+    const j = x.jobs;
+    rows.push(
+      [
+        x.geoid, x.level, x.name, x.stusab ?? x.stateName ?? "", x.metro ?? "", anchor?.[0] ?? "", anchor?.[1] ?? "",
+        h?.latest != null ? Math.round(h.latest) : "", h?.asOf ?? "", h?.yoyPct?.toFixed(2) ?? "", h?.y5Pct?.toFixed(2) ?? "",
+        rt?.latest != null ? Math.round(rt.latest) : "", rt?.asOf ?? "", rt?.yoyPct?.toFixed(2) ?? "",
+        h && rt ? (h.latest / (rt.latest * 12)).toFixed(2) : "",
+        j?.period ?? "", j?.emp ?? "", j?.estabs ?? "", j?.avgWeeklyWage ?? "", j?.yoy.emp ?? "", j?.yoy.avgWeeklyWage ?? "", j ? String(j.suppressed) : "",
+      ]
+        .map(csvCell)
+        .join(","),
+    );
+  }
+  return { count: seen.size, text: rows.join("\n") };
+}
+
+/** Harbours and land crossings the trade layer holds. */
+export function tradeCsv(): { count: number; text: string } {
+  const r = getRenderer("trade");
+  const rows: string[] = [
+    "feature_id,kind,name,country_or_state,lon,lat,harbour_size,harbour_type,channel_depth_m,locode,bts_year,container_teu,teu_rank,total_tons,tonnage_rank,trucks_month,trucks_latest,trucks_1y_pct,personal_vehicles_latest,pedestrians_latest,position_basis,source",
+  ];
+  let n = 0;
+  if (r) {
+    for (const f of r.features() as IterableIterator<LayerFeature<Point>>) {
+      const k = f.properties.kind;
+      if (k !== "port" && k !== "crossing") continue;
+      n++;
+      const [lon, lat] = f.geometry.coordinates;
+      if (k === "port") {
+        const x = f.properties.extra as PortExtra;
+        const s = x.stats;
+        rows.push(
+          [
+            f.properties.id, k, f.properties.name, x.wpi.country, lon, lat, x.wpi.size ?? "", x.wpi.type ?? "", x.wpi.channelM ?? "", x.wpi.locode ?? "",
+            s?.year ?? "", s?.container?.total ?? "", s?.container?.ranking ?? "", s?.tonnage?.total ?? "", s?.tonnage?.ranking ?? "",
+            "", "", "", "", "", s?.position ?? "World Port Index", f.properties.source,
+          ]
+            .map(csvCell)
+            .join(","),
+        );
+      } else {
+        const x = f.properties.extra as CrossingExtra;
+        const t = x.measures.Trucks;
+        rows.push(
+          [
+            f.properties.id, k, f.properties.name, x.state, lon, lat, "", x.border, "", "", "", "", "", "", "",
+            t?.latestDate ?? x.asOf, t?.latest ?? "", t?.yoyPct?.toFixed(2) ?? "", x.measures["Personal Vehicles"]?.latest ?? "", x.measures.Pedestrians?.latest ?? "",
+            "BTS port coordinates", f.properties.source,
+          ]
+            .map(csvCell)
+            .join(","),
+        );
+      }
+    }
+  }
+  return { count: n, text: rows.join("\n") };
+}
+
+export function exportAreas() {
+  const { count, text } = areasCsv();
+  if (!count) {
+    useGlobe.getState().pushLog({ level: "warn", text: "No counties or states loaded to export (turn on Home values or Jobs & wages)." });
+    return;
+  }
+  downloadText(`gev-areas-${stamp()}.csv`, text, "text/csv");
+}
+
+export function exportTrade() {
+  const { count, text } = tradeCsv();
+  if (!count) {
+    useGlobe.getState().pushLog({ level: "warn", text: "No harbours or crossings loaded to export (turn on Ports & trade)." });
+    return;
+  }
+  downloadText(`gev-ports-crossings-${stamp()}.csv`, text, "text/csv");
 }
 
 export function exportChips() {

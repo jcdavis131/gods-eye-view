@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, Settings2, Crosshair, Home, Droplets, Compass, Link2 } from "lucide-react";
+import { Search, Settings2, Crosshair, Home, Droplets, Compass, Link2, Landmark } from "lucide-react";
 import { copyShareLink } from "@/lib/globe/share";
 import { useNow } from "@/lib/hooks/useNow";
 import { useGlobe } from "@/lib/store/globe";
@@ -26,6 +26,7 @@ export default function TopBar() {
   const setSearchOpen = useGlobe((s) => s.setSearchOpen);
   const setSettingsOpen = useGlobe((s) => s.setSettingsOpen);
   const waterOpen = useGlobe((s) => s.waterReportOpen);
+  const marketOpen = useGlobe((s) => s.marketReportOpen);
   const setExploreOpen = useGlobe((s) => s.setExploreOpen);
   const live = isLive(clock.offsetMs);
   const mission = now ? now + clock.offsetMs : 0;
@@ -131,6 +132,25 @@ export default function TopBar() {
         >
           <Droplets className="size-3.5" />
           Water
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            const st = useGlobe.getState();
+            if (!marketOpen) {
+              st.setLayer("realestate", true);
+              st.setLayer("commerce", true);
+              st.setLayer("trade", true);
+            }
+            st.setMarketReportOpen(!marketOpen);
+          }}
+          className={`flex items-center gap-2 px-3 py-2 text-[11px] uppercase tracking-wider hover:bg-accent hover:text-primary ${
+            marketOpen ? "text-primary" : "text-foreground/80"
+          }`}
+          title="Market report for the current view: home values, rents, wages, jobs, trade gateways"
+        >
+          <Landmark className="size-3.5" />
+          Market
         </button>
         <button
           type="button"

@@ -9,6 +9,7 @@ import TopBar from "./TopBar";
 import LayerPanel from "./LayerPanel";
 import InfoPanel from "./InfoPanel";
 import WaterReportPanel from "./WaterReportPanel";
+import MarketReportPanel from "./MarketReportPanel";
 import ExploreDialog from "./ExploreDialog";
 import TourCaption from "./TourCaption";
 import { applyShare, parseShare, startUrlSync } from "@/lib/globe/share";
@@ -86,7 +87,7 @@ export default function Cockpit() {
         flyTo: camera.flyTo,
         features: registry.allFeatures,
         presets: PRESETS,
-        exports: { gaugesCsv: exportsMod.gaugesCsv, chipsGeoJson: exportsMod.chipsGeoJson },
+        exports: { gaugesCsv: exportsMod.gaugesCsv, chipsGeoJson: exportsMod.chipsGeoJson, areasCsv: exportsMod.areasCsv, tradeCsv: exportsMod.tradeCsv },
         shareUrl: share.shareUrl,
         applyShare: share.applyShare,
       };
@@ -127,6 +128,7 @@ export default function Cockpit() {
           <LayerPanel />
           <div className="pointer-events-none absolute right-3 top-[76px] z-30 flex w-[320px] max-w-[calc(100vw-24px)] flex-col gap-2">
             <WaterReportPanel />
+            <MarketReportPanel />
             <InfoPanel />
           </div>
           <Timeline />

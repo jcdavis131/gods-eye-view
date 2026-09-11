@@ -12,6 +12,9 @@ import { launchesLayer } from "./launches";
 import { waterLayer } from "./water";
 import { groundwaterLayer } from "./groundwater";
 import { turbidityLayer } from "./turbidity";
+import { tradeLayer } from "./trade";
+import { commerceLayer } from "./commerce";
+import { realestateLayer } from "./realestate";
 
 export const LAYERS: LayerDefinition[] = [
   aircraftLayer,
@@ -24,6 +27,9 @@ export const LAYERS: LayerDefinition[] = [
   waterLayer,
   groundwaterLayer,
   turbidityLayer,
+  tradeLayer,
+  commerceLayer,
+  realestateLayer,
 ];
 
 export const LAYER_BY_ID: Partial<Record<LayerId, LayerDefinition>> = Object.fromEntries(

@@ -15,6 +15,7 @@ import type { GaugeExtra } from "@/lib/layers/water";
 import type { WellExtra } from "@/lib/layers/groundwater";
 import type { ChipExtra } from "@/lib/layers/turbidity";
 import { turbidityHex } from "@/lib/water/overlay";
+import EconomyAside from "./EconomyAsides";
 
 function useRefresh(ms: number) {
   const [, set] = useState(0);
@@ -79,11 +80,13 @@ export default function InfoPanel() {
   }
   const details = Object.entries(p.details ?? {}).filter(([, v]) => v != null && v !== "" && v !== false);
   const isLiveLayer =
-    !p.simulated && p.layer !== "satellites" && p.layer !== "launches" && p.layer !== "water" && p.layer !== "groundwater" && p.layer !== "turbidity";
+    !p.simulated &&
+    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate"].includes(p.layer);
   const gauge = p.layer === "water" && (p.kind === "gauge" || p.kind === "reservoir") && p.id.startsWith("usgs:") ? (p.extra as GaugeExtra) : null;
   const well = p.layer === "groundwater" && p.kind === "well" ? (p.extra as WellExtra) : null;
   const chip = p.layer === "turbidity" ? (p.extra as ChipExtra) : null;
-  const estimate = p.layer === "turbidity" ? "ESTIMATE" : null;
+  const estimate = p.layer === "turbidity" || p.layer === "realestate" ? "ESTIMATE" : null;
+  const economy = p.layer === "trade" || p.layer === "commerce" || p.layer === "realestate";
 
   return (
     <aside className="pointer-events-auto w-full">
@@ -168,6 +171,7 @@ export default function InfoPanel() {
         {gauge?.primary && (
           <GaugeHistory key={`${gauge.site}:${gauge.primary}`} site={gauge.site} param={gauge.primary} latest={gauge.readings[gauge.primary]?.value} />
         )}
+        {economy && <EconomyAside key={p.id} feature={feature} />}
         {well && (
           <GaugeHistory
             key={`${well.site}:${well.primary}`}

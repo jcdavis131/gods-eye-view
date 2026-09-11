@@ -7,6 +7,7 @@
 //   &t=2026-09-02T18:00:00Z      mission clock (omitted while live)
 //   &sel=water:usgs:USGS-08180800   selected feature, best effort
 //   &report=1                    community water report open
+//   &market=1                    market report open
 //   &embed=1                     no HUD chrome (iframes)
 //
 // The URL is rewritten with replaceState about once a second while things
@@ -31,6 +32,7 @@ export interface ShareState {
   t?: number;
   sel?: Selection;
   report?: boolean;
+  market?: boolean;
   embed?: boolean;
 }
 
@@ -77,6 +79,7 @@ export function parseShare(search: string): ShareState {
     if (LAYER_SET.has(layer) && id) out.sel = { layer: layer as LayerId, id };
   }
   if (q.get("report") === "1") out.report = true;
+  if (q.get("market") === "1") out.market = true;
   if (q.get("embed") === "1") out.embed = true;
   return out;
 }
@@ -97,6 +100,7 @@ export function shareQuery(s: ShareState): string {
   if (s.t != null) q.set("t", new Date(s.t).toISOString().slice(0, 19) + "Z");
   if (s.sel) q.set("sel", `${s.sel.layer}:${s.sel.id}`);
   if (s.report) q.set("report", "1");
+  if (s.market) q.set("market", "1");
   if (s.embed) q.set("embed", "1");
   const str = q.toString();
   return str ? `?${str}` : "";
@@ -116,6 +120,7 @@ export function currentShare(): ShareState {
     t: Math.abs(st.clock.offsetMs) >= 60_000 ? Date.now() + st.clock.offsetMs : undefined,
     sel: st.selected ?? undefined,
     report: st.waterReportOpen || undefined,
+    market: st.marketReportOpen || undefined,
     embed: st.embed || undefined,
   };
 }
@@ -151,7 +156,8 @@ export function startUrlSync(): () => void {
       s.layers !== prev.layers ||
       s.clock.offsetMs !== prev.clock.offsetMs ||
       s.selected !== prev.selected ||
-      s.waterReportOpen !== prev.waterReportOpen
+      s.waterReportOpen !== prev.waterReportOpen ||
+      s.marketReportOpen !== prev.marketReportOpen
     ) {
       schedule();
     }
@@ -173,6 +179,7 @@ export function applyShare(s: ShareState, opts: { fly?: boolean } = {}): void {
   }
   if (s.t != null) setMissionTime(s.t);
   if (s.report) st.setWaterReportOpen(true);
+  if (s.market) st.setMarketReportOpen(true);
   if (opts.fly !== false && s.lat != null && s.lon != null) {
     flyTo(s.lon, s.lat, { height: s.h ?? 120_000, pitchDeg: s.p ?? -55, headingDeg: s.hd ?? 0, durationS: 4 });
   }
@@ -197,7 +204,7 @@ export async function copyShareLink(): Promise<string> {
   const url = shareUrl();
   try {
     await navigator.clipboard.writeText(url);
-    useGlobe.getState().pushLog({ level: "info", text: "Link copied. It carries the view, the layers, the clock and the selection." });
+    useGlobe.getState().pushLog({ level: "info", text: "Link copied. It carries the view, the layers, the clock, the selection and open reports." });
   } catch {
     useGlobe.getState().pushLog({ level: "warn", text: `Clipboard blocked; the link is ${url}` });
   }

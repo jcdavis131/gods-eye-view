@@ -71,6 +71,8 @@ interface GlobeState {
   setSearchOpen: (open: boolean) => void;
   waterReportOpen: boolean;
   setWaterReportOpen: (open: boolean) => void;
+  marketReportOpen: boolean;
+  setMarketReportOpen: (open: boolean) => void;
   exploreOpen: boolean;
   setExploreOpen: (open: boolean) => void;
   /** ?embed=1: no HUD chrome, for iframes. */
@@ -141,6 +143,8 @@ export const useGlobe = create<GlobeState>()((set) => ({
   setSearchOpen: (searchOpen) => set({ searchOpen }),
   waterReportOpen: false,
   setWaterReportOpen: (waterReportOpen) => set({ waterReportOpen }),
+  marketReportOpen: false,
+  setMarketReportOpen: (marketReportOpen) => set({ marketReportOpen }),
   exploreOpen: false,
   setExploreOpen: (exploreOpen) => set({ exploreOpen }),
   embed: false,

@@ -30,11 +30,12 @@ export default function AboutButton() {
             <section>
               <div className="hud-label mb-1">Rules of engagement</div>
               <ul className="list-disc space-y-1 pl-4 text-foreground/90">
-                <li>Only public infrastructure and public events: aircraft, ships, satellites, earthquakes, open-data cameras, rocket launches, and the water systems communities depend on: rivers, lakes, reservoirs, aquifers, drought.</li>
+                <li>Only public infrastructure and public events: aircraft, ships, satellites, earthquakes, open-data cameras, rocket launches, the water systems communities depend on (rivers, lakes, reservoirs, aquifers, drought), and the economy in aggregate: harbours and border crossings, jobs and wages by county, home values and rents by county.</li>
                 <li>No face recognition, no person tracking, no search for named individuals. Nothing here identifies a human being.</li>
                 <li>Camera positions are operator-published and coarse; no camera orientation is ever drawn because none is published.</li>
                 <li>The traffic layer is a labelled simulation on real roads. The turbidity layer is a labelled estimate: Dogliotti (2015) physics run in your browser on real Sentinel-2 pixels, the teacher that TurbidityVision distils, not the distilled model and not a measurement. Every other layer is a live public feed; nothing is invented.</li>
                 <li>Water-quality screens compare a gauge&apos;s latest reading with cited EPA freshwater thresholds and print the formula; the community water report prints its weights and the terms it lacked. None of it is advice on whether water is safe to drink.</li>
+                <li>Home values, rents, jobs and wages are county, metro and state aggregates from Zillow Research and the BLS. No parcels, no addresses, no owners, no listings; the Home values layer is labelled ESTIMATE because Zillow&apos;s indexes are models of a typical home, and the mortgage-against-wages line prints its formula. None of it is investment or lending advice.</li>
                 <li>API keys you enter stay in this browser and only reach this app&apos;s own /api routes or the vendor SDK they belong to.</li>
               </ul>
             </section>

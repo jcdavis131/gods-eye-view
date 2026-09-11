@@ -18,7 +18,10 @@ export type LayerId =
   | "launches"
   | "water"
   | "groundwater"
-  | "turbidity";
+  | "turbidity"
+  | "trade"
+  | "commerce"
+  | "realestate";
 
 export const LAYER_IDS: LayerId[] = [
   "aircraft",
@@ -31,6 +34,9 @@ export const LAYER_IDS: LayerId[] = [
   "water",
   "groundwater",
   "turbidity",
+  "trade",
+  "commerce",
+  "realestate",
 ];
 
 /** Properties every feature carries, whatever the layer. */
@@ -60,6 +66,8 @@ export interface BaseProps {
   imageUrl?: string;
   /** Layer specific opaque payload (e.g. OMM elements for satellites). */
   extra?: unknown;
+  /** Label / pick anchor for a polygon feature, [lon, lat] (Census internal point, country label point). */
+  anchor?: [number, number];
 }
 
 export type LayerFeature<G extends Geometry = Geometry> = Feature<G, BaseProps>;

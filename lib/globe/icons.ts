@@ -16,7 +16,10 @@ export type IconKind =
   | "gauge"
   | "well"
   | "dam"
-  | "chip";
+  | "chip"
+  | "port"
+  | "crossing"
+  | "jobs";
 
 const cache = new Map<string, HTMLCanvasElement>();
 
@@ -185,6 +188,43 @@ function draw(kind: IconKind, color: string, size: number): HTMLCanvasElement {
     case "chip": {
       // turbidity chip: a square swatch
       path.rect(-9, -9, 18, 18);
+      break;
+    }
+    case "port": {
+      // harbour: an anchor
+      path.moveTo(0, -12);
+      path.arc(0, -9, 3, -Math.PI / 2, (3 * Math.PI) / 2);
+      path.rect(-1.3, -6, 2.6, 15);
+      path.rect(-6, -4, 12, 2.2);
+      path.moveTo(-11, 1);
+      path.quadraticCurveTo(-10, 12, 0, 12);
+      path.quadraticCurveTo(10, 12, 11, 1);
+      path.lineTo(7.5, 1);
+      path.quadraticCurveTo(7, 8.5, 0, 8.5);
+      path.quadraticCurveTo(-7, 8.5, -7.5, 1);
+      path.closePath();
+      break;
+    }
+    case "crossing": {
+      // land port of entry: a truck
+      path.rect(-13, -6, 16, 11);
+      path.moveTo(3, -2);
+      path.lineTo(9, -2);
+      path.lineTo(13, 3);
+      path.lineTo(13, 5);
+      path.lineTo(3, 5);
+      path.closePath();
+      path.moveTo(-6.5, 8);
+      path.arc(-9, 8, 2.6, 0, Math.PI * 2);
+      path.moveTo(11.6, 8);
+      path.arc(9, 8, 2.6, 0, Math.PI * 2);
+      break;
+    }
+    case "jobs": {
+      // jobs & wages: three rising bars
+      path.rect(-11, 1, 5.5, 10);
+      path.rect(-2.75, -5, 5.5, 16);
+      path.rect(5.5, -11, 5.5, 22);
       break;
     }
     case "dot":

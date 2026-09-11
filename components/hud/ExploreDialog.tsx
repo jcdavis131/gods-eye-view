@@ -7,8 +7,8 @@ import { useState } from "react";
 import { Compass, Copy, Download, Link2, Play } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { LAYER_BY_ID } from "@/lib/layers";
-import { PRESETS, presetShare, type Preset } from "@/lib/explore/presets";
-import { exportChips, exportGauges } from "@/lib/explore/export";
+import { PRESETS, PRESET_GROUPS, presetShare, type Preset } from "@/lib/explore/presets";
+import { exportAreas, exportChips, exportGauges, exportTrade } from "@/lib/explore/export";
 import { applyShare, copyShareLink, shareQuery, shareUrl } from "@/lib/globe/share";
 import { useGlobe } from "@/lib/store/globe";
 
@@ -44,6 +44,8 @@ export default function ExploreDialog() {
 
   const chips = status.turbidity?.count ?? 0;
   const gauges = status.water?.count ?? 0;
+  const areas = Math.max(status.realestate?.count ?? 0, status.commerce?.count ?? 0);
+  const trade = status.trade?.count ?? 0;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -69,8 +71,11 @@ export default function ExploreDialog() {
                 <Play className="size-3" /> Play the tour
               </button>
             </div>
+            {PRESET_GROUPS.map((g) => (
+            <div key={g.title} className="mb-3">
+            <div className="mb-1 text-[9px] uppercase tracking-widest text-muted-foreground">{g.title}</div>
             <ul className="grid gap-2 sm:grid-cols-2">
-              {PRESETS.map((p) => (
+              {g.presets.map((p) => (
                 <li key={p.id} className="border border-border/70 p-3">
                   <div className="flex items-start justify-between gap-2">
                     <button type="button" onClick={() => go(p)} className="min-w-0 text-left" title="Fly there">
@@ -102,6 +107,8 @@ export default function ExploreDialog() {
                 </li>
               ))}
             </ul>
+            </div>
+            ))}
           </section>
 
           <section>
@@ -122,6 +129,22 @@ export default function ExploreDialog() {
                 title="Turbidity chips with scene provenance as GeoJSON polygons"
               >
                 <Download className="size-3" /> Turbidity chips GeoJSON{chips ? ` (${chips})` : ""}
+              </button>
+              <button
+                type="button"
+                onClick={exportAreas}
+                className="flex items-center gap-2 border border-border px-3 py-1.5 text-[10px] uppercase tracking-widest text-foreground/80 hover:bg-accent hover:text-primary"
+                title="Every county or state currently loaded: home value, rent, jobs, wages"
+              >
+                <Download className="size-3" /> Counties CSV{areas ? ` (${areas})` : ""}
+              </button>
+              <button
+                type="button"
+                onClick={exportTrade}
+                className="flex items-center gap-2 border border-border px-3 py-1.5 text-[10px] uppercase tracking-widest text-foreground/80 hover:bg-accent hover:text-primary"
+                title="Harbours and border crossings currently loaded with their volumes"
+              >
+                <Download className="size-3" /> Ports & crossings CSV{trade ? ` (${trade})` : ""}
               </button>
               <button
                 type="button"

@@ -10,7 +10,7 @@ export interface Intent {
 }
 
 const LAYER_WORDS =
-  "aircraft|airplanes|planes|flights|flight|jets|ships|ship|vessels|boats|satellites|satellite|sats|earthquakes|quakes|seismic|cameras|webcams|cctv|traffic|cars|launches|rockets|rocket|water quality|satellite water|stream gauges|water|rivers|river|lakes|lake|reservoirs|reservoir|gauges|floods|flooding|hydrology|groundwater|aquifers|aquifer|wells|drought|turbidity|sediment";
+  "aircraft|airplanes|planes|flights|flight|jets|ships|ship|vessels|boats|satellites|satellite|sats|earthquakes|quakes|seismic|cameras|webcams|cctv|traffic|cars|launches|rockets|rocket|water quality|satellite water|stream gauges|water|rivers|river|lakes|lake|reservoirs|reservoir|gauges|floods|flooding|hydrology|groundwater|aquifers|aquifer|wells|drought|turbidity|sediment|trade|ports|port|harbours|harbors|shipping|borders|border crossings|crossings|commerce|jobs|employment|wages|business|economy|real estate|housing|home values|homes|rents|property values|property";
 
 const num = (s: string) => {
   const words: Record<string, number> = {
@@ -47,7 +47,7 @@ export function parseIntent(raw: string): Intent | null {
     return { command: "home_view", args: {} };
   }
   // "start the tour", "take me on the tour", "explore lake mead"
-  if (/^(?:start|begin|play|take)(?: me on)?(?: the)? (?:water )?tour$/.test(t)) {
+  if (/^(?:start|begin|play|take)(?: me on)?(?: the)? (?:water |market |trade )?tour$/.test(t)) {
     return { command: "explore_preset", args: { tour: true } };
   }
   if ((m = t.match(/^(?:explore|preset|jump to preset)\s+(.+)$/))) {
@@ -56,6 +56,10 @@ export function parseIntent(raw: string): Intent | null {
   // "water report", "water report for san antonio", "how is the water in austin"
   if ((m = t.match(/^(?:water report|water status|how(?:'s| is) the water|is the water (?:ok|safe))(?:\s+(?:for|in|near|around|over|at)\s+(.+))?$/))) {
     return { command: "water_report", args: { place: m[1]?.trim() || undefined } };
+  }
+  // "market report", "market report for austin", "home values in denver", "how is the economy in tulsa"
+  if ((m = t.match(/^(?:market report|housing market|housing report|home values|property values|how(?:'s| is) the (?:economy|market|housing|job market))(?:\s+(?:for|in|near|around|over|at)\s+(.+))?$/))) {
+    return { command: "market_report", args: { place: m[1]?.trim() || undefined } };
   }
   if (/^(where am i|what am i looking at|describe|status|report|sitrep)/.test(t)) {
     return { command: "describe_view", args: {} };

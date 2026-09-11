@@ -20,7 +20,12 @@ export interface Preset {
   layers: LayerId[];
   /** Seconds the tour lingers here. */
   dwellS?: number;
+  /** Open the community water report on arrival. */
   report?: boolean;
+  /** Open the market report on arrival. */
+  market?: boolean;
+  /** Gallery section; water presets carry no group. */
+  group?: "markets";
 }
 
 export const PRESETS: Preset[] = [
@@ -138,10 +143,116 @@ export const PRESETS: Preset[] = [
     dwellS: 30,
     report: true,
   },
+  // ---- Trade & markets (probed against /api/economy on 2026-09-10)
+  {
+    id: "world-trade",
+    title: "Who trades with whom",
+    region: "whole Earth",
+    group: "markets",
+    blurb: "Countries shaded by goods-and-services trade from the World Bank, the twenty largest labelled with exports. Click any country and its top export markets and import sources arrive as arcs from WITS.",
+    lon: -40,
+    lat: 25,
+    height: 16_000_000,
+    layers: ["trade"],
+    dwellS: 25,
+  },
+  {
+    id: "la-long-beach",
+    title: "Los Angeles & Long Beach",
+    region: "San Pedro Bay, California",
+    group: "markets",
+    blurb: "The two busiest container ports in the country side by side with their BTS TEU history, the counties around them with jobs, wages and home values, and the market report open.",
+    lon: -118.22,
+    lat: 33.76,
+    height: 90_000,
+    layers: ["trade", "commerce", "realestate"],
+    dwellS: 40,
+    market: true,
+  },
+  {
+    id: "houston-ship-channel",
+    title: "Houston Ship Channel",
+    region: "Texas Gulf Coast",
+    group: "markets",
+    blurb: "Houston, Texas City, Freeport, Beaumont and Port Arthur: tonnage leaders with their top commodities, beside Harris County's jobs and wages.",
+    lon: -95.0,
+    lat: 29.7,
+    height: 140_000,
+    layers: ["trade", "commerce"],
+    dwellS: 35,
+  },
+  {
+    id: "laredo",
+    title: "Laredo crossings",
+    region: "US–Mexico border, Texas",
+    group: "markets",
+    blurb: "The busiest truck crossing in North America with 25 months of BTS counts, the other Rio Grande ports of entry, and Webb County's jobs.",
+    lon: -99.5,
+    lat: 27.55,
+    height: 160_000,
+    layers: ["trade", "commerce"],
+    dwellS: 35,
+  },
+  {
+    id: "detroit-windsor",
+    title: "Detroit–Windsor",
+    region: "US–Canada border, Michigan",
+    group: "markets",
+    blurb: "The Ambassador Bridge crossing and Port Huron, Detroit's harbour, and Wayne County's sector mix and home values.",
+    lon: -83.05,
+    lat: 42.3,
+    height: 160_000,
+    layers: ["trade", "commerce", "realestate"],
+    dwellS: 30,
+  },
+  {
+    id: "austin-housing",
+    title: "Austin housing",
+    region: "Central Texas",
+    group: "markets",
+    blurb: "Travis, Williamson and Hays counties coloured by the one-year change in Zillow's typical home value, with rents, wages and the mortgage-against-wages estimate in the market report.",
+    lon: -97.75,
+    lat: 30.3,
+    height: 160_000,
+    layers: ["realestate", "commerce"],
+    dwellS: 35,
+    market: true,
+  },
+  {
+    id: "bay-area-values",
+    title: "Bay Area values",
+    region: "Northern California",
+    group: "markets",
+    blurb: "The most expensive counties in the country next to the Port of Oakland, with price-to-rent and years-of-wages lines showing what those values mean against local pay.",
+    lon: -122.2,
+    lat: 37.6,
+    height: 220_000,
+    layers: ["realestate", "commerce", "trade"],
+    dwellS: 35,
+    market: true,
+  },
+  {
+    id: "states-markets",
+    title: "Fifty states",
+    region: "United States",
+    group: "markets",
+    blurb: "Every state coloured by the one-year change in typical home value with statewide jobs and wages; descend below 2,500 km anywhere and the counties take over.",
+    lon: -97,
+    lat: 39,
+    height: 6_500_000,
+    layers: ["realestate", "commerce"],
+    dwellS: 25,
+  },
 ];
 
 export const PRESET_BY_ID = new Map(PRESETS.map((p) => [p.id, p]));
 
 export function presetShare(p: Preset): ShareState {
-  return { lat: p.lat, lon: p.lon, h: p.height, layers: p.layers, report: p.report || undefined };
+  return { lat: p.lat, lon: p.lon, h: p.height, layers: p.layers, report: p.report || undefined, market: p.market || undefined };
 }
+
+/** Presets in gallery order, grouped. */
+export const PRESET_GROUPS: Array<{ title: string; presets: Preset[] }> = [
+  { title: "Water", presets: PRESETS.filter((p) => !p.group) },
+  { title: "Trade & markets", presets: PRESETS.filter((p) => p.group === "markets") },
+];

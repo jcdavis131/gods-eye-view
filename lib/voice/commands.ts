@@ -17,6 +17,8 @@ import { geocode, heightForPlace } from "@/components/hud/SearchCommand";
 import { formatDistance, formatLatLon } from "@/lib/globe/geo";
 import { speakReport } from "@/lib/water/report";
 import { reportFromGlobe } from "@/lib/water/reportClient";
+import { speakMarketReport } from "@/lib/economy/report";
+import { marketReportFromGlobe } from "@/lib/economy/reportClient";
 import { PRESETS, presetShare } from "@/lib/explore/presets";
 import { applyShare } from "@/lib/globe/share";
 
@@ -80,6 +82,28 @@ const LAYER_ALIASES: Record<string, LayerId> = {
   sediment: "turbidity",
   "water quality": "turbidity",
   "satellite water": "turbidity",
+  trade: "trade",
+  ports: "trade",
+  port: "trade",
+  harbours: "trade",
+  harbors: "trade",
+  shipping: "trade",
+  borders: "trade",
+  "border crossings": "trade",
+  crossings: "trade",
+  commerce: "commerce",
+  jobs: "commerce",
+  employment: "commerce",
+  wages: "commerce",
+  business: "commerce",
+  economy: "commerce",
+  "real estate": "realestate",
+  housing: "realestate",
+  "home values": "realestate",
+  homes: "realestate",
+  rents: "realestate",
+  property: "realestate",
+  "property values": "realestate",
 };
 
 export function resolveLayer(word: string | undefined): LayerId | null {
@@ -242,8 +266,31 @@ export const COMMANDS: CommandDef[] = [
     },
   },
   {
+    name: "market_report",
+    description:
+      "Market report for a place or the current view: typical home value and rent with one- and five-year changes, a mortgage-against-wages estimate, jobs and wages, the nearest ports and border crossings, and a momentum index with its formula.",
+    parameters: {
+      type: "object",
+      properties: {
+        place: { type: "string", description: "Optional place to fly to first, e.g. 'Austin'" },
+      },
+    },
+    run: async (a) => {
+      const st = useGlobe.getState();
+      let prefix = "";
+      if (a.place) prefix = (await goToPlace(String(a.place), 150)) + " ";
+      st.setLayer("realestate", true);
+      st.setLayer("commerce", true);
+      st.setLayer("trade", true);
+      st.setMarketReportOpen(true);
+      await new Promise((r) => setTimeout(r, a.place ? 7000 : 2000));
+      const v = useGlobe.getState().view;
+      return prefix + speakMarketReport(marketReportFromGlobe(v.lon, v.lat));
+    },
+  },
+  {
     name: "explore_preset",
-    description: "Jump to one of the curated water explorations (a place with the right layers switched on), or start the guided tour.",
+    description: "Jump to one of the curated explorations (a place with the right layers switched on: water, ports, housing markets), or start the guided tour.",
     parameters: {
       type: "object",
       properties: {
@@ -255,7 +302,7 @@ export const COMMANDS: CommandDef[] = [
       const st = useGlobe.getState();
       if (a.tour === true || a.tour === "true") {
         st.setTour({ active: true, index: 0, startedAt: Date.now(), paused: false });
-        return "Starting the water tour.";
+        return "Starting the tour.";
       }
       const q = String(a.preset ?? "").toLowerCase();
       const p = PRESETS.find((x) => x.id === q) ?? PRESETS.find((x) => `${x.title} ${x.region}`.toLowerCase().includes(q));

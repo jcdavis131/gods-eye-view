@@ -76,6 +76,8 @@ export interface LayerStyle {
   labelWhen?: (f: LayerFeature, timeMs: number) => boolean;
   /** Features that keep a label regardless of labelMax (major rivers, matched chips). */
   labelAlways?: (f: LayerFeature) => boolean;
+  /** Pixel offset of standing labels from the anchor; default [14, -12]. Lets two layers label one point. */
+  labelOffset?: [number, number];
   /** Filled ground polygons for a feature (drought classes). */
   polygons?: (f: LayerFeature) => StyledPolygon[] | null;
   /** One raster overlay derived from the whole collection (turbidity map). */
@@ -528,7 +530,7 @@ export class LayerRenderer {
         outlineColor: C.Color.BLACK.withAlpha(0.9),
         outlineWidth: 3,
         style: C.LabelStyle.FILL_AND_OUTLINE,
-        pixelOffset: new C.Cartesian2(14, -12),
+        pixelOffset: new C.Cartesian2(...(this.style.labelOffset ?? [14, -12])),
         horizontalOrigin: C.HorizontalOrigin.LEFT,
         verticalOrigin: C.VerticalOrigin.CENTER,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -704,6 +706,8 @@ export function northAxis(pos: CesiumNS.Cartesian3): CesiumNS.Cartesian3 {
 
 /** A representative position for a non-point feature: label anchor and pick focus. */
 export function anchorOf(f: LayerFeature): LonLatAlt | null {
+  const a = f.properties.anchor;
+  if (a && Number.isFinite(a[0]) && Number.isFinite(a[1])) return [a[0], a[1], 0];
   const g = f.geometry;
   const mid = (line: number[][]): LonLatAlt | null => {
     if (!Array.isArray(line)) return null;

@@ -11,6 +11,7 @@ import { satWorker } from "./satWorker";
 import type { LaunchExtra } from "@/lib/layers/launches";
 import { vehiclePosition, type VehicleExtra } from "@/lib/layers/traffic";
 import { groundwaterStyle, turbidityStyle, waterStyle } from "./waterStyles";
+import { commerceStyle, realestateStyle, tradeStyle } from "./economyStyles";
 
 /** Dead-reckon a moving surface/air object from its last report for up to 90 s. */
 function extrapolate(
@@ -267,6 +268,9 @@ export const STYLES: Partial<Record<LayerId, LayerStyle>> = {
   water: waterStyle,
   groundwater: groundwaterStyle,
   turbidity: turbidityStyle,
+  trade: tradeStyle,
+  commerce: commerceStyle,
+  realestate: realestateStyle,
 };
 
 /** Camera range (m) to sit at when following an object of a given layer. */
@@ -281,4 +285,7 @@ export const FOLLOW_RANGE: Record<LayerId, number> = {
   water: 15_000,
   groundwater: 15_000,
   turbidity: 6_000,
+  trade: 40_000,
+  commerce: 150_000,
+  realestate: 150_000,
 };
