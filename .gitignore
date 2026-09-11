@@ -45,3 +45,6 @@ next-env.d.ts
 
 # turbidity-check compile scratch
 .tmp-turb/
+
+# mcp stdio compile scratch
+.tmp-mcp/
