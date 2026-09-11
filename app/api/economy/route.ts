@@ -16,13 +16,48 @@
 //   /api/economy?op=pulse                     national series: FRED + BTS freight indicators
 //   /api/economy?op=report&lon=..&lat=..      the market report for a point, built server-side
 //
+// Every response carries `provenance` (one record per upstream release the
+// numbers came from, estimates with their formula) and `generatedAt`; the
+// tabular ops (areas, ports, border, countries, sectors, pulse) also answer
+// `format=csv` with the same provenance as `#` footer lines. See docs/API.md.
+//
 // Bounding boxes are snapped outward to a one-degree grid so nearby callers
 // share an entry; every upstream table is cached in memory for hours.
 
 import type { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
 import { cached } from "@/lib/server/cache";
 import { jsonError } from "@/lib/server/upstream";
+import { badRequest, csv as csvResponse, ok, options, parseFormat, withCors, type CsvRow, type ResponseFormat } from "@/lib/server/respond";
+import type { Provenance } from "@/lib/provenance/types";
+import { dedupeProvenance } from "@/lib/provenance/collect";
+import {
+  btsBorderProvenance,
+  btsPortsProvenance,
+  naturalEarthProvenance,
+  pulseProvenance,
+  qcewProvenance,
+  tigerProvenance,
+  witsProvenance,
+  worldBankProvenance,
+  wpiProvenance,
+  zillowProvenance,
+} from "@/lib/economy/provenance";
+import {
+  AREA_COLUMNS,
+  COUNTRY_COLUMNS,
+  CROSSING_COLUMNS,
+  flattenAreas,
+  flattenCountries,
+  flattenCrossings,
+  flattenPorts,
+  flattenPulse,
+  flattenPulseSeries,
+  flattenSectors,
+  PORT_COLUMNS,
+  PULSE_COLUMNS,
+  PULSE_SERIES_COLUMNS,
+  SECTOR_COLUMNS,
+} from "@/lib/economy/flatten";
 import { bboxAround, haversine } from "@/lib/globe/geo";
 import {
   buildAreas,
@@ -65,12 +100,6 @@ export const maxDuration = 60;
 
 const MAX_SPAN_DEG = 18;
 
-const CORS = {
-  "access-control-allow-origin": "*",
-  "access-control-allow-methods": "GET, OPTIONS",
-  "access-control-allow-headers": "content-type",
-};
-
 type Bbox = [number, number, number, number];
 
 function parseBbox(raw: string | null): Bbox | null {
@@ -95,6 +124,16 @@ interface OpResult {
   data: unknown;
   meta: Record<string, unknown>;
   ttlS: number;
+  /** One record per upstream release the payload was read or computed from. */
+  provenance: Provenance[];
+  caveats?: string[];
+  /** Tabular ops: how to flatten `data` for `format=csv`. Absent means CSV is not offered for this op. */
+  csv?: () => { rows: CsvRow[]; columns: readonly string[]; filename: string };
+}
+
+/** When a cached value was fetched: now minus its age. */
+function retrievedAt(ageMs: number): string {
+  return new Date(Date.now() - ageMs).toISOString();
 }
 
 /** Generalization by box size: fine polygons for a city, coarse for a region. */
@@ -163,10 +202,17 @@ async function opAreas(level: AreaLevel, bbox: Bbox | null): Promise<OpResult> {
       detail: level === "state" ? "20M" : detailFor(bbox!),
     };
   });
+  const at = retrievedAt(r.age);
+  const provenance: Provenance[] = [tigerProvenance(at, r.value.detail)];
+  if (r.value.asOf.qcew) provenance.push(qcewProvenance(r.value.asOf.qcew, at, { notes: [`${level} rows, all ownerships, all industries`] }));
+  if (r.value.asOf.zhvi) provenance.push(zillowProvenance(level === "county" ? "zhviCounty" : "zhviState", r.value.asOf.zhvi, at));
+  if (r.value.asOf.zori) provenance.push(zillowProvenance("zoriCounty", r.value.asOf.zori, at));
   return {
     data: { type: "FeatureCollection", features: r.value.features },
     meta: { source: r.value.sources.join(" + ") + " + Census TIGERweb", asOf: r.value.asOf, level, bbox, polygons: r.value.polygons, detail: r.value.detail, cacheAge: r.age },
     ttlS: 3600,
+    provenance,
+    csv: () => ({ rows: flattenAreas(r.value.features), columns: AREA_COLUMNS, filename: `economy-areas-${level}${bbox ? "-" + bbox.join("_") : ""}.csv` }),
   };
 }
 
@@ -184,6 +230,12 @@ async function opContext(fips: string): Promise<OpResult> {
   const home = county?.rows.get(geoid);
   const stateName = states?.get(geoid.slice(0, 2))?.name;
   const slim = (h: HomeValue | undefined | null) => (h ? { name: h.name, latest: h.latest, yoyPct: h.yoyPct, yearly: h.yearly } : null);
+  const at = new Date().toISOString();
+  const provenance: Provenance[] = [];
+  if (sectors) provenance.push(qcewProvenance(sectors.period, at, { area: fips, sectors: true }));
+  if (home) provenance.push(zillowProvenance("zhviCounty", county?.asOf, at));
+  if (metro) provenance.push(zillowProvenance("zhviMetro", metro.asOf, at, ["metro and United States rows"]));
+  if (state && stateName) provenance.push(zillowProvenance("zhviState", state.asOf, at));
   return {
     data: {
       period: sectors?.period,
@@ -194,12 +246,19 @@ async function opContext(fips: string): Promise<OpResult> {
     },
     meta: { source: "BLS QCEW + Zillow ZHVI", fips },
     ttlS: 6 * 3600,
+    provenance,
   };
 }
 
 async function opSectors(fips: string): Promise<OpResult> {
   const s = await qcewSectors(fips);
-  return { data: s, meta: { source: "BLS QCEW", fips }, ttlS: 6 * 3600 };
+  return {
+    data: s,
+    meta: { source: "BLS QCEW", fips },
+    ttlS: 6 * 3600,
+    provenance: [qcewProvenance(s.period, new Date().toISOString(), { area: fips, sectors: true })],
+    csv: () => ({ rows: flattenSectors(fips, s.period, s.sectors), columns: SECTOR_COLUMNS, filename: `economy-sectors-${fips}.csv` }),
+  };
 }
 
 const SIZE_MIN: Record<string, number> = { large: 3, medium: 2, small: 1, all: 0 };
@@ -219,6 +278,9 @@ async function opPorts(bbox: Bbox, min: string): Promise<OpResult> {
     const features = buildPorts([...ports, ...extras.map((x) => x.port)], statMap);
     return { features, bts: !!stats, btsYear: stats?.year, withStats: features.filter((f) => (f.properties.extra as { stats?: unknown }).stats).length };
   });
+  const at = retrievedAt(r.age);
+  const provenance: Provenance[] = [wpiProvenance(at, WPI.pulled)];
+  if (r.value.bts) provenance.push(btsPortsProvenance(r.value.btsYear, at));
   return {
     data: { type: "FeatureCollection", features: r.value.features },
     meta: {
@@ -231,12 +293,21 @@ async function opPorts(bbox: Bbox, min: string): Promise<OpResult> {
       cacheAge: r.age,
     },
     ttlS: 6 * 3600,
+    provenance,
+    csv: () => ({ rows: flattenPorts(r.value.features), columns: PORT_COLUMNS, filename: `economy-ports-${bbox.join("_")}.csv` }),
   };
 }
 
 async function opBorder(): Promise<OpResult> {
   const b = await borderCrossings();
-  return { data: { type: "FeatureCollection", features: buildCrossings(b.rows) }, meta: { source: "BTS Border Crossing Entry Data", asOf: b.asOf, ports: b.rows.length }, ttlS: 6 * 3600 };
+  const features = buildCrossings(b.rows);
+  return {
+    data: { type: "FeatureCollection", features },
+    meta: { source: "BTS Border Crossing Entry Data", asOf: b.asOf, ports: b.rows.length },
+    ttlS: 6 * 3600,
+    provenance: [btsBorderProvenance(b.asOf, new Date().toISOString())],
+    csv: () => ({ rows: flattenCrossings(features), columns: CROSSING_COLUMNS, filename: "economy-border-crossings.csv" }),
+  };
 }
 
 async function opCountries(): Promise<OpResult> {
@@ -248,15 +319,18 @@ async function opCountries(): Promise<OpResult> {
     data: { type: "FeatureCollection", features: r.value.features },
     meta: { source: "Natural Earth + World Bank WDI", nePulled: COUNTRIES.pulled, indicatorsFailed: r.value.failed, countriesWithData: r.value.withData, cacheAge: r.age },
     ttlS: 12 * 3600,
+    provenance: [naturalEarthProvenance(retrievedAt(r.age), COUNTRIES.pulled), worldBankProvenance(retrievedAt(r.age))],
+    caveats: r.value.failed.length ? [`World Bank indicators that did not answer: ${r.value.failed.join(", ")}`] : undefined,
+    csv: () => ({ rows: flattenCountries(r.value.features), columns: COUNTRY_COLUMNS, filename: "economy-countries.csv" }),
   };
 }
 
 async function opPartners(iso3: string): Promise<OpResult> {
   const p = await witsPartners(iso3);
-  return { data: p, meta: { source: "World Bank WITS TradeStats", iso3, units: "US$ thousands" }, ttlS: 24 * 3600 };
+  return { data: p, meta: { source: "World Bank WITS TradeStats", iso3, units: "US$ thousands" }, ttlS: 24 * 3600, provenance: [witsProvenance(iso3, p?.year, new Date().toISOString())] };
 }
 
-async function opPulse(): Promise<OpResult> {
+async function opPulse(series = false): Promise<OpResult> {
   const [fredItems, bts] = await Promise.all([Promise.allSettled(FRED_SERIES.map((s) => fred(s.id))), btsIndicators().catch(() => [] as PulseItem[])]);
   const items: PulseItem[] = [];
   const failed: string[] = [];
@@ -265,7 +339,17 @@ async function opPulse(): Promise<OpResult> {
     else failed.push(FRED_SERIES[i].id);
   });
   items.push(...bts);
-  return { data: items, meta: { source: "FRED + BTS Supply Chain Indicators", failed, count: items.length }, ttlS: 1800 };
+  return {
+    data: items,
+    meta: { source: "FRED + BTS Supply Chain Indicators", failed, count: items.length },
+    ttlS: 1800,
+    provenance: pulseProvenance(items, new Date().toISOString()),
+    caveats: failed.length ? [`FRED series that did not answer: ${failed.join(", ")}`] : undefined,
+    csv: () =>
+      series
+        ? { rows: flattenPulseSeries(items), columns: PULSE_SERIES_COLUMNS, filename: "economy-pulse-series.csv" }
+        : { rows: flattenPulse(items), columns: PULSE_COLUMNS, filename: "economy-pulse.csv" },
+  };
 }
 
 async function opReport(lon: number, lat: number, origin: string): Promise<OpResult> {
@@ -318,78 +402,75 @@ async function opReport(lon: number, lat: number, origin: string): Promise<OpRes
     now,
   );
   const globe = `${origin}/?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}&h=150000&layers=realestate,commerce,trade&market=1`;
-  return { data: report, meta: { source: "zillow+qcew+tigerweb+bts+fred", county: county?.geoid ?? null, globe }, ttlS: 900 };
+  // The report already carries per-section provenance and citations; the envelope repeats the union plus the polygon source.
+  const provenance = dedupeProvenance([county ? [tigerProvenance(new Date(now).toISOString())] : [], report.provenance]);
+  return { data: report, meta: { source: "zillow+qcew+tigerweb+bts+fred", county: county?.geoid ?? null, globe }, ttlS: 900, provenance, caveats: report.caveats };
 }
 
-function respond(r: OpResult) {
-  return NextResponse.json(
-    { ...r.meta, data: r.data },
-    {
-      headers: {
-        ...CORS,
-        "cache-control": `public, max-age=0, s-maxage=${r.ttlS}, stale-while-revalidate=${r.ttlS}`,
-      },
-    },
-  );
+/** JSON envelope, or CSV when asked and the op is tabular. */
+function respond(r: OpResult, format: ResponseFormat = "json", op = "") {
+  if (format === "csv") {
+    if (!r.csv) return badRequest(`format=csv is not offered for op=${op}; tabular ops are areas, sectors, ports, border, countries, pulse`);
+    const t = r.csv();
+    return csvResponse(t.rows, { columns: [...t.columns], filename: t.filename, provenance: r.provenance, caveats: r.caveats, ttlS: r.ttlS });
+  }
+  return ok(r.data, { meta: r.meta, provenance: r.provenance, caveats: r.caveats, ttlS: r.ttlS });
 }
 
-function bad(message: string) {
-  return NextResponse.json({ error: message }, { status: 400, headers: CORS });
-}
+const bad = badRequest;
 
-export function OPTIONS() {
-  return new Response(null, { status: 204, headers: CORS });
-}
+export const OPTIONS = options;
 
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams;
   const op = q.get("op") ?? "";
+  const format = parseFormat(req);
   try {
     switch (op) {
       case "areas": {
         const level = q.get("level") === "state" ? "state" : "county";
         const b = level === "county" ? parseBbox(q.get("bbox")) : null;
         if (level === "county" && !b) return bad("bbox=w,s,e,n required for level=county");
-        return respond(await opAreas(level, b));
+        return respond(await opAreas(level, b), format, op);
       }
       case "sectors": {
         const fips = q.get("fips") ?? "";
         if (!/^(\d{5}|US000)$/.test(fips)) return bad("fips=SSCCC (county) or SS000 (state) required");
-        return respond(await opSectors(fips));
+        return respond(await opSectors(fips), format, op);
       }
       case "context": {
         const fips = q.get("fips") ?? "";
         if (!/^\d{5}$/.test(fips)) return bad("fips=SSCCC (county) or SS000 (state) required");
-        return respond(await opContext(fips));
+        return respond(await opContext(fips), format, op);
       }
       case "ports": {
         const b = parseBbox(q.get("bbox"));
         if (!b) return bad("bbox=w,s,e,n required");
-        return respond(await opPorts(b, q.get("min") ?? "medium"));
+        const min = q.get("min") ?? "medium";
+        if (!(min in SIZE_MIN)) return bad("min=large | medium | small | all");
+        return respond(await opPorts(b, min), format, op);
       }
       case "border":
-        return respond(await opBorder());
+        return respond(await opBorder(), format, op);
       case "countries":
-        return respond(await opCountries());
+        return respond(await opCountries(), format, op);
       case "partners": {
         const iso3 = (q.get("iso3") ?? "").toUpperCase();
         if (!/^[A-Z]{3}$/.test(iso3)) return bad("iso3=USA required");
-        return respond(await opPartners(iso3));
+        return respond(await opPartners(iso3), format, op);
       }
       case "pulse":
-        return respond(await opPulse());
+        return respond(await opPulse(q.get("series") === "1"), format, op);
       case "report": {
         const lon = Number(q.get("lon"));
         const lat = Number(q.get("lat"));
         if (!Number.isFinite(lon) || !Number.isFinite(lat) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return bad("lon and lat required");
-        return respond(await opReport(lon, lat, req.nextUrl.origin));
+        return respond(await opReport(lon, lat, req.nextUrl.origin), format, op);
       }
       default:
         return bad("unknown op: areas | sectors | context | ports | border | countries | partners | pulse | report");
     }
   } catch (err) {
-    const res = jsonError(err);
-    for (const [k, v] of Object.entries(CORS)) res.headers.set(k, v);
-    return res;
+    return withCors(jsonError(err));
   }
 }

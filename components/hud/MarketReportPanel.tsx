@@ -5,9 +5,10 @@
 // estimate prints its arithmetic.
 
 import { useEffect, useMemo, useState } from "react";
-import { Copy, FileDown, Landmark, Link2, RefreshCw, X } from "lucide-react";
+import { Braces, Copy, FileDown, Landmark, Link2, Quote, RefreshCw, X } from "lucide-react";
 import { useGlobe } from "@/lib/store/globe";
-import { marketReportText, type MarketItem, type MarketReport, type MarketSection } from "@/lib/economy/report";
+import { marketCitations, marketReportText, type MarketItem, type MarketReport, type MarketSection } from "@/lib/economy/report";
+import ProvenanceList from "./ProvenanceList";
 import { marketReportFromGlobe } from "@/lib/economy/reportClient";
 import { fmtNum, fmtPct, fmtUsd } from "@/lib/economy/features";
 import { copyShareLink } from "@/lib/globe/share";
@@ -45,6 +46,14 @@ const FLAG: Record<NonNullable<MarketItem["flag"]>, string> = {
   watch: "text-warn",
   poor: "text-alert",
 };
+
+/** Clipboard write with the outcome on the log line, the same way the copy-as-text button reports. */
+function copyToClipboard(text: string, done: string) {
+  navigator.clipboard.writeText(text).then(
+    () => useGlobe.getState().pushLog({ level: "info", text: done }),
+    () => useGlobe.getState().pushLog({ level: "warn", text: "Clipboard blocked." }),
+  );
+}
 
 function selectItem(item: MarketItem) {
   const r = getRenderer(item.layer);
@@ -138,6 +147,24 @@ export default function MarketReportPanel() {
             title="Download JSON"
           >
             <FileDown className="size-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => report && copyToClipboard(marketCitations(report).join("\n"), `${marketCitations(report).length} citation lines copied.`)}
+            className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+            aria-label="Copy citations"
+            title="Copy citation (one line per source)"
+          >
+            <Quote className="size-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => report && copyToClipboard(JSON.stringify({ generatedAt: new Date(report.generatedAt).toISOString(), provenance: report.provenance, citations: report.citations }, null, 2), "Provenance JSON copied.")}
+            className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+            aria-label="Copy provenance as JSON"
+            title="Copy provenance JSON"
+          >
+            <Braces className="size-3.5" />
           </button>
           <button type="button" onClick={() => void copyShareLink()} className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground" aria-label="Copy a link to this view" title="Copy link to this view">
             <Link2 className="size-3.5" />
@@ -237,6 +264,16 @@ export default function MarketReportPanel() {
             ))}
             <p>· Aggregates only: counties, metros and states. No parcels, no addresses, no owners.</p>
           </div>
+          <details className="group border-t border-border/60 px-3 py-2">
+            <summary className="flex cursor-pointer list-none items-baseline justify-between gap-2 [&::-webkit-details-marker]:hidden">
+              <span className="hud-label">Sources</span>
+              <span className="text-[9px] text-muted-foreground">
+                {report.provenance.length} record{report.provenance.length === 1 ? "" : "s"} · <span className="group-open:hidden">show</span>
+                <span className="hidden group-open:inline">hide</span>
+              </span>
+            </summary>
+            <ProvenanceList items={report.provenance} className="mt-1" />
+          </details>
         </div>
       )}
     </div>

@@ -29,6 +29,7 @@ export const SOURCES = {
   usaspending: { id: "usaspending", name: "USAspending API", publisher: "U.S. Department of the Treasury", url: "https://api.usaspending.gov/", license: "public domain" },
   "census-zcta-county": { id: "census-zcta-county", name: "ZCTA to county relationship file (2020)", publisher: "U.S. Census Bureau", url: "https://www.census.gov/geographies/reference-files/time-series/geo/relationship-files.html", license: "public domain" },
   "sentinel-2": { id: "sentinel-2", name: "Copernicus Sentinel-2 L2A", publisher: "ESA via Element 84 Earth Search", url: "https://earth-search.aws.element84.com/v1", license: "free and open (Copernicus)" },
+  "natural-earth": { id: "natural-earth", name: "Natural Earth 1:110m cultural vectors", publisher: "Natural Earth", url: "https://www.naturalearthdata.com/", license: "public domain" },
   "gev-snapshot": { id: "gev-snapshot", name: "God's Eye View feed snapshots", publisher: "God's Eye View", url: "https://github.com/jcdavis131/gods-eye-view", license: "MIT; derived counts of public feeds" },
 } as const satisfies Record<string, SourceRef>;
 
