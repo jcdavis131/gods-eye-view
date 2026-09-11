@@ -3,8 +3,9 @@
 //   memoryStore()           tests and ephemeral serverless processes
 //   fileStore(dir)          one JSON file per series under `dir`; the snapshot
 //                           cron commits this directory so history is free
-//   defaultStore()          GEV_SERIES_DIR when set, else data/series when it
-//                           exists on disk, else memory
+//   defaultStore()          fileStore(GEV_SERIES_DIR or data/series), layered
+//                           over the read-only raw adapter when
+//                           GEV_SERIES_RAW_BASE is set (lib/series/githubRaw.ts)
 //
 // Adding a remote adapter (Cloudflare KV, Vercel Blob, Postgres): implement
 // SeriesStore and return it from defaultStore() behind an env variable.
@@ -12,6 +13,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Point, Series, SeriesMeta, SeriesQuery, SeriesStore } from "./types";
+import { layeredStore, rawStore } from "./githubRaw";
 
 export function mergePoints(existing: Point[], incoming: Point[]): Point[] {
   const byT = new Map<number, Point>();
@@ -127,7 +129,12 @@ export function defaultSeriesDir(): string {
 
 export function defaultStore(): SeriesStore {
   if (_default) return _default;
-  _default = fileStore(defaultSeriesDir());
+  const files = fileStore(defaultSeriesDir());
+  // Hosts whose filesystem is not the repo (Vercel) read the committed
+  // snapshots over HTTP; the file store stays primary so local writes and a
+  // fresh checkout still win. See lib/series/githubRaw.ts.
+  const rawBase = process.env.GEV_SERIES_RAW_BASE?.trim();
+  _default = rawBase ? layeredStore(files, rawStore(rawBase, { name: "GEV_SERIES_RAW_BASE" })) : files;
   return _default;
 }
 

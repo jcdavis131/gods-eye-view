@@ -1,0 +1,75 @@
+# Samples the live public feeds every three hours and commits the aggregate
+# counts to data/series (see docs/SNAPSHOTS.md). Keyless by default; add an
+# AISSTREAM_KEY repository secret to cover the non-Baltic ports.
+#
+# The commit is made with the built-in GITHUB_TOKEN, so it cannot trigger
+# other workflows (GitHub suppresses that on purpose) and needs no PAT. The
+# "[skip ci]" in the message is belt-and-braces for any CI added later and
+# for hosts (Vercel, Netlify) that honour it.
+name: snapshot
+
+on:
+  schedule:
+    # Minute 17 to stay off the top-of-hour crowd on shared runners.
+    - cron: "17 */3 * * *"
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "Comma-separated collector ids (empty = all): port-vessels,cargo-flights,gauges,reservoirs,quakes"
+        required: false
+        default: ""
+      listen:
+        description: "AISStream listen window, seconds"
+        required: false
+        default: "180"
+
+permissions:
+  contents: write
+
+# Never let two samples race on the same files or the same push.
+concurrency:
+  group: snapshot-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history is not needed; a shallow clone rebases fine.
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # --ignore-scripts skips the Cesium asset copy, which the collectors do not need.
+      - run: npm ci --ignore-scripts
+
+      - name: Collect
+        env:
+          AISSTREAM_KEY: ${{ secrets.AISSTREAM_KEY }}
+          GEV_SNAPSHOT_LISTEN_S: ${{ github.event.inputs.listen || '180' }}
+        run: |
+          ONLY="${{ github.event.inputs.only }}"
+          if [ -n "$ONLY" ]; then
+            node scripts/snapshot.mjs --only="$ONLY"
+          else
+            node scripts/snapshot.mjs
+          fi
+
+      - name: Commit and push
+        run: |
+          git add data/series
+          if git diff --cached --quiet; then
+            echo "nothing to commit"
+            exit 0
+          fi
+          git -c user.name="gev-snapshot[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "snapshot: $(date -u +%Y-%m-%dT%H:%MZ) [skip ci]"
+          # Someone may have pushed while we were sampling; replay our one commit on top.
+          git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
