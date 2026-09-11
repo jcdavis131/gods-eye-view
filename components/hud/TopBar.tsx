@@ -1,6 +1,7 @@
 "use client";
 
-import { Search, Settings2, Crosshair, Home, Droplets } from "lucide-react";
+import { Search, Settings2, Crosshair, Home, Droplets, Compass, Link2 } from "lucide-react";
+import { copyShareLink } from "@/lib/globe/share";
 import { useNow } from "@/lib/hooks/useNow";
 import { useGlobe } from "@/lib/store/globe";
 import { formatDistance, formatLatLon } from "@/lib/globe/geo";
@@ -25,6 +26,7 @@ export default function TopBar() {
   const setSearchOpen = useGlobe((s) => s.setSearchOpen);
   const setSettingsOpen = useGlobe((s) => s.setSettingsOpen);
   const waterOpen = useGlobe((s) => s.waterReportOpen);
+  const setExploreOpen = useGlobe((s) => s.setExploreOpen);
   const live = isLive(clock.offsetMs);
   const mission = now ? now + clock.offsetMs : 0;
 
@@ -95,6 +97,15 @@ export default function TopBar() {
         <VoiceControl />
         <button
           type="button"
+          onClick={() => setExploreOpen(true)}
+          className="flex items-center gap-2 px-3 py-2 text-[11px] uppercase tracking-wider text-foreground/80 hover:bg-accent hover:text-primary"
+          title="Curated places, guided tour, exports"
+        >
+          <Compass className="size-3.5" />
+          Explore
+        </button>
+        <button
+          type="button"
           onClick={() => setSearchOpen(true)}
           className="flex items-center gap-2 px-3 py-2 text-[11px] uppercase tracking-wider text-foreground/80 hover:bg-accent hover:text-primary"
           title="Search flights, ships, satellites, places (Ctrl+K)"
@@ -120,6 +131,15 @@ export default function TopBar() {
         >
           <Droplets className="size-3.5" />
           Water
+        </button>
+        <button
+          type="button"
+          onClick={() => void copyShareLink()}
+          className="flex items-center gap-2 px-3 py-2 text-[11px] uppercase tracking-wider text-foreground/80 hover:bg-accent hover:text-primary"
+          title="Copy a link to exactly this view, layers, clock and selection"
+        >
+          <Link2 className="size-3.5" />
+          Share
         </button>
         <button
           type="button"

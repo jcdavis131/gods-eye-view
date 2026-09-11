@@ -4,9 +4,12 @@
 // prints its own formula and inputs.
 
 import { useEffect, useMemo, useState } from "react";
-import { Droplets, RefreshCw, X } from "lucide-react";
+import { Copy, Droplets, FileDown, Link2, RefreshCw, X } from "lucide-react";
 import { useGlobe } from "@/lib/store/globe";
-import { buildWaterReport, type ReportItem, type ReportSection, type WaterReport } from "@/lib/water/report";
+import { reportAsText, type ReportItem, type ReportSection, type WaterReport } from "@/lib/water/report";
+import { reportFromGlobe } from "@/lib/water/reportClient";
+import { copyShareLink } from "@/lib/globe/share";
+import { downloadText } from "@/lib/explore/export";
 import { getRenderer } from "@/lib/globe/registry";
 import { flyToSelection } from "@/lib/globe/camera";
 import { formatLatLon } from "@/lib/globe/geo";
@@ -23,7 +26,7 @@ function useReport(open: boolean): { report: WaterReport | null; refresh: () => 
     if (!open) return;
     const id = setTimeout(() => {
       const v = useGlobe.getState().view;
-      setReport(buildWaterReport(v.lon, v.lat));
+      setReport(reportFromGlobe(v.lon, v.lat));
     }, 600);
     return () => clearTimeout(id);
   }, [open, stamps, target, nonce]);
@@ -110,7 +113,40 @@ export default function WaterReportPanel() {
             around the camera target · estimates with the arithmetic shown
           </div>
         </div>
-        <div className="flex shrink-0 gap-1">
+        <div className="flex shrink-0 gap-0.5">
+          <button
+            type="button"
+            onClick={() => {
+              if (!report) return;
+              navigator.clipboard.writeText(reportAsText(report)).then(
+                () => useGlobe.getState().pushLog({ level: "info", text: "Report copied as text." }),
+                () => useGlobe.getState().pushLog({ level: "warn", text: "Clipboard blocked." }),
+              );
+            }}
+            className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+            aria-label="Copy report as text"
+            title="Copy as text"
+          >
+            <Copy className="size-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => report && downloadText(`water-report-${report.lat.toFixed(3)}_${report.lon.toFixed(3)}.json`, JSON.stringify(report, null, 2), "application/json")}
+            className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+            aria-label="Download report as JSON"
+            title="Download JSON"
+          >
+            <FileDown className="size-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => void copyShareLink()}
+            className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+            aria-label="Copy a link to this view"
+            title="Copy link to this view"
+          >
+            <Link2 className="size-3.5" />
+          </button>
           <button
             type="button"
             onClick={refresh}

@@ -46,6 +46,13 @@ export function parseIntent(raw: string): Intent | null {
   if (/^(home|zoom out|overview|show (me )?(the )?(whole )?(earth|globe|world|planet)|pull back)/.test(t)) {
     return { command: "home_view", args: {} };
   }
+  // "start the tour", "take me on the tour", "explore lake mead"
+  if (/^(?:start|begin|play|take)(?: me on)?(?: the)? (?:water )?tour$/.test(t)) {
+    return { command: "explore_preset", args: { tour: true } };
+  }
+  if ((m = t.match(/^(?:explore|preset|jump to preset)\s+(.+)$/))) {
+    return { command: "explore_preset", args: { preset: m[1].trim() } };
+  }
   // "water report", "water report for san antonio", "how is the water in austin"
   if ((m = t.match(/^(?:water report|water status|how(?:'s| is) the water|is the water (?:ok|safe))(?:\s+(?:for|in|near|around|over|at)\s+(.+))?$/))) {
     return { command: "water_report", args: { place: m[1]?.trim() || undefined } };

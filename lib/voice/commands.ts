@@ -15,7 +15,10 @@ import type { LayerId } from "@/lib/layers/types";
 import { useGlobe } from "@/lib/store/globe";
 import { geocode, heightForPlace } from "@/components/hud/SearchCommand";
 import { formatDistance, formatLatLon } from "@/lib/globe/geo";
-import { buildWaterReport, speakReport } from "@/lib/water/report";
+import { speakReport } from "@/lib/water/report";
+import { reportFromGlobe } from "@/lib/water/reportClient";
+import { PRESETS, presetShare } from "@/lib/explore/presets";
+import { applyShare } from "@/lib/globe/share";
 
 export interface JsonSchema {
   type: "object";
@@ -234,8 +237,31 @@ export const COMMANDS: CommandDef[] = [
       // Give the layers a moment to land before reading them.
       await new Promise((r) => setTimeout(r, a.place ? 6000 : 1500));
       const v = useGlobe.getState().view;
-      const report = buildWaterReport(v.lon, v.lat);
+      const report = reportFromGlobe(v.lon, v.lat);
       return prefix + speakReport(report);
+    },
+  },
+  {
+    name: "explore_preset",
+    description: "Jump to one of the curated water explorations (a place with the right layers switched on), or start the guided tour.",
+    parameters: {
+      type: "object",
+      properties: {
+        preset: { type: "string", description: "Preset id or a word from its title", enum: PRESETS.map((p) => p.id) },
+        tour: { type: "boolean", description: "true to start the guided tour instead" },
+      },
+    },
+    run: async (a) => {
+      const st = useGlobe.getState();
+      if (a.tour === true || a.tour === "true") {
+        st.setTour({ active: true, index: 0, startedAt: Date.now(), paused: false });
+        return "Starting the water tour.";
+      }
+      const q = String(a.preset ?? "").toLowerCase();
+      const p = PRESETS.find((x) => x.id === q) ?? PRESETS.find((x) => `${x.title} ${x.region}`.toLowerCase().includes(q));
+      if (!p) return `No preset matches ${a.preset}. Try one of: ${PRESETS.map((x) => x.title).join(", ")}.`;
+      applyShare(presetShare(p));
+      return `${p.title}, ${p.region}. ${p.blurb}`;
     },
   },
   {

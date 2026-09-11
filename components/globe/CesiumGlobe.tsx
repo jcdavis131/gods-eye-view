@@ -11,6 +11,8 @@ import { allRenderers, getRenderer } from "@/lib/globe/registry";
 import type { PickId } from "@/lib/globe/renderer";
 import { cinematicTick, followTick } from "@/lib/globe/camera";
 import { satWorker } from "@/lib/globe/satWorker";
+import { parseShare } from "@/lib/globe/share";
+import { flyTo } from "@/lib/globe/camera";
 import { useGlobe } from "@/lib/store/globe";
 import { useSettings } from "@/lib/store/settings";
 import type { ViewState } from "@/lib/layers/types";
@@ -101,12 +103,22 @@ export default function CesiumGlobe() {
         destination: C.Cartesian3.fromDegrees(-97.7, 10, 32_000_000),
         orientation: { heading: 0, pitch: C.Math.toRadians(-90), roll: 0 },
       });
-      viewer.camera.flyTo({
-        destination: C.Cartesian3.fromDegrees(-97.7, 8, 9_500_000),
-        orientation: { heading: 0, pitch: C.Math.toRadians(-72), roll: 0 },
-        duration: 5,
-        easingFunction: C.EasingFunction.QUADRATIC_OUT,
-      });
+      const shared = parseShare(window.location.search);
+      if (shared.lat != null && shared.lon != null) {
+        flyTo(shared.lon, shared.lat, {
+          height: shared.h ?? 120_000,
+          pitchDeg: shared.p ?? -55,
+          headingDeg: shared.hd ?? 0,
+          durationS: 5,
+        });
+      } else {
+        viewer.camera.flyTo({
+          destination: C.Cartesian3.fromDegrees(-97.7, 8, 9_500_000),
+          orientation: { heading: 0, pitch: C.Math.toRadians(-72), roll: 0 },
+          duration: 5,
+          easingFunction: C.EasingFunction.QUADRATIC_OUT,
+        });
+      }
 
       // Camera state -> store (throttled)
       const ellipsoid = scene.globe.ellipsoid;

@@ -9,6 +9,9 @@ import TopBar from "./TopBar";
 import LayerPanel from "./LayerPanel";
 import InfoPanel from "./InfoPanel";
 import WaterReportPanel from "./WaterReportPanel";
+import ExploreDialog from "./ExploreDialog";
+import TourCaption from "./TourCaption";
+import { applyShare, parseShare, startUrlSync } from "@/lib/globe/share";
 import Timeline from "./Timeline";
 import SettingsDialog from "./SettingsDialog";
 import SearchCommand from "./SearchCommand";
@@ -28,24 +31,46 @@ export default function Cockpit() {
   const setLayer = useGlobe((s) => s.setLayer);
   const setSearchOpen = useGlobe((s) => s.setSearchOpen);
   const setSettingsOpen = useGlobe((s) => s.setSettingsOpen);
+  const ready = useGlobe((s) => s.ready);
+  const embed = useGlobe((s) => s.embed);
 
-  // Default layers on at first boot.
+  // Default layers on at first boot, unless the link names its own set.
   useEffect(() => {
-    for (const l of LAYERS) if (l.defaultEnabled) setLayer(l.id, true);
+    const share = parseShare(window.location.search);
+    if (share.embed) useGlobe.getState().setEmbed(true);
+    if (share.layers) {
+      for (const l of LAYERS) setLayer(l.id, share.layers.includes(l.id));
+    } else {
+      for (const l of LAYERS) if (l.defaultEnabled) setLayer(l.id, true);
+    }
   }, [setLayer]);
+
+  // Once the globe is up: apply the rest of the link (clock, report,
+  // selection; the camera already flew there in CesiumGlobe's opening move)
+  // and start mirroring the cockpit back into the address bar.
+  useEffect(() => {
+    if (!ready) return;
+    const share = parseShare(window.location.search);
+    applyShare(share, { fly: false });
+    return startUrlSync();
+  }, [ready]);
 
   // Console API for inspection: window.gev.{globe,settings,run,say,flyTo,layers,features}
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const [{ runCommand, COMMANDS }, { parseIntent }, camera, registry, { useSettings }, cesium] = await Promise.all([
-        import("@/lib/voice/commands"),
-        import("@/lib/voice/intent"),
-        import("@/lib/globe/camera"),
-        import("@/lib/globe/registry"),
-        import("@/lib/store/settings"),
-        import("@/lib/globe/cesium"),
-      ]);
+      const [{ runCommand, COMMANDS }, { parseIntent }, camera, registry, { useSettings }, cesium, { PRESETS }, exportsMod, share] =
+        await Promise.all([
+          import("@/lib/voice/commands"),
+          import("@/lib/voice/intent"),
+          import("@/lib/globe/camera"),
+          import("@/lib/globe/registry"),
+          import("@/lib/store/settings"),
+          import("@/lib/globe/cesium"),
+          import("@/lib/explore/presets"),
+          import("@/lib/explore/export"),
+          import("@/lib/globe/share"),
+        ]);
       if (cancelled) return;
       (window as unknown as { gev: unknown }).gev = {
         globe: useGlobe,
@@ -60,6 +85,10 @@ export default function Cockpit() {
         },
         flyTo: camera.flyTo,
         features: registry.allFeatures,
+        presets: PRESETS,
+        exports: { gaugesCsv: exportsMod.gaugesCsv, chipsGeoJson: exportsMod.chipsGeoJson },
+        shareUrl: share.shareUrl,
+        applyShare: share.applyShare,
       };
     })();
     return () => {
@@ -90,15 +119,39 @@ export default function Cockpit() {
       <CesiumGlobe />
       <LayerHost />
       <HudFrame />
-      <TopBar />
-      <LayerPanel />
-      <div className="pointer-events-none absolute right-3 top-[76px] z-30 flex w-[320px] max-w-[calc(100vw-24px)] flex-col gap-2">
-        <WaterReportPanel />
-        <InfoPanel />
-      </div>
-      <Timeline />
-      <SettingsDialog />
-      <SearchCommand />
+      {embed ? (
+        <EmbedBadge />
+      ) : (
+        <>
+          <TopBar />
+          <LayerPanel />
+          <div className="pointer-events-none absolute right-3 top-[76px] z-30 flex w-[320px] max-w-[calc(100vw-24px)] flex-col gap-2">
+            <WaterReportPanel />
+            <InfoPanel />
+          </div>
+          <Timeline />
+          <TourCaption />
+          <SettingsDialog />
+          <SearchCommand />
+          <ExploreDialog />
+        </>
+      )}
     </main>
+  );
+}
+
+/** Minimal chrome for ?embed=1: brand and a way out. Cesium's own credits stay. */
+function EmbedBadge() {
+  return (
+    <a
+      href={typeof window === "undefined" ? "/" : window.location.href.replace(/([?&])embed=1&?/, "$1").replace(/[?&]$/, "")}
+      target="_blank"
+      rel="noreferrer"
+      className="hud-panel pointer-events-auto absolute left-3 top-3 z-30 flex items-center gap-2 px-3 py-1.5 text-[10px] uppercase tracking-wider text-primary hover:text-foreground"
+      title="Open the full cockpit"
+    >
+      God&apos;s Eye View
+      <span className="text-muted-foreground">· open full view</span>
+    </a>
   );
 }

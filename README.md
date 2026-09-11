@@ -4,7 +4,7 @@
 
 A photorealistic 3D globe that fuses live public signals: every aircraft broadcasting ADS-B, ships on AIS, satellites propagated from CelesTrak elements, earthquakes as USGS reports them, open-data public cameras, upcoming rocket launches. And the thing the others don't do: **the water that keeps communities alive**. Rivers, lakes and reservoirs with their live gauges, the aquifers under them, this week's drought, and turbidity computed in your browser from the latest Sentinel-2 pass, with a community water report that shows its arithmetic. Dark HUD, scanlines, cinematic camera, voice control. Starts with **zero API keys**. MIT licensed.
 
-**Live:** https://gods-eye-view-rust.vercel.app (deploys from `master`). One hosting caveat: OpenSky refuses Vercel's egress, so the zoomed-out aircraft view there falls back to adsb.lol around the view centre plus the military feed; run it locally or add OpenSky credentials for the full global picture.
+**Live:** https://eye.jcamd.com (also https://gods-eye-view-rust.vercel.app; deploys from `master`). One hosting caveat: OpenSky refuses Vercel's egress, so the zoomed-out aircraft view there falls back to adsb.lol around the view centre plus the military feed; run it locally or add OpenSky credentials for the full global picture.
 
 ![God's Eye View boot screen](docs/screenshot-boot.jpg)
 
@@ -31,6 +31,59 @@ Three layers and one report, all keyless, all labelled by what they are.
 What the turbidity layer is and is not. It is the physics "teacher" that the TurbidityVision project (a separate, distilled LightGBM model; its explainer is the reference for the recipe below) learns from: T = A·ρw / (1 − ρw/C) with Dogliotti's published red (A 228.1, C 0.1641) and NIR (A 3078.9, C 0.2112) coefficients, blended between ρ_red 0.05 and 0.07, on the water mask SCL 6 ∪ (NDWI > 0.05 ∧ ρB08 < 0.10) minus cloud, shadow, snow and saturated classes. The distilled model's boosters are not bundled here. The numbers are estimates of a physical quantity from reflectance, not measurements, not regulatory values; the chip dossier says so, the layer tag says so, and the p10–p90 is the spread *inside* the chip, not model uncertainty.
 
 Validation before shipping: the pipeline in `lib/water/` was run on the explainer's own Bexar County scene `S2A_14RNT_20250118_0_L2A` and reproduced its per-reservoir medians (Calaveras 4.47 vs 4.44 FNU, Braunig 4.02 vs 4.04, Mitchell Lake 15.98 vs 15.7). The same run settled the DN→reflectance question empirically: on this bucket ρ = DN/10000 passes the dark-water / land-NDVI / negative-fraction check and the STAC `offset −0.1` metadata does not (70 % negative reflectances), so the worker tries both conventions on every scene, keeps the one that passes and prints the check in the dossier.
+
+## Explore it
+
+Every view is a link. **Share** in the top bar copies one that carries the camera target, the layers, the mission clock and the selected object; **Explore** opens curated places, a guided tour, and exports.
+
+| Start here | What loads |
+| --- | --- |
+| [Calaveras & Braunig, San Antonio](https://eye.jcamd.com/?lat=29.28&lon=-98.34&h=60000&layers=water,turbidity,groundwater&report=1) | Sentinel-2 turbidity chips beside USGS turbidity gauges, with the community water report open |
+| [Edwards Aquifer wells](https://eye.jcamd.com/?lat=29.42&lon=-98.49&h=120000&layers=water,groundwater&report=1) | Wells named by aquifer, drought class, gauges with full quality panels |
+| [Highland Lakes, Austin](https://eye.jcamd.com/?lat=30.4&lon=-97.9&h=120000&layers=water,groundwater&report=1) | TWDB reservoirs with percent full; the report weights storage by capacity |
+| [Lake Mead & Hoover Dam](https://eye.jcamd.com/?lat=36.05&lon=-114.74&h=150000&layers=water,turbidity,groundwater) | Dozens of turbidity and oxygen gauges plus satellite chips |
+| [Chesapeake Bay](https://eye.jcamd.com/?lat=38.95&lon=-76.45&h=120000&layers=water,turbidity) | Estuary turbidity, gauges on the tributaries |
+| [Western Lake Erie](https://eye.jcamd.com/?lat=41.7&lon=-83.4&h=150000&layers=water,turbidity,groundwater) | Open-water chips, Maumee gauges, inland wells |
+| [Lake Okeechobee](https://eye.jcamd.com/?lat=26.95&lon=-80.8&h=150000&layers=water,turbidity,groundwater) | Canal gauges, basin wells, lake chips |
+| [Mississippi & Atchafalaya](https://eye.jcamd.com/?lat=30&lon=-91.3&h=200000&layers=water,groundwater) | NWS flood categories along the lower river |
+| [Rio Grande at El Paso](https://eye.jcamd.com/?lat=31.75&lon=-106.5&h=120000&layers=groundwater,water&report=1) | A groundwater story: wells, aquifers, drought |
+| [The planet's water](https://eye.jcamd.com/?lat=30&lon=-97.7&h=12000000&layers=water,groundwater) | Every named river and lake with this week's drought classes |
+
+Link parameters: `lat`, `lon`, `h` (camera height in metres), `hd` / `p` (heading, pitch), `layers` (comma list of layer ids, exactly these on), `t` (mission clock, ISO; omitted while live), `sel=layer:id` (selected object, best effort once its feed loads), `report=1` (water report open), `embed=1` (no HUD chrome, for iframes; data credits stay).
+
+Embed it:
+
+```html
+<iframe src="https://eye.jcamd.com/?lat=29.28&lon=-98.34&h=60000&layers=water,turbidity&embed=1"
+        width="960" height="600" style="border:0" allow="clipboard-write" loading="lazy"></iframe>
+```
+
+Take the data with you: **Explore → Take the data with you** saves every loaded gauge reading as CSV and the turbidity chips as GeoJSON polygons with scene provenance; the water report has copy-as-text and JSON buttons in its header.
+
+## Use the data without the globe
+
+`/api/water` is a keyless, CORS-open JSON API over the same public sources, edge-cached by op. Call it from a notebook, a script or your own page:
+
+```bash
+# Community water report for a point (drought, reservoirs, gauges, wells, stress estimate with its formula)
+curl "https://eye.jcamd.com/api/water?op=report&lon=-98.49&lat=29.42"
+
+# Latest USGS gauge readings in a box (flow, stage, temp, DO, conductance, pH, turbidity, reservoir level/storage)
+curl "https://eye.jcamd.com/api/water?op=gauges&bbox=-98.6,29.2,-98.2,29.6"
+curl "https://eye.jcamd.com/api/water?op=gauges&bbox=-98.6,29.2,-98.2,29.6&param=63680"   # turbidity only
+
+# NWS flood categories, Texas reservoirs, USGS wells with aquifer names, this week's Drought Monitor polygons
+curl "https://eye.jcamd.com/api/water?op=nwps&bbox=-98.6,29.2,-98.2,29.6"
+curl "https://eye.jcamd.com/api/water?op=twdb"
+curl "https://eye.jcamd.com/api/water?op=wells&bbox=-98.6,29.2,-98.2,29.6"
+curl "https://eye.jcamd.com/api/water?op=drought"
+
+# One site: 365 days of daily means, or instantaneous values in a window
+curl "https://eye.jcamd.com/api/water?op=history&site=USGS-08180800&param=00060"
+curl "https://eye.jcamd.com/api/water?op=matchup&site=USGS-08181500&param=63680&from=2026-09-02T15:25:56Z&to=2026-09-02T19:25:56Z"
+```
+
+Boxes are clamped to 4° and snapped to a 0.5° grid so nearby callers share a cache entry. Responses carry `source`, `cacheAge` and, for the report, `globe`: the permalink that opens the same point on the globe. The report from the API has no satellite turbidity term (that runs in a browser) and says so in `caveats`. Please keep the upstreams' terms in mind; the route already rate-gates and backs off on their behalf.
 
 ## Quick start
 
@@ -81,9 +134,10 @@ Press **Keys** in the top bar or hit `,`. Keys live in `localStorage` and are on
 - Drag to orbit, scroll to zoom, middle-drag or ctrl-drag to tilt.
 - Click any object for its dossier; **Follow** locks the camera to it (your orbit offset is kept while it moves).
 - `⌘K` / `Ctrl+K` search flights, ships, satellites and cameras by callsign, name, MMSI, ICAO hex or NORAD id, or geocode a place.
+- **Explore** opens curated places, the guided tour and exports; **Share** copies a permalink to exactly this view.
 - Timeline scrubs ±24 h. Satellites and launches propagate to any time. Live layers hold their last known state and are flagged `LAST KNOWN`; nothing is synthesised for the past.
 - Idle for 12 s and the camera drifts in orbit (cinematic mode, toggle in settings).
-- Voice: press **Voice** and say "show me flights over Austin", "track the ISS", "rewind 30 minutes", "go live", "what am I looking at", "show me aquifers", "water report for San Antonio".
+- Voice: press **Voice** and say "show me flights over Austin", "track the ISS", "rewind 30 minutes", "go live", "what am I looking at", "show me aquifers", "water report for San Antonio", "explore Lake Mead", "start the tour".
 
 ## Voice control
 
@@ -106,6 +160,7 @@ For ElevenLabs and Vapi, configure tools on the vendor side with these names and
   { "name": "set_time",        "parameters": { "offset_minutes": "number?", "live": "boolean?" } },
   { "name": "home_view",       "parameters": {} },
   { "name": "water_report",    "parameters": { "place": "string?" } },
+  { "name": "explore_preset",  "parameters": { "preset": "string?", "tour": "boolean?" } },
   { "name": "describe_view",   "parameters": {} }
 ]
 ```
@@ -209,6 +264,10 @@ export const myStyle: LayerStyle = {
 ```
 
 Rules the codebase keeps: never invent a value the upstream did not send (unknown heading stays `undefined`, AIS sentinels 511/360 are dropped), never count simulated features as live, never let a key reach third-party JavaScript except the SDK it belongs to.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md): the ground rules (public infrastructure only, never invent a value, keyless first, polite to upstreams), how to add a layer or an Explore preset, and how to report a wrong number with a permalink.
 
 ## Ethics guardrails
 

@@ -1,6 +1,10 @@
-"use client";
 // Community water report: everything the water layers currently hold,
 // aggregated around one point, with the arithmetic printed.
+//
+// Pure: takes feature lists, returns a report. The browser feeds it what the
+// renderers hold (lib/water/reportClient.ts); /api/water?op=report feeds it
+// features built server-side from the same upstreams (no turbidity there,
+// that needs a browser).
 //
 // The report never invents a number. Each section names its inputs and the
 // radius it searched; when a source is not loaded or empty the section says
@@ -10,13 +14,9 @@
 
 import type { MultiPolygon, Point, Polygon } from "geojson";
 import { haversine } from "@/lib/globe/geo";
-import { getRenderer } from "@/lib/globe/registry";
 import type { LayerFeature } from "@/lib/layers/types";
-import type { GaugeExtra, ReservoirExtra } from "@/lib/layers/water";
-import type { DroughtExtra, WellExtra } from "@/lib/layers/groundwater";
 import type { ChipExtra } from "@/lib/layers/turbidity";
-import { DROUGHT_LABEL } from "@/lib/layers/groundwater";
-import { floodLabel } from "@/lib/layers/water";
+import { DROUGHT_LABEL, floodLabel, type DroughtExtra, type GaugeExtra, type ReservoirExtra, type WellExtra } from "./features";
 import { fmtReading, PARAM_INFO } from "./quality";
 
 export interface ReportItem {
@@ -59,10 +59,17 @@ export interface WaterReport {
   caveats: string[];
 }
 
-const R_RESERVOIR_KM = 150;
-const R_GAUGE_KM = 75;
-const R_WELL_KM = 75;
-const R_CHIP_KM = 30;
+/** What the report reads. `loaded` says whether that source was fetched at all. */
+export interface ReportSources {
+  water: LayerFeature[];
+  groundwater: LayerFeature[];
+  turbidity: LayerFeature[];
+  loaded: { water: boolean; groundwater: boolean; turbidity: boolean };
+  /** Extra caveats from the caller (e.g. "server report: no turbidity"). */
+  caveats?: string[];
+}
+
+export const REPORT_RADII_KM = { reservoirs: 150, gauges: 75, wells: 75, chips: 30 } as const;
 
 function pointInRing(lon: number, lat: number, ring: number[][]): boolean {
   let inside = false;
@@ -82,15 +89,9 @@ function pointInPolygon(lon: number, lat: number, poly: number[][][]): boolean {
   return true;
 }
 
-function pointInGeometry(lon: number, lat: number, g: Polygon | MultiPolygon): boolean {
+export function pointInGeometry(lon: number, lat: number, g: Polygon | MultiPolygon): boolean {
   if (g.type === "Polygon") return pointInPolygon(lon, lat, g.coordinates);
   return g.coordinates.some((p) => pointInPolygon(lon, lat, p));
-}
-
-function features(layer: "water" | "groundwater" | "turbidity"): { loaded: boolean; list: LayerFeature[] } {
-  const r = getRenderer(layer);
-  if (!r) return { loaded: false, list: [] };
-  return { loaded: r.size > 0, list: [...r.features()] };
 }
 
 function km(lon: number, lat: number, f: LayerFeature<Point>): number {
@@ -104,15 +105,13 @@ function stressLabel(score: number): string {
   return "severe";
 }
 
-export function buildWaterReport(lon: number, lat: number, now = Date.now()): WaterReport {
-  const caveats: string[] = [];
-  const water = features("water");
-  const ground = features("groundwater");
-  const turb = features("turbidity");
+export function buildWaterReport(lon: number, lat: number, src: ReportSources, now = Date.now()): WaterReport {
+  const caveats: string[] = [...(src.caveats ?? [])];
+  const R = REPORT_RADII_KM;
 
   // Drought: max class over every USDM polygon containing the point.
   let dm: number | null = null;
-  const droughtFeatures = ground.list.filter((f) => f.properties.kind === "drought");
+  const droughtFeatures = src.groundwater.filter((f) => f.properties.kind === "drought");
   for (const f of droughtFeatures) {
     const x = f.properties.extra as DroughtExtra;
     if (pointInGeometry(lon, lat, f.geometry as Polygon | MultiPolygon)) dm = Math.max(dm ?? -1, x.dm);
@@ -137,10 +136,10 @@ export function buildWaterReport(lon: number, lat: number, now = Date.now()): Wa
   const resItems: ReportItem[] = [];
   let capSum = 0;
   let storSum = 0;
-  for (const f of water.list as LayerFeature<Point>[]) {
+  for (const f of src.water as LayerFeature<Point>[]) {
     if (f.properties.kind !== "reservoir" || f.geometry.type !== "Point") continue;
     const d = km(lon, lat, f);
-    if (d > R_RESERVOIR_KM) continue;
+    if (d > R.reservoirs) continue;
     const x = f.properties.extra as ReservoirExtra | GaugeExtra;
     if ("percentFull" in x && x.percentFull != null && x.capacityAcFt) {
       capSum += x.capacityAcFt;
@@ -170,17 +169,18 @@ export function buildWaterReport(lon: number, lat: number, now = Date.now()): Wa
   const weighted = capSum > 0 ? (storSum / capSum) * 100 : null;
   const reservoirs: WaterReport["reservoirs"] = {
     title: "Reservoirs",
-    loaded: water.loaded,
-    radiusKm: R_RESERVOIR_KM,
+    loaded: src.loaded.water,
+    radiusKm: R.reservoirs,
     n: resItems.length,
-    summary: !water.loaded
+    summary: !src.loaded.water
       ? "Surface water layer not loaded"
       : resItems.length === 0
         ? "No reservoir gauges within 150 km (or the camera is above the gauge altitude)"
         : weighted != null
           ? `${weighted.toFixed(0)} % of conservation capacity, weighted over ${resItems.filter((i) => i.flag).length} TWDB reservoirs`
           : `${resItems.length} USGS reservoir gauges, no capacity figures to weight`,
-    basis: "Σ(capacity × percent full) / Σ capacity over TWDB reservoirs within 150 km. Texas only; elsewhere USGS reservoir elevation/storage is listed without a capacity to normalise by.",
+    basis:
+      "Σ(capacity × percent full) / Σ capacity over TWDB reservoirs within 150 km. Texas only; elsewhere USGS reservoir elevation/storage is listed without a capacity to normalise by.",
     items: resItems.slice(0, 8),
     data: { weightedPercentFull: weighted },
   };
@@ -192,11 +192,11 @@ export function buildWaterReport(lon: number, lat: number, now = Date.now()): Wa
   const scores: number[] = [];
   let worst: "ok" | "watch" | "poor" | null = null;
   const rank = { ok: 0, watch: 1, poor: 2 };
-  for (const f of water.list as LayerFeature<Point>[]) {
+  for (const f of src.water as LayerFeature<Point>[]) {
     const k = f.properties.kind;
     if ((k !== "gauge" && k !== "flood-gauge") || f.geometry.type !== "Point") continue;
     const d = km(lon, lat, f);
-    if (d > R_GAUGE_KM) continue;
+    if (d > R.gauges) continue;
     const x = f.properties.extra as GaugeExtra;
     const cat = x.flood?.category;
     const isFlooding = cat === "minor" || cat === "moderate" || cat === "major";
@@ -225,17 +225,18 @@ export function buildWaterReport(lon: number, lat: number, now = Date.now()): Wa
   const meanQuality = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
   const gauges: WaterReport["gauges"] = {
     title: "Stream gauges",
-    loaded: water.loaded,
-    radiusKm: R_GAUGE_KM,
+    loaded: src.loaded.water,
+    radiusKm: R.gauges,
     n: gItems.length,
-    summary: !water.loaded
+    summary: !src.loaded.water
       ? "Surface water layer not loaded"
       : gItems.length === 0
         ? "No gauges within 75 km (descend below 1,500 km to load them)"
         : `${gItems.length} gauges · ${flooding} flooding · ${scores.length} with quality panels` +
           (meanQuality != null ? ` averaging ${(meanQuality * 100).toFixed(0)} %` : "") +
           (stale ? ` · ${stale} stale` : ""),
-    basis: "USGS latest readings screened against EPA freshwater criteria (DO ≥ 5 mg/L, pH 6.5–9, conductance, turbidity, temperature); NWS flood categories where a NWPS gauge is co-located.",
+    basis:
+      "USGS latest readings screened against EPA freshwater criteria (DO ≥ 5 mg/L, pH 6.5–9, conductance, turbidity, temperature); NWS flood categories where a NWPS gauge is co-located.",
     items: gItems.slice(0, 10),
     data: { flooding, meanQuality, stale, worst },
   };
@@ -243,10 +244,10 @@ export function buildWaterReport(lon: number, lat: number, now = Date.now()): Wa
   // Wells: aquifers and latest levels within 75 km.
   const wItems: ReportItem[] = [];
   const aquifers = new Set<string>();
-  for (const f of ground.list as LayerFeature<Point>[]) {
+  for (const f of src.groundwater as LayerFeature<Point>[]) {
     if (f.properties.kind !== "well" || f.geometry.type !== "Point") continue;
     const d = km(lon, lat, f);
-    if (d > R_WELL_KM) continue;
+    if (d > R.wells) continue;
     const x = f.properties.extra as WellExtra;
     if (x.aquifer) aquifers.add(x.aquifer);
     const r = x.readings[x.primary];
@@ -262,15 +263,16 @@ export function buildWaterReport(lon: number, lat: number, now = Date.now()): Wa
   wItems.sort((a, b) => a.distanceKm - b.distanceKm);
   const wells: WaterReport["wells"] = {
     title: "Groundwater",
-    loaded: ground.loaded,
-    radiusKm: R_WELL_KM,
+    loaded: src.loaded.groundwater,
+    radiusKm: R.wells,
     n: wItems.length,
-    summary: !ground.loaded
+    summary: !src.loaded.groundwater
       ? "Aquifers & drought layer not loaded"
       : wItems.length === 0
         ? "No USGS monitoring wells within 75 km (or above 1,500 km)"
         : `${wItems.length} wells in ${aquifers.size} named aquifer${aquifers.size === 1 ? "" : "s"}: ${[...aquifers].slice(0, 3).join(", ")}${aquifers.size > 3 ? "…" : ""}`,
-    basis: "USGS latest daily water levels. A single latest reading says where the table is, not which way it is moving; select a well for its 365-day trace.",
+    basis:
+      "USGS latest daily water levels. A single latest reading says where the table is, not which way it is moving; select a well for its 365-day trace.",
     items: wItems.slice(0, 8),
     data: { aquifers: [...aquifers] },
   };
@@ -279,10 +281,10 @@ export function buildWaterReport(lon: number, lat: number, now = Date.now()): Wa
   const tItems: ReportItem[] = [];
   const meds: number[] = [];
   let scene: string | null = null;
-  for (const f of turb.list as LayerFeature<Point>[]) {
+  for (const f of src.turbidity as LayerFeature<Point>[]) {
     if (f.geometry.type !== "Point") continue;
     const d = km(lon, lat, f);
-    if (d > R_CHIP_KM) continue;
+    if (d > R.chips) continue;
     const x = f.properties.extra as ChipExtra;
     meds.push(x.stats.median);
     scene = scene ?? `${x.scene.id} (${x.scene.datetime.slice(0, 10)})`;
@@ -300,15 +302,16 @@ export function buildWaterReport(lon: number, lat: number, now = Date.now()): Wa
   const medianFnu = meds.length ? meds[Math.floor(meds.length / 2)] : null;
   const turbidity: WaterReport["turbidity"] = {
     title: "Satellite turbidity",
-    loaded: turb.loaded,
-    radiusKm: R_CHIP_KM,
+    loaded: src.loaded.turbidity,
+    radiusKm: R.chips,
     n: meds.length,
-    summary: !turb.loaded
+    summary: !src.loaded.turbidity
       ? "Turbidity layer not computed (turn it on below 300 km over water)"
       : meds.length === 0
         ? "No water chips within 30 km"
         : `${meds.length} chips · median ${medianFnu!.toFixed(1)} FNU · scene ${scene}`,
-    basis: "Dogliotti (2015) physics estimate on Sentinel-2 L2A water pixels, 640 m chips; median of chip medians. An estimate, not an in-situ measurement.",
+    basis:
+      "Dogliotti (2015) physics estimate on Sentinel-2 L2A water pixels, 640 m chips; median of chip medians. An estimate, not an in-situ measurement.",
     items: tItems.slice(0, 6),
     data: { medianFnu, scene },
   };
@@ -317,7 +320,8 @@ export function buildWaterReport(lon: number, lat: number, now = Date.now()): Wa
   const terms: StressTerm[] = [];
   if (dm != null) terms.push({ name: "drought", weight: 0.35, value: dm / 4, input: `D${dm} / 4` });
   else if (drought.loaded) terms.push({ name: "drought", weight: 0.35, value: 0, input: "no drought class here" });
-  if (weighted != null) terms.push({ name: "reservoirs", weight: 0.3, value: Math.max(0, Math.min(1, 1 - weighted / 100)), input: `1 − ${weighted.toFixed(0)} % / 100` });
+  if (weighted != null)
+    terms.push({ name: "reservoirs", weight: 0.3, value: Math.max(0, Math.min(1, 1 - weighted / 100)), input: `1 − ${weighted.toFixed(0)} % / 100` });
   if (meanQuality != null) terms.push({ name: "quality", weight: 0.2, value: 1 - meanQuality, input: `1 − ${(meanQuality * 100).toFixed(0)} % / 100` });
   if (medianFnu != null)
     terms.push({
@@ -328,8 +332,10 @@ export function buildWaterReport(lon: number, lat: number, now = Date.now()): Wa
     });
   const wsum = terms.reduce((a, t) => a + t.weight, 0);
   const score = wsum > 0 ? terms.reduce((a, t) => a + t.weight * t.value, 0) / wsum : null;
-  if (terms.length && terms.length < 4) caveats.push(`Stress uses ${terms.length} of 4 terms (${terms.map((t) => t.name).join(", ")}); missing terms are left out, not assumed.`);
-  if (water.loaded && gItems.length === 0 && resItems.length === 0) caveats.push("Gauges load only when the camera is below 1,500 km; fly closer for the instrumented picture.");
+  if (terms.length && terms.length < 4)
+    caveats.push(`Stress uses ${terms.length} of 4 terms (${terms.map((t) => t.name).join(", ")}); missing terms are left out, not assumed.`);
+  if (src.loaded.water && gItems.length === 0 && resItems.length === 0)
+    caveats.push("Gauges load only when the camera is below 1,500 km; fly closer for the instrumented picture.");
   if (!drought.loaded) caveats.push("Turn on Aquifers & drought to add the Drought Monitor and wells.");
   caveats.push("Groundwater has no trend term: one latest level cannot say whether an aquifer is being drawn down.");
 
@@ -346,7 +352,9 @@ export function buildWaterReport(lon: number, lat: number, now = Date.now()): Wa
       score,
       label: score == null ? "insufficient data" : stressLabel(score),
       terms,
-      formula: terms.length ? `Σ wᵢ·termᵢ / Σ wᵢ = ${terms.map((t) => `${t.weight}×${t.value.toFixed(2)}`).join(" + ")} / ${wsum.toFixed(2)}` : "no terms available",
+      formula: terms.length
+        ? `Σ wᵢ·termᵢ / Σ wᵢ = ${terms.map((t) => `${t.weight}×${t.value.toFixed(2)}`).join(" + ")} / ${wsum.toFixed(2)}`
+        : "no terms available",
     },
     caveats,
   };
@@ -366,4 +374,25 @@ export function speakReport(r: WaterReport): string {
       : `Estimated supply stress ${r.stress.label}, ${(r.stress.score * 100).toFixed(0)} percent, from ${r.stress.terms.map((t) => t.name).join(", ")}.`,
   );
   return parts.join(" ");
+}
+
+/** Multi-line plain text for clipboard / files: every section with its items and basis. */
+export function reportAsText(r: WaterReport): string {
+  const lines: string[] = [];
+  lines.push(`Community water report · ${r.lat.toFixed(4)}, ${r.lon.toFixed(4)} · ${new Date(r.generatedAt).toISOString()}`);
+  lines.push(
+    `Supply stress (estimate): ${r.stress.score == null ? "insufficient data" : `${Math.round(r.stress.score * 100)} % · ${r.stress.label}`}`,
+  );
+  lines.push(`  ${r.stress.formula}`);
+  for (const t of r.stress.terms) lines.push(`  ${t.name} w ${t.weight} = ${t.value.toFixed(2)} (${t.input})`);
+  for (const s of [r.drought, r.reservoirs, r.gauges, r.wells, r.turbidity]) {
+    lines.push("");
+    lines.push(`${s.title}${s.radiusKm ? ` (≤ ${s.radiusKm} km)` : ""}: ${s.summary}`);
+    for (const it of s.items) lines.push(`  - ${it.name} · ${it.value} · ${it.distanceKm.toFixed(0)} km${it.flag ? ` · ${it.flag}` : ""}`);
+    lines.push(`  basis: ${s.basis}`);
+  }
+  lines.push("");
+  for (const c of r.caveats) lines.push(`caveat: ${c}`);
+  lines.push("Sources: USGS Water Data, NOAA NWPS, TWDB, US Drought Monitor, Copernicus Sentinel-2 via Earth Search. Estimates, not advice.");
+  return lines.join("\n");
 }

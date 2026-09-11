@@ -3,6 +3,7 @@
 
 import type * as CesiumNS from "cesium";
 import { getCesium, getViewer } from "./cesium";
+import { destination } from "./geo";
 import { getRenderer } from "./registry";
 import { FOLLOW_RANGE } from "./styles";
 import { useGlobe, type Selection } from "@/lib/store/globe";
@@ -21,12 +22,17 @@ export function flyTo(lon: number, lat: number, opts: FlyOptions = {}) {
   const C = getCesium();
   stopFollowing();
   const height = opts.height ?? 120_000;
-  const pitch = C.Math.toRadians(opts.pitchDeg ?? -55);
-  const heading = C.Math.toRadians(opts.headingDeg ?? 0);
-  // Approach from the south so the tilt reveals the target.
-  const offsetLat = lat - (height / 6_371_000) * (180 / Math.PI) * Math.cos(-pitch) * 0.9;
+  // From very high up a tilt only shows horizon; look straight down instead.
+  const pitchDeg = height > 1_500_000 ? -90 : (opts.pitchDeg ?? -55);
+  const pitch = C.Math.toRadians(pitchDeg);
+  const headingDeg = ((opts.headingDeg ?? 0) % 360 + 360) % 360;
+  const heading = C.Math.toRadians(headingDeg);
+  // Put the reticle on the target: back the camera off along the view heading
+  // by height / tan(-pitch), so a shared link re-opens on the same spot.
+  const back = pitchDeg <= -89 ? 0 : height / Math.tan(-pitch);
+  const [camLon, camLat] = back > 0 ? destination(lat, lon, (headingDeg + 180) % 360, back) : [lon, lat];
   viewer.camera.flyTo({
-    destination: C.Cartesian3.fromDegrees(lon, Math.max(-89, offsetLat), height),
+    destination: C.Cartesian3.fromDegrees(camLon, Math.max(-89.9, Math.min(89.9, camLat)), height),
     orientation: { heading, pitch, roll: 0 },
     duration: opts.durationS ?? 3.2,
     easingFunction: C.EasingFunction.QUADRATIC_IN_OUT,

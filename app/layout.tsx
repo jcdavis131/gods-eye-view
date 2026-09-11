@@ -14,10 +14,28 @@ const display = Rajdhani({
   weight: ["500", "600", "700"],
 });
 
+const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "https://eye.jcamd.com";
+const DESCRIPTION =
+  "A spy satellite simulator in your browser, except the data is real: live aircraft, ships, satellites, earthquakes, launches, and the water that sustains communities. Rivers, reservoirs, aquifers, drought and Sentinel-2 turbidity, no API keys.";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE),
   title: "God's Eye View",
-  description: "A spy satellite simulator in your browser, except the data is real.",
+  description: DESCRIPTION,
   applicationName: "God's Eye View",
+  openGraph: {
+    title: "God's Eye View",
+    description: DESCRIPTION,
+    type: "website",
+    siteName: "God's Eye View",
+    images: [{ url: "/og.jpg", width: 1600, height: 960, alt: "Community water report over San Antonio on the God's Eye View globe" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "God's Eye View",
+    description: DESCRIPTION,
+    images: ["/og.jpg"],
+  },
 };
 
 export const viewport: Viewport = {

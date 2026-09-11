@@ -71,6 +71,14 @@ interface GlobeState {
   setSearchOpen: (open: boolean) => void;
   waterReportOpen: boolean;
   setWaterReportOpen: (open: boolean) => void;
+  exploreOpen: boolean;
+  setExploreOpen: (open: boolean) => void;
+  /** ?embed=1: no HUD chrome, for iframes. */
+  embed: boolean;
+  setEmbed: (embed: boolean) => void;
+  /** Guided tour through the Explore presets. */
+  tour: { active: boolean; index: number; startedAt: number; paused: boolean };
+  setTour: (patch: Partial<GlobeState["tour"]>) => void;
 }
 
 const defaultLayers = Object.fromEntries(
@@ -133,6 +141,12 @@ export const useGlobe = create<GlobeState>()((set) => ({
   setSearchOpen: (searchOpen) => set({ searchOpen }),
   waterReportOpen: false,
   setWaterReportOpen: (waterReportOpen) => set({ waterReportOpen }),
+  exploreOpen: false,
+  setExploreOpen: (exploreOpen) => set({ exploreOpen }),
+  embed: false,
+  setEmbed: (embed) => set({ embed }),
+  tour: { active: false, index: 0, startedAt: 0, paused: false },
+  setTour: (patch) => set((s) => ({ tour: { ...s.tour, ...patch } })),
 }));
 
 /** Mission time = wall clock + operator offset. */
