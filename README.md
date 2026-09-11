@@ -325,7 +325,7 @@ This project shows **public infrastructure and public events** only. It is a way
 - The traffic layer is a simulation on real roads driven by an aggregate demand curve. It never ingests real vehicle, phone or plate data and is labelled `SIMULATED` on the layer, on every feature, in the info panel and here.
 - No fabricated fallbacks. When a feed is unavailable the layer says so; when coverage is partial (AIS without a key is the Baltic Sea) the layer says that too.
 - Aircraft with privacy programmes (PIA/LADD) appear only as their upstream publishes them; this app adds no de-anonymisation.
-- Economic layers are aggregates: counties, metros, states, harbours, ports of entry. No parcel values, no addresses, no owners, no listings, no company or person lookups. Zillow indexes are labelled as model estimates; the affordability and momentum lines print their formulas and are not investment, lending or relocation advice.
+- Economic layers are about places and institutions, not people. Counties, metros, states, harbours, ports of entry, and now public companies, banks and federal awards as their regulators publish them: SEC EDGAR filings and XBRL facts at a company's registered business address, FDIC institutions and branch deposits, USAspending recipients and agencies. No parcel values, no home addresses, no owners, no listings, no insider or officer names from Forms 3/4/5, no shareholder names. Zillow indexes are labelled as model estimates; the affordability, momentum, HHI and per-job lines print their formulas; the sector-to-ETF bridge is a stated convention. None of it is investment, lending or relocation advice.
 
 If you build on this, keep the list above intact. It is the point.
 
