@@ -38,8 +38,8 @@ const CesiumGlobe = dynamic(() => import("@/components/globe/CesiumGlobe"), {
   ),
 });
 
-export default function Cockpit() {
-  const mobile = useIsMobile();
+export default function Cockpit({ initialMobile = false }: { initialMobile?: boolean } = {}) {
+  const mobile = useIsMobile(initialMobile);
   const layersOpen = useMobile((s) => s.layersOpen);
   const setLayer = useGlobe((s) => s.setLayer);
   const setSearchOpen = useGlobe((s) => s.setSearchOpen);

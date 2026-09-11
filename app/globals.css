@@ -654,3 +654,77 @@
     height: 28px;
   }
 }
+
+/* ---------- Phone ergonomics ----------
+   Readable type and 32 px targets inside the sheet, dialogs pinned to the top
+   so the on-screen keyboard never hides them, no backdrop blur or scanlines
+   (both are GPU-heavy on phones), a fatter scrubber thumb. */
+.mobile-sheet .hud-label {
+  font-size: 11px;
+}
+.mobile-sheet .text-\[9px\] {
+  font-size: 11px;
+}
+.mobile-sheet .text-\[10px\] {
+  font-size: 12px;
+}
+.mobile-sheet .text-\[11px\] {
+  font-size: 13px;
+}
+.mobile-sheet .text-\[12px\],
+.mobile-sheet .text-\[13px\] {
+  font-size: 14px;
+}
+.mobile-sheet .hud-panel button:not(table button) {
+  min-height: 32px;
+  min-width: 32px;
+}
+.mobile-sheet input,
+.mobile-sheet select,
+.mobile-sheet textarea {
+  /* iOS zooms into inputs smaller than 16px; keep them at 16px on phones. */
+  font-size: 16px !important;
+  min-height: 40px;
+}
+@media (max-width: 767px), (max-height: 480px) {
+  .hud-panel {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: linear-gradient(180deg, rgba(6, 14, 18, 0.94), rgba(4, 9, 12, 0.92));
+  }
+  .scanlines {
+    display: none;
+  }
+  /* Tailwind 4 centres the popup with the `translate` property and base-ui
+     wraps it in its own centring box, so pin it to the viewport ourselves. */
+  [data-slot="dialog-content"] {
+    position: fixed !important;
+    top: max(8px, env(safe-area-inset-top)) !important;
+    left: 8px !important;
+    right: auto !important;
+    width: calc(100vw - 16px) !important;
+    max-width: none !important;
+    max-height: calc(100dvh - 16px - max(8px, env(safe-area-inset-top))) !important;
+    /* lightningcss folds `translate: none` into transform and drops it, so zero
+       Tailwind's own variables instead; its utility reads them. */
+    --tw-translate-x: 0px !important;
+    --tw-translate-y: 0px !important;
+    transform: none !important;
+  }
+  [data-slot="dialog-content"] [cmdk-list],
+  [data-slot="dialog-content"] .max-h-\[50vh\] {
+    max-height: 40dvh !important;
+  }
+  .timeline-range::-webkit-slider-thumb {
+    width: 24px;
+    height: 24px;
+  }
+  .timeline-range::-moz-range-thumb {
+    width: 24px;
+    height: 24px;
+  }
+  button,
+  [role="button"] {
+    touch-action: manipulation;
+  }
+}

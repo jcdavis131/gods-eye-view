@@ -23,6 +23,9 @@ export const metadata: Metadata = {
   title: "God's Eye View",
   description: DESCRIPTION,
   applicationName: "God's Eye View",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "God's Eye" },
+  icons: { icon: [{ url: "/icon.svg", type: "image/svg+xml" }, { url: "/favicon.ico" }], apple: "/apple-touch-icon.png" },
   openGraph: {
     title: "God's Eye View",
     description: DESCRIPTION,

@@ -19,6 +19,16 @@ function snapshot(): boolean {
   return typeof window !== "undefined" && !!window.matchMedia && window.matchMedia(MOBILE_QUERY).matches;
 }
 
-export function useIsMobile(): boolean {
-  return useSyncExternalStore(subscribe, snapshot, () => false);
+/**
+ * `initial` is the server's guess from the request (user agent / client hint);
+ * it is what the server renders and what the client uses for hydration, then
+ * the real media query takes over.
+ */
+export function useIsMobile(initial = false): boolean {
+  return useSyncExternalStore(subscribe, snapshot, () => initial);
+}
+
+/** Non-hook read for imperative code (render loops, event handlers). */
+export function isMobileViewport(): boolean {
+  return snapshot();
 }

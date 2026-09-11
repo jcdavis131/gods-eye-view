@@ -5,7 +5,7 @@
 // desktop widths and inner max-heights under `.mobile-sheet`.
 
 import { ChevronDown, ChevronUp, X } from "lucide-react";
-import type { ReactNode } from "react";
+import { useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { closeAllPanels, useMobile, useOpenPanels } from "@/lib/mobile/store";
 
 const TITLES: Record<string, string> = {
@@ -23,13 +23,31 @@ export default function MobileSheet({ children }: { children: ReactNode }) {
   const open = useOpenPanels();
   const sheet = useMobile((s) => s.sheet);
   const toggleSheet = useMobile((s) => s.toggleSheet);
+  const setSheet = useMobile((s) => s.setSheet);
+  const drag = useRef<{ y: number; id: number } | null>(null);
+  // Swipe on the handle row: up makes the sheet tall, down shrinks it, and a
+  // second swipe down closes everything. A short tap still toggles.
+  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    drag.current = { y: e.clientY, id: e.pointerId };
+  };
+  const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    drag.current = null;
+    if (!d || d.id !== e.pointerId) return;
+    const dy = e.clientY - d.y;
+    if (dy < -40) setSheet("tall");
+    else if (dy > 40) {
+      if (sheet === "tall") setSheet("half");
+      else closeAllPanels();
+    }
+  };
   if (open.length === 0) return null;
   return (
     <section
       className={`mobile-sheet pointer-events-auto flex min-h-0 flex-col ${sheet === "tall" ? "mobile-sheet-tall" : "mobile-sheet-half"}`}
       aria-label="Open panels"
     >
-      <div className="hud-panel flex items-center gap-2 px-2 py-1">
+      <div className="hud-panel flex touch-none items-center gap-2 px-2 py-1" onPointerDown={onPointerDown} onPointerUp={onPointerUp} onPointerCancel={() => (drag.current = null)}>
         <button
           type="button"
           onClick={toggleSheet}
