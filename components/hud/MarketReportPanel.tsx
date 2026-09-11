@@ -9,6 +9,7 @@ import { Braces, Copy, FileDown, Landmark, Link2, Quote, RefreshCw, X } from "lu
 import { useGlobe } from "@/lib/store/globe";
 import { marketCitations, marketReportText, type MarketItem, type MarketReport, type MarketSection } from "@/lib/economy/report";
 import ProvenanceList from "./ProvenanceList";
+import CountyCompanies from "./CountyCompanies";
 import { marketReportFromGlobe } from "@/lib/economy/reportClient";
 import { fmtNum, fmtPct, fmtUsd } from "@/lib/economy/features";
 import { copyShareLink } from "@/lib/globe/share";
@@ -240,6 +241,7 @@ export default function MarketReportPanel() {
           <Section s={report.jobs}>
             {byLq.length > 0 && <div className="mt-1 text-[10px] leading-snug text-muted-foreground">Concentrated here: {byLq.map((s) => `${s.title} ${s.lq!.toFixed(1)}× (${fmtNum(s.emp)} jobs)`).join(", ")}</div>}
           </Section>
+          <CountyCompanies fips={report.area ? (report.area.level === "county" ? report.area.geoid : `${report.area.geoid}000`) : null} />
           <Section s={report.trade} />
           <Section s={report.pulse}>
             {pulseItems.length > 0 && (

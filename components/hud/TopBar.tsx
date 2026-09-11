@@ -1,6 +1,11 @@
 "use client";
 
-import { Search, Settings2, Crosshair, Home, Droplets, Compass, Link2, Landmark } from "lucide-react";
+import { Search, Settings2, Crosshair, Home, Droplets, Compass, Link2, Landmark, Activity, CalendarDays, Bell, Table2 } from "lucide-react";
+import { useIndicators } from "@/lib/indicators/store";
+import { useReleases } from "@/lib/releases/store";
+import { useWatchlists } from "@/lib/watch/store";
+import { useScreener } from "@/lib/screener/store";
+import DeskToggle from "./DeskToggle";
 import { copyShareLink } from "@/lib/globe/share";
 import { useNow } from "@/lib/hooks/useNow";
 import { useGlobe } from "@/lib/store/globe";
@@ -28,6 +33,15 @@ export default function TopBar() {
   const waterOpen = useGlobe((s) => s.waterReportOpen);
   const marketOpen = useGlobe((s) => s.marketReportOpen);
   const setExploreOpen = useGlobe((s) => s.setExploreOpen);
+  const indOpen = useIndicators((s) => s.open);
+  const toggleInd = useIndicators((s) => s.toggle);
+  const relOpen = useReleases((s) => s.releasesOpen);
+  const setRelOpen = useReleases((s) => s.setReleasesOpen);
+  const vintage = useReleases((s) => s.vintage);
+  const watchOpen = useWatchlists((s) => s.open);
+  const setWatchOpen = useWatchlists((s) => s.setOpen);
+  const screenOpen = useScreener((s) => s.open);
+  const toggleScreen = useScreener((s) => s.toggle);
   const live = isLive(clock.offsetMs);
   const mission = now ? now + clock.offsetMs : 0;
 
@@ -74,6 +88,11 @@ export default function TopBar() {
             >
               {live ? "LIVE" : clock.offsetMs < 0 ? "REPLAY" : "FORWARD"}
             </span>
+            {vintage && (
+              <span className="rounded bg-warn/15 px-1 text-[9px] tracking-widest text-warn" title="Data vintage pinned by the permalink (&v=)">
+                VINTAGE {vintage}
+              </span>
+            )}
           </div>
         </div>
         <div className="h-8 w-px bg-border" />
@@ -152,6 +171,47 @@ export default function TopBar() {
           <Landmark className="size-3.5" />
           Market
         </button>
+        <button
+          type="button"
+          onClick={toggleInd}
+          aria-pressed={indOpen}
+          className={`flex items-center gap-2 px-3 py-2 text-[11px] uppercase tracking-wider hover:bg-accent hover:text-primary ${indOpen ? "text-primary" : "text-foreground/80"}`}
+          title="Named indicators with thresholds: river stages, freight, housing, energy, labour, trade"
+        >
+          <Activity className="size-3.5" />
+          Signals
+        </button>
+        <button
+          type="button"
+          onClick={toggleScreen}
+          aria-pressed={screenOpen}
+          className={`flex items-center gap-2 px-3 py-2 text-[11px] uppercase tracking-wider hover:bg-accent hover:text-primary ${screenOpen ? "text-primary" : "text-foreground/80"}`}
+          title="Screener: rank and filter counties, states, ports, crossings, countries"
+        >
+          <Table2 className="size-3.5" />
+          Screen
+        </button>
+        <button
+          type="button"
+          onClick={() => setRelOpen(!relOpen)}
+          aria-pressed={relOpen}
+          className={`flex items-center gap-2 px-3 py-2 text-[11px] uppercase tracking-wider hover:bg-accent hover:text-primary ${relOpen ? "text-primary" : "text-foreground/80"}`}
+          title="Release calendar, loaded vintages, movers since the last release"
+        >
+          <CalendarDays className="size-3.5" />
+          Releases
+        </button>
+        <button
+          type="button"
+          onClick={() => setWatchOpen(!watchOpen)}
+          aria-pressed={watchOpen}
+          className={`flex items-center gap-2 px-3 py-2 text-[11px] uppercase tracking-wider hover:bg-accent hover:text-primary ${watchOpen ? "text-primary" : "text-foreground/80"}`}
+          title="Watchlists with rules, RSS/Atom feeds and webhooks"
+        >
+          <Bell className="size-3.5" />
+          Watch
+        </button>
+        <DeskToggle />
         <button
           type="button"
           onClick={() => void copyShareLink()}

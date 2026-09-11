@@ -10,6 +10,11 @@ import LayerPanel from "./LayerPanel";
 import InfoPanel from "./InfoPanel";
 import WaterReportPanel from "./WaterReportPanel";
 import MarketReportPanel from "./MarketReportPanel";
+import IndicatorsPanel from "./IndicatorsPanel";
+import ReleasesPanel from "./ReleasesPanel";
+import WatchlistPanel from "./WatchlistPanel";
+import ScreenerPanel from "./ScreenerPanel";
+import DeskLayout from "./DeskLayout";
 import ExploreDialog from "./ExploreDialog";
 import TourCaption from "./TourCaption";
 import { applyShare, parseShare, startUrlSync } from "@/lib/globe/share";
@@ -126,16 +131,23 @@ export default function Cockpit() {
         <>
           <TopBar />
           <LayerPanel />
-          <div className="pointer-events-none absolute right-3 top-[76px] z-30 flex w-[320px] max-w-[calc(100vw-24px)] flex-col gap-2">
+          <div className="desk-hud-only pointer-events-none absolute right-3 top-[76px] z-30 flex w-[320px] max-w-[calc(100vw-24px)] flex-col gap-2">
             <WaterReportPanel />
             <MarketReportPanel />
+            <IndicatorsPanel />
+            <ReleasesPanel />
+            <WatchlistPanel />
             <InfoPanel />
+          </div>
+          <div className="pointer-events-none absolute bottom-16 right-3 z-30 max-w-[calc(100vw-24px)]">
+            <ScreenerPanel />
           </div>
           <Timeline />
           <TourCaption />
           <SettingsDialog />
           <SearchCommand />
           <ExploreDialog />
+          <DeskLayout />
         </>
       )}
     </main>

@@ -15,6 +15,13 @@ import path from "node:path";
 import type { Point, Series, SeriesMeta, SeriesQuery, SeriesStore } from "./types";
 import { layeredStore, rawStore } from "./githubRaw";
 
+/** Series without its points: the metadata a listing returns. */
+export function stripPoints(s: Series): SeriesMeta {
+  const meta: Series = { ...s };
+  delete (meta as Partial<Series>).points;
+  return meta;
+}
+
 export function mergePoints(existing: Point[], incoming: Point[]): Point[] {
   const byT = new Map<number, Point>();
   for (const p of existing) byT.set(p.t, p);
@@ -42,7 +49,7 @@ export function memoryStore(): SeriesStore {
       return s ? { ...s, points: applyQuery(s.points, q) } : null;
     },
     async list(prefix) {
-      return [...series.values()].filter((s) => !prefix || s.id.startsWith(prefix)).map(({ points: _p, ...meta }) => meta);
+      return [...series.values()].filter((s) => !prefix || s.id.startsWith(prefix)).map((s) => stripPoints(s));
     },
     async remove(id) {
       series.delete(id);
@@ -108,8 +115,7 @@ export function fileStore(dir: string): SeriesStore {
         if (prefix && !id.startsWith(prefix)) continue;
         const s = await read(id);
         if (s) {
-          const { points: _p, ...meta } = s;
-          out.push(meta);
+          out.push(stripPoints(s));
         }
       }
       return out.sort((a, b) => a.id.localeCompare(b.id));

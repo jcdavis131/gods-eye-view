@@ -12,6 +12,8 @@ import type { LaunchExtra } from "@/lib/layers/launches";
 import { vehiclePosition, type VehicleExtra } from "@/lib/layers/traffic";
 import { groundwaterStyle, turbidityStyle, waterStyle } from "./waterStyles";
 import { commerceStyle, realestateStyle, tradeStyle } from "./economyStyles";
+import { companiesStyle } from "./companyStyles";
+import { bankStyle, spendingStyle } from "./financeStyles";
 
 /** Dead-reckon a moving surface/air object from its last report for up to 90 s. */
 function extrapolate(
@@ -271,6 +273,9 @@ export const STYLES: Partial<Record<LayerId, LayerStyle>> = {
   trade: tradeStyle,
   commerce: commerceStyle,
   realestate: realestateStyle,
+  companies: companiesStyle,
+  banks: bankStyle,
+  spending: spendingStyle,
 };
 
 /** Camera range (m) to sit at when following an object of a given layer. */
