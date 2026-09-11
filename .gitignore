@@ -48,3 +48,6 @@ next-env.d.ts
 
 # mcp stdio compile scratch
 .tmp-mcp/
+
+# per-user watchlists and alert state written by /api/watch
+/data/watch/
