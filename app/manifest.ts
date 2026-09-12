@@ -4,8 +4,8 @@ import type { MetadataRoute } from "next";
 // reticle icon. Served at /manifest.webmanifest and linked from the layout.
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "God's Eye View",
-    short_name: "God's Eye",
+    name: "Embedding Atlas",
+    short_name: "Atlas",
     description: "A spy satellite simulator in your browser, except the data is real.",
     start_url: "/",
     display: "standalone",

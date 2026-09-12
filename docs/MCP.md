@@ -1,6 +1,6 @@
 # MCP server
 
-God's Eye View exposes its keyless JSON API as a [Model Context Protocol](https://modelcontextprotocol.io) server so an agent (Claude Desktop, Claude Code, any MCP client) can pull the same water, economy, series, indicator and filings data a notebook can, with the same provenance fields. The MCP layer holds no data logic: every tool builds one `/api/...` URL and relays the route's JSON verbatim. When a route is missing on the server you point at (an older deployment), the tool answers the route's 404 plus `note: "this route is not deployed on this server"` instead of failing.
+Embedding Atlas exposes its keyless JSON API as a [Model Context Protocol](https://modelcontextprotocol.io) server so an agent (Claude Desktop, Claude Code, any MCP client) can pull the same water, economy, series, indicator and filings data a notebook can, with the same provenance fields. The MCP layer holds no data logic: every tool builds one `/api/...` URL and relays the route's JSON verbatim. When a route is missing on the server you point at (an older deployment), the tool answers the route's 404 plus `note: "this route is not deployed on this server"` instead of failing.
 
 ## Transports
 

@@ -48,7 +48,7 @@ describe("screenCsv", () => {
     expect(lines[2].startsWith("county:06037,county,")).toBe(true);
     const footer = lines.slice(3);
     expect(footer.every((l) => l.startsWith("#"))).toBe(true);
-    expect(footer[0]).toBe("# God's Eye View screener export, 2 rows, retrieved 2026-09-11T10:00:00.000Z");
+    expect(footer[0]).toBe("# Embedding Atlas screener export, 2 rows, retrieved 2026-09-11T10:00:00.000Z");
     expect(footer[1]).toBe("# query: SORT home.latest DESC LIMIT 2");
     expect(footer.some((l) => l.includes("U.S. Bureau of Labor Statistics") && l.includes("period 2026 Q1") && l.includes("accessed 2026-09-11"))).toBe(true);
     expect(footer.some((l) => l.includes("Zillow Research") && l.includes("period 2026-07-31"))).toBe(true);

@@ -6,7 +6,7 @@ import { COLLECTORS } from "./collectors";
 import type { Collector, CollectorContext, CollectorOutput, FetchInit, FetchJson, WebSocketLike } from "./collectors/types";
 import type { Point, SeriesStore } from "./types";
 
-export const USER_AGENT = "gods-eye-view/0.1 snapshot collector (+https://github.com/jcdavis131/gods-eye-view)";
+export const USER_AGENT = "embedding-atlas/0.1 snapshot collector (+https://github.com/jcdavis131/gods-eye-view)";
 
 /** Series ids are ':'-namespaced lower-case tokens; upper-case is allowed for codes (LOCODE, IATA). */
 export const SERIES_ID_RE = /^[a-z0-9][a-zA-Z0-9:_.\-]{2,120}$/;

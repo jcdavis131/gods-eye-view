@@ -51,7 +51,7 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* God's Eye cockpit palette. The app is dark-only; the .dark class is set on <html>. */
+/* Embedding Atlas cockpit palette. The app is dark-only; the .dark class is set on <html>. */
 :root,
 .dark {
   --background: #03070a;

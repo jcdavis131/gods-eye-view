@@ -28,7 +28,7 @@ export default function MobileTopBar() {
     >
       <div className="hud-panel pointer-events-auto flex items-center gap-2 px-3 py-1.5">
         <span className={`hud-dot shrink-0 ${ready ? "text-primary" : "text-warn blink"}`} style={{ color: ready ? undefined : "var(--warn)" }} aria-label={ready ? "online" : "booting"} />
-        <div className="hud-display min-w-0 truncate text-[13px] font-semibold leading-none text-primary">God&apos;s Eye View</div>
+        <div className="hud-display min-w-0 truncate text-[13px] font-semibold leading-none text-primary">Embedding Atlas</div>
         <span className={`shrink-0 rounded px-1 text-[9px] tracking-widest ${live ? "bg-primary/15 text-primary" : "bg-warn/15 text-warn"}`}>
           {live ? "LIVE" : clock.offsetMs < 0 ? "REPLAY" : "FORWARD"}
         </span>

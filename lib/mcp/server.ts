@@ -12,7 +12,7 @@ import path from "node:path";
 import { z } from "zod";
 import { TOOLS, type FetchJson, type ToolDef, type ToolReply } from "./tools";
 
-export const SERVER_NAME = "gods-eye-view-mcp-server";
+export const SERVER_NAME = "embedding-atlas-mcp-server";
 export const SERVER_VERSION = "0.1.0";
 
 export interface ServerOptions {
@@ -206,7 +206,7 @@ export function createServer(opts: ServerOptions): McpServer {
     "docs",
     new ResourceTemplate("gev://docs/{name}", {
       list: async () => ({
-        resources: (await listDocs(docsDir)).map((n) => ({ uri: `gev://docs/${n}`, name: n, mimeType: "text/markdown", description: `docs/${n} from the God's Eye View repository` })),
+        resources: (await listDocs(docsDir)).map((n) => ({ uri: `gev://docs/${n}`, name: n, mimeType: "text/markdown", description: `docs/${n} from the Embedding Atlas repository` })),
       }),
     }),
     { title: "Project docs", description: "Markdown docs shipped with the app (API guide, provenance contract, MCP notes).", mimeType: "text/markdown" },

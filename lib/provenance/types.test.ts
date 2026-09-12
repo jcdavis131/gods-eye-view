@@ -13,6 +13,6 @@ describe("citation", () => {
   });
   it("marks estimates", () => {
     const p = provenance(source("zillow-zhvi"), { kind: "estimate", method: "x / y", retrievedAt: "2026-09-11T10:00:00Z" });
-    expect(citation(p)).toContain("estimate computed by God's Eye View: x / y");
+    expect(citation(p)).toContain("estimate computed by Embedding Atlas: x / y");
   });
 });

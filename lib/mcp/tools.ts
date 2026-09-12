@@ -1,4 +1,4 @@
-// MCP tool definitions for God's Eye View. Each tool is a thin, typed front
+// MCP tool definitions for Embedding Atlas. Each tool is a thin, typed front
 // on one of this app's own JSON routes: the handler builds the exact
 // /api/... URL and relays whatever the route answered, so data logic lives in
 // one place (the routes) and the MCP layer cannot drift from the HTTP API.

@@ -1,10 +1,10 @@
-// Pinokio launcher for God's Eye View.
+// Pinokio launcher for Embedding Atlas.
 // Install: clones nothing (Pinokio already has this folder), runs npm install,
 // which also copies Cesium's static assets into public/cesium.
 // Start:   next dev on a free port; the URL is picked up from the log.
 module.exports = {
   version: "3.0",
-  title: "God's Eye View",
+  title: "Embedding Atlas",
   description: "A spy satellite simulator in your browser, except the data is real. No API keys needed.",
   menu: async (kernel, info) => {
     const installed = info.exists("node_modules");
@@ -24,7 +24,7 @@ module.exports = {
       const local = info.local("start.js");
       if (local && local.url) {
         return [
-          { default: true, icon: "fa-solid fa-satellite", text: "Open God's Eye View", href: local.url },
+          { default: true, icon: "fa-solid fa-satellite", text: "Open Embedding Atlas", href: local.url },
           { icon: "fa-solid fa-terminal", text: "Terminal", href: "start.js" },
         ];
       }

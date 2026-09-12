@@ -235,7 +235,7 @@ export const portVesselsCollector: Collector = {
     const global = PORTS.filter((p) => p.coverage === "aisstream");
 
     const fc = await ctx.fetchJson<DtFeatureCollection>(DIGITRAFFIC_URL, {
-      headers: { "accept-encoding": "gzip", "digitraffic-user": "gods-eye-view/0.1 (snapshot collector)" },
+      headers: { "accept-encoding": "gzip", "digitraffic-user": "embedding-atlas/0.1 (snapshot collector)" },
       timeoutMs: 30_000,
       signal: ctx.signal,
     });

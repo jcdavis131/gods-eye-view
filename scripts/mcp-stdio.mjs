@@ -1,4 +1,4 @@
-// God's Eye View as a local MCP server over stdio, for Claude Desktop, Claude
+// Embedding Atlas as a local MCP server over stdio, for Claude Desktop, Claude
 // Code (`claude mcp add gev -- node scripts/mcp-stdio.mjs`) and any other
 // client that spawns a process. The tools call the HTTP API at GEV_BASE_URL
 // (default http://localhost:3000), so run `npm run dev` or point it at the

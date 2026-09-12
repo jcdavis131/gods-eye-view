@@ -46,7 +46,7 @@ export interface Fetchers {
 }
 
 export interface ResolveContext {
-  /** Origin for globe permalinks, e.g. "https://gods-eye-view.example". */
+  /** Origin for globe permalinks, e.g. "https://embedding-atlas.example". */
   origin: string;
   /** Epoch ms "now" (injectable for tests). */
   now: number;

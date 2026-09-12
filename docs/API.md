@@ -1,4 +1,4 @@
-# God's Eye View data API
+# Embedding Atlas data API
 
 Keyless, CORS-open JSON and CSV over the same public sources the globe draws: USGS, NOAA, TWDB and the Drought Monitor for water; BLS QCEW, Zillow, BTS, the World Port Index, the World Bank and FRED for jobs, homes and trade. Every number carries provenance. This guide is for people calling it from a notebook, a script or their own page.
 
@@ -54,7 +54,7 @@ Errors are JSON too: `400 { "error": "bbox=w,s,e,n required" }` for a bad parame
 `kind` is the field to read first:
 
 - `published` — relayed as the upstream serves it. Cite the upstream.
-- `estimate` — computed here from published values. `method` holds the arithmetic that ran, with the inputs, e.g. `price-to-rent = $412,000 / ($1,850 × 12) = 18.6`. The `source` is the publisher of the main input; other inputs are named in `notes`. Cite it as an estimate by God's Eye View from those sources.
+- `estimate` — computed here from published values. `method` holds the arithmetic that ran, with the inputs, e.g. `price-to-rent = $412,000 / ($1,850 × 12) = 18.6`. The `source` is the publisher of the main input; other inputs are named in `notes`. Cite it as an estimate by Embedding Atlas from those sources.
 - `snapshot` — our own observation of a live feed (aircraft, ship and satellite counts). Not reproducible upstream.
 
 Where a call knows the exact identifiers they are in `seriesId`: a FRED series id (`MORTGAGE30US`), a Zillow file name, a QCEW area code, a USGS `site:parameter` (`USGS-08180800:00060`), a BTS dataset id, a Sentinel-2 scene id. Where it does not (a bbox of many gauges) the record names the collection and parameter codes and the count is in `notes`.
@@ -68,7 +68,7 @@ Where a call knows the exact identifiers they are in `seriesId`: a FRED series i
 ```
 U.S. Bureau of Labor Statistics. Quarterly Census of Employment and Wages. series area 48453, all ownerships, all industries. period 2026-Q1. https://data.bls.gov/cew/data/api/2026/1/area/48453.csv. accessed 2026-09-11.
 Zillow Research. Zillow Home Value Index (ZHVI). series County_zhvi_uc_sfrcondo_tier_0.33_0.67_sm_sa_month.csv. period 2026-07. https://files.zillowstatic.com/research/public_csvs/zhvi/County_zhvi_uc_sfrcondo_tier_0.33_0.67_sm_sa_month.csv. accessed 2026-09-11.
-Zillow Research. Zillow Home Value Index (ZHVI). https://www.zillow.com/research/data/. accessed 2026-09-11. estimate computed by God's Eye View: price-to-rent = $412,000 / ($1,850 × 12) = 18.6.
+Zillow Research. Zillow Home Value Index (ZHVI). https://www.zillow.com/research/data/. accessed 2026-09-11. estimate computed by Embedding Atlas: price-to-rent = $412,000 / ($1,850 × 12) = 18.6.
 ```
 
 Segments: publisher, source name, `series <id>` if any, `period <p>` if any, `released <date>` if known, the upstream URL (or the source landing page), `accessed <date>`, and for estimates the method. Accessed dates are the retrieval date, which is what a reader needs to reproduce a revisable series.

@@ -24,7 +24,7 @@ describe("citationsOf", () => {
     const out = citationsOf([a, a, b, est]);
     expect(out).toHaveLength(3);
     expect(out[0]).toContain("period 2026-Q1");
-    expect(out[2]).toContain("estimate computed by God's Eye View: x / y");
+    expect(out[2]).toContain("estimate computed by Embedding Atlas: x / y");
   });
 });
 

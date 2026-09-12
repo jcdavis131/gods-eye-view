@@ -30,7 +30,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const CONTACT = process.env.CONTACT || "jcdavis131@gmail.com";
-const UA = `gods-eye-view/0.1 (+https://github.com/jcdavis131/gods-eye-view; open-source globe) contact: ${CONTACT}`;
+const UA = `embedding-atlas/0.1 (+https://github.com/jcdavis131/gods-eye-view; open-source globe) contact: ${CONTACT}`;
 const OUT_DIR = path.resolve("lib/companies/data");
 const OUT = path.join(OUT_DIR, "companies.json");
 const PARTIAL = path.join(OUT_DIR, "companies.partial.json");

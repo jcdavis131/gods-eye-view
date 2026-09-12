@@ -45,6 +45,6 @@ describe("water provenance builders", () => {
     const e = waterEstimateProvenance("twdb", "Σ(capacity × percent full) / Σ capacity", at);
     expect(e.kind).toBe("estimate");
     expect(e.source.id).toBe("twdb");
-    expect(citation(e)).toContain("estimate computed by God's Eye View");
+    expect(citation(e)).toContain("estimate computed by Embedding Atlas");
   });
 });

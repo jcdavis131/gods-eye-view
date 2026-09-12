@@ -75,7 +75,8 @@ export default function Cockpit({ initialMobile = false }: { initialMobile?: boo
     return startUrlSync();
   }, [ready]);
 
-  // Console API for inspection: window.gev.{globe,settings,run,say,flyTo,layers,features}
+  // Console API for inspection: window.atlas.{globe,settings,run,say,flyTo,layers,features}
+  // (also exposed as window.gev, the old name).
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -92,7 +93,7 @@ export default function Cockpit({ initialMobile = false }: { initialMobile?: boo
           import("@/lib/globe/share"),
         ]);
       if (cancelled) return;
-      (window as unknown as { gev: unknown }).gev = {
+      const api = {
         globe: useGlobe,
         settings: useSettings,
         viewer: cesium.getViewer,
@@ -110,6 +111,11 @@ export default function Cockpit({ initialMobile = false }: { initialMobile?: boo
         shareUrl: share.shareUrl,
         applyShare: share.applyShare,
       };
+      const w = window as unknown as { atlas: unknown; gev: unknown };
+      w.atlas = api;
+      // `gev` is the old name of this console API, kept so existing snippets
+      // and bookmarklets keep working.
+      w.gev = api;
     })();
     return () => {
       cancelled = true;
@@ -207,7 +213,7 @@ function EmbedBadge() {
       className="hud-panel pointer-events-auto absolute left-3 top-3 z-30 flex items-center gap-2 px-3 py-1.5 text-[10px] uppercase tracking-wider text-primary hover:text-foreground"
       title="Open the full cockpit"
     >
-      God&apos;s Eye View
+      Embedding Atlas
       <span className="text-muted-foreground">· open full view</span>
     </a>
   );

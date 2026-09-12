@@ -1,4 +1,4 @@
-# God's Eye View
+# Embedding Atlas
 
 **A spy satellite simulator in your browser, except the data is real.**
 
@@ -6,7 +6,7 @@ A photorealistic 3D globe that fuses live public signals: every aircraft broadca
 
 **Live:** https://eye.jcamd.com (also https://gods-eye-view-rust.vercel.app; deploys from `master`). One hosting caveat: OpenSky refuses Vercel's egress, so the zoomed-out aircraft view there falls back to adsb.lol around the view centre plus the military feed; run it locally or add OpenSky credentials for the full global picture.
 
-![God's Eye View boot screen](docs/screenshot-boot.jpg)
+![Embedding Atlas boot screen](docs/screenshot-boot.jpg)
 
 | Community water report over San Antonio | Sentinel-2 turbidity chips on Calaveras and Braunig lakes |
 | --- | --- |
@@ -236,7 +236,7 @@ Three providers share one command registry (`lib/voice/commands.ts`):
 | ElevenLabs | agent id | Conversational AI agent; every command is registered as a **client tool** so the agent calls the globe directly. |
 | Vapi | public key + assistant id | Web SDK call; function tools are advertised on the call as async client tools and results are posted back as system messages. |
 
-For ElevenLabs and Vapi, configure tools on the vendor side with these names and schemas (also available at runtime as `window.gev.commands` and `toolDefinitions()`):
+For ElevenLabs and Vapi, configure tools on the vendor side with these names and schemas (also available at runtime as `window.atlas.commands` and `toolDefinitions()`):
 
 ```json
 [
@@ -401,6 +401,7 @@ Please respect each upstream's rate limits and terms; the proxies already do (se
 - Server state: `lib/series/store.ts` picks the series store (file under `data/series`, the raw GitHub adapter when `GEV_SERIES_RAW_BASE` is set, memory in tests). Environment variables the practitioner routes read: `GEV_SERIES_DIR`, `GEV_SERIES_RAW_BASE`, `GEV_CRON_SECRET` (enables `POST /api/series?op=collect` and the watchlist webhook ops), `GEV_WATCH_KV`, `GEV_WATCH_DIR`, `GEV_PUBLIC_ORIGIN`, `GEV_BASE_URL` (MCP), `AISSTREAM_KEY` (snapshot cron, optional), `GEV_INDICATORS_NO_STORE`. None is required.
 - Upstream shapes for SEC EDGAR, FDIC BankFind, USAspending, AISStream and the TIGERweb ZCTA layer were written from their published documentation and fixture-tested; the sandbox this build ran in had no egress to those hosts, so the first live run should be watched (each parser fails loudly rather than inventing a value).
 - Dev and production builds use separate output directories, so `next build` can run while `next dev` is up.
+- The project was renamed from God's Eye View to Embedding Atlas. The internal `gev` namespace stayed put on purpose, because renaming it breaks live installs rather than just labels: the `GEV_*` environment variables (a rename silently disables the features that read them until every host is updated), the `gev:` localStorage keys (a rename drops each visitor's saved lens and desk notes), the `x-gev-cron-secret` header, the `gev://docs/` MCP resource URIs, the `gev-snapshot` provenance source id (part of the published response contract) and `examples/gev.py`. The console API is now `window.atlas`, with `window.gev` kept as an alias. The GitHub repository is still `jcdavis131/gods-eye-view`, so every repository and raw-content URL in the code and docs still points there.
 - Route handlers keep a process-local TTL cache (`lib/server/cache.ts`) and a per-upstream politeness gate (`lib/server/upstream.ts`).
 
 ## Disclaimer

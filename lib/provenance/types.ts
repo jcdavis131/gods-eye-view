@@ -65,8 +65,8 @@ export function citation(p: Provenance, accessed = p.retrievedAt): string {
   if (p.releasedAt) parts.push(`released ${p.releasedAt.slice(0, 10)}`);
   parts.push(p.upstreamUrl ?? p.source.url);
   parts.push(`accessed ${accessed.slice(0, 10)}`);
-  if (p.kind === "estimate") parts.push("estimate computed by God's Eye View" + (p.method ? `: ${p.method}` : ""));
-  if (p.kind === "snapshot") parts.push("God's Eye View snapshot of a live feed");
+  if (p.kind === "estimate") parts.push("estimate computed by Embedding Atlas" + (p.method ? `: ${p.method}` : ""));
+  if (p.kind === "snapshot") parts.push("Embedding Atlas snapshot of a live feed");
   return parts.join(". ") + ".";
 }
 

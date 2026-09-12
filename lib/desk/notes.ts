@@ -46,7 +46,7 @@ export function citeReport(r: ReportCite): string[] {
  * note copies as just a heading, the text and the link.
  */
 export function notesMarkdown(input: NotesInput): string {
-  const lines: string[] = [`# God's Eye View notes`, "", `_${iso(input.now)} · [permalink](${input.url})_`, ""];
+  const lines: string[] = [`# Embedding Atlas notes`, "", `_${iso(input.now)} · [permalink](${input.url})_`, ""];
   const text = input.notes.trim();
   if (text) lines.push(text, "");
   if (input.series && input.series.length > 0) {

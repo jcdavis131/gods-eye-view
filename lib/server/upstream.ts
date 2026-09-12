@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 
 export const USER_AGENT =
-  "gods-eye-view/0.1 (+https://github.com/jcdavis131/gods-eye-view; open-source globe)";
+  "embedding-atlas/0.1 (+https://github.com/jcdavis131/gods-eye-view; open-source globe)";
 
 export class UpstreamError extends Error {
   constructor(

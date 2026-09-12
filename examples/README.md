@@ -1,6 +1,6 @@
 # Examples
 
-Use the God's Eye View data without the globe: a Python client, a notebook, and the MCP server for agents. Everything here talks to the same keyless, CORS-open `/api` routes the globe uses; nothing is computed client-side that the API does not already publish with its source.
+Use the Embedding Atlas data without the globe: a Python client, a notebook, and the MCP server for agents. Everything here talks to the same keyless, CORS-open `/api` routes the globe uses; nothing is computed client-side that the API does not already publish with its source.
 
 ## Point at a server
 
@@ -28,12 +28,12 @@ print("\n".join(citations(r)))
 
 Routes added in this build (`/api/series`, `/api/screen`, `/api/indicators`, `/api/releases`, `/api/economy/history`, `/api/companies`, `/api/finance`) raise `GevError(404, ...)` on a server that does not have them yet; the notebook shows how to skip those cells.
 
-## Notebook (`gods_eye_view.ipynb`)
+## Notebook (`embedding_atlas.ipynb`)
 
 ```bash
 pip install jupyter pandas matplotlib      # the only extras
 export GEV_BASE_URL=https://eye.jcamd.com  # or leave unset with npm run dev running
-jupyter lab examples/gods_eye_view.ipynb
+jupyter lab examples/embedding_atlas.ipynb
 ```
 
 It pulls the Texas counties into pandas, plots home-value yoy against wage yoy, reads Travis County's momentum history, runs a screen, reads the Mississippi-at-Memphis indicator history, and prints the citations from each response's `provenance`. The notebook ships with no outputs; run it top to bottom. Each markdown cell says what the numbers are and what they are not (Zillow values are model estimates; QCEW withheld cells are null; momentum and affordability are estimates with the formula in the payload).

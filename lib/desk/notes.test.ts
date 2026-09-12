@@ -26,7 +26,7 @@ describe("notesMarkdown", () => {
   const now = Date.UTC(2026, 8, 11, 12, 0);
   it("is just heading, link and text when nothing else is open", () => {
     const md = notesMarkdown({ notes: "  hello  ", url: "https://x/?lat=1&mode=desk", now });
-    expect(md).toBe(["# God's Eye View notes", "", "_2026-09-11 12:00Z · [permalink](https://x/?lat=1&mode=desk)_", "", "hello", "", "---", "Aggregates only; estimates print their arithmetic. No data about private individuals.", ""].join("\n"));
+    expect(md).toBe(["# Embedding Atlas notes", "", "_2026-09-11 12:00Z · [permalink](https://x/?lat=1&mode=desk)_", "", "hello", "", "---", "Aggregates only; estimates print their arithmetic. No data about private individuals.", ""].join("\n"));
   });
   it("adds data and source sections when present", () => {
     const md = notesMarkdown({ notes: "", url: "u", now, reports: [market], series: [{ label: "Rate", id: "fred:MORTGAGE30US", source: "series" }] });

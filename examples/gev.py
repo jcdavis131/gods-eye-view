@@ -1,4 +1,4 @@
-"""Tiny dependency-free client for the God's Eye View JSON API.
+"""Tiny dependency-free client for the Embedding Atlas JSON API.
 
     from gev import report, areas, series, screen, to_dataframe
     r = report(-97.75, 30.3)                       # market report for a point
@@ -146,12 +146,12 @@ def citations(payload: Dict[str, Any]) -> List[str]:
         parts.append(p.get("upstreamUrl") or src.get("url", ""))
         parts.append(f"accessed {str(p.get('retrievedAt', ''))[:10]}")
         if p.get("kind") == "estimate":
-            parts.append("estimate computed by God's Eye View" + (f": {p['method']}" if p.get("method") else ""))
+            parts.append("estimate computed by Embedding Atlas" + (f": {p['method']}" if p.get("method") else ""))
         elif p.get("kind") == "snapshot":
-            parts.append("God's Eye View snapshot of a live feed")
+            parts.append("Embedding Atlas snapshot of a live feed")
         lines.append(". ".join(x for x in parts if x) + ".")
     if not lines and payload.get("source"):
-        lines.append(f"{payload['source']} via God's Eye View API (no provenance field on this route; cacheAge {payload.get('cacheAge')} ms).")
+        lines.append(f"{payload['source']} via Embedding Atlas API (no provenance field on this route; cacheAge {payload.get('cacheAge')} ms).")
     return lines
 
 

@@ -21,7 +21,7 @@ export default function AboutButton() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="hud-panel max-h-[88vh] w-[min(640px,calc(100vw-24px))] overflow-y-auto rounded-none p-0 sm:max-w-[640px]">
           <DialogHeader className="border-b border-border px-5 py-4">
-            <DialogTitle className="hud-display text-lg text-primary">God&apos;s Eye View</DialogTitle>
+            <DialogTitle className="hud-display text-lg text-primary">Embedding Atlas</DialogTitle>
             <DialogDescription className="text-[11px] text-muted-foreground">
               A spy satellite simulator in your browser, except the data is real. Open source, MIT.
             </DialogDescription>

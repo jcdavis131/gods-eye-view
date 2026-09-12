@@ -210,7 +210,7 @@ export async function dispatch(events: WatchEvent[], opts: WebhookOptions): Prom
   const body = JSON.stringify(buildPayload(events, opts, generatedAt));
   const headers: Record<string, string> = {
     "content-type": "application/json",
-    "user-agent": "gods-eye-view-watch/0.1 (+https://github.com/jcdavis131/gods-eye-view)",
+    "user-agent": "embedding-atlas-watch/0.1 (+https://github.com/jcdavis131/gods-eye-view)",
     "x-gev-signature": sign(body, opts.secret),
     "x-gev-timestamp": generatedAt,
     "x-gev-watchlist": opts.watchlistId,

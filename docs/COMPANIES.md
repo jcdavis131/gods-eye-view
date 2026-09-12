@@ -19,7 +19,7 @@ Response shapes for the EDGAR endpoints follow https://www.sec.gov/search-filing
 
 ## Fair-access policy
 
-The SEC asks automated clients to send a descriptive `User-Agent` with a contact address and to stay at or under ten requests a second. `lib/companies/edgar.ts` sends `gods-eye-view/0.1 (...) contact: <address>` in the header only (it never appears in a response body) and routes every call through `polite("sec", 120, 60_000, ...)`: at most one request every 120 ms (about 8/s), and a 60 s cool-down after any 429. The build script uses the same limits and additionally retries 429/5xx with back-off. Set `CONTACT=you@example.com` when running the script under your own name.
+The SEC asks automated clients to send a descriptive `User-Agent` with a contact address and to stay at or under ten requests a second. `lib/companies/edgar.ts` sends `embedding-atlas/0.1 (...) contact: <address>` in the header only (it never appears in a response body) and routes every call through `polite("sec", 120, 60_000, ...)`: at most one request every 120 ms (about 8/s), and a 60 s cool-down after any 429. The build script uses the same limits and additionally retries 429/5xx with back-off. Set `CONTACT=you@example.com` when running the script under your own name.
 
 ## The bundle and how to refresh it
 

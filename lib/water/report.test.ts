@@ -72,7 +72,7 @@ describe("buildWaterReport provenance", () => {
     expect(waterCitations(r)).toEqual(r.citations);
     const text = reportAsText(r);
     expect(text).toContain("U.S. Geological Survey. USGS Water Data API. series latest-continuous 00010,00060,00300");
-    expect(text).toContain("estimate computed by God's Eye View: supply stress");
+    expect(text).toContain("estimate computed by Embedding Atlas: supply stress");
   });
   it("with nothing loaded there is no provenance and no stress record", () => {
     const r = buildWaterReport(LON, LAT, { water: [], groundwater: [], turbidity: [], loaded: { water: false, groundwater: false, turbidity: false } }, NOW);

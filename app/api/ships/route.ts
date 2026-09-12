@@ -13,7 +13,7 @@ import { jsonError, proxied, upstreamJson } from "@/lib/server/upstream";
 
 const DT_HEADERS = {
   "accept-encoding": "gzip",
-  "digitraffic-user": "gods-eye-view/0.1 (open-source globe)",
+  "digitraffic-user": "embedding-atlas/0.1 (open-source globe)",
 };
 
 export async function GET(req: NextRequest) {

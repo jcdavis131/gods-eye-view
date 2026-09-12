@@ -97,7 +97,7 @@ describe("GET /api/screen", () => {
     expect(lines[0]).toBe("id,kind,name,lon,lat,name,state,home.latest (USD)");
     expect(lines[1]).toBe('county:48029,county,"Bexar County, TX",-98.52,29.45,Bexar County,TX,290000');
     expect(lines[2]).toBe('county:48453,county,"Travis County, TX",-97.78,30.33,Travis County,TX,520000');
-    expect(lines[3]).toContain("# God's Eye View screener export, 2 rows");
+    expect(lines[3]).toContain("# Embedding Atlas screener export, 2 rows");
     expect(lines[4]).toBe("# query: state == TX SORT name");
     expect(lines.some((l) => l.startsWith("# source: U.S. Bureau of Labor Statistics"))).toBe(true);
   });

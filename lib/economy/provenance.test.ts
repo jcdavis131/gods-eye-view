@@ -79,7 +79,7 @@ describe("economy provenance builders", () => {
     const e = estimateProvenance("zillow-zhvi", "price-to-rent = 400000 / (2000 × 12) = 16.7", at, ["rent from ZORI"]);
     expect(e.kind).toBe("estimate");
     expect(e.source.id).toBe("zillow-zhvi");
-    expect(citation(e)).toContain("estimate computed by God's Eye View: price-to-rent = 400000 / (2000 × 12) = 16.7");
+    expect(citation(e)).toContain("estimate computed by Embedding Atlas: price-to-rent = 400000 / (2000 × 12) = 16.7");
     expect(e.notes).toEqual(["rent from ZORI"]);
   });
 });

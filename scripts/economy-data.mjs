@@ -17,7 +17,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const UA = "gods-eye-view/0.1 (+https://github.com/jcdavis131/gods-eye-view; open-source globe)";
+const UA = "embedding-atlas/0.1 (+https://github.com/jcdavis131/gods-eye-view; open-source globe)";
 const OUT = path.resolve("lib/economy/data");
 fs.mkdirSync(OUT, { recursive: true });
 

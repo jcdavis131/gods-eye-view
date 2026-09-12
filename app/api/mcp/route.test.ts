@@ -13,7 +13,7 @@ describe("GET /api/mcp", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("access-control-allow-origin")).toBe("*");
     const j = (await res.json()) as { name: string; endpoint: string; tools: { name: string; inputSchema: { type: string } }[]; prompts: unknown[] };
-    expect(j.name).toBe("gods-eye-view-mcp-server");
+    expect(j.name).toBe("embedding-atlas-mcp-server");
     expect(j.endpoint).toBe(URL_);
     expect(j.tools.map((t) => t.name)).toContain("water_report");
     expect(j.tools[0].inputSchema.type).toBe("object");
@@ -60,7 +60,7 @@ describe("POST /api/mcp", () => {
     expect(init.headers.get("mcp-session-id")).toBeNull();
     expect(init.headers.get("access-control-allow-origin")).toBe("*");
     const ij = (await init.json()) as { result: { serverInfo: { name: string }; capabilities: Record<string, unknown> } };
-    expect(ij.result.serverInfo.name).toBe("gods-eye-view-mcp-server");
+    expect(ij.result.serverInfo.name).toBe("embedding-atlas-mcp-server");
     expect(ij.result.capabilities).toHaveProperty("tools");
     expect(ij.result.capabilities).toHaveProperty("prompts");
     expect(ij.result.capabilities).toHaveProperty("resources");

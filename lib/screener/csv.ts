@@ -50,7 +50,7 @@ export function screenCsv(rows: ScreenRow[], fields: FieldMeta[], provenance: Pr
     lines.push(cells.map(csvCell).join(","));
   }
   const retrieved = opts.retrievedAt ?? new Date().toISOString();
-  lines.push(`# God's Eye View screener export, ${rows.length} rows, retrieved ${retrieved}`);
+  lines.push(`# Embedding Atlas screener export, ${rows.length} rows, retrieved ${retrieved}`);
   if (opts.query) lines.push(`# query: ${opts.query.replace(/[\r\n]+/g, " ")}`);
   const seen = new Set<string>();
   for (const p of provenance) {
