@@ -18,6 +18,9 @@ import DeskLayout from "./DeskLayout";
 import MobileTopBar from "./MobileTopBar";
 import MobileNav from "./MobileNav";
 import MobileSheet from "./MobileSheet";
+import PersonaPicker from "./PersonaPicker";
+import StartHere from "./StartHere";
+import { useLens } from "@/lib/personas/store";
 import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { useMobile } from "@/lib/mobile/store";
 import ExploreDialog from "./ExploreDialog";
@@ -65,6 +68,10 @@ export default function Cockpit({ initialMobile = false }: { initialMobile?: boo
     if (!ready) return;
     const share = parseShare(window.location.search);
     applyShare(share, { fly: false });
+    // First visit with a bare URL: ask who is looking. A shared link (layers,
+    // selection, lens, embed) is never interrupted.
+    const bare = !share.lens && !share.layers && !share.sel && !share.report && !share.market && !share.embed;
+    if (bare && useLens.getState().personaId == null) useLens.getState().setPickerOpen(true);
     return startUrlSync();
   }, [ready]);
 
@@ -159,12 +166,14 @@ export default function Cockpit({ initialMobile = false }: { initialMobile?: boo
           <SettingsDialog />
           <SearchCommand />
           <ExploreDialog />
+          <PersonaPicker />
         </>
       ) : (
         <>
           <TopBar />
           <LayerPanel />
           <div className="desk-hud-only pointer-events-none absolute right-3 top-[76px] z-30 flex w-[320px] max-w-[calc(100vw-24px)] flex-col gap-2">
+            <StartHere />
             <WaterReportPanel />
             <MarketReportPanel />
             <IndicatorsPanel />
@@ -180,6 +189,7 @@ export default function Cockpit({ initialMobile = false }: { initialMobile?: boo
           <SettingsDialog />
           <SearchCommand />
           <ExploreDialog />
+          <PersonaPicker />
           <DeskLayout />
         </>
       )}

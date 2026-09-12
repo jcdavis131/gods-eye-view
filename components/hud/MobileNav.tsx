@@ -1,9 +1,10 @@
 "use client";
-// Phone bottom bar: a horizontally scrollable strip of panel toggles. Each
-// chip is a 44 px touch target; the active ones light up. The strip snaps so
-// a flick lands on whole chips.
+// Phone bottom bar: a Lens chip, then a horizontally scrollable strip of panel
+// toggles in the order the active lens prefers. Each chip is a 48 px touch
+// target; the active ones light up. The strip snaps so a flick lands on
+// whole chips.
 
-import { Activity, Bell, CalendarDays, Compass, Droplets, Landmark, Layers, Link2, Table2 } from "lucide-react";
+import { Activity, Aperture, Bell, CalendarDays, Compass, Droplets, Landmark, Layers, Link2, Table2 } from "lucide-react";
 import type { ComponentType } from "react";
 import { useGlobe } from "@/lib/store/globe";
 import { useIndicators } from "@/lib/indicators/store";
@@ -11,83 +12,88 @@ import { useReleases } from "@/lib/releases/store";
 import { useWatchlists } from "@/lib/watch/store";
 import { useScreener } from "@/lib/screener/store";
 import { useMobile } from "@/lib/mobile/store";
-import { copyShareLink } from "@/lib/globe/share";
+import { useLens } from "@/lib/personas/store";
+import { PERSONA_BY_ID, type PanelId } from "@/lib/personas/registry";
+import { togglePanel } from "@/lib/personas/actions";
 
 interface Chip {
-  id: string;
+  id: PanelId;
   label: string;
   icon: ComponentType<{ className?: string }>;
-  active: boolean;
-  onPress: () => void;
+}
+
+const CHIPS: Chip[] = [
+  { id: "layers", label: "Layers", icon: Layers },
+  { id: "water", label: "Water", icon: Droplets },
+  { id: "market", label: "Market", icon: Landmark },
+  { id: "signals", label: "Signals", icon: Activity },
+  { id: "screen", label: "Screen", icon: Table2 },
+  { id: "releases", label: "Releases", icon: CalendarDays },
+  { id: "watch", label: "Watch", icon: Bell },
+  { id: "explore", label: "Explore", icon: Compass },
+  { id: "share", label: "Share", icon: Link2 },
+];
+
+/** Chips in the lens's order, then any it did not mention. */
+export function orderChips(order: PanelId[] | undefined): Chip[] {
+  if (!order) return CHIPS;
+  const byId = new Map(CHIPS.map((c) => [c.id, c]));
+  const out: Chip[] = [];
+  for (const id of order) {
+    const c = byId.get(id);
+    if (c) out.push(c);
+  }
+  for (const c of CHIPS) if (!out.includes(c)) out.push(c);
+  return out;
 }
 
 export default function MobileNav() {
   const layersOpen = useMobile((s) => s.layersOpen);
-  const toggleLayers = useMobile((s) => s.toggleLayers);
   const waterOpen = useGlobe((s) => s.waterReportOpen);
   const marketOpen = useGlobe((s) => s.marketReportOpen);
   const indOpen = useIndicators((s) => s.open);
-  const toggleInd = useIndicators((s) => s.toggle);
   const screenOpen = useScreener((s) => s.open);
-  const toggleScreen = useScreener((s) => s.toggle);
   const relOpen = useReleases((s) => s.releasesOpen);
-  const setRelOpen = useReleases((s) => s.setReleasesOpen);
   const watchOpen = useWatchlists((s) => s.open);
-  const setWatchOpen = useWatchlists((s) => s.setOpen);
-  const setExploreOpen = useGlobe((s) => s.setExploreOpen);
-
-  const chips: Chip[] = [
-    { id: "layers", label: "Layers", icon: Layers, active: layersOpen, onPress: toggleLayers },
-    {
-      id: "water",
-      label: "Water",
-      icon: Droplets,
-      active: waterOpen,
-      onPress: () => {
-        const st = useGlobe.getState();
-        if (!waterOpen) {
-          st.setLayer("water", true);
-          st.setLayer("groundwater", true);
-        }
-        st.setWaterReportOpen(!waterOpen);
-      },
-    },
-    {
-      id: "market",
-      label: "Market",
-      icon: Landmark,
-      active: marketOpen,
-      onPress: () => {
-        const st = useGlobe.getState();
-        if (!marketOpen) {
-          st.setLayer("realestate", true);
-          st.setLayer("commerce", true);
-          st.setLayer("trade", true);
-        }
-        st.setMarketReportOpen(!marketOpen);
-      },
-    },
-    { id: "signals", label: "Signals", icon: Activity, active: indOpen, onPress: toggleInd },
-    { id: "screen", label: "Screen", icon: Table2, active: screenOpen, onPress: toggleScreen },
-    { id: "releases", label: "Releases", icon: CalendarDays, active: relOpen, onPress: () => setRelOpen(!relOpen) },
-    { id: "watch", label: "Watch", icon: Bell, active: watchOpen, onPress: () => setWatchOpen(!watchOpen) },
-    { id: "explore", label: "Explore", icon: Compass, active: false, onPress: () => setExploreOpen(true) },
-    { id: "share", label: "Share", icon: Link2, active: false, onPress: () => void copyShareLink() },
-  ];
-
+  const personaId = useLens((s) => s.personaId);
+  const setPickerOpen = useLens((s) => s.setPickerOpen);
+  const persona = personaId ? PERSONA_BY_ID[personaId] : null;
+  const active: Record<PanelId, boolean> = {
+    layers: layersOpen,
+    water: waterOpen,
+    market: marketOpen,
+    signals: indOpen,
+    screen: screenOpen,
+    releases: relOpen,
+    watch: watchOpen,
+    explore: false,
+    share: false,
+  };
+  const chips = orderChips(persona?.nav);
   return (
-    <nav className="hud-panel pointer-events-auto mobile-nav" aria-label="Panels">
-      <div className="flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain px-1">
+    <nav className="hud-panel pointer-events-auto mobile-nav flex" aria-label="Panels">
+      <button
+        type="button"
+        onClick={() => setPickerOpen(true)}
+        className="flex min-h-[48px] min-w-[68px] shrink-0 flex-col items-center justify-center gap-0.5 border-r border-border px-2 text-[9px] uppercase tracking-wider"
+        style={{ color: persona?.color ?? "var(--primary)" }}
+        aria-label={persona ? `Lens: ${persona.title}. Change lens` : "Choose a lens"}
+      >
+        <Aperture className="size-4" />
+        {persona ? persona.short : "Lens"}
+      </button>
+      <div className="flex min-w-0 flex-1 snap-x snap-mandatory overflow-x-auto overscroll-x-contain px-1">
         {chips.map((c) => {
           const Icon = c.icon;
+          const on = active[c.id];
           return (
             <button
               key={c.id}
               type="button"
-              onClick={c.onPress}
-              aria-pressed={c.active}
+              onClick={() => togglePanel(c.id)}
+              aria-pressed={on}
               className={`flex min-h-[48px] min-w-[68px] shrink-0 snap-start flex-col items-center justify-center gap-0.5 px-2 text-[9px] uppercase tracking-wider ${
-                c.active ? "text-primary" : "text-foreground/75"
+                on ? "text-primary" : "text-foreground/75"
               }`}
             >
               <Icon className="size-4" />

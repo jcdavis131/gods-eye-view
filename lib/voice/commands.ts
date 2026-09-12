@@ -27,6 +27,8 @@ import { useWatchlists } from "@/lib/watch/store";
 import { useScreener } from "@/lib/screener/store";
 import { ENTITY_KINDS, type EntityKind } from "@/lib/screener/fields";
 import { useDesk } from "@/lib/desk/store";
+import { PERSONAS, personaFromWords } from "@/lib/personas/registry";
+import { applyPersona, useLens } from "@/lib/personas/store";
 
 export interface JsonSchema {
   type: "object";
@@ -336,7 +338,7 @@ export const COMMANDS: CommandDef[] = [
     parameters: {
       type: "object",
       properties: {
-        panel: { type: "string", description: "Which panel", enum: ["screener", "indicators", "releases", "movers", "watchlist", "desk", "hud"] },
+        panel: { type: "string", description: "Which panel", enum: ["screener", "indicators", "releases", "movers", "watchlist", "desk", "hud", "lens"] },
         on: { type: "boolean", description: "true to open (default), false to close" },
       },
       required: ["panel"],
@@ -361,6 +363,9 @@ export const COMMANDS: CommandDef[] = [
         case "watchlist":
           useWatchlists.getState().setOpen(on);
           return on ? "Watchlist open. Say 'watch this' to add the selected object." : "Watchlist closed.";
+        case "lens":
+          useLens.getState().setPickerOpen(on);
+          return on ? "Pick a lens." : "Lens picker closed.";
         case "hud":
           useDesk.getState().setMode("hud");
           return "Back to the HUD.";
@@ -434,6 +439,26 @@ export const COMMANDS: CommandDef[] = [
       useReleases.getState().setVintage(d);
       setMissionTime(vintageClockMs(d));
       return `Vintage pinned to ${d}.`;
+    },
+  },
+  {
+    name: "set_lens",
+    description: "Switch the lens (who is looking): real estate, economist, trader, water and ecology, supply chain, public finance, or explorer. Sets layers, the arrival panel and the camera.",
+    parameters: {
+      type: "object",
+      properties: {
+        lens: { type: "string", description: "Lens id or a role word such as 'realtor' or 'hydrologist'", enum: PERSONAS.map((p) => p.id) },
+      },
+      required: ["lens"],
+    },
+    run: async (a) => {
+      const p = personaFromWords(String(a.lens ?? ""));
+      if (!p) {
+        useLens.getState().setPickerOpen(true);
+        return `I do not know that lens. Pick one: ${PERSONAS.map((x) => x.title).join(", ")}.`;
+      }
+      applyPersona(p.id);
+      return `Lens: ${p.title}. ${p.tagline} Landing on ${p.start.label}.`;
     },
   },
   {

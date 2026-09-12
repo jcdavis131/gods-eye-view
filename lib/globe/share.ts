@@ -21,6 +21,8 @@ import { flyTo, flyToSelection } from "./camera";
 import { getRenderer } from "./registry";
 import { setMissionTime } from "./clock";
 import { getVintage, isValidVintage, useReleases, vintageClockMs } from "@/lib/releases/store";
+import { isPersonaId, type PersonaId } from "@/lib/personas/registry";
+import { applyPersona, useLens } from "@/lib/personas/store";
 
 export interface ShareState {
   lat?: number;
@@ -42,6 +44,8 @@ export interface ShareState {
    * can read history (series store, Zillow history) will honour it later.
    */
   vintage?: string;
+  /** Lens (who is looking): sets layers, the arrival panel and the camera unless the link carries its own. */
+  lens?: PersonaId;
   embed?: boolean;
 }
 
@@ -91,6 +95,8 @@ export function parseShare(search: string): ShareState {
   if (q.get("market") === "1") out.market = true;
   const v = q.get("v");
   if (v && isValidVintage(v)) out.vintage = v;
+  const lens = q.get("lens");
+  if (isPersonaId(lens)) out.lens = lens;
   if (q.get("embed") === "1") out.embed = true;
   return out;
 }
@@ -113,6 +119,7 @@ export function shareQuery(s: ShareState): string {
   if (s.report) q.set("report", "1");
   if (s.market) q.set("market", "1");
   if (s.vintage && isValidVintage(s.vintage)) q.set("v", s.vintage);
+  if (s.lens) q.set("lens", s.lens);
   if (s.embed) q.set("embed", "1");
   const str = q.toString();
   return str ? `?${str}` : "";
@@ -134,6 +141,7 @@ export function currentShare(): ShareState {
     report: st.waterReportOpen || undefined,
     market: st.marketReportOpen || undefined,
     vintage: getVintage() ?? undefined,
+    lens: useLens.getState().personaId ?? undefined,
     embed: st.embed || undefined,
   };
 }
@@ -178,9 +186,13 @@ export function startUrlSync(): () => void {
   const unsubReleases = useReleases.subscribe((s, prev) => {
     if (s.vintage !== prev.vintage) schedule();
   });
+  const unsubLens = useLens.subscribe((s, prev) => {
+    if (s.personaId !== prev.personaId) schedule();
+  });
   return () => {
     unsub();
     unsubReleases();
+    unsubLens();
     if (timer) clearTimeout(timer);
   };
 }
@@ -191,6 +203,8 @@ export function startUrlSync(): () => void {
  */
 export function applyShare(s: ShareState, opts: { fly?: boolean } = {}): void {
   const st = useGlobe.getState();
+  // A lens goes first so an explicit layer list or panel in the same link wins over its defaults.
+  if (s.lens) applyPersona(s.lens, { fly: opts.fly !== false && s.lat == null, configure: true });
   if (s.layers) {
     for (const id of LAYER_IDS) st.setLayer(id, s.layers.includes(id));
   }

@@ -6,6 +6,9 @@ import { useReleases } from "@/lib/releases/store";
 import { useWatchlists } from "@/lib/watch/store";
 import { useScreener } from "@/lib/screener/store";
 import DeskToggle from "./DeskToggle";
+import { useLens } from "@/lib/personas/store";
+import { PERSONA_BY_ID } from "@/lib/personas/registry";
+import { Aperture } from "lucide-react";
 import { copyShareLink } from "@/lib/globe/share";
 import { useNow } from "@/lib/hooks/useNow";
 import { useGlobe } from "@/lib/store/globe";
@@ -42,6 +45,9 @@ export default function TopBar() {
   const setWatchOpen = useWatchlists((s) => s.setOpen);
   const screenOpen = useScreener((s) => s.open);
   const toggleScreen = useScreener((s) => s.toggle);
+  const personaId = useLens((s) => s.personaId);
+  const setPickerOpen = useLens((s) => s.setPickerOpen);
+  const persona = personaId ? PERSONA_BY_ID[personaId] : null;
   const live = isLive(clock.offsetMs);
   const mission = now ? now + clock.offsetMs : 0;
 
@@ -74,6 +80,14 @@ export default function TopBar() {
           />
           <span className="hud-label">{ready ? "ONLINE" : "BOOT"}</span>
         </div>
+        {persona && (
+          <>
+            <div className="h-8 w-px bg-border" />
+            <button type="button" onClick={() => setPickerOpen(true)} className="hud-label whitespace-nowrap hover:text-primary" style={{ color: persona.color }} title="Change lens">
+              lens · {persona.title}
+            </button>
+          </>
+        )}
       </div>
 
       {/* clock + camera readout */}
@@ -115,6 +129,15 @@ export default function TopBar() {
 
       {/* actions */}
       <div className="hud-panel pointer-events-auto flex min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap p-1 [scrollbar-width:none]">
+        <button
+          type="button"
+          onClick={() => setPickerOpen(true)}
+          className="flex items-center gap-2 px-3 py-2 text-[11px] uppercase tracking-wider text-foreground/80 hover:bg-accent hover:text-primary"
+          title="Lens: who is looking (real estate, economist, trader, water, supply chain, public finance, explorer)"
+        >
+          <Aperture className="size-3.5" />
+          <span className="sr-only">Lens</span>
+        </button>
         <VoiceControl />
         <button
           type="button"

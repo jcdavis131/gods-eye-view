@@ -61,6 +61,13 @@ export function parseIntent(raw: string): Intent | null {
   if ((m = t.match(/^(?:market report|housing market|housing report|home values|property values|how(?:'s| is) the (?:economy|market|housing|job market))(?:\s+(?:for|in|near|around|over|at)\s+(.+))?$/))) {
     return { command: "market_report", args: { place: m[1]?.trim() || undefined } };
   }
+  // Lenses: "I'm a realtor", "switch lens to economist", "lens water", "change lens"
+  if ((m = t.match(/^(?:i(?:'| a)?m (?:an? )?|switch (?:the )?lens to |change (?:the )?lens to |set (?:the )?lens to |lens |look as (?:an? )?|view as (?:an? )?)(.+)$/))) {
+    return { command: "set_lens", args: { lens: m[1].trim() } };
+  }
+  if (/^(?:change|pick|choose)(?: the| a)? lens$/.test(t) || /^who (?:am i|is looking)$/.test(t)) {
+    return { command: "open_panel", args: { panel: "lens", on: true } };
+  }
   // Practitioner panels: "open the screener", "show indicators", "release calendar", "what changed", "watchlist", "desk mode"
   if ((m = t.match(/^(?:(open|show|display|bring up|hide|close|dismiss)\s+)?(?:me\s+)?(?:the\s+|my\s+)?(screener|screen|indicators|signals|release calendar|releases|movers|what changed|watchlist|watch list|desk mode|desk|hud mode|hud)$/))) {
     const off = /^(hide|close|dismiss)$/.test(m[1] ?? "");

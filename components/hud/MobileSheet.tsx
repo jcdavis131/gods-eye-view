@@ -7,6 +7,7 @@
 import { ChevronDown, ChevronUp, X } from "lucide-react";
 import { useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { closeAllPanels, useMobile, useOpenPanels } from "@/lib/mobile/store";
+import StartHere from "./StartHere";
 
 const TITLES: Record<string, string> = {
   layers: "Layers",
@@ -66,7 +67,10 @@ export default function MobileSheet({ children }: { children: ReactNode }) {
           <X className="size-4" />
         </button>
       </div>
-      <div className="mobile-sheet-body flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-contain pt-2">{children}</div>
+      <div className="mobile-sheet-body flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-contain pt-2">
+        <StartHere />
+        {children}
+      </div>
     </section>
   );
 }

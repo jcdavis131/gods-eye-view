@@ -46,6 +46,22 @@ Three more layers and a second report. Same rules: keyless, published values onl
 
 Where the numbers come from and what was checked before shipping: the Census Bureau's data API now requires a key, so nothing here uses it; county geometry comes from TIGERweb's generalized services, which answered a Texas-sized box (429 counties at 1:20M) in about half a second. BLS QCEW answered 2026 Q1 for all 3,275 county totals with no suppressed county totals (sector cells can be). Zillow's county file carried a July 2026 value for all 3,071 counties and a five-year comparison for 3,020. BTS port authorities were placed by matching their harbour city to a World Port Index entry within 150 km of the geocoded city; the four with no WPI entry (Palm Beach district, Pittsburgh, South Louisiana, St. Louis) sit at the city and say so in the dossier; ten river districts that name no city are left off. WITS's newest bilateral year was 2023 at the time of writing, and the arcs say which year they are.
 
+## Lenses: who is looking
+
+The first visit asks one question, *Who is looking?*, and the answer sets the layers, the landing view, the first panel and the order of the phone nav. Every layer stays one tap away; change lens any time from the aperture button (top bar on desktop, first chip on a phone), a permalink (`?lens=water`), or by voice ("I'm a hydrologist", "switch lens to trader"). A lens is one object in `lib/personas/registry.ts`, so adding one is a data change.
+
+| Lens | Who | Turns on | Lands on | Opens |
+| --- | --- | --- | --- | --- |
+| Real estate | Agents, investors, appraisers, relocation | Home values, jobs & wages, surface water | Austin housing | Market report; screener preset on momentum |
+| Economist | Macro, regional and labour economists, journalists | Jobs & wages, ports & trade, home values | The United States | Signals (all categories), releases next |
+| Trader | Equity, commodity and macro traders | Public companies, ports & trade, ships, aircraft | Los Angeles and Long Beach | Signals (freight); screener on ports losing TEU |
+| Water & ecology | Biologists, hydrologists, utilities, conservation | Surface water, aquifers & drought, turbidity | Calaveras and Braunig lakes | Water report; signals (water) |
+| Supply chain | Logistics, shipping, freight and trade operations | Ports & trade, ships, aircraft | The Laredo crossings | Signals (freight); screener on crossings by trucks |
+| Public finance | Bankers, municipal analysts, grant writers, local government | Bank branches, federal spending, jobs & wages, surface water | Travis County | Market report; signals (labour) |
+| Explorer | Everyone else | Aircraft, ships, satellites, earthquakes, launches, surface water | Orbit | Nothing; the classic spy-satellite view |
+
+Each lens shows a **Start here** card with three first steps that open the right panel when tapped; dismiss it once and it stays dismissed for that lens. On phones the heavy live layers (aircraft, satellites) stay off until you switch them on. Explore lists the lens's curated places first.
+
 ## For practitioners: history, screens, signals, releases, watchlists, desk mode
 
 The globe is the front door; the rest of this section is for analysts, economists and traders who need the same public numbers as time series, tables and feeds. Every route below is keyless, CORS-open, returns a provenance envelope (`data`, `provenance[]`, `generatedAt`, `caveats[]`), answers `format=csv` where the payload is tabular, and is described at [`/api/openapi`](https://eye.jcamd.com/api/openapi). The practitioner guide is [`docs/API.md`](docs/API.md).
@@ -85,7 +101,7 @@ Every view is a link. **Share** in the top bar copies one that carries the camer
 | [Austin housing](https://eye.jcamd.com/?lat=30.3&lon=-97.75&h=160000&layers=realestate,commerce&market=1) | Counties by one-year home value change, rents, wages, the mortgage-against-wages estimate |
 | [Fifty states](https://eye.jcamd.com/?lat=39&lon=-97&h=6500000&layers=realestate,commerce) | Every state by home value change with statewide jobs and wages |
 
-Link parameters: `lat`, `lon`, `h` (camera height in metres), `hd` / `p` (heading, pitch), `layers` (comma list of layer ids, exactly these on), `t` (mission clock, ISO; omitted while live), `sel=layer:id` (selected object, best effort once its feed loads), `report=1` (water report open), `market=1` (market report open), `embed=1` (no HUD chrome, for iframes; data credits stay).
+Link parameters: `lens` (who is looking; sets layers, panel and camera unless the link carries its own), `lat`, `lon`, `h` (camera height in metres), `hd` / `p` (heading, pitch), `layers` (comma list of layer ids, exactly these on), `t` (mission clock, ISO; omitted while live), `sel=layer:id` (selected object, best effort once its feed loads), `report=1` (water report open), `market=1` (market report open), `embed=1` (no HUD chrome, for iframes; data credits stay).
 
 Embed it:
 
@@ -208,7 +224,7 @@ Press **Keys** in the top bar or hit `,`. Keys live in `localStorage` and are on
 - Idle for 12 s and the camera drifts in orbit (cinematic mode, toggle in settings).
 - `D` toggles desk mode. Top bar: **Signals** (indicators), **Screen** (screener), **Releases** (calendar, vintages, movers), **Watch** (watchlists); the strip is icon-only with tooltips and scrolls sideways on narrow screens.
 - On a phone (or a short landscape viewport) the HUD stacks: a one-row header with voice, search and settings; a bottom strip of panel toggles (Layers, Water, Market, Signals, Screen, Releases, Watch, Explore, Share); a compact timeline that unfolds on tap; and one bottom sheet that holds every open panel, with a handle to make it taller and an X that closes everything. Pinch and drag work on the globe as usual. The site is installable (web app manifest, standalone display, home-screen icons from `public/icon.svg`; `node scripts/icons.mjs` regenerates the PNGs), the server picks the phone layout from the request so there is no desktop flash, and phones skip the backdrop blur, scanlines and idle drift to save the GPU.
-- Voice: press **Voice** and say "show me flights over Austin", "track the ISS", "rewind 30 minutes", "go live", "what am I looking at", "show me aquifers", "water report for San Antonio", "market report for Austin", "show me ports", "home values in Denver", "explore Lake Mead", "start the tour", "show companies", "show banks", "show federal spending", "open the screener", "screen counties where rents rising and jobs falling", "show indicators", "release calendar", "what changed", "open my watchlist", "watch this", "pin vintage 2026-08-15", "desk mode".
+- Voice: press **Voice** and say "show me flights over Austin", "track the ISS", "rewind 30 minutes", "go live", "what am I looking at", "show me aquifers", "water report for San Antonio", "market report for Austin", "show me ports", "home values in Denver", "explore Lake Mead", "start the tour", "I'm a realtor", "switch lens to economist", "change lens", "show companies", "show banks", "show federal spending", "open the screener", "screen counties where rents rising and jobs falling", "show indicators", "release calendar", "what changed", "open my watchlist", "watch this", "pin vintage 2026-08-15", "desk mode".
 
 ## Voice control
 
@@ -236,7 +252,8 @@ For ElevenLabs and Vapi, configure tools on the vendor side with these names and
   { "name": "open_panel",      "parameters": { "panel": "screener|indicators|releases|movers|watchlist|desk|hud", "on": "boolean?" } },
   { "name": "screen",          "parameters": { "kind": "county|state|port|crossing|country", "query": "string" } },
   { "name": "watch_selected",  "parameters": {} },
-  { "name": "set_vintage",     "parameters": { "date": "string?" } }
+  { "name": "set_vintage",     "parameters": { "date": "string?" } },
+  { "name": "set_lens",        "parameters": { "lens": "realestate|economist|trader|water|logistics|banking|explorer" } }
 ]
 ```
 
