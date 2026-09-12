@@ -237,14 +237,12 @@ export default function TopBar() {
         {/* Mobile overflow: every action that doesn't fit the bar. */}
         <div className="md:hidden">
           <Popover open={menuOpen} onOpenChange={setMenuOpen}>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                className="flex items-center px-2 py-2 text-foreground/80 hover:text-primary"
-                aria-label="More actions"
-              >
-                <Menu className="size-4" />
-              </button>
+            <PopoverTrigger
+              type="button"
+              className="flex items-center px-2 py-2 text-foreground/80 hover:text-primary"
+              aria-label="More actions"
+            >
+              <Menu className="size-4" />
             </PopoverTrigger>
             <PopoverContent align="end" className="w-52 p-1">
               <MenuItem icon={Search} label="Search" onClick={closeMenu(() => setSearchOpen(true))} />
