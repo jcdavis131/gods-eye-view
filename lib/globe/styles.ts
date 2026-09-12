@@ -49,6 +49,70 @@ export const occupationsStyle: LayerStyle = {
   scaleByDistance: [3e5, 1.0, 8e6, 0.25],
 };
 
+/** Temperature ramp for the weather layer (°C). */
+function tempColor(t: number | null): string {
+  if (t == null) return "#8A93A6";
+  if (t <= 0) return "#A5D8FF";
+  if (t <= 10) return "#7DD3FC";
+  if (t <= 20) return "#A8E6A0";
+  if (t <= 30) return "#F5C849";
+  return "#FF6B3D";
+}
+
+interface WeatherExtra {
+  tempC?: number | null;
+  windMs?: number | null;
+  windDirTo?: number;
+  barbLenM?: number;
+}
+
+export const weatherStyle: LayerStyle = {
+  color: "#7DD3FC",
+  pointSize: (f) => {
+    const x = f.properties.extra as WeatherExtra | undefined;
+    return Math.min(11, 4.5 + (x?.windMs ?? 0) * 0.45);
+  },
+  colorFor: (f) => tempColor((f.properties.extra as WeatherExtra | undefined)?.tempC ?? null),
+  label: (f) => f.properties.name,
+  labelMax: 25,
+  // Wind barb: a short line from the sample point in the direction the wind
+  // blows toward, length ∝ speed. Calm points get no barb.
+  lines: (f) => {
+    const x = f.properties.extra as WeatherExtra | undefined;
+    if (x?.windDirTo == null || (x.windMs ?? 0) < 0.5) return null;
+    if (f.geometry.type !== "Point") return null;
+    const [lon, lat] = f.geometry.coordinates;
+    const [blon, blat] = destination(lat, lon, x.windDirTo, x.barbLenM ?? 20_000);
+    return [
+      {
+        positions: [
+          [lon, lat, 0],
+          [blon, blat, 0],
+        ],
+        color: "#EAF4FF",
+        alpha: 0.85,
+        width: 1.5,
+      },
+    ];
+  },
+  scaleByDistance: [3e5, 1.0, 8e6, 0.3],
+};
+
+const SPORTS_COLORS: Record<string, string> = {
+  in: "#4ADE80", // live now
+  pre: "#F5B849", // upcoming
+  post: "#8A93A6", // final
+};
+
+export const sportsStyle: LayerStyle = {
+  color: "#4ADE80",
+  pointSize: (f) => (f.properties.kind === "in" ? 8.5 : 5),
+  colorFor: (f) => SPORTS_COLORS[f.properties.kind ?? ""] ?? "#4ADE80",
+  label: (f) => f.properties.name,
+  labelMax: 40,
+  scaleByDistance: [3e5, 1.0, 8e6, 0.3],
+};
+
 /** Dead-reckon a moving surface/air object from its last report for up to 90 s. */
 function extrapolate(
   lon: number,
@@ -308,6 +372,8 @@ export const STYLES: Partial<Record<LayerId, LayerStyle>> = {
   commerce: commerceStyle,
   realestate: realestateStyle,
   occupations: occupationsStyle,
+  weather: weatherStyle,
+  sports: sportsStyle,
 };
 
 /** Camera range (m) to sit at when following an object of a given layer. */
@@ -326,4 +392,6 @@ export const FOLLOW_RANGE: Record<LayerId, number> = {
   commerce: 150_000,
   realestate: 150_000,
   occupations: 400_000,
+  weather: 500_000,
+  sports: 500_000,
 };
