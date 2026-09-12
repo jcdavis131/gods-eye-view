@@ -97,7 +97,7 @@ export default function TopBar() {
       <div className="hud-panel pointer-events-auto flex shrink-0 items-center gap-3 px-3 py-2">
         <div>
           <div className="hud-display whitespace-nowrap text-[15px] font-semibold leading-none text-primary sm:text-[17px]">
-            God&apos;s Eye View
+            Embedding Atlas
           </div>
           <div className="hud-label mt-1 hidden text-[9px] sm:block">
             spy satellite simulator · the data is real

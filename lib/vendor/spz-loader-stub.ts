@@ -10,7 +10,7 @@
 // the package to this stub, which fails loudly if anything reaches it.
 
 export function loadSpz(): never {
-  throw new Error("Gaussian splat (.spz) loading is disabled in God's Eye View (see lib/vendor/spz-loader-stub.ts)");
+  throw new Error("Gaussian splat (.spz) loading is disabled in Embedding Atlas (see lib/vendor/spz-loader-stub.ts)");
 }
 
 export default { loadSpz };

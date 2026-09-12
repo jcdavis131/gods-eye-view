@@ -1,4 +1,4 @@
-# God's Eye View
+# Embedding Atlas
 
 **A spy satellite simulator in your browser, except the data is real.**
 
@@ -6,7 +6,7 @@ A photorealistic 3D globe that fuses live public signals: every aircraft broadca
 
 **Live:** https://eye.jcamd.com (also https://gods-eye-view-rust.vercel.app; deploys from `master`). One hosting caveat: OpenSky refuses Vercel's egress, so the zoomed-out aircraft view there falls back to adsb.lol around the view centre plus the military feed; run it locally or add OpenSky credentials for the full global picture.
 
-![God's Eye View boot screen](docs/screenshot-boot.jpg)
+![Embedding Atlas boot screen](docs/screenshot-boot.jpg)
 
 | Community water report over San Antonio | Sentinel-2 turbidity chips on Calaveras and Braunig lakes |
 | --- | --- |

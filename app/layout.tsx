@@ -20,19 +20,19 @@ const DESCRIPTION =
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE),
-  title: "God's Eye View",
+  title: "Embedding Atlas",
   description: DESCRIPTION,
-  applicationName: "God's Eye View",
+  applicationName: "Embedding Atlas",
   openGraph: {
-    title: "God's Eye View",
+    title: "Embedding Atlas",
     description: DESCRIPTION,
     type: "website",
-    siteName: "God's Eye View",
-    images: [{ url: "/og.jpg", width: 1600, height: 960, alt: "Community water report over San Antonio on the God's Eye View globe" }],
+    siteName: "Embedding Atlas",
+    images: [{ url: "/og.jpg", width: 1600, height: 960, alt: "Community water report over San Antonio on the Embedding Atlas globe" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "God's Eye View",
+    title: "Embedding Atlas",
     description: DESCRIPTION,
     images: ["/og.jpg"],
   },

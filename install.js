@@ -9,7 +9,7 @@ module.exports = {
     {
       method: "notify",
       params: {
-        html: "God's Eye View installed. Click Start.",
+        html: "Embedding Atlas installed. Click Start.",
       },
     },
   ],

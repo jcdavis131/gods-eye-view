@@ -1,4 +1,4 @@
-// Shared contract for every data layer in God's Eye View.
+// Shared contract for every data layer in Embedding Atlas.
 //
 // A layer is a plain module in lib/layers/<name>.ts that exports a
 // LayerDefinition: metadata + a fetch() that resolves to GeoJSON. The globe

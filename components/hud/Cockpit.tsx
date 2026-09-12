@@ -152,7 +152,7 @@ function EmbedBadge() {
       className="hud-panel pointer-events-auto absolute left-3 top-3 z-30 flex items-center gap-2 px-3 py-1.5 text-[10px] uppercase tracking-wider text-primary hover:text-foreground"
       title="Open the full cockpit"
     >
-      God&apos;s Eye View
+      Embedding Atlas
       <span className="text-muted-foreground">· open full view</span>
     </a>
   );
