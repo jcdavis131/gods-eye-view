@@ -2,11 +2,20 @@
 
 import { Switch } from "@/components/ui/switch";
 import { LAYERS } from "@/lib/layers";
+import { groupLayers, erroringLayers } from "@/lib/layers/groups";
+import type { LayerDefinition } from "@/lib/layers/types";
 import { useGlobe } from "@/lib/store/globe";
 import { timeAgo } from "@/lib/globe/geo";
-import { useEffect, useState } from "react";
+import { useLens } from "@/lib/personas/store";
+import { PERSONA_BY_ID } from "@/lib/personas/registry";
+import { ChevronDown, ChevronUp } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
-/** `embedded`: render as a block inside the mobile sheet instead of pinned to the left edge. */
+/**
+ * `embedded`: render as a block inside the mobile sheet instead of pinned to
+ * the left edge. Phones get a compact two-column grid that opens on the lens's
+ * own feeds, because sixteen full-width rows bury the rest of the sheet.
+ */
 export default function LayerPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const layers = useGlobe((s) => s.layers);
   const status = useGlobe((s) => s.status);
@@ -17,28 +26,44 @@ export default function LayerPanel({ embedded = false }: { embedded?: boolean } 
     return () => clearInterval(id);
   }, []);
 
-  return (
-    <aside className={embedded ? "pointer-events-auto w-full" : "pointer-events-auto absolute left-3 top-[76px] z-30 max-h-[calc(100vh-190px)] w-[268px] max-w-[calc(100vw-24px)] overflow-y-auto [scrollbar-width:thin]"}>
-      <div className="hud-panel">
-        <div className="flex items-center justify-between border-b border-border px-3 py-2">
-          <span className="hud-label">Signal layers</span>
-          <span className="text-[9px] text-muted-foreground">
-            {Object.values(layers).filter(Boolean).length}/{LAYERS.length} ON
-          </span>
+  const on = Object.values(layers).filter(Boolean).length;
+  const header = (
+    <div className="flex items-center justify-between border-b border-border px-3 py-2">
+      <span className="hud-label">Signal layers</span>
+      <span className="text-[9px] text-muted-foreground">
+        {on}/{LAYERS.length} ON
+      </span>
+    </div>
+  );
+
+  if (embedded) {
+    return (
+      <aside className="pointer-events-auto w-full">
+        <div className="hud-panel">
+          {header}
+          <CompactLayers layers={layers} status={status} setLayer={setLayer} />
         </div>
+      </aside>
+    );
+  }
+
+  return (
+    <aside className="pointer-events-auto absolute left-3 top-[76px] z-30 max-h-[calc(100vh-190px)] w-[268px] max-w-[calc(100vw-24px)] overflow-y-auto [scrollbar-width:thin]">
+      <div className="hud-panel">
+        {header}
         <ul className="divide-y divide-border/60">
           {LAYERS.map((l) => {
-            const on = layers[l.id];
+            const isOn = layers[l.id];
             const st = status[l.id];
             return (
               <li key={l.id} className="px-3 py-2">
                 <div className="flex items-center gap-2">
-                  <span className="hud-dot" style={{ color: l.color, opacity: on ? 1 : 0.35 }} />
+                  <span className="hud-dot" style={{ color: l.color, opacity: isOn ? 1 : 0.35 }} />
                   <button
                     type="button"
-                    onClick={() => setLayer(l.id, !on)}
+                    onClick={() => setLayer(l.id, !isOn)}
                     className="hud-display flex-1 text-left text-[13px] font-semibold tracking-wider"
-                    style={{ color: on ? l.color : "var(--muted-foreground)" }}
+                    style={{ color: isOn ? l.color : "var(--muted-foreground)" }}
                     title={l.description}
                   >
                     {l.label}
@@ -54,16 +79,16 @@ export default function LayerPanel({ embedded = false }: { embedded?: boolean } 
                     </span>
                   )}
                   <span className="min-w-[44px] text-right text-[12px] tabular-nums text-foreground/90">
-                    {on && st ? st.count.toLocaleString() : "—"}
+                    {isOn && st ? st.count.toLocaleString() : "—"}
                   </span>
                   <Switch
                     size="sm"
-                    checked={on}
+                    checked={isOn}
                     onCheckedChange={(checked) => setLayer(l.id, checked)}
                     aria-label={`Toggle ${l.label}`}
                   />
                 </div>
-                {on && (
+                {isOn && (
                   <div className="mt-1 flex items-center justify-between gap-2 pl-4 text-[9px] text-muted-foreground">
                     <span className="truncate">
                       {st?.error ? (
@@ -85,5 +110,128 @@ export default function LayerPanel({ embedded = false }: { embedded?: boolean } 
         </ul>
       </div>
     </aside>
+  );
+}
+
+type Layers = ReturnType<typeof useGlobe.getState>["layers"];
+type Status = ReturnType<typeof useGlobe.getState>["status"];
+
+/** Phone layout: tiles, the lens's feeds first, the rest behind one disclosure. */
+function CompactLayers({
+  layers,
+  status,
+  setLayer,
+}: {
+  layers: Layers;
+  status: Status;
+  setLayer: (id: LayerDefinition["id"], on: boolean) => void;
+}) {
+  const personaId = useLens((s) => s.personaId);
+  const [showAll, setShowAll] = useState(false);
+  const lens = personaId ? PERSONA_BY_ID[personaId].layers : undefined;
+  // Freeze the split while the panel is open so tapping a tile never makes the
+  // grid reflow under the finger; it re-splits when the lens changes.
+  const groups = useMemo(() => groupLayers(LAYERS, { lens, on: useGlobe.getState().layers }), [lens]);
+  const problems = erroringLayers(LAYERS, layers, status);
+
+  return (
+    <div className="px-2 py-2">
+      <Tiles items={groups.primary} layers={layers} status={status} setLayer={setLayer} />
+      {groups.more.length > 0 && (
+        <>
+          {showAll && (
+            <>
+              <div className="mt-2 px-1 pb-1 text-[9px] uppercase tracking-widest text-muted-foreground">
+                Everything else
+              </div>
+              <Tiles items={groups.more} layers={layers} status={status} setLayer={setLayer} />
+            </>
+          )}
+          <button
+            type="button"
+            onClick={() => setShowAll((v) => !v)}
+            className="mt-2 flex w-full items-center justify-center gap-1.5 rounded border border-border/70 py-2 text-[10px] uppercase tracking-widest text-muted-foreground hover:text-foreground"
+            aria-expanded={showAll}
+          >
+            {showAll ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+            {showAll ? "Fewer layers" : `More layers (${groups.more.length})`}
+          </button>
+        </>
+      )}
+      {problems.length > 0 && (
+        <ul className="mt-2 space-y-1 border-t border-border/60 pt-2">
+          {problems.slice(0, 3).map(({ layer, error }) => (
+            <li key={layer.id} className="truncate text-[9px] text-alert" title={error}>
+              {layer.label}: {error}
+            </li>
+          ))}
+          {problems.length > 3 && (
+            <li className="text-[9px] text-alert">+{problems.length - 3} more feeds failing</li>
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function Tiles({
+  items,
+  layers,
+  status,
+  setLayer,
+}: {
+  items: LayerDefinition[];
+  layers: Layers;
+  status: Status;
+  setLayer: (id: LayerDefinition["id"], on: boolean) => void;
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-1.5">
+      {items.map((l) => {
+        const on = layers[l.id];
+        const st = status[l.id];
+        return (
+          <button
+            key={l.id}
+            type="button"
+            role="switch"
+            aria-checked={on}
+            onClick={() => setLayer(l.id, !on)}
+            title={l.description}
+            className="flex min-h-[44px] items-center gap-1.5 rounded border px-2 py-1.5 text-left transition-colors"
+            style={{
+              borderColor: on ? l.color : "var(--border)",
+              background: on ? `color-mix(in srgb, ${l.color} 14%, transparent)` : "transparent",
+            }}
+          >
+            <span className="hud-dot shrink-0" style={{ color: l.color, opacity: on ? 1 : 0.35 }} />
+            <span className="min-w-0 flex-1">
+              <span
+                className="hud-display line-clamp-2 block text-[11px] leading-tight font-semibold tracking-wider"
+                style={{ color: on ? l.color : "var(--muted-foreground)" }}
+              >
+                {l.label}
+              </span>
+              {(l.simulated || l.estimate) && (
+                <span className="block text-[8px] uppercase tracking-widest text-warn">
+                  {l.simulated ? "Simulated" : "Estimate"}
+                </span>
+              )}
+            </span>
+            <span className="shrink-0 text-right text-[10px] tabular-nums text-foreground/80">
+              {!on ? (
+                "—"
+              ) : st?.error ? (
+                <span className="text-alert">ERR</span>
+              ) : st?.loading ? (
+                <span className="blink text-primary">•••</span>
+              ) : (
+                (st?.count ?? 0).toLocaleString()
+              )}
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
 }

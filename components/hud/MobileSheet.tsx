@@ -67,9 +67,11 @@ export default function MobileSheet({ children }: { children: ReactNode }) {
           <X className="size-4" />
         </button>
       </div>
+      {/* The panel the visitor asked for comes first; the lens's start-here
+          card follows it, folded, so it never pushes that panel off screen. */}
       <div className="mobile-sheet-body flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-contain pt-2">
-        <StartHere />
         {children}
+        <StartHere collapsible />
       </div>
     </section>
   );
