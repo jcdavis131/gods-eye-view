@@ -21,7 +21,7 @@ function opsDocumented(route: string): string[] {
 
 function opsInRoute(file: string): string[] {
   const src = readFileSync(path.join(root, file), "utf8");
-  return [...src.matchAll(/case "([a-z]+)":/g)].map((m) => m[1]);
+  return [...src.matchAll(/case "([a-z][a-z-]*)":/g)].map((m) => m[1]);
 }
 
 function refs(node: unknown, out: string[] = []): string[] {
@@ -77,7 +77,7 @@ describe("public/openapi.json", () => {
       .map((f) => "/api/" + f.replace(/\/?route\.ts$/, "").replace(/\\/g, "/"))
       .map((f) => f.replace(/\/$/, ""));
     // Thin browser proxies for the live layers are not part of the practitioner API.
-    const proxies = new Set(["/api/aircraft", "/api/cameras", "/api/earthquakes", "/api/geocode", "/api/launches", "/api/roads", "/api/satellites", "/api/ships", "/api/voice/elevenlabs"]);
+    const proxies = new Set(["/api/aircraft", "/api/cameras", "/api/earthquakes", "/api/geocode", "/api/launches", "/api/roads", "/api/satellites", "/api/ships", "/api/sports", "/api/weather", "/api/voice/elevenlabs"]);
     for (const r of routes) {
       if (proxies.has(r)) continue;
       expect(spec.paths[r], r).toBeDefined();

@@ -3,18 +3,96 @@
 import { Switch } from "@/components/ui/switch";
 import { LAYERS } from "@/lib/layers";
 import { groupLayers, erroringLayers } from "@/lib/layers/groups";
-import type { LayerDefinition } from "@/lib/layers/types";
-import { useGlobe } from "@/lib/store/globe";
+import type { LayerDefinition, LayerId } from "@/lib/layers/types";
+import { useGlobe, type LayerStatus } from "@/lib/store/globe";
 import { timeAgo } from "@/lib/globe/geo";
 import { useLens } from "@/lib/personas/store";
 import { PERSONA_BY_ID } from "@/lib/personas/registry";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+/** One layer in the pinned list: dot, name, badges, count, switch, status line. */
+function LayerRow({
+  l,
+  on,
+  st,
+  setLayer,
+}: {
+  l: LayerDefinition;
+  on: boolean;
+  st: LayerStatus | undefined;
+  setLayer: (id: LayerId, on: boolean) => void;
+}) {
+  const toggle = (checked: boolean) => setLayer(l.id, checked);
+  return (
+    <li className="flex min-h-[48px] flex-col justify-center px-3 py-2 md:min-h-0">
+      <div className="flex items-center gap-2">
+        <span className="hud-dot shrink-0" style={{ color: l.color, opacity: on ? 1 : 0.35 }} />
+        <button
+          type="button"
+          onClick={() => setLayer(l.id, !on)}
+          className="hud-display min-w-0 flex-1 text-left text-[14px] font-semibold tracking-wider md:text-[13px]"
+          style={{ color: on ? l.color : "var(--muted-foreground)" }}
+          title={l.description}
+        >
+          {l.label}
+        </button>
+        {l.simulated && (
+          <span className="shrink-0 rounded border border-warn/50 px-1 text-[8px] tracking-widest text-warn">
+            SIMULATED
+          </span>
+        )}
+        {l.estimate && (
+          <span className="shrink-0 rounded border border-warn/50 px-1 text-[8px] tracking-widest text-warn" title={l.estimate}>
+            ESTIMATE
+          </span>
+        )}
+        <span className="min-w-[44px] shrink-0 text-right text-[13px] tabular-nums text-foreground/90 md:text-[12px]">
+          {on && st ? st.count.toLocaleString() : "—"}
+        </span>
+        {/* Short-landscape phones keep the pinned panel, so both sizes stay. */}
+        <Switch
+          size="default"
+          checked={on}
+          onCheckedChange={toggle}
+          aria-label={`Toggle ${l.label}`}
+          className="shrink-0 md:hidden"
+        />
+        <Switch
+          size="sm"
+          checked={on}
+          onCheckedChange={toggle}
+          aria-label={`Toggle ${l.label}`}
+          className="hidden shrink-0 md:block"
+        />
+      </div>
+      {on && (
+        <div className="mt-1 flex items-center justify-between gap-2 pl-4 text-[10px] text-muted-foreground md:text-[9px]">
+          <span className="truncate">
+            {st?.error ? (
+              <span className="text-alert">ERR {st.error.slice(0, 60)}</span>
+            ) : st?.note ? (
+              st.note
+            ) : (
+              l.attribution
+            )}
+          </span>
+          <span className="shrink-0 tabular-nums">
+            {st?.loading ? <span className="blink text-primary">SYNC</span> : timeAgo(st?.fetchedAt)}
+          </span>
+        </div>
+      )}
+    </li>
+  );
+}
+
 /**
  * `embedded`: render as a block inside the mobile sheet instead of pinned to
  * the left edge. Phones get a compact two-column grid that opens on the lens's
- * own feeds, because sixteen full-width rows bury the rest of the sheet.
+ * own feeds, because nineteen full-width rows bury the rest of the sheet.
+ *
+ * The sheet covers every viewport `useIsMobile` calls a phone, so the pinned
+ * list below is the desktop (and short-landscape) layout only.
  */
 export default function LayerPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const layers = useGlobe((s) => s.layers);
@@ -52,61 +130,9 @@ export default function LayerPanel({ embedded = false }: { embedded?: boolean } 
       <div className="hud-panel">
         {header}
         <ul className="divide-y divide-border/60">
-          {LAYERS.map((l) => {
-            const isOn = layers[l.id];
-            const st = status[l.id];
-            return (
-              <li key={l.id} className="px-3 py-2">
-                <div className="flex items-center gap-2">
-                  <span className="hud-dot" style={{ color: l.color, opacity: isOn ? 1 : 0.35 }} />
-                  <button
-                    type="button"
-                    onClick={() => setLayer(l.id, !isOn)}
-                    className="hud-display flex-1 text-left text-[13px] font-semibold tracking-wider"
-                    style={{ color: isOn ? l.color : "var(--muted-foreground)" }}
-                    title={l.description}
-                  >
-                    {l.label}
-                  </button>
-                  {l.simulated && (
-                    <span className="rounded border border-warn/50 px-1 text-[8px] tracking-widest text-warn">
-                      SIMULATED
-                    </span>
-                  )}
-                  {l.estimate && (
-                    <span className="rounded border border-warn/50 px-1 text-[8px] tracking-widest text-warn" title={l.estimate}>
-                      ESTIMATE
-                    </span>
-                  )}
-                  <span className="min-w-[44px] text-right text-[12px] tabular-nums text-foreground/90">
-                    {isOn && st ? st.count.toLocaleString() : "—"}
-                  </span>
-                  <Switch
-                    size="sm"
-                    checked={isOn}
-                    onCheckedChange={(checked) => setLayer(l.id, checked)}
-                    aria-label={`Toggle ${l.label}`}
-                  />
-                </div>
-                {isOn && (
-                  <div className="mt-1 flex items-center justify-between gap-2 pl-4 text-[9px] text-muted-foreground">
-                    <span className="truncate">
-                      {st?.error ? (
-                        <span className="text-alert">ERR {st.error.slice(0, 60)}</span>
-                      ) : st?.note ? (
-                        st.note
-                      ) : (
-                        l.attribution
-                      )}
-                    </span>
-                    <span className="shrink-0 tabular-nums">
-                      {st?.loading ? <span className="blink text-primary">SYNC</span> : timeAgo(st?.fetchedAt)}
-                    </span>
-                  </div>
-                )}
-              </li>
-            );
-          })}
+          {LAYERS.map((l) => (
+            <LayerRow key={l.id} l={l} on={!!layers[l.id]} st={status[l.id]} setLayer={setLayer} />
+          ))}
         </ul>
       </div>
     </aside>

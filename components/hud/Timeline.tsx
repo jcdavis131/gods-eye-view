@@ -25,6 +25,11 @@ export default function Timeline({ compact = false }: { compact?: boolean } = {}
   const pct = ((clock.offsetMs + RANGE_MS) / (2 * RANGE_MS)) * 100;
   const mission = now ? now + clock.offsetMs : 0;
 
+  const cycleRate = () => {
+    const i = RATES.indexOf(clock.multiplier);
+    setMultiplier(RATES[(i + 1) % RATES.length]);
+  };
+
   return (
     <div
       className={
@@ -54,7 +59,9 @@ export default function Timeline({ compact = false }: { compact?: boolean } = {}
           >
             {clock.animate ? <Pause className="size-3" /> : <Play className="size-3" />}
           </button>
-          <div className={`items-center gap-0.5 ${compact && !expanded ? "hidden" : "flex"}`}>
+          {/* Desktop: all five rates. Phones get the cycler below, and the
+              compact bar folds them away until it is expanded. */}
+          <div className={`items-center gap-0.5 ${compact && !expanded ? "hidden" : "hidden sm:flex"}`}>
             {RATES.map((r) => (
               <button
                 key={r}
@@ -68,6 +75,14 @@ export default function Timeline({ compact = false }: { compact?: boolean } = {}
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            onClick={cycleRate}
+            className="px-2 py-1 text-[11px] tabular-nums text-muted-foreground hover:text-foreground sm:hidden"
+            title="Cycle time-lapse speed"
+          >
+            {clock.multiplier}×
+          </button>
           <div className="ml-auto text-[11px] tabular-nums text-foreground/90">
             {compact ? fmtUtc(mission).slice(11) : fmtUtc(mission)}
             <span className={`ml-2 text-[9px] tracking-widest ${live ? "text-primary" : "text-warn"}`}>
@@ -96,7 +111,7 @@ export default function Timeline({ compact = false }: { compact?: boolean } = {}
               style={{ left: `${((h + 24) / 48) * 100}%` }}
             >
               <div className={`h-2 w-px ${h === 0 ? "bg-primary" : "bg-border"}`} />
-              <div className="mt-2 text-[8px] tabular-nums text-muted-foreground">{h === 0 ? "NOW" : `${h > 0 ? "+" : ""}${h}h`}</div>
+              <div className="mt-2 text-[9px] tabular-nums text-muted-foreground">{h === 0 ? "NOW" : `${h > 0 ? "+" : ""}${h}h`}</div>
             </div>
           ))}
           <input

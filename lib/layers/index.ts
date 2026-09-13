@@ -18,6 +18,9 @@ import { realestateLayer } from "./realestate";
 import { companiesLayer } from "./companies";
 import { banksLayer } from "./banks";
 import { spendingLayer } from "./spending";
+import { occupationsLayer } from "./occupations";
+import { weatherLayer } from "./weather";
+import { sportsLayer } from "./sports";
 
 export const LAYERS: LayerDefinition[] = [
   aircraftLayer,
@@ -36,6 +39,9 @@ export const LAYERS: LayerDefinition[] = [
   companiesLayer,
   banksLayer,
   spendingLayer,
+  occupationsLayer,
+  weatherLayer,
+  sportsLayer,
 ];
 
 export const LAYER_BY_ID: Partial<Record<LayerId, LayerDefinition>> = Object.fromEntries(

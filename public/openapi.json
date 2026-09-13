@@ -70,7 +70,7 @@
         ],
         "summary": "Trade, commerce and real-estate ops",
         "operationId": "economy",
-        "description": "One route, dispatched on `op`. Bounding boxes are clamped to 18\u00b0 and snapped outward to a 1\u00b0 grid so nearby callers share a cache entry. Tabular ops (`areas`, `sectors`, `ports`, `border`, `countries`, `pulse`) accept `format=csv`.",
+        "description": "One route, dispatched on `op`. Bounding boxes are clamped to 18° and snapped outward to a 1° grid so nearby callers share a cache entry. Tabular ops (`areas`, `sectors`, `ports`, `border`, `countries`, `pulse`) accept `format=csv`. The occupation ops (`msas`, `msa-jobs`) read a bundled BLS OEWS release, so they answer without an upstream call.",
         "parameters": [
           {
             "name": "op",
@@ -81,6 +81,8 @@
               "enum": [
                 "areas",
                 "sectors",
+                "msas",
+                "msa-jobs",
                 "context",
                 "ports",
                 "border",
@@ -90,7 +92,7 @@
                 "report"
               ]
             },
-            "description": "areas: counties in a bbox (or every state with level=state) joined with QCEW jobs/wages and Zillow home values/rents. sectors: NAICS sector mix for a county (SSCCC) or state (SS000) with location quotients. context: sector mix plus metro, state and US home values. ports: World Port Index harbours in a bbox with BTS Port Performance volumes. border: every US land port of entry with 25 months of BTS counts. countries: Natural Earth polygons with World Bank GDP, exports, imports, trade/GDP, TEU. partners: top trading partners (WITS). pulse: national FRED and BTS series. report: the market report for a point."
+            "description": "areas: counties in a bbox (or every state with level=state) joined with QCEW jobs/wages and Zillow home values/rents. sectors: NAICS sector mix for a county (SSCCC) or state (SS000) with location quotients. msas: every metropolitan statistical area with its centroid, employment and most distinctive occupation group. msa-jobs: the occupation mix of one MSA (top 30 detailed occupations and all 22 SOC major groups, with wages and location quotients). context: sector mix plus metro, state and US home values. ports: World Port Index harbours in a bbox with BTS Port Performance volumes. border: every US land port of entry with 25 months of BTS counts. countries: Natural Earth polygons with World Bank GDP, exports, imports, trade/GDP, TEU. partners: top trading partners (WITS). pulse: national FRED and BTS series. report: the market report for a point."
           },
           {
             "$ref": "#/components/parameters/format"
@@ -124,6 +126,15 @@
               "pattern": "^(\\d{5}|US000)$"
             },
             "description": "op=sectors, op=context: county GEOID (48453) or state (48000)."
+          },
+          {
+            "name": "msa",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{5}$"
+            },
+            "description": "op=msa-jobs: 5-digit CBSA code (41700). `data` is null with a caveat when the release has no such MSA."
           },
           {
             "name": "min",
@@ -189,6 +200,12 @@
                       "$ref": "#/components/schemas/EconomySectorsResponse"
                     },
                     {
+                      "$ref": "#/components/schemas/EconomyMsasResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/EconomyMsaJobsResponse"
+                    },
+                    {
                       "$ref": "#/components/schemas/EconomyContextResponse"
                     },
                     {
@@ -248,7 +265,7 @@
         ],
         "summary": "Water ops",
         "operationId": "water",
-        "description": "One route, dispatched on `op`. Bounding boxes are clamped to 4\u00b0 and snapped outward to a 0.5\u00b0 grid. Tabular ops (`gauges`, `wells`, `nwps`, `twdb`, `history`, `matchup`) accept `format=csv`.",
+        "description": "One route, dispatched on `op`. Bounding boxes are clamped to 4° and snapped outward to a 0.5° grid. Tabular ops (`gauges`, `wells`, `nwps`, `twdb`, `history`, `matchup`) accept `format=csv`.",
         "parameters": [
           {
             "name": "op",
@@ -3609,6 +3626,164 @@
             "minimum": 0
           }
         }
+      },
+      "MsaOccupation": {
+        "type": "object",
+        "description": "One occupation in an MSA. Keys are short because the tables ship with the app.",
+        "properties": {
+          "c": {
+            "type": "string",
+            "description": "SOC code, e.g. 15-1252; the taxonomy key shared with O*NET."
+          },
+          "t": {
+            "type": "string",
+            "description": "SOC title."
+          },
+          "e": {
+            "type": "number",
+            "description": "Employment in the MSA."
+          },
+          "w": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Annual mean wage in USD; null where BLS suppresses it."
+          },
+          "lq": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Location quotient against the national mix; null when either side is suppressed."
+          }
+        }
+      },
+      "MsaIndexEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "5-digit CBSA code."
+          },
+          "name": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "lat": {
+            "type": "number"
+          },
+          "lon": {
+            "type": "number"
+          },
+          "emp": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Total covered employment."
+          },
+          "dom": {
+            "type": "string",
+            "description": "SOC major group with the highest location quotient."
+          },
+          "domT": {
+            "type": "string",
+            "description": "Title of that group."
+          },
+          "domLq": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        }
+      },
+      "EconomyMsasResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "asOf": {
+                    "type": "string",
+                    "description": "OEWS release the tables come from, e.g. \"May 2025\"."
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "msas": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/MsaIndexEntry"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "msas"
+      },
+      "EconomyMsaJobsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "description": "Null when the release has no row for that CBSA code; the caveat says so.",
+                "properties": {
+                  "asOf": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "msa": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "top": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/components/schemas/MsaOccupation"
+                        },
+                        "description": "Top 30 detailed occupations by employment."
+                      },
+                      "major": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/components/schemas/MsaOccupation"
+                        },
+                        "description": "All 22 SOC major groups."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "msa-jobs"
       }
     }
   }

@@ -15,6 +15,106 @@ import { commerceStyle, realestateStyle, tradeStyle } from "./economyStyles";
 import { companiesStyle } from "./companyStyles";
 import { bankStyle, spendingStyle } from "./financeStyles";
 
+/** Distinctive major-group colours for the occupations layer: one hue per SOC major group. */
+const OCCUPATION_COLORS: Record<string, string> = {
+  "11-0000": "#F5B849", // Management
+  "13-0000": "#E8A33D", // Business & financial operations
+  "15-0000": "#4DD8FF", // Computer & mathematical
+  "17-0000": "#7DD3FC", // Architecture & engineering
+  "19-0000": "#A78BFA", // Life, physical & social science
+  "21-0000": "#F472B6", // Community & social service
+  "23-0000": "#FB7185", // Legal
+  "25-0000": "#FACC15", // Educational instruction & library
+  "27-0000": "#E879F9", // Arts, design, entertainment, sports & media
+  "29-0000": "#5EEAD4", // Healthcare practitioners & technical
+  "31-0000": "#6EE7B7", // Healthcare support
+  "33-0000": "#94A3B8", // Protective service
+  "35-0000": "#FB923C", // Food preparation & serving
+  "37-0000": "#A3A380", // Building & grounds cleaning & maintenance
+  "39-0000": "#F9A8D4", // Personal care & service
+  "41-0000": "#FCA5A5", // Sales & related
+  "43-0000": "#C4B5FD", // Office & administrative support
+  "45-0000": "#84CC16", // Farming, fishing & forestry
+  "47-0000": "#D97706", // Construction & extraction
+  "49-0000": "#B45309", // Installation, maintenance & repair
+  "51-0000": "#60A5FA", // Production
+  "53-0000": "#38BDF8", // Transportation & material moving
+};
+
+export const occupationsStyle: LayerStyle = {
+  color: "#7DD3A8",
+  icon: () => "jobs",
+  iconSize: 20,
+  colorFor: (f) => OCCUPATION_COLORS[f.properties.kind ?? ""] ?? "#7DD3A8",
+  label: (f) => f.properties.name,
+  labelMax: 24,
+  scaleByDistance: [3e5, 1.0, 8e6, 0.25],
+};
+
+/** Temperature ramp for the weather layer (°C). */
+function tempColor(t: number | null): string {
+  if (t == null) return "#8A93A6";
+  if (t <= 0) return "#A5D8FF";
+  if (t <= 10) return "#7DD3FC";
+  if (t <= 20) return "#A8E6A0";
+  if (t <= 30) return "#F5C849";
+  return "#FF6B3D";
+}
+
+interface WeatherExtra {
+  tempC?: number | null;
+  windMs?: number | null;
+  windDirTo?: number;
+  barbLenM?: number;
+}
+
+export const weatherStyle: LayerStyle = {
+  color: "#7DD3FC",
+  pointSize: (f) => {
+    const x = f.properties.extra as WeatherExtra | undefined;
+    return Math.min(11, 4.5 + (x?.windMs ?? 0) * 0.45);
+  },
+  colorFor: (f) => tempColor((f.properties.extra as WeatherExtra | undefined)?.tempC ?? null),
+  label: (f) => f.properties.name,
+  labelMax: 25,
+  // Wind barb: a short line from the sample point in the direction the wind
+  // blows toward, length ∝ speed. Calm points get no barb.
+  lines: (f) => {
+    const x = f.properties.extra as WeatherExtra | undefined;
+    if (x?.windDirTo == null || (x.windMs ?? 0) < 0.5) return null;
+    if (f.geometry.type !== "Point") return null;
+    const [lon, lat] = f.geometry.coordinates;
+    const [blon, blat] = destination(lat, lon, x.windDirTo, x.barbLenM ?? 20_000);
+    return [
+      {
+        positions: [
+          [lon, lat, 0],
+          [blon, blat, 0],
+        ],
+        color: "#EAF4FF",
+        alpha: 0.85,
+        width: 1.5,
+      },
+    ];
+  },
+  scaleByDistance: [3e5, 1.0, 8e6, 0.3],
+};
+
+const SPORTS_COLORS: Record<string, string> = {
+  in: "#4ADE80", // live now
+  pre: "#F5B849", // upcoming
+  post: "#8A93A6", // final
+};
+
+export const sportsStyle: LayerStyle = {
+  color: "#4ADE80",
+  pointSize: (f) => (f.properties.kind === "in" ? 8.5 : 5),
+  colorFor: (f) => SPORTS_COLORS[f.properties.kind ?? ""] ?? "#4ADE80",
+  label: (f) => f.properties.name,
+  labelMax: 40,
+  scaleByDistance: [3e5, 1.0, 8e6, 0.3],
+};
+
 /** Dead-reckon a moving surface/air object from its last report for up to 90 s. */
 function extrapolate(
   lon: number,
@@ -276,6 +376,9 @@ export const STYLES: Partial<Record<LayerId, LayerStyle>> = {
   companies: companiesStyle,
   banks: bankStyle,
   spending: spendingStyle,
+  occupations: occupationsStyle,
+  weather: weatherStyle,
+  sports: sportsStyle,
 };
 
 /** Camera range (m) to sit at when following an object of a given layer. */
@@ -296,4 +399,7 @@ export const FOLLOW_RANGE: Record<LayerId, number> = {
   companies: 20_000,
   banks: 20_000,
   spending: 150_000,
+  occupations: 400_000,
+  weather: 500_000,
+  sports: 500_000,
 };

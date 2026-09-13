@@ -7,7 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getRenderer } from "@/lib/globe/registry";
 import type { LayerFeature } from "@/lib/layers/types";
 import { affordability } from "@/lib/economy/estimates";
-import { fmtNum, fmtPct, fmtUsd, monthLabel, type AreaExtra, type CountryExtra, type CrossingExtra, type Partners, type PortExtra, type SectorRow } from "@/lib/economy/features";
+import { fmtNum, fmtPct, fmtUsd, monthLabel, type AreaExtra, type CountryExtra, type CrossingExtra, type MsaExtra, type MsaJobs, type MsaOccupation, type Partners, type PortExtra, type SectorRow } from "@/lib/economy/features";
 import type { PulseItem } from "@/lib/economy/sources";
 import SeriesChart from "./SeriesChart";
 
@@ -47,10 +47,77 @@ export function useAreaContext(fips: string | null) {
   });
 }
 
+export interface MsaJobsEnvelope {
+  asOf: string;
+  source: string;
+  data: MsaJobs;
+}
+
+export function useMsaJobs(msa: string | null) {
+  return useQuery({
+    queryKey: ["economy-msa-jobs", msa],
+    queryFn: () => getJson<{ data: MsaJobsEnvelope }>(`/api/economy?op=msa-jobs&msa=${msa}`).then((j) => j.data),
+    staleTime: 24 * 3600_000,
+    enabled: !!msa,
+  });
+}
+
+/** City dossier for the occupations layer: what people do for a living here. */
+function OccupationsAside({ x }: { x: MsaExtra }) {
+  const q = useMsaJobs(x.msa);
+  const jobs = q.data?.data;
+  const asOf = q.data?.asOf;
+  const byEmp = jobs?.top.slice(0, 10) ?? [];
+  const concentrated = [...(jobs?.top ?? [])]
+    .filter((o) => o.lq != null && o.e >= 1000)
+    .sort((a, b) => (b.lq ?? 0) - (a.lq ?? 0))
+    .slice(0, 5);
+  return (
+    <div className="border-t border-border/60 px-3 py-2">
+      <div className="flex items-baseline justify-between">
+        <span className="hud-label">Occupation mix · {x.name}</span>
+        <span className="text-[9px] text-muted-foreground">{asOf ? `OEWS ${asOf}` : "OEWS"}</span>
+      </div>
+      {x.domLq != null && (
+        <div className="mt-0.5 text-[10px] leading-snug text-foreground/85">
+          Most distinctive here: <span className="font-medium">{x.domT}</span> at {x.domLq.toFixed(2)}× the national share.
+        </div>
+      )}
+      {q.isLoading && <div className="mt-1 text-[9px] text-muted-foreground">loading occupation mix…</div>}
+      {q.error && <div className="mt-1 text-[9px] text-muted-foreground">occupation mix unavailable: {(q.error as Error).message.slice(0, 60)}</div>}
+      {byEmp.length > 0 && (
+        <table className="mt-1 w-full text-[9px] leading-tight">
+          <tbody>
+            {byEmp.map((o: MsaOccupation) => (
+              <tr key={o.c} className="align-baseline">
+                <td className="truncate pr-1 text-foreground/85" title={`${o.t} (${o.c})`}>
+                  {o.t}
+                </td>
+                <td className="whitespace-nowrap text-right tabular-nums">{fmtNum(o.e)}</td>
+                <td className="whitespace-nowrap pl-2 text-right tabular-nums text-muted-foreground">{o.w != null ? `${fmtUsd(o.w)}/yr` : ""}</td>
+                <td className="whitespace-nowrap pl-2 text-right tabular-nums text-muted-foreground">{o.lq != null ? `${o.lq.toFixed(2)}×` : ""}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {concentrated.length > 0 && (
+        <div className="mt-1 text-[9px] leading-snug text-muted-foreground">
+          Concentrated here (location quotient vs the nation): {concentrated.map((o) => `${o.t} ${o.lq!.toFixed(1)}×`).join(", ")}
+        </div>
+      )}
+      <div className="mt-1 text-[9px] leading-snug text-muted-foreground/80">
+        BLS Occupational Employment and Wage Statistics, May 2025; SOC codes are the shared O*NET taxonomy, so a role means the same thing in every city.
+      </div>
+    </div>
+  );
+}
+
 export default function EconomyAside({ feature }: { feature: LayerFeature }) {
   const p = feature.properties;
   if (p.layer === "realestate") return <HomeAside x={p.extra as AreaExtra} />;
   if (p.layer === "commerce") return <JobsAside x={p.extra as AreaExtra} />;
+  if (p.layer === "occupations") return <OccupationsAside x={p.extra as MsaExtra} />;
   if (p.layer === "trade") {
     if (p.kind === "port") return <PortAside x={p.extra as PortExtra} />;
     if (p.kind === "crossing") return <CrossingAside x={p.extra as CrossingExtra} />;

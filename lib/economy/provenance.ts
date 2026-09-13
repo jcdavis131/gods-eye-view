@@ -51,6 +51,26 @@ export function qcewProvenance(period: string | null | undefined, retrievedAt: s
   });
 }
 
+/**
+ * BLS OEWS metro occupation mix. The tables ship with the app (one release a
+ * year), so there is no upstream fetch to time: `retrievedAt` is when this
+ * response was assembled, and `period` is the OEWS vintage itself.
+ */
+export function oewsProvenance(asOf: string, retrievedAt: string, opts: { msa?: string; notes?: string[] } = {}): Provenance {
+  return provenance(source("bls-oews"), {
+    kind: "published",
+    seriesId: opts.msa ? `MSA ${opts.msa}, all occupations` : "all MSAs",
+    upstreamUrl: "https://www.bls.gov/oes/tables.htm",
+    period: asOf,
+    retrievedAt,
+    revision: "OEWS publishes once a year; estimates are not comparable across vintages",
+    notes: [
+      "Bundled with the app from the published OEWS release; metro centroids come from Census TIGERweb.",
+      ...(opts.notes ?? []),
+    ],
+  });
+}
+
 /** Census TIGERweb polygons (geometry only, no values). */
 export function tigerProvenance(retrievedAt: string, detail?: string): Provenance {
   return provenance(source("census-tigerweb"), {

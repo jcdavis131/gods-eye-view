@@ -3,6 +3,7 @@
 import type { SourceRef } from "./types";
 
 export const SOURCES = {
+  "bls-oews": { id: "bls-oews", name: "Occupational Employment and Wage Statistics", publisher: "U.S. Bureau of Labor Statistics", url: "https://www.bls.gov/oes/", license: "public domain" },
   "bls-qcew": { id: "bls-qcew", name: "Quarterly Census of Employment and Wages", publisher: "U.S. Bureau of Labor Statistics", url: "https://www.bls.gov/cew/", license: "public domain" },
   "zillow-zhvi": { id: "zillow-zhvi", name: "Zillow Home Value Index (ZHVI)", publisher: "Zillow Research", url: "https://www.zillow.com/research/data/", license: "free for public use with attribution" },
   "zillow-zori": { id: "zillow-zori", name: "Zillow Observed Rent Index (ZORI)", publisher: "Zillow Research", url: "https://www.zillow.com/research/data/", license: "free for public use with attribution" },
