@@ -19,6 +19,11 @@ export default function Timeline() {
   const pct = ((clock.offsetMs + RANGE_MS) / (2 * RANGE_MS)) * 100;
   const mission = now ? now + clock.offsetMs : 0;
 
+  const cycleRate = () => {
+    const i = RATES.indexOf(clock.multiplier);
+    setMultiplier(RATES[(i + 1) % RATES.length]);
+  };
+
   return (
     <div className="pointer-events-auto absolute inset-x-3 bottom-3 z-30 md:inset-x-auto md:left-1/2 md:w-[720px] md:max-w-[calc(100vw-24px)] md:-translate-x-1/2">
       <div className="hud-panel px-3 py-2">
@@ -42,7 +47,8 @@ export default function Timeline() {
           >
             {clock.animate ? <Pause className="size-3" /> : <Play className="size-3" />}
           </button>
-          <div className="flex items-center gap-0.5">
+          {/* Desktop: all five rates. Mobile: one cycler button. */}
+          <div className="hidden items-center gap-0.5 sm:flex">
             {RATES.map((r) => (
               <button
                 key={r}
@@ -56,6 +62,14 @@ export default function Timeline() {
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            onClick={cycleRate}
+            className="px-2 py-1 text-[11px] tabular-nums text-muted-foreground hover:text-foreground sm:hidden"
+            title="Cycle time-lapse speed"
+          >
+            {clock.multiplier}×
+          </button>
           <div className="ml-auto text-[11px] tabular-nums text-foreground/90">
             {fmtUtc(mission)}
             <span className={`ml-2 text-[9px] tracking-widest ${live ? "text-primary" : "text-warn"}`}>
@@ -73,7 +87,7 @@ export default function Timeline() {
               style={{ left: `${((h + 24) / 48) * 100}%` }}
             >
               <div className={`h-2 w-px ${h === 0 ? "bg-primary" : "bg-border"}`} />
-              <div className="mt-2 text-[8px] tabular-nums text-muted-foreground">{h === 0 ? "NOW" : `${h > 0 ? "+" : ""}${h}h`}</div>
+              <div className="mt-2 text-[9px] tabular-nums text-muted-foreground">{h === 0 ? "NOW" : `${h > 0 ? "+" : ""}${h}h`}</div>
             </div>
           ))}
           <input

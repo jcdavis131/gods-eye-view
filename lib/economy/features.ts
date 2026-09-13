@@ -529,3 +529,50 @@ export function greatCircle(lon1: number, lat1: number, lon2: number, lat2: numb
   }
   return pts;
 }
+
+// ---- MSA occupations (BLS OEWS, keyless bulk) ----
+
+/** One occupation row inside an MSA: SOC code, title, employment, mean annual wage, location quotient. */
+export interface MsaOccupation {
+  /** SOC code, e.g. "15-1252". The universal taxonomy key shared with O*NET. */
+  c: string;
+  t: string;
+  e: number;
+  w: number | null;
+  lq: number | null;
+}
+
+/** Occupation mix for one metropolitan statistical area. */
+export interface MsaJobs {
+  msa: string;
+  name: string;
+  /** Top 30 detailed occupations by employment. */
+  top: MsaOccupation[];
+  /** All 22 SOC major groups by employment. */
+  major: MsaOccupation[];
+}
+
+/** One row of the MSA index: the point plotted on the globe. */
+export interface MsaIndexEntry {
+  /** 5-digit CBSA code, e.g. "41700". */
+  id: string;
+  name: string;
+  state: string;
+  lat: number;
+  lon: number;
+  emp: number | null;
+  /** Most distinctive SOC major group (highest location quotient): code, title, LQ. */
+  dom: string;
+  domT: string;
+  domLq: number | null;
+}
+
+export interface MsaExtra {
+  msa: string;
+  name: string;
+  state: string;
+  emp: number | null;
+  /** Distinctive major group, for the aside to lead with. */
+  domT: string;
+  domLq: number | null;
+}

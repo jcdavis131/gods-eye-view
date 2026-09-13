@@ -6,22 +6,27 @@ import { Info } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { LAYERS } from "@/lib/layers";
 
-export default function AboutButton() {
+export default function AboutButton({ compact = false }: { compact?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2 px-3 py-2 text-[11px] uppercase tracking-wider text-foreground/80 hover:bg-accent hover:text-primary"
+        className={
+          compact
+            ? "flex w-full items-center gap-2.5 rounded px-3 py-2.5 text-left text-[13px] text-foreground/85 hover:bg-accent hover:text-primary"
+            : "flex items-center gap-2 px-3 py-2 text-[11px] uppercase tracking-wider text-foreground/80 hover:bg-accent hover:text-primary"
+        }
         title="About, data sources and rules"
       >
-        <Info className="size-3.5" />
+        <Info className={compact ? "size-4 shrink-0" : "size-3.5"} />
+        {compact && "About & data sources"}
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="hud-panel max-h-[88vh] w-[min(640px,calc(100vw-24px))] overflow-y-auto rounded-none p-0 sm:max-w-[640px]">
           <DialogHeader className="border-b border-border px-5 py-4">
-            <DialogTitle className="hud-display text-lg text-primary">God&apos;s Eye View</DialogTitle>
+            <DialogTitle className="hud-display text-lg text-primary">Embedding Atlas</DialogTitle>
             <DialogDescription className="text-[11px] text-muted-foreground">
               A spy satellite simulator in your browser, except the data is real. Open source, MIT.
             </DialogDescription>
@@ -34,6 +39,7 @@ export default function AboutButton() {
                 <li>No face recognition, no person tracking, no search for named individuals. Nothing here identifies a human being.</li>
                 <li>Camera positions are operator-published and coarse; no camera orientation is ever drawn because none is published.</li>
                 <li>The traffic layer is a labelled simulation on real roads. The turbidity layer is a labelled estimate: Dogliotti (2015) physics run in your browser on real Sentinel-2 pixels, the teacher that TurbidityVision distils, not the distilled model and not a measurement. Every other layer is a live public feed; nothing is invented.</li>
+                <li>The weather layer samples live current conditions on a coarse grid around your view (temperature colour, wind barbs) — it is a sampling of now, not a forecast and not global coverage. The sports layer plots games at their venues as geocoded from the stadium name; scores and statuses are the feed&apos;s as-reported, and venues still being located are counted, not placed.</li>
                 <li>Water-quality screens compare a gauge&apos;s latest reading with cited EPA freshwater thresholds and print the formula; the community water report prints its weights and the terms it lacked. None of it is advice on whether water is safe to drink.</li>
                 <li>Home values, rents, jobs and wages are county, metro and state aggregates from Zillow Research and the BLS. No parcels, no addresses, no owners, no listings; the Home values layer is labelled ESTIMATE because Zillow&apos;s indexes are models of a typical home, and the mortgage-against-wages line prints its formula. None of it is investment or lending advice.</li>
                 <li>API keys you enter stay in this browser and only reach this app&apos;s own /api routes or the vendor SDK they belong to.</li>

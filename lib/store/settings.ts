@@ -111,7 +111,7 @@ export const API_KEYS: ApiKeyMeta[] = [
     id: "VAPI_ASSISTANT_ID",
     label: "Vapi assistant id",
     group: "Voice",
-    unlocks: "The Vapi assistant configured with the God's Eye tool schema (see README).",
+    unlocks: "The Vapi assistant configured with the Embedding Atlas tool schema (see README).",
     url: "https://dashboard.vapi.ai",
   },
 ];

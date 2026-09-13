@@ -1,4 +1,4 @@
-// Shared contract for every data layer in God's Eye View.
+// Shared contract for every data layer in Embedding Atlas.
 //
 // A layer is a plain module in lib/layers/<name>.ts that exports a
 // LayerDefinition: metadata + a fetch() that resolves to GeoJSON. The globe
@@ -21,7 +21,10 @@ export type LayerId =
   | "turbidity"
   | "trade"
   | "commerce"
-  | "realestate";
+  | "realestate"
+  | "occupations"
+  | "weather"
+  | "sports";
 
 export const LAYER_IDS: LayerId[] = [
   "aircraft",
@@ -37,6 +40,9 @@ export const LAYER_IDS: LayerId[] = [
   "trade",
   "commerce",
   "realestate",
+  "occupations",
+  "weather",
+  "sports",
 ];
 
 /** Properties every feature carries, whatever the layer. */
