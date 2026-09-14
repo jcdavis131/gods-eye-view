@@ -29,35 +29,58 @@ const nextConfig: NextConfig = {
     // this still blocks the dangerous vectors: http downgrade, data: exfil,
     // plugins, framing, and cross-origin form/base hijack. script-src keeps
     // 'unsafe-inline' because the Next.js App Router emits inline bootstrap
-    // scripts.
-    const csp = [
-      "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' https:",
-      "style-src 'self' 'unsafe-inline' https:",
-      "img-src 'self' data: blob: https:",
-      "font-src 'self' data: https:",
-      "connect-src 'self' https: wss:",
-      "media-src 'self' blob: https:",
-      "worker-src 'self' blob:",
-      "object-src 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-      "frame-ancestors 'none'",
-      "upgrade-insecure-requests",
-    ].join("; ");
-    const securityHeaders = [
-      { key: "Content-Security-Policy", value: csp },
+    // scripts, and 'wasm-unsafe-eval' because Cesium instantiates WebAssembly
+    // to draw the globe — without it the map never renders. That keyword
+    // permits WebAssembly only; plain eval() and new Function() stay blocked.
+    const csp = (frameAncestors: string) =>
+      [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https:",
+        "style-src 'self' 'unsafe-inline' https:",
+        "img-src 'self' data: blob: https:",
+        "font-src 'self' data: https:",
+        "connect-src 'self' https: wss:",
+        "media-src 'self' blob: https:",
+        "worker-src 'self' blob:",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        `frame-ancestors ${frameAncestors}`,
+        "upgrade-insecure-requests",
+      ].join("; ");
+    // Voice control asks for the microphone on this origin, so `microphone`
+    // is self rather than closed; everything else stays denied.
+    const permissions =
+      "camera=(), microphone=(self), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()";
+    const common = [
       { key: "X-Content-Type-Options", value: "nosniff" },
-      { key: "X-Frame-Options", value: "DENY" },
       { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+      { key: "Permissions-Policy", value: permissions },
+    ];
+    // `?embed=1` is the documented iframe view (README shows the embed code),
+    // so that one request may be framed; every other request may not. The two
+    // rules are exact complements — `missing` matches whenever the `has` would
+    // not — so a request always gets one of them and never both.
+    const embedQuery = [{ type: "query" as const, key: "embed", value: "1" }];
+    return [
       {
-        key: "Permissions-Policy",
-        value:
-          "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=()",
+        source: "/:path*",
+        missing: embedQuery,
+        headers: [
+          { key: "Content-Security-Policy", value: csp("'none'") },
+          { key: "X-Frame-Options", value: "DENY" },
+          ...common,
+        ],
+      },
+      {
+        source: "/:path*",
+        has: embedQuery,
+        // No X-Frame-Options here: it has no "any origin" value, and
+        // frame-ancestors is the control browsers honour when both are set.
+        headers: [{ key: "Content-Security-Policy", value: csp("https:") }, ...common],
       },
     ];
-    return [{ source: "/:path*", headers: securityHeaders }];
-  },
+  }
 };
 
 export default nextConfig;
