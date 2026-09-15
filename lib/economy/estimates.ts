@@ -114,3 +114,8 @@ export function momentum(home?: HomeValue, rent?: RentValue, jobs?: JobsRow): Mo
       MOMENTUM_SPEC.map((s) => `${s.name} ${s.weight} (±${s.scale}%)`).join(", "),
   };
 }
+
+// Exported so lib/economy/history can backfill the same index over history
+// with the same weights and scales; the pick functions are only used here.
+export { MOMENTUM_SPEC };
+export type MomentumSpecTerm = (typeof MOMENTUM_SPEC)[number];

@@ -4,7 +4,7 @@ Thanks for looking. The point of this project is a globe anyone can run with no 
 
 ## Ground rules
 
-- **Public infrastructure and public events only.** No people. No face recognition, person tracking, named-individual search, licence plates or phone signals. Economic data stays aggregate: counties, metros, states, harbours, ports of entry; no parcels, addresses, owners, listings or company lookups. Pull requests that add any of those will be closed; see the Ethics section of the README.
+- **Public infrastructure and public events only.** No people. No face recognition, person tracking, named-individual search, licence plates or phone signals. Economic data is about places and institutions: counties, metros, states, harbours, ports of entry, and public companies, banks and federal award recipients as their regulators publish them (SEC EDGAR, FDIC, USAspending). No parcels, no home addresses, no owners, no listings, no insider or officer names, no shareholder names. Pull requests that add data about private individuals will be closed; see the Ethics section of the README.
 - **Never invent a value.** If an upstream does not send a field, leave it `undefined`. Simulations (traffic) and estimates (turbidity) are labelled as such on the layer, on every feature and in the dossier. Unknown heading stays unknown; stale readings are flagged, not hidden.
 - **Keyless first.** A new layer must work with no API key. Optional keys can unlock more, but they are entered in the app, travel only as `x-gev-*` headers to this app's own `/api` routes or to the vendor SDK they belong to, and are never required.
 - **Be polite to upstreams.** Route handlers cache, rate-gate (`lib/server/upstream.ts`) and back off on 429. Read each source's terms before adding it.

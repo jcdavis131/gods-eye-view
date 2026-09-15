@@ -45,3 +45,9 @@ next-env.d.ts
 
 # turbidity-check compile scratch
 .tmp-turb/
+
+# mcp stdio compile scratch
+.tmp-mcp/
+
+# per-user watchlists and alert state written by /api/watch
+/data/watch/

@@ -23,6 +23,9 @@ export const metadata: Metadata = {
   title: "Embedding Atlas",
   description: DESCRIPTION,
   applicationName: "Embedding Atlas",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Atlas" },
+  icons: { icon: [{ url: "/icon.svg", type: "image/svg+xml" }, { url: "/favicon.ico" }], apple: "/apple-touch-icon.png" },
   openGraph: {
     title: "Embedding Atlas",
     description: DESCRIPTION,
@@ -41,6 +44,10 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   themeColor: "#03070a",
   colorScheme: "dark",
+  width: "device-width",
+  initialScale: 1,
+  // Let the HUD pad itself around the notch and the home indicator.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

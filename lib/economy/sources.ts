@@ -767,6 +767,102 @@ export function witsPartners(iso3: string): Promise<Partners | null> {
   }).then((c) => c.value);
 }
 
+// ---------------------------------------------------------------- History readers
+//
+// The readers above keep only what the globe needs (latest value, 25 months,
+// 11 yearly points) so the county table stays small. The research routes need
+// the whole history, so these variants keep every column / quarter / week.
+// Parsers live in lib/economy/history so they can be tested on fixtures.
+
+import { parseZillowHistory, type ZillowHistoryTable } from "./history/zillowCsv";
+import { parseQcewAreaTotal, type QcewTotalRow } from "./history/qcewCsv";
+
+/** Full monthly history of one Zillow file (every region, every month column). Cached 6 h. */
+export function zillowHistory(kind: ZillowKind): Promise<ZillowHistoryTable> {
+  return cached("zillow:history:" + kind, 6 * H, async () => parseZillowHistory(kind, await text("zillow", ZILLOW_FILES[kind], 60_000))).then(
+    (c) => c.value,
+  );
+}
+
+/** Where a QCEW area slice lives; exported so provenance can cite the exact file. */
+export function qcewAreaUrl(fips: string, year: number, qtr: number): string {
+  return `${QCEW}/${year}/${qtr}/area/${fips}.csv`;
+}
+
+/**
+ * Total covered employment row (industry 10, ownership 0) for one area and
+ * quarter from the per-area BLS slice. Null when the file has no such row.
+ * One BLS request per county-quarter, gated to about three per second and
+ * cached 12 h; a quarter BLS has not published yet raises an UpstreamError.
+ */
+export function qcewAreaTotal(fips: string, year: number, qtr: number): Promise<QcewTotalRow | null> {
+  return cached(`qcew:area-total:${fips}:${year}:${qtr}`, 12 * H, async () => {
+    const csv = await polite("bls", 300, 60_000, () => text("bls-qcew", qcewAreaUrl(fips, year, qtr)));
+    return parseQcewAreaTotal(csv, fips, year, qtr);
+  }).then((c) => c.value);
+}
+
+/** Every (date, value) row of a FRED series; missing values ('.') are null. Cached 6 h. */
+export function fredSeries(id: string): Promise<Array<[string, number | null]>> {
+  return cached("fred:series:" + id, 6 * H, async () => {
+    const csv = await polite("fred", 200, 60_000, () => text("fred", `https://fred.stlouisfed.org/graph/fredgraph.csv?id=${encodeURIComponent(id)}`, 20_000));
+    return parseCsv(csv)
+      .slice(1)
+      .filter((r) => /^\d{4}-\d{2}-\d{2}$/.test(r[0] ?? ""))
+      .map((r): [string, number | null] => [r[0], cellNum(r[1])]);
+  }).then((c) => c.value);
+}
+
+// ---------------------------------------------------------------- TIGERweb county points (screener)
+
+/** A county or state with its Census internal point but no polygon. */
+export type AreaPoint = Omit<AreaPoly, "geometry">;
+
+interface TigerPointFeature {
+  properties: { GEOID: string; NAME: string; STATE?: string; STUSAB?: string; CENTLAT: string; CENTLON: string };
+}
+
+/**
+ * Every county (and county equivalent) with its Census internal point and
+ * no geometry: what a nationwide screen needs without pulling 3,000 polygons.
+ * Pages through the 1:20M county layer with returnGeometry=false; the USPS
+ * state code is filled from the states layer because county rows carry
+ * only the state FIPS. Cached 24 h (boundaries change once a year).
+ */
+export function tigerCountyPoints(): Promise<AreaPoint[]> {
+  return cached("tiger:county-points", 24 * H, async () => {
+    // shape per https://tigerweb.geo.census.gov/arcgis/sdk/rest/query.html (resultOffset / resultRecordCount paging); unverified in sandbox
+    const page = 2000;
+    const out: AreaPoint[] = [];
+    for (let offset = 0; offset < 10 * page; offset += page) {
+      const qs = new URLSearchParams({
+        where: "1=1",
+        outFields: "GEOID,NAME,STATE,CENTLAT,CENTLON",
+        returnGeometry: "false",
+        outSR: "4326",
+        f: "geojson",
+        orderByFields: "GEOID",
+        resultOffset: String(offset),
+        resultRecordCount: String(page),
+      });
+      const j = await polite("tigerweb", 150, 30_000, () =>
+        upstreamJson<{ features?: TigerPointFeature[]; error?: { message: string } }>("tigerweb", `${TIGER}/${TIGER_LAYER.county["20M"]}/query?${qs}`, { timeoutMs: 40_000 }),
+      );
+      if (j.error) throw new Error("TIGERweb: " + j.error.message);
+      const feats = j.features ?? [];
+      for (const f of feats) {
+        const lat = Number(f.properties.CENTLAT);
+        const lon = Number(f.properties.CENTLON);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon) || !f.properties.GEOID) continue;
+        out.push({ geoid: f.properties.GEOID, name: f.properties.NAME, lon, lat });
+      }
+      if (feats.length < page) break;
+    }
+    const states = await stateLookup().catch(() => null);
+    return out.map((p) => (states ? { ...p, stusab: states.get(p.geoid.slice(0, 2))?.stusab } : p));
+  }).then((c) => c.value);
+}
+
 // ---------------------------------------------------------------- BLS OEWS MSA occupations (bundled, keyless)
 
 import type { MsaIndexEntry, MsaJobs } from "./features";

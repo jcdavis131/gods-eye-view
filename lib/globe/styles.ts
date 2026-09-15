@@ -12,6 +12,8 @@ import type { LaunchExtra } from "@/lib/layers/launches";
 import { vehiclePosition, type VehicleExtra } from "@/lib/layers/traffic";
 import { groundwaterStyle, turbidityStyle, waterStyle } from "./waterStyles";
 import { commerceStyle, realestateStyle, tradeStyle } from "./economyStyles";
+import { companiesStyle } from "./companyStyles";
+import { bankStyle, spendingStyle } from "./financeStyles";
 
 /** Distinctive major-group colours for the occupations layer: one hue per SOC major group. */
 const OCCUPATION_COLORS: Record<string, string> = {
@@ -371,6 +373,9 @@ export const STYLES: Partial<Record<LayerId, LayerStyle>> = {
   trade: tradeStyle,
   commerce: commerceStyle,
   realestate: realestateStyle,
+  companies: companiesStyle,
+  banks: bankStyle,
+  spending: spendingStyle,
   occupations: occupationsStyle,
   weather: weatherStyle,
   sports: sportsStyle,
@@ -391,6 +396,9 @@ export const FOLLOW_RANGE: Record<LayerId, number> = {
   trade: 40_000,
   commerce: 150_000,
   realestate: 150_000,
+  companies: 20_000,
+  banks: 20_000,
+  spending: 150_000,
   occupations: 400_000,
   weather: 500_000,
   sports: 500_000,

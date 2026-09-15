@@ -3,7 +3,8 @@
 // Satellites and launches propagate to any time; live layers (aircraft,
 // ships, cameras, earthquakes) hold their last known state and are flagged.
 
-import { Pause, Play, Radio } from "lucide-react";
+import { ChevronDown, ChevronUp, Pause, Play, Radio } from "lucide-react";
+import { useState } from "react";
 import { useGlobe } from "@/lib/store/globe";
 import { goLive, isLive, setAnimate, setMissionTime, setMultiplier } from "@/lib/globe/clock";
 import { fmtUtc } from "./TopBar";
@@ -12,7 +13,12 @@ import { useNow } from "@/lib/hooks/useNow";
 const RANGE_MS = 24 * 3600 * 1000;
 const RATES = [1, 10, 60, 600, 3600];
 
-export default function Timeline() {
+/**
+ * `compact`: the phone variant. One row (live, play, clock, expand) that sits in
+ * the bottom stack; the rate buttons and the scrubber unfold on demand.
+ */
+export default function Timeline({ compact = false }: { compact?: boolean } = {}) {
+  const [expanded, setExpanded] = useState(false);
   const clock = useGlobe((s) => s.clock);
   const now = useNow(1000);
   const live = isLive(clock.offsetMs);
@@ -25,9 +31,15 @@ export default function Timeline() {
   };
 
   return (
-    <div className="pointer-events-auto absolute inset-x-3 bottom-3 z-30 md:inset-x-auto md:left-1/2 md:w-[720px] md:max-w-[calc(100vw-24px)] md:-translate-x-1/2">
+    <div
+      className={
+        compact
+          ? "pointer-events-auto w-full"
+          : "pointer-events-auto absolute inset-x-3 bottom-3 z-30 md:inset-x-auto md:left-1/2 md:w-[720px] md:max-w-[calc(100vw-24px)] md:-translate-x-1/2"
+      }
+    >
       <div className="hud-panel px-3 py-2">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 md:gap-3">
           <button
             type="button"
             onClick={() => goLive()}
@@ -47,8 +59,9 @@ export default function Timeline() {
           >
             {clock.animate ? <Pause className="size-3" /> : <Play className="size-3" />}
           </button>
-          {/* Desktop: all five rates. Mobile: one cycler button. */}
-          <div className="hidden items-center gap-0.5 sm:flex">
+          {/* Desktop: all five rates. Phones get the cycler below, and the
+              compact bar folds them away until it is expanded. */}
+          <div className={`items-center gap-0.5 ${compact && !expanded ? "hidden" : "hidden sm:flex"}`}>
             {RATES.map((r) => (
               <button
                 key={r}
@@ -71,13 +84,24 @@ export default function Timeline() {
             {clock.multiplier}×
           </button>
           <div className="ml-auto text-[11px] tabular-nums text-foreground/90">
-            {fmtUtc(mission)}
+            {compact ? fmtUtc(mission).slice(11) : fmtUtc(mission)}
             <span className={`ml-2 text-[9px] tracking-widest ${live ? "text-primary" : "text-warn"}`}>
               {live ? "T+0" : `${clock.offsetMs > 0 ? "+" : "−"}${fmtOffset(Math.abs(clock.offsetMs))}`}
             </span>
           </div>
+          {compact && (
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="flex size-8 items-center justify-center text-muted-foreground"
+              aria-expanded={expanded}
+              aria-label={expanded ? "Hide the timeline" : "Show the timeline"}
+            >
+              {expanded ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
+            </button>
+          )}
         </div>
-        <div className="relative mt-2 h-6">
+        <div className={`relative mt-2 h-6 ${compact && !expanded ? "hidden" : ""}`}>
           {/* ticks */}
           <div className="pointer-events-none absolute inset-x-0 top-1/2 h-px bg-border" />
           {[-24, -12, -6, 0, 6, 12, 24].map((h) => (

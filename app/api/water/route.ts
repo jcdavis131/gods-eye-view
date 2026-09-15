@@ -20,15 +20,24 @@
 //                                       (no satellite turbidity: that needs a
 //                                       browser).
 //
+// Every response carries `provenance` (one record per upstream the values
+// came from, with site, parameter codes and observation time where the call
+// knew them) and `generatedAt`; the tabular ops (gauges, wells, nwps, twdb,
+// history, matchup) also answer `format=csv` with the provenance as `#`
+// footer lines. See docs/API.md.
+//
 // The USGS API has no documented keyless quota but does throttle; every bbox
 // is snapped to a coarse grid so a panning browser reuses the cache, the
 // polite() gate keeps concurrent tabs from stampeding one upstream, and
 // Cache-Control lets Vercel's edge absorb repeat callers.
 
 import type { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
 import { cached } from "@/lib/server/cache";
 import { jsonError, polite, upstreamJson } from "@/lib/server/upstream";
+import { badRequest, csv as csvResponse, ok, options, parseFormat, withCors, type CsvRow, type ResponseFormat } from "@/lib/server/respond";
+import type { Provenance } from "@/lib/provenance/types";
+import { nwpsProvenance, twdbProvenance, usdmProvenance, usgsProvenance } from "@/lib/water/provenance";
+import { flattenGauges, flattenHistory, flattenMatchup, flattenNwps, flattenTwdb, flattenWells, GAUGE_COLUMNS, HISTORY_COLUMNS, MATCHUP_COLUMNS, NWPS_COLUMNS, TWDB_COLUMNS, WELL_COLUMNS } from "@/lib/water/flatten";
 import { bboxAround } from "@/lib/globe/geo";
 import { buildDrought, buildGauges, buildReservoirs, buildWells, intersectsTexas, mergeFlood } from "@/lib/water/features";
 import { buildWaterReport } from "@/lib/water/report";
@@ -40,12 +49,6 @@ const USGS = "https://api.waterdata.usgs.gov/ogcapi/v0/collections";
 const GAUGE_PARAMS = "00060,00065,00010,00300,00095,00400,63680,00062,00054";
 const WELL_PARAMS = "72019,62610,62611";
 const MAX_SPAN_DEG = 4;
-
-const CORS = {
-  "access-control-allow-origin": "*",
-  "access-control-allow-methods": "GET, OPTIONS",
-  "access-control-allow-headers": "content-type",
-};
 
 interface UsgsRow {
   properties: {
@@ -222,6 +225,29 @@ interface OpResult {
   data: unknown;
   meta: Record<string, unknown>;
   ttlS: number;
+  /** One record per upstream the payload was read from. */
+  provenance: Provenance[];
+  caveats?: string[];
+  /** Tabular ops: how to flatten `data` for `format=csv`. Absent means CSV is not offered for this op. */
+  csv?: () => { rows: CsvRow[]; columns: readonly string[]; filename: string };
+}
+
+/** When a cached value was fetched: now minus its age. */
+function retrievedAt(ageMs: number): string {
+  return new Date(Date.now() - ageMs).toISOString();
+}
+
+/** Newest observation time in a set of readings, or undefined when empty. */
+function newest(rows: Array<{ time: string }>): string | undefined {
+  let best: string | undefined;
+  for (const r of rows) if (!best || r.time > best) best = r.time;
+  return best;
+}
+
+/** The approval flag readings carry ("Provisional" / "Approved"); "mixed" when both appear. */
+function approvalOf(rows: Array<{ approval?: string }>): string | undefined {
+  const set = new Set(rows.map((r) => r.approval).filter((a): a is string => !!a));
+  return set.size === 0 ? undefined : set.size === 1 ? [...set][0] : "mixed: " + [...set].sort().join(", ");
 }
 
 async function opGauges(bbox: Bbox, param?: string | null): Promise<OpResult> {
@@ -231,7 +257,15 @@ async function opGauges(bbox: Bbox, param?: string | null): Promise<OpResult> {
     const [latest, sites] = await Promise.all([usgs<UsgsRow>("latest-continuous", { bbox: key, parameter_code: params }), sitesFor(key)]);
     return { readings: rows(latest.features, sites), returned: latest.numberReturned ?? latest.features.length };
   });
-  return { data: r.value.readings, meta: { source: "usgs", bbox, cacheAge: r.age, returned: r.value.returned }, ttlS: 300 };
+  return {
+    data: r.value.readings,
+    meta: { source: "usgs", bbox, cacheAge: r.age, returned: r.value.returned },
+    ttlS: 300,
+    provenance: [
+      usgsProvenance({ collection: "latest-continuous", params: params.split(","), period: newest(r.value.readings), approval: approvalOf(r.value.readings), retrievedAt: retrievedAt(r.age), notes: [`bbox ${key}; site names from monitoring-locations`] }),
+    ],
+    csv: () => ({ rows: flattenGauges(r.value.readings), columns: GAUGE_COLUMNS, filename: `water-gauges-${key.replace(/,/g, "_")}.csv` }),
+  };
 }
 
 async function opWells(bbox: Bbox): Promise<OpResult> {
@@ -256,7 +290,15 @@ async function opWells(bbox: Bbox): Promise<OpResult> {
     });
     return { readings, returned: latest.numberReturned ?? latest.features.length };
   });
-  return { data: r.value.readings, meta: { source: "usgs", bbox, cacheAge: r.age, returned: r.value.returned }, ttlS: 1800 };
+  return {
+    data: r.value.readings,
+    meta: { source: "usgs", bbox, cacheAge: r.age, returned: r.value.returned },
+    ttlS: 1800,
+    provenance: [
+      usgsProvenance({ collection: "latest-daily", params: WELL_PARAMS.split(","), period: newest(r.value.readings), approval: approvalOf(r.value.readings), retrievedAt: retrievedAt(r.age), notes: [`bbox ${key}; aquifer names from national-aquifer-codes`] }),
+    ],
+    csv: () => ({ rows: flattenWells(r.value.readings), columns: WELL_COLUMNS, filename: `water-wells-${key.replace(/,/g, "_")}.csv` }),
+  };
 }
 
 async function opNwps(bbox: Bbox): Promise<OpResult> {
@@ -274,7 +316,14 @@ async function opNwps(bbox: Bbox): Promise<OpResult> {
       forecast: g.status?.forecast,
     }));
   });
-  return { data: r.value, meta: { source: "nwps", bbox, cacheAge: r.age }, ttlS: 300 };
+  const validTimes = r.value.map((g) => g.observed?.validTime).filter((t): t is string => !!t).sort();
+  return {
+    data: r.value,
+    meta: { source: "nwps", bbox, cacheAge: r.age },
+    ttlS: 300,
+    provenance: [nwpsProvenance(retrievedAt(r.age), validTimes[validTimes.length - 1] ?? null)],
+    csv: () => ({ rows: flattenNwps(r.value), columns: NWPS_COLUMNS, filename: `water-nwps-${bbox.join("_")}.csv` }),
+  };
 }
 
 async function opTwdb(): Promise<OpResult> {
@@ -301,7 +350,14 @@ async function opTwdb(): Promise<OpResult> {
         tags: (x.tags ?? []).filter((t) => /^(water_supply|municipal_|flood_control|monitored)/.test(t)),
       }));
   });
-  return { data: r.value, meta: { source: "twdb", cacheAge: r.age }, ttlS: 1800 };
+  const dates = r.value.map((x) => x.date).filter((d): d is string => !!d).sort();
+  return {
+    data: r.value,
+    meta: { source: "twdb", cacheAge: r.age },
+    ttlS: 1800,
+    provenance: [twdbProvenance(dates[dates.length - 1] ?? null, retrievedAt(r.age))],
+    csv: () => ({ rows: flattenTwdb(r.value), columns: TWDB_COLUMNS, filename: "water-twdb-reservoirs.csv" }),
+  };
 }
 
 async function opDrought(): Promise<OpResult> {
@@ -312,7 +368,7 @@ async function opDrought(): Promise<OpResult> {
       { timeoutMs: 40_000 },
     ),
   );
-  return { data: r.value, meta: { source: "usdm", cacheAge: r.age }, ttlS: 3600 };
+  return { data: r.value, meta: { source: "usdm", cacheAge: r.age }, ttlS: 3600, provenance: [usdmProvenance(retrievedAt(r.age))] };
 }
 
 async function opHistory(site: string, param: string): Promise<OpResult> {
@@ -327,7 +383,13 @@ async function opHistory(site: string, param: string): Promise<OpResult> {
       .filter((x) => Number.isFinite(x[1]))
       .sort((a, b) => (a[0] < b[0] ? -1 : 1));
   });
-  return { data: r.value, meta: { source: "usgs", site, param, range, cacheAge: r.age }, ttlS: 3600 };
+  return {
+    data: r.value,
+    meta: { source: "usgs", site, param, range, cacheAge: r.age },
+    ttlS: 3600,
+    provenance: [usgsProvenance({ collection: "daily", site, params: [param], period: range, retrievedAt: retrievedAt(r.age), notes: ["daily mean (statistic 00003)"] })],
+    csv: () => ({ rows: flattenHistory(site, param, r.value), columns: HISTORY_COLUMNS, filename: `water-history-${site}-${param}.csv` }),
+  };
 }
 
 async function opMatchup(site: string, param: string, from: string, to: string): Promise<OpResult> {
@@ -342,7 +404,13 @@ async function opMatchup(site: string, param: string, from: string, to: string):
       .filter((f) => f.properties.value != null)
       .map((f) => [f.properties.time, Number(f.properties.value), f.properties.unit_of_measure] as [string, number, string]);
   });
-  return { data: r.value, meta: { source: "usgs", site, param, cacheAge: r.age }, ttlS: 3600 };
+  return {
+    data: r.value,
+    meta: { source: "usgs", site, param, cacheAge: r.age },
+    ttlS: 3600,
+    provenance: [usgsProvenance({ collection: "continuous", site, params: [param], period: `${from}/${to}`, retrievedAt: retrievedAt(r.age) })],
+    csv: () => ({ rows: flattenMatchup(site, param, r.value), columns: MATCHUP_COLUMNS, filename: `water-matchup-${site}-${param}.csv` }),
+  };
 }
 
 /** The community water report, server-side: same builders and arithmetic as the globe, minus satellite turbidity. */
@@ -387,58 +455,56 @@ async function opReport(lon: number, lat: number, origin: string): Promise<OpRes
     now,
   );
   const globe = `${origin}/?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}&h=120000&layers=water,groundwater,turbidity&report=1`;
-  return { data: report, meta: { source: "usgs+nwps+twdb+usdm", bbox, globe }, ttlS: 300 };
+  // Per-section provenance and citations live on the report; the envelope repeats the union.
+  return { data: report, meta: { source: "usgs+nwps+twdb+usdm", bbox, globe }, ttlS: 300, provenance: report.provenance, caveats: report.caveats };
 }
 
-function respond(r: OpResult) {
-  return NextResponse.json(
-    { ...r.meta, data: r.data },
-    {
-      headers: {
-        ...CORS,
-        "cache-control": `public, max-age=0, s-maxage=${r.ttlS}, stale-while-revalidate=${r.ttlS}`,
-      },
-    },
-  );
+/** JSON envelope, or CSV when asked and the op is tabular. */
+function respond(r: OpResult, format: ResponseFormat = "json", op = "") {
+  if (format === "csv") {
+    if (!r.csv) return badRequest(`format=csv is not offered for op=${op}; tabular ops are gauges, wells, nwps, twdb, history, matchup`);
+    const t = r.csv();
+    return csvResponse(t.rows, { columns: [...t.columns], filename: t.filename, provenance: r.provenance, caveats: r.caveats, ttlS: r.ttlS });
+  }
+  return ok(r.data, { meta: r.meta, provenance: r.provenance, caveats: r.caveats, ttlS: r.ttlS });
 }
 
-function bad(message: string) {
-  return NextResponse.json({ error: message }, { status: 400, headers: CORS });
-}
+const bad = badRequest;
 
-export function OPTIONS() {
-  return new Response(null, { status: 204, headers: CORS });
-}
+export const OPTIONS = options;
 
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams;
   const op = q.get("op") ?? "";
+  const format = parseFormat(req);
   try {
     switch (op) {
       case "gauges": {
         const b = parseBbox(q.get("bbox"));
         if (!b) return bad("bbox=w,s,e,n required");
-        return respond(await opGauges(b, q.get("param")));
+        const param = q.get("param");
+        if (param && !/^\d{5}(,\d{5})*$/.test(param)) return bad("param=00060 or a comma list of five-digit USGS parameter codes");
+        return respond(await opGauges(b, param), format, op);
       }
       case "wells": {
         const b = parseBbox(q.get("bbox"));
         if (!b) return bad("bbox=w,s,e,n required");
-        return respond(await opWells(b));
+        return respond(await opWells(b), format, op);
       }
       case "nwps": {
         const b = parseBbox(q.get("bbox"));
         if (!b) return bad("bbox=w,s,e,n required");
-        return respond(await opNwps(b));
+        return respond(await opNwps(b), format, op);
       }
       case "twdb":
-        return respond(await opTwdb());
+        return respond(await opTwdb(), format, op);
       case "drought":
-        return respond(await opDrought());
+        return respond(await opDrought(), format, op);
       case "history": {
         const site = q.get("site") ?? "";
         const param = q.get("param") ?? "";
         if (!SITE_RE.test(site) || !PARAM_RE.test(param)) return bad("site=USGS-xxxx and param=00060 required");
-        return respond(await opHistory(site, param));
+        return respond(await opHistory(site, param), format, op);
       }
       case "matchup": {
         const site = q.get("site") ?? "";
@@ -448,7 +514,8 @@ export async function GET(req: NextRequest) {
         if (!SITE_RE.test(site) || !PARAM_RE.test(param) || !ISO_RE.test(from) || !ISO_RE.test(to)) {
           return bad("site, param, from, to (ISO Z) required");
         }
-        return respond(await opMatchup(site, param, from, to));
+        if (from >= to) return bad("from must be before to");
+        return respond(await opMatchup(site, param, from, to), format, op);
       }
       case "report": {
         const lon = Number(q.get("lon"));
@@ -456,14 +523,12 @@ export async function GET(req: NextRequest) {
         if (!Number.isFinite(lon) || !Number.isFinite(lat) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
           return bad("lon and lat required");
         }
-        return respond(await opReport(lon, lat, req.nextUrl.origin));
+        return respond(await opReport(lon, lat, req.nextUrl.origin), format, op);
       }
       default:
         return bad("unknown op: gauges | wells | nwps | twdb | drought | history | matchup | report");
     }
   } catch (err) {
-    const res = jsonError(err);
-    for (const [k, v] of Object.entries(CORS)) res.headers.set(k, v);
-    return res;
+    return withCors(jsonError(err));
   }
 }

@@ -14,6 +14,9 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Cesium's runtime assets are copied here by scripts/copy-cesium.mjs.
     "public/cesium/**",
+    // On-the-fly compile scratch for scripts/turbidity-check.mjs and scripts/mcp-stdio.mjs.
+    ".tmp-turb/**",
+    ".tmp-mcp/**",
   ]),
 ]);
 

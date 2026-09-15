@@ -10,6 +10,19 @@ import LayerPanel from "./LayerPanel";
 import InfoPanel from "./InfoPanel";
 import WaterReportPanel from "./WaterReportPanel";
 import MarketReportPanel from "./MarketReportPanel";
+import IndicatorsPanel from "./IndicatorsPanel";
+import ReleasesPanel from "./ReleasesPanel";
+import WatchlistPanel from "./WatchlistPanel";
+import ScreenerPanel from "./ScreenerPanel";
+import DeskLayout from "./DeskLayout";
+import MobileTopBar from "./MobileTopBar";
+import MobileNav from "./MobileNav";
+import MobileSheet from "./MobileSheet";
+import PersonaPicker from "./PersonaPicker";
+import StartHere from "./StartHere";
+import { useLens } from "@/lib/personas/store";
+import { useIsMobile } from "@/lib/hooks/useIsMobile";
+import { useMobile } from "@/lib/mobile/store";
 import ExploreDialog from "./ExploreDialog";
 import TourCaption from "./TourCaption";
 import { applyShare, parseShare, startUrlSync } from "@/lib/globe/share";
@@ -28,7 +41,9 @@ const CesiumGlobe = dynamic(() => import("@/components/globe/CesiumGlobe"), {
   ),
 });
 
-export default function Cockpit() {
+export default function Cockpit({ initialMobile = false }: { initialMobile?: boolean } = {}) {
+  const mobile = useIsMobile(initialMobile);
+  const layersOpen = useMobile((s) => s.layersOpen);
   const setLayer = useGlobe((s) => s.setLayer);
   const setSearchOpen = useGlobe((s) => s.setSearchOpen);
   const setSettingsOpen = useGlobe((s) => s.setSettingsOpen);
@@ -53,10 +68,15 @@ export default function Cockpit() {
     if (!ready) return;
     const share = parseShare(window.location.search);
     applyShare(share, { fly: false });
+    // First visit with a bare URL: ask who is looking. A shared link (layers,
+    // selection, lens, embed) is never interrupted.
+    const bare = !share.lens && !share.layers && !share.sel && !share.report && !share.market && !share.embed;
+    if (bare && useLens.getState().personaId == null) useLens.getState().setPickerOpen(true);
     return startUrlSync();
   }, [ready]);
 
-  // Console API for inspection: window.gev.{globe,settings,run,say,flyTo,layers,features}
+  // Console API for inspection: window.atlas.{globe,settings,run,say,flyTo,layers,features}
+  // (also exposed as window.gev, the old name).
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -73,7 +93,7 @@ export default function Cockpit() {
           import("@/lib/globe/share"),
         ]);
       if (cancelled) return;
-      (window as unknown as { gev: unknown }).gev = {
+      const api = {
         globe: useGlobe,
         settings: useSettings,
         viewer: cesium.getViewer,
@@ -91,6 +111,11 @@ export default function Cockpit() {
         shareUrl: share.shareUrl,
         applyShare: share.applyShare,
       };
+      const w = window as unknown as { atlas: unknown; gev: unknown };
+      w.atlas = api;
+      // `gev` is the old name of this console API, kept so existing snippets
+      // and bookmarklets keep working.
+      w.gev = api;
     })();
     return () => {
       cancelled = true;
@@ -122,20 +147,56 @@ export default function Cockpit() {
       <HudFrame />
       {embed ? (
         <EmbedBadge />
+      ) : mobile ? (
+        <>
+          <MobileTopBar />
+          {/* Bottom stack: sheet with every open panel, compact timeline, nav strip. Nothing overlaps. */}
+          <div
+            className="mobile-stack pointer-events-none absolute inset-x-0 bottom-0 z-30 flex flex-col gap-2 px-2"
+            style={{ paddingBottom: "max(8px, env(safe-area-inset-bottom))" }}
+          >
+            <MobileSheet>
+              {layersOpen && <LayerPanel embedded />}
+              <WaterReportPanel />
+              <MarketReportPanel />
+              <IndicatorsPanel />
+              <ReleasesPanel />
+              <WatchlistPanel />
+              <ScreenerPanel />
+              <InfoPanel />
+            </MobileSheet>
+            <Timeline compact />
+            <MobileNav />
+          </div>
+          <TourCaption />
+          <SettingsDialog />
+          <SearchCommand />
+          <ExploreDialog />
+          <PersonaPicker />
+        </>
       ) : (
         <>
           <TopBar />
           <LayerPanel />
-          <div className="pointer-events-none absolute right-3 top-[76px] z-30 flex w-[320px] max-w-[calc(100vw-24px)] flex-col gap-2">
+          <div className="desk-hud-only pointer-events-none absolute right-3 top-[76px] z-30 flex w-[320px] max-w-[calc(100vw-24px)] flex-col gap-2">
+            <StartHere />
             <WaterReportPanel />
             <MarketReportPanel />
+            <IndicatorsPanel />
+            <ReleasesPanel />
+            <WatchlistPanel />
             <InfoPanel />
+          </div>
+          <div className="pointer-events-none absolute bottom-16 right-3 z-30 max-w-[calc(100vw-24px)]">
+            <ScreenerPanel />
           </div>
           <Timeline />
           <TourCaption />
           <SettingsDialog />
           <SearchCommand />
           <ExploreDialog />
+          <PersonaPicker />
+          <DeskLayout />
         </>
       )}
     </main>

@@ -1,0 +1,3790 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Embedding Atlas data API",
+    "version": "0.2.0",
+    "summary": "Keyless, CORS-open JSON and CSV over public water, trade, jobs and housing sources, with provenance on every number.",
+    "description": "Every JSON response is an envelope: route-specific fields at the top level, the payload in `data`, one `provenance` record per upstream release the numbers came from (estimates carry their formula in `method`), and `generatedAt`. Tabular ops answer `format=csv` with the same provenance as `#` comment lines after the data. See docs/API.md for citation format, caching, courtesy and per-source revision caveats.",
+    "license": {
+      "name": "MIT",
+      "url": "https://github.com/jcdavis131/gods-eye-view/blob/main/LICENSE"
+    },
+    "contact": {
+      "url": "https://github.com/jcdavis131/gods-eye-view"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://eye.jcamd.com",
+      "description": "Public deployment"
+    },
+    {
+      "url": "http://localhost:3000",
+      "description": "next dev"
+    }
+  ],
+  "tags": [
+    {
+      "name": "economy",
+      "description": "Trade, jobs, wages, home values and rents: BLS QCEW, Zillow, BTS, NGA World Port Index, World Bank, FRED."
+    },
+    {
+      "name": "water",
+      "description": "Surface water, groundwater, drought, flood status: USGS, NOAA NWPS, TWDB, US Drought Monitor."
+    },
+    {
+      "name": "meta",
+      "description": "This description."
+    },
+    {
+      "name": "reserved",
+      "description": "Routes other workstreams add in this build; documented in docs/*.md, schemas to be filled in by the integrator."
+    }
+  ],
+  "paths": {
+    "/api/openapi": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "summary": "This OpenAPI document",
+        "operationId": "openapi",
+        "responses": {
+          "200": {
+            "description": "The document.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/economy": {
+      "get": {
+        "tags": [
+          "economy"
+        ],
+        "summary": "Trade, commerce and real-estate ops",
+        "operationId": "economy",
+        "description": "One route, dispatched on `op`. Bounding boxes are clamped to 18° and snapped outward to a 1° grid so nearby callers share a cache entry. Tabular ops (`areas`, `sectors`, `ports`, `border`, `countries`, `pulse`) accept `format=csv`. The occupation ops (`msas`, `msa-jobs`) read a bundled BLS OEWS release, so they answer without an upstream call.",
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "areas",
+                "sectors",
+                "msas",
+                "msa-jobs",
+                "context",
+                "ports",
+                "border",
+                "countries",
+                "partners",
+                "pulse",
+                "report"
+              ]
+            },
+            "description": "areas: counties in a bbox (or every state with level=state) joined with QCEW jobs/wages and Zillow home values/rents. sectors: NAICS sector mix for a county (SSCCC) or state (SS000) with location quotients. msas: every metropolitan statistical area with its centroid, employment and most distinctive occupation group. msa-jobs: the occupation mix of one MSA (top 30 detailed occupations and all 22 SOC major groups, with wages and location quotients). context: sector mix plus metro, state and US home values. ports: World Port Index harbours in a bbox with BTS Port Performance volumes. border: every US land port of entry with 25 months of BTS counts. countries: Natural Earth polygons with World Bank GDP, exports, imports, trade/GDP, TEU. partners: top trading partners (WITS). pulse: national FRED and BTS series. report: the market report for a point."
+          },
+          {
+            "$ref": "#/components/parameters/format"
+          },
+          {
+            "name": "bbox",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Bbox"
+            },
+            "description": "`w,s,e,n` degrees. Required for op=areas (level=county) and op=ports."
+          },
+          {
+            "name": "level",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "county",
+                "state"
+              ],
+              "default": "county"
+            },
+            "description": "op=areas: county polygons in the bbox, or every state."
+          },
+          {
+            "name": "fips",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^(\\d{5}|US000)$"
+            },
+            "description": "op=sectors, op=context: county GEOID (48453) or state (48000)."
+          },
+          {
+            "name": "msa",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{5}$"
+            },
+            "description": "op=msa-jobs: 5-digit CBSA code (41700). `data` is null with a caveat when the release has no such MSA."
+          },
+          {
+            "name": "min",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "large",
+                "medium",
+                "small",
+                "all"
+              ],
+              "default": "medium"
+            },
+            "description": "op=ports: smallest harbour size to include; any harbour with BTS statistics is always included."
+          },
+          {
+            "name": "iso3",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z]{3}$"
+            },
+            "description": "op=partners: reporter country."
+          },
+          {
+            "name": "series",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            },
+            "description": "op=pulse with format=csv: long format, one row per observation instead of one per series."
+          },
+          {
+            "$ref": "#/components/parameters/lon"
+          },
+          {
+            "$ref": "#/components/parameters/lat"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope for the op, or CSV.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/Cors"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/EconomyAreasResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/EconomySectorsResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/EconomyMsasResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/EconomyMsaJobsResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/EconomyContextResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/EconomyPortsResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/EconomyBorderResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/EconomyCountriesResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/EconomyPartnersResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/EconomyPulseResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/EconomyReportResponse"
+                    }
+                  ]
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "geoid,name,level,state,...\r\n48453,Travis,county,TX,...\r\n# generated_at: 2026-09-11T10:00:00.000Z\r\n# source: U.S. Bureau of Labor Statistics. Quarterly Census of Employment and Wages. ...\r\n"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/Upstream"
+          }
+        }
+      },
+      "options": {
+        "tags": [
+          "economy"
+        ],
+        "summary": "CORS preflight",
+        "operationId": "economyOptions",
+        "responses": {
+          "204": {
+            "description": "No content."
+          }
+        }
+      }
+    },
+    "/api/water": {
+      "get": {
+        "tags": [
+          "water"
+        ],
+        "summary": "Water ops",
+        "operationId": "water",
+        "description": "One route, dispatched on `op`. Bounding boxes are clamped to 4° and snapped outward to a 0.5° grid. Tabular ops (`gauges`, `wells`, `nwps`, `twdb`, `history`, `matchup`) accept `format=csv`.",
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "gauges",
+                "wells",
+                "nwps",
+                "twdb",
+                "drought",
+                "history",
+                "matchup",
+                "report"
+              ]
+            },
+            "description": "gauges: USGS latest continuous readings in a bbox (flow, stage, temperature, DO, conductance, pH, turbidity, reservoir elevation/storage). wells: USGS latest daily groundwater levels with aquifer names. nwps: NOAA NWPS gauges with flood categories. twdb: Texas reservoirs. drought: US Drought Monitor current polygons. history: 365 days of daily means for one site and parameter. matchup: instantaneous values for one site and parameter in a window. report: the community water report for a point."
+          },
+          {
+            "$ref": "#/components/parameters/format"
+          },
+          {
+            "name": "bbox",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Bbox"
+            },
+            "description": "`w,s,e,n` degrees. Required for op=gauges, wells, nwps."
+          },
+          {
+            "name": "param",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{5}(,\\d{5})*$"
+            },
+            "description": "USGS parameter code(s). op=gauges: optional comma list to narrow; op=history, op=matchup: one code, required."
+          },
+          {
+            "name": "site",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^USGS-\\w+$"
+            },
+            "description": "op=history, op=matchup: monitoring location id."
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "op=matchup: window start, ISO 8601 with Z."
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "op=matchup: window end, ISO 8601 with Z."
+          },
+          {
+            "$ref": "#/components/parameters/lon"
+          },
+          {
+            "$ref": "#/components/parameters/lat"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope for the op, or CSV.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/Cors"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/WaterGaugesResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/WaterWellsResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/WaterNwpsResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/WaterTwdbResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/WaterDroughtResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/WaterHistoryResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/WaterMatchupResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/WaterReportResponse"
+                    }
+                  ]
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/Upstream"
+          }
+        }
+      },
+      "options": {
+        "tags": [
+          "water"
+        ],
+        "summary": "CORS preflight",
+        "operationId": "waterOptions",
+        "responses": {
+          "204": {
+            "description": "No content."
+          }
+        }
+      }
+    },
+    "/api/series": {
+      "get": {
+        "summary": "Nowcast series built by the snapshot collectors (counts only) and any series appended by indicators",
+        "tags": [
+          "series"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "list",
+                "get",
+                "collectors"
+              ]
+            },
+            "required": true
+          },
+          {
+            "name": "prefix",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "list: id prefix filter"
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "get: one series id"
+          },
+          {
+            "name": "ids",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "get: up to 20 comma-separated ids"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "ISO date/time or epoch ms"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50000,
+              "default": 5000
+            }
+          },
+          {
+            "name": "rollup",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "daily-mean",
+                "daily-max",
+                "daily-last"
+              ]
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "csv"
+              ],
+              "default": "json"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope { data, provenance[], generatedAt, caveats? }; text/csv when format=csv",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              },
+              "text/csv": {}
+            }
+          },
+          "400": {
+            "description": "Bad parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown series"
+          }
+        }
+      },
+      "post": {
+        "summary": "Run the collectors now (requires x-gev-cron-secret; 404 when GEV_CRON_SECRET is unset)",
+        "tags": [
+          "series"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "collect"
+              ]
+            },
+            "required": true
+          },
+          {
+            "name": "only",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "comma-separated collector ids"
+          },
+          {
+            "name": "x-gev-cron-secret",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope<RunReport>"
+          },
+          "401": {
+            "description": "Bad secret"
+          },
+          "404": {
+            "description": "Collect endpoint disabled"
+          },
+          "502": {
+            "description": "Every collector failed"
+          }
+        }
+      }
+    },
+    "/api/economy/history": {
+      "get": {
+        "summary": "Backfilled housing and jobs history per county, the national set, and the momentum IC panel",
+        "tags": [
+          "economy"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "county",
+                "us",
+                "ic"
+              ]
+            },
+            "required": true
+          },
+          {
+            "name": "fips",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{5}$"
+            }
+          },
+          {
+            "name": "years",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 26,
+              "default": 10
+            }
+          },
+          {
+            "name": "lag",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 12,
+              "default": 0
+            },
+            "description": "publication lag in months applied to quarterly terms"
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "csv"
+              ],
+              "default": "json"
+            }
+          },
+          {
+            "name": "h",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 60,
+              "default": 12
+            },
+            "description": "ic: forward horizon in months"
+          },
+          {
+            "name": "asof",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            }
+          },
+          {
+            "name": "minN",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 10,
+              "maximum": 5000,
+              "default": 30
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope { data, provenance[], generatedAt, caveats? }; text/csv when format=csv",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              },
+              "text/csv": {}
+            }
+          },
+          "400": {
+            "description": "Bad parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No Zillow row for fips"
+          }
+        }
+      }
+    },
+    "/api/screen": {
+      "get": {
+        "summary": "Rank and filter counties, states, ports, border crossings or countries with the screener query language",
+        "tags": [
+          "screener"
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "county",
+                "state",
+                "port",
+                "crossing",
+                "country"
+              ]
+            },
+            "required": true
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "description": "Compact query, e.g. home.yoyPct>5 AND jobs.yoy.emp<0 SORT momentum DESC LIMIT 50"
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "csv"
+              ],
+              "default": "json"
+            }
+          },
+          {
+            "name": "pct",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            },
+            "description": "add percentile ranks within the result"
+          },
+          {
+            "name": "cols",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "comma-separated field keys to return"
+          },
+          {
+            "name": "fields",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            },
+            "description": "return only the field registry"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope { data, provenance[], generatedAt, caveats? }; text/csv when format=csv",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              },
+              "text/csv": {}
+            }
+          },
+          "400": {
+            "description": "Bad parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Query too long"
+          }
+        }
+      },
+      "post": {
+        "summary": "Same screen from a JSON body",
+        "tags": [
+          "screener"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "kind",
+                  "query"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "county",
+                      "state",
+                      "port",
+                      "crossing",
+                      "country"
+                    ]
+                  },
+                  "query": {
+                    "oneOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "where": {
+                            "type": "array"
+                          },
+                          "sort": {
+                            "type": "array"
+                          },
+                          "limit": {
+                            "type": "integer",
+                            "maximum": 1000
+                          },
+                          "offset": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "format": {
+                    "type": "string",
+                    "enum": [
+                      "json",
+                      "csv"
+                    ]
+                  },
+                  "percentiles": {
+                    "type": "boolean"
+                  },
+                  "columns": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Envelope { data, provenance[], generatedAt, caveats? }; text/csv when format=csv",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              },
+              "text/csv": {}
+            }
+          },
+          "400": {
+            "description": "Bad parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body over 8 KB"
+          }
+        }
+      }
+    },
+    "/api/indicators": {
+      "get": {
+        "summary": "Named indicators with thresholds: river stages, freight, housing, energy, labour, trade, macro",
+        "tags": [
+          "indicators"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "list",
+                "latest",
+                "history"
+              ]
+            },
+            "required": true
+          },
+          {
+            "name": "ids",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "latest: comma-separated indicator ids"
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "freight",
+                "housing",
+                "water",
+                "energy",
+                "labour",
+                "trade",
+                "macro"
+              ]
+            }
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "history: indicator id"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "YYYY-MM-DD, ISO 8601 or epoch ms"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000,
+              "default": 2000
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "csv"
+              ],
+              "default": "json"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope { data, provenance[], generatedAt, caveats? }; text/csv when format=csv",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              },
+              "text/csv": {}
+            }
+          },
+          "400": {
+            "description": "Bad parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream failed and nothing stored (history only)"
+          }
+        }
+      }
+    },
+    "/api/releases": {
+      "get": {
+        "summary": "Release calendar, loaded vintages, movers since the previous release",
+        "tags": [
+          "releases"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "calendar",
+                "vintages",
+                "movers"
+              ]
+            },
+            "required": true
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "calendar: default today (UTC)"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "calendar: default from+30d, clamped to 366d"
+          },
+          {
+            "name": "table",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "zillow",
+                "qcew",
+                "border",
+                "ports"
+              ]
+            },
+            "description": "movers only"
+          },
+          {
+            "name": "metric",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "movers: zhviCounty|zoriCounty, emp|avgWeeklyWage|wages|estabs, a BTS border measure, container|tonnage|dryBulk"
+          },
+          {
+            "name": "n",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 20
+            }
+          },
+          {
+            "name": "min",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "default": 0
+            },
+            "description": "floor on the previous value"
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "csv"
+              ]
+            },
+            "description": "movers only"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope { data, provenance[], generatedAt, caveats? }; text/csv when format=csv",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              },
+              "text/csv": {}
+            }
+          },
+          "400": {
+            "description": "Bad parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/watch": {
+      "get": {
+        "summary": "Evaluate a watchlist and render it as RSS, Atom, JSON Feed or JSON",
+        "tags": [
+          "watch"
+        ],
+        "parameters": [
+          {
+            "name": "t",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 8192
+            },
+            "description": "Watchlist token (base64url of deflate-raw JSON)"
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]{2,63}$"
+            },
+            "description": "Published list id (requires the server store)"
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "rss",
+                "atom",
+                "json",
+                "jsonfeed"
+              ],
+              "default": "rss"
+            }
+          },
+          {
+            "name": "op",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "metrics"
+              ]
+            },
+            "description": "list the metrics available per item kind"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Feed or evaluation envelope",
+            "content": {
+              "application/rss+xml": {},
+              "application/atom+xml": {},
+              "application/feed+json": {},
+              "application/json": {}
+            }
+          },
+          "400": {
+            "description": "Bad token or format"
+          },
+          "404": {
+            "description": "Unknown id"
+          },
+          "502": {
+            "description": "Evaluation failed"
+          }
+        }
+      },
+      "post": {
+        "summary": "Publish a watchlist (mint a token), test a webhook, or dispatch alerts",
+        "tags": [
+          "watch"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "publish",
+                "test-webhook",
+                "dispatch"
+              ],
+              "default": "publish"
+            }
+          },
+          {
+            "name": "x-gev-cron-secret",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Required for test-webhook and dispatch; must equal GEV_CRON_SECRET"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "required": [
+                      "watchlist"
+                    ],
+                    "properties": {
+                      "watchlist": {
+                        "$ref": "#/components/schemas/Watchlist"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "url",
+                      "secret"
+                    ],
+                    "properties": {
+                      "url": {
+                        "type": "string",
+                        "format": "uri"
+                      },
+                      "secret": {
+                        "type": "string",
+                        "minLength": 8,
+                        "maxLength": 256
+                      },
+                      "token": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "always": {
+                        "type": "boolean"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "{ data: { id, token, stored, urls, shortUrls } } or a delivery result"
+          },
+          "400": {
+            "description": "Validation errors in details[]"
+          },
+          "401": {
+            "description": "Wrong cron secret"
+          },
+          "404": {
+            "description": "Webhook ops disabled (GEV_CRON_SECRET unset)"
+          },
+          "502": {
+            "description": "Delivery failed"
+          }
+        }
+      }
+    },
+    "/api/companies": {
+      "get": {
+        "summary": "Public companies from SEC EDGAR at their registered business address, with XBRL facts and sector bridge",
+        "tags": [
+          "companies"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "near",
+                "county",
+                "search",
+                "company",
+                "sectors"
+              ]
+            },
+            "required": true
+          },
+          {
+            "name": "bbox",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Bbox"
+            }
+          },
+          {
+            "name": "fips",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{5}$"
+            },
+            "description": "county, or SS000 for a state"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "description": "search text"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "ticker",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Z0-9][A-Z0-9.\\-]{0,9}$"
+            }
+          },
+          {
+            "name": "cik",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{1,10}$"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "csv"
+              ],
+              "default": "json"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope { data, provenance[], generatedAt, caveats? }; text/csv when format=csv",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              },
+              "text/csv": {}
+            }
+          },
+          "400": {
+            "description": "Bad parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown ticker"
+          }
+        }
+      }
+    },
+    "/api/finance": {
+      "get": {
+        "summary": "Banks (FDIC BankFind) and federal spending (USAspending)",
+        "tags": [
+          "finance"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "banks",
+                "deposits",
+                "bank",
+                "failures",
+                "spending",
+                "spending-detail",
+                "section"
+              ]
+            },
+            "required": true
+          },
+          {
+            "name": "bbox",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Bbox"
+            },
+            "description": "banks: at most 25 counties; spending: more than 400 counties falls back to states"
+          },
+          {
+            "name": "fips",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{5}$"
+            }
+          },
+          {
+            "name": "cert",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 999999
+            },
+            "description": "FDIC certificate number"
+          },
+          {
+            "name": "year",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1934
+            },
+            "description": "failures: calendar year"
+          },
+          {
+            "name": "fy",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 2008
+            },
+            "description": "federal fiscal year (Oct 1 to Sep 30)"
+          },
+          {
+            "name": "level",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "county",
+                "state"
+              ]
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "csv"
+              ],
+              "default": "json"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope { data, provenance[], generatedAt, caveats? }; text/csv when format=csv",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              },
+              "text/csv": {}
+            }
+          },
+          "400": {
+            "description": "Bad parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Well-formed id with no upstream rows"
+          }
+        }
+      }
+    },
+    "/api/mcp": {
+      "get": {
+        "summary": "MCP server description and tool manifest",
+        "tags": [
+          "mcp"
+        ],
+        "responses": {
+          "200": {
+            "description": "name, version, endpoint, tools[], prompts[], resources[]"
+          }
+        }
+      },
+      "post": {
+        "summary": "MCP JSON-RPC 2.0 over Streamable HTTP (stateless, JSON responses)",
+        "tags": [
+          "mcp"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "JSON-RPC result"
+          },
+          "202": {
+            "description": "Notification accepted"
+          },
+          "400": {
+            "description": "Parse error"
+          },
+          "413": {
+            "description": "Body over 1 MB"
+          },
+          "415": {
+            "description": "Content-Type must be application/json"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "format": {
+        "name": "format",
+        "in": "query",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "json",
+            "csv"
+          ],
+          "default": "json"
+        },
+        "description": "csv is offered on the tabular ops only; other ops answer 400. `Accept: text/csv` works too."
+      },
+      "lon": {
+        "name": "lon",
+        "in": "query",
+        "schema": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        "description": "op=report: longitude of the point."
+      },
+      "lat": {
+        "name": "lat",
+        "in": "query",
+        "schema": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        },
+        "description": "op=report: latitude of the point."
+      }
+    },
+    "headers": {
+      "CacheControl": {
+        "schema": {
+          "type": "string"
+        },
+        "description": "`public, max-age=0, s-maxage=<ttl>, stale-while-revalidate=<ttl>`: browsers revalidate, the CDN edge absorbs repeats for the op's TTL (5 min for live gauges, hours for monthly and quarterly tables)."
+      },
+      "Cors": {
+        "schema": {
+          "type": "string",
+          "enum": [
+            "*"
+          ]
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "A parameter is missing or malformed; `error` says what a valid call looks like.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Upstream": {
+        "description": "An upstream did not answer; `upstream` and `status` name it.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Bbox": {
+        "type": "string",
+        "pattern": "^-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?$",
+        "example": "-98.6,29.2,-98.2,29.6"
+      },
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "details": {},
+          "upstream": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          }
+        }
+      },
+      "SourceRef": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "publisher",
+          "url",
+          "license"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Stable id from lib/provenance/sources.ts, e.g. bls-qcew, zillow-zhvi, usgs-water."
+          },
+          "name": {
+            "type": "string"
+          },
+          "publisher": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "license": {
+            "type": "string"
+          }
+        }
+      },
+      "Provenance": {
+        "type": "object",
+        "required": [
+          "source",
+          "retrievedAt",
+          "kind"
+        ],
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/SourceRef"
+          },
+          "seriesId": {
+            "type": "string",
+            "description": "Upstream series / file / site:parameter when one exists (MORTGAGE30US, County_zhvi_...csv, USGS-08180800:00060)."
+          },
+          "upstreamUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "period": {
+            "type": "string",
+            "description": "What the value describes: ISO date, 2026-07, 2026-Q1, 2024, or from/to."
+          },
+          "releasedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the upstream published it, when known."
+          },
+          "retrievedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When this server fetched it (cache age subtracted)."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "published",
+              "estimate",
+              "snapshot"
+            ],
+            "description": "published = relayed as-is; estimate = computed here from published values (see method); snapshot = our own observation of a live feed."
+          },
+          "method": {
+            "type": "string",
+            "description": "For estimates: the formula that ran, with the inputs."
+          },
+          "revision": {
+            "type": "string",
+            "description": "Upstream revision policy or flag (provisional, revised, ...)."
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "Envelope": {
+        "type": "object",
+        "required": [
+          "data",
+          "provenance",
+          "generatedAt"
+        ],
+        "properties": {
+          "data": {
+            "description": "The payload; shape depends on the op."
+          },
+          "provenance": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Provenance"
+            }
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "caveats": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "source": {
+            "type": "string",
+            "description": "Short human label of the upstreams (kept for older scripts)."
+          },
+          "cacheAge": {
+            "type": "integer",
+            "description": "Milliseconds since the server fetched the cached table (0 = fresh)."
+          }
+        },
+        "additionalProperties": true,
+        "description": "Route-specific fields (bbox, level, asOf, globe, ...) sit beside these at the top level."
+      },
+      "FeatureCollection": {
+        "type": "object",
+        "required": [
+          "type",
+          "features"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "FeatureCollection"
+            ]
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LayerFeature"
+            }
+          }
+        }
+      },
+      "LayerFeature": {
+        "type": "object",
+        "required": [
+          "type",
+          "geometry",
+          "properties"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "Feature"
+            ]
+          },
+          "geometry": {
+            "type": "object",
+            "description": "GeoJSON geometry."
+          },
+          "properties": {
+            "type": "object",
+            "required": [
+              "id",
+              "layer",
+              "name",
+              "source"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "layer": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              },
+              "observedAt": {
+                "type": "integer",
+                "description": "Epoch ms of the observation."
+              },
+              "details": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Human-readable key/values as the HUD shows them."
+              },
+              "extra": {
+                "description": "Layer-specific payload: AreaExtra (jobs, home, rent), PortExtra (wpi, stats), CrossingExtra (measures), CountryExtra (wb), GaugeExtra (readings, screens, index, flood), WellExtra, ReservoirExtra, DroughtExtra."
+              },
+              "anchor": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              }
+            }
+          }
+        }
+      },
+      "HomeValue": {
+        "type": "object",
+        "description": "Zillow ZHVI (or ZORI) row.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "metro": {
+            "type": "string"
+          },
+          "asOf": {
+            "type": "string",
+            "description": "Last month column, e.g. 2026-07-31."
+          },
+          "latest": {
+            "type": "number"
+          },
+          "yoyPct": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "y5Pct": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "monthly": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            }
+          },
+          "yearly": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "JobsRow": {
+        "type": "object",
+        "description": "BLS QCEW row, all ownerships, all industries. Suppressed cells are null.",
+        "properties": {
+          "area": {
+            "type": "string"
+          },
+          "period": {
+            "type": "string",
+            "example": "2026 Q1"
+          },
+          "estabs": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "emp": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "wages": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "avgWeeklyWage": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "yoy": {
+            "type": "object",
+            "properties": {
+              "estabs": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "emp": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "wages": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "avgWeeklyWage": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            }
+          },
+          "suppressed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SectorRow": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "estabs": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "emp": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "avgWeeklyWage": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "lq": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Employment location quotient vs the nation."
+          },
+          "yoyEmp": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "suppressed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PulseItem": {
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "value",
+          "unit",
+          "date",
+          "source"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "FRED series id, or bts-* for BTS indicators."
+          },
+          "label": {
+            "type": "string"
+          },
+          "value": {
+            "type": "number"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string"
+          },
+          "prev": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "prevDate": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "changePct": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "source": {
+            "type": "string"
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "MarketSection": {
+        "type": "object",
+        "required": [
+          "title",
+          "loaded",
+          "summary",
+          "basis",
+          "provenance",
+          "items",
+          "data"
+        ],
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "loaded": {
+            "type": "boolean"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "basis": {
+            "type": "string",
+            "description": "Prose: what the numbers are and are not."
+          },
+          "provenance": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Provenance"
+            }
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "layer": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "distanceKm": {
+                  "type": "number"
+                },
+                "value": {
+                  "type": "string"
+                },
+                "flag": {
+                  "type": "string",
+                  "enum": [
+                    "ok",
+                    "watch",
+                    "poor"
+                  ]
+                }
+              }
+            }
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "MarketReport": {
+        "type": "object",
+        "required": [
+          "lon",
+          "lat",
+          "generatedAt",
+          "area",
+          "home",
+          "rent",
+          "affordability",
+          "jobs",
+          "trade",
+          "pulse",
+          "momentum",
+          "caveats",
+          "provenance",
+          "citations"
+        ],
+        "properties": {
+          "lon": {
+            "type": "number"
+          },
+          "lat": {
+            "type": "number"
+          },
+          "generatedAt": {
+            "type": "integer",
+            "description": "Epoch ms."
+          },
+          "area": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "level": {
+                "type": "string",
+                "enum": [
+                  "county",
+                  "state"
+                ]
+              },
+              "geoid": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "stateName": {
+                "type": "string"
+              },
+              "metro": {
+                "type": "string"
+              }
+            }
+          },
+          "home": {
+            "$ref": "#/components/schemas/MarketSection"
+          },
+          "rent": {
+            "$ref": "#/components/schemas/MarketSection"
+          },
+          "affordability": {
+            "type": "object",
+            "properties": {
+              "estimate": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "description": "Payment, wage share, price-to-rent, years of wages and the formula lines."
+              },
+              "basis": {
+                "type": "string"
+              },
+              "provenance": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Provenance"
+                }
+              }
+            }
+          },
+          "jobs": {
+            "$ref": "#/components/schemas/MarketSection"
+          },
+          "trade": {
+            "$ref": "#/components/schemas/MarketSection"
+          },
+          "pulse": {
+            "$ref": "#/components/schemas/MarketSection"
+          },
+          "momentum": {
+            "type": "object",
+            "description": "Estimate: weighted mean of normalised over-the-year terms with the formula printed."
+          },
+          "caveats": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "provenance": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Provenance"
+            },
+            "description": "Union of every section's provenance, de-duplicated."
+          },
+          "citations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "One citation line per provenance record."
+          }
+        }
+      },
+      "EconomyAreasResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "level": {
+                "type": "string"
+              },
+              "asOf": {
+                "type": "object",
+                "properties": {
+                  "qcew": {
+                    "type": "string"
+                  },
+                  "zhvi": {
+                    "type": "string"
+                  },
+                  "zori": {
+                    "type": "string"
+                  }
+                }
+              },
+              "polygons": {
+                "type": "integer"
+              },
+              "detail": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "x-op": "areas",
+        "x-csv-columns": [
+          "geoid",
+          "name",
+          "level",
+          "state",
+          "state_name",
+          "metro",
+          "lon",
+          "lat",
+          "home_value",
+          "home_as_of",
+          "home_yoy_pct",
+          "home_y5_pct",
+          "rent",
+          "rent_as_of",
+          "rent_yoy_pct",
+          "price_to_rent",
+          "qcew_period",
+          "emp",
+          "emp_yoy_pct",
+          "estabs",
+          "estabs_yoy_pct",
+          "wages_qtr",
+          "wages_yoy_pct",
+          "avg_weekly_wage",
+          "avg_weekly_wage_yoy_pct",
+          "qcew_suppressed"
+        ]
+      },
+      "EconomySectorsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "period": {
+                    "type": "string"
+                  },
+                  "total": {
+                    "$ref": "#/components/schemas/JobsRow"
+                  },
+                  "sectors": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/SectorRow"
+                    }
+                  }
+                }
+              },
+              "fips": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "x-op": "sectors",
+        "x-csv-columns": [
+          "fips",
+          "period",
+          "naics",
+          "sector",
+          "estabs",
+          "emp",
+          "avg_weekly_wage",
+          "lq",
+          "emp_yoy_pct",
+          "suppressed"
+        ]
+      },
+      "EconomyContextResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "period": {
+                    "type": "string"
+                  },
+                  "sectors": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/SectorRow"
+                    }
+                  },
+                  "metroHome": {
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  },
+                  "stateHome": {
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  },
+                  "usHome": {
+                    "type": [
+                      "object",
+                      "null"
+                    ]
+                  }
+                }
+              },
+              "fips": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "x-op": "context"
+      },
+      "EconomyPortsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "wpiPulled": {
+                "type": "string"
+              },
+              "btsYear": {
+                "type": "integer"
+              },
+              "withStats": {
+                "type": "integer"
+              },
+              "min": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "x-op": "ports",
+        "x-csv-columns": [
+          "id",
+          "wpi_id",
+          "name",
+          "country",
+          "region",
+          "lon",
+          "lat",
+          "size",
+          "type",
+          "use",
+          "locode",
+          "water_body",
+          "channel_m",
+          "anchorage_m",
+          "cargo_pier_m",
+          "max_draft_m",
+          "max_length_m",
+          "first_port_of_entry",
+          "bts_port_id",
+          "bts_authority",
+          "bts_year",
+          "container_teu",
+          "container_rank",
+          "container_pct_change",
+          "tonnage_tons",
+          "tonnage_rank",
+          "tonnage_pct_change",
+          "dry_bulk_tons",
+          "position_basis",
+          "source"
+        ]
+      },
+      "EconomyBorderResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "asOf": {
+                "type": "string"
+              },
+              "ports": {
+                "type": "integer"
+              }
+            }
+          }
+        ],
+        "x-op": "border",
+        "x-csv-columns": [
+          "id",
+          "code",
+          "name",
+          "state",
+          "border",
+          "lon",
+          "lat",
+          "as_of",
+          "trucks",
+          "trucks_month",
+          "trucks_yoy_pct",
+          "trains",
+          "trains_month",
+          "trains_yoy_pct",
+          "buses",
+          "buses_month",
+          "buses_yoy_pct",
+          "personal_vehicles",
+          "personal_vehicles_month",
+          "personal_vehicles_yoy_pct",
+          "pedestrians",
+          "pedestrians_month",
+          "pedestrians_yoy_pct",
+          "personal_vehicle_passengers",
+          "personal_vehicle_passengers_month",
+          "personal_vehicle_passengers_yoy_pct",
+          "train_passengers",
+          "train_passengers_month",
+          "train_passengers_yoy_pct",
+          "bus_passengers",
+          "bus_passengers_month",
+          "bus_passengers_yoy_pct",
+          "source"
+        ]
+      },
+      "EconomyCountriesResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "nePulled": {
+                "type": "string"
+              },
+              "indicatorsFailed": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "countriesWithData": {
+                "type": "integer"
+              }
+            }
+          }
+        ],
+        "x-op": "countries",
+        "x-csv-columns": [
+          "iso3",
+          "iso2",
+          "name",
+          "continent",
+          "lon",
+          "lat",
+          "population",
+          "population_year",
+          "gdp_usd",
+          "gdp_year",
+          "exports_usd",
+          "exports_year",
+          "imports_usd",
+          "imports_year",
+          "trade_pct_gdp",
+          "trade_pct_gdp_year",
+          "container_teu",
+          "container_teu_year",
+          "trade_rank",
+          "source"
+        ]
+      },
+      "EconomyPartnersResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "iso3": {
+                    "type": "string"
+                  },
+                  "year": {
+                    "type": "integer"
+                  },
+                  "exportsTotal": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "importsTotal": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "exports": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "imports": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  }
+                }
+              },
+              "iso3": {
+                "type": "string"
+              },
+              "units": {
+                "type": "string",
+                "enum": [
+                  "US$ thousands"
+                ]
+              }
+            }
+          }
+        ],
+        "x-op": "partners"
+      },
+      "EconomyPulseResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/PulseItem"
+                }
+              },
+              "failed": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "count": {
+                "type": "integer"
+              }
+            }
+          }
+        ],
+        "x-op": "pulse",
+        "x-csv-columns": [
+          "id",
+          "label",
+          "value",
+          "unit",
+          "date",
+          "prev",
+          "prev_date",
+          "change_pct",
+          "source"
+        ]
+      },
+      "EconomyReportResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/MarketReport"
+              },
+              "county": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "globe": {
+                "type": "string",
+                "format": "uri",
+                "description": "Permalink that opens the same point on the globe."
+              }
+            }
+          }
+        ],
+        "x-op": "report"
+      },
+      "GaugeReading": {
+        "type": "object",
+        "required": [
+          "site",
+          "lon",
+          "lat",
+          "param",
+          "value",
+          "unit",
+          "time"
+        ],
+        "properties": {
+          "site": {
+            "type": "string",
+            "example": "USGS-08180800"
+          },
+          "name": {
+            "type": "string"
+          },
+          "siteType": {
+            "type": "string"
+          },
+          "lon": {
+            "type": "number"
+          },
+          "lat": {
+            "type": "number"
+          },
+          "param": {
+            "type": "string",
+            "description": "USGS parameter code."
+          },
+          "value": {
+            "type": "number"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "approval": {
+            "type": "string"
+          }
+        }
+      },
+      "WellReading": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/GaugeReading"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "aquifer": {
+                "type": "string"
+              },
+              "aquiferCode": {
+                "type": "string"
+              },
+              "localAquifer": {
+                "type": "string"
+              },
+              "wellDepthFt": {
+                "type": "number"
+              }
+            }
+          }
+        ]
+      },
+      "NwpsRow": {
+        "type": "object",
+        "properties": {
+          "lid": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "lat": {
+            "type": "number"
+          },
+          "lon": {
+            "type": "number"
+          },
+          "state": {
+            "type": "string"
+          },
+          "observed": {
+            "type": "object",
+            "properties": {
+              "primary": {
+                "type": "number"
+              },
+              "primaryUnit": {
+                "type": "string"
+              },
+              "secondary": {
+                "type": "number"
+              },
+              "secondaryUnit": {
+                "type": "string"
+              },
+              "floodCategory": {
+                "type": "string"
+              },
+              "validTime": {
+                "type": "string"
+              }
+            }
+          },
+          "forecast": {
+            "type": "object",
+            "properties": {
+              "primary": {
+                "type": "number"
+              },
+              "primaryUnit": {
+                "type": "string"
+              },
+              "floodCategory": {
+                "type": "string"
+              },
+              "validTime": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "TwdbRow": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "lon": {
+            "type": "number"
+          },
+          "lat": {
+            "type": "number"
+          },
+          "percentFull": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "capacityAcFt": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "storageAcFt": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "elevationFt": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "poolElevationFt": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "date": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ReportSection": {
+        "type": "object",
+        "required": [
+          "title",
+          "loaded",
+          "radiusKm",
+          "n",
+          "summary",
+          "basis",
+          "provenance",
+          "items",
+          "data"
+        ],
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "loaded": {
+            "type": "boolean"
+          },
+          "radiusKm": {
+            "type": "number"
+          },
+          "n": {
+            "type": "integer"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "basis": {
+            "type": "string"
+          },
+          "provenance": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Provenance"
+            }
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "layer": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "distanceKm": {
+                  "type": "number"
+                },
+                "value": {
+                  "type": "string"
+                },
+                "flag": {
+                  "type": "string",
+                  "enum": [
+                    "ok",
+                    "watch",
+                    "poor"
+                  ]
+                }
+              }
+            }
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "WaterReport": {
+        "type": "object",
+        "required": [
+          "lon",
+          "lat",
+          "generatedAt",
+          "drought",
+          "reservoirs",
+          "gauges",
+          "wells",
+          "turbidity",
+          "stress",
+          "caveats",
+          "provenance",
+          "citations"
+        ],
+        "properties": {
+          "lon": {
+            "type": "number"
+          },
+          "lat": {
+            "type": "number"
+          },
+          "generatedAt": {
+            "type": "integer",
+            "description": "Epoch ms."
+          },
+          "drought": {
+            "$ref": "#/components/schemas/ReportSection"
+          },
+          "reservoirs": {
+            "$ref": "#/components/schemas/ReportSection"
+          },
+          "gauges": {
+            "$ref": "#/components/schemas/ReportSection"
+          },
+          "wells": {
+            "$ref": "#/components/schemas/ReportSection"
+          },
+          "turbidity": {
+            "$ref": "#/components/schemas/ReportSection"
+          },
+          "stress": {
+            "type": "object",
+            "properties": {
+              "score": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "label": {
+                "type": "string"
+              },
+              "terms": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
+              "formula": {
+                "type": "string"
+              },
+              "provenance": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Provenance"
+                }
+              }
+            }
+          },
+          "caveats": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "provenance": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Provenance"
+            }
+          },
+          "citations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "WaterGaugesResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/GaugeReading"
+                }
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "returned": {
+                "type": "integer"
+              }
+            }
+          }
+        ],
+        "x-op": "gauges",
+        "x-csv-columns": [
+          "site",
+          "name",
+          "site_type",
+          "lon",
+          "lat",
+          "parameter",
+          "parameter_label",
+          "value",
+          "unit",
+          "time",
+          "approval"
+        ]
+      },
+      "WaterWellsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WellReading"
+                }
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "returned": {
+                "type": "integer"
+              }
+            }
+          }
+        ],
+        "x-op": "wells",
+        "x-csv-columns": [
+          "site",
+          "name",
+          "site_type",
+          "lon",
+          "lat",
+          "parameter",
+          "parameter_label",
+          "value",
+          "unit",
+          "time",
+          "approval",
+          "aquifer",
+          "aquifer_code",
+          "local_aquifer",
+          "well_depth_ft"
+        ]
+      },
+      "WaterNwpsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/NwpsRow"
+                }
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "nwps",
+        "x-csv-columns": [
+          "lid",
+          "name",
+          "state",
+          "lon",
+          "lat",
+          "flood_category",
+          "observed_primary",
+          "observed_primary_unit",
+          "observed_secondary",
+          "observed_secondary_unit",
+          "observed_time",
+          "forecast_category",
+          "forecast_primary",
+          "forecast_primary_unit",
+          "forecast_time"
+        ]
+      },
+      "WaterTwdbResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/TwdbRow"
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "twdb",
+        "x-csv-columns": [
+          "id",
+          "name",
+          "lon",
+          "lat",
+          "percent_full",
+          "capacity_acft",
+          "storage_acft",
+          "elevation_ft",
+          "pool_elevation_ft",
+          "date",
+          "tags"
+        ]
+      },
+      "WaterDroughtResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "description": "GeoJSON FeatureCollection; each feature's properties.DM is the class 0-4."
+              }
+            }
+          }
+        ],
+        "x-op": "drought"
+      },
+      "WaterHistoryResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "description": "[date, daily mean]"
+                }
+              },
+              "site": {
+                "type": "string"
+              },
+              "param": {
+                "type": "string"
+              },
+              "range": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "x-op": "history",
+        "x-csv-columns": [
+          "site",
+          "parameter",
+          "parameter_label",
+          "date",
+          "value"
+        ]
+      },
+      "WaterMatchupResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ],
+                  "description": "[time, value, unit]"
+                }
+              },
+              "site": {
+                "type": "string"
+              },
+              "param": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "x-op": "matchup",
+        "x-csv-columns": [
+          "site",
+          "parameter",
+          "parameter_label",
+          "time",
+          "value",
+          "unit"
+        ]
+      },
+      "WaterReportResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/WaterReport"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "globe": {
+                "type": "string",
+                "format": "uri"
+              }
+            }
+          }
+        ],
+        "x-op": "report"
+      },
+      "Watchlist": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "items"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{2,63}$"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "required": [
+                "kind",
+                "id"
+              ],
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "county",
+                    "state",
+                    "port",
+                    "crossing",
+                    "gauge",
+                    "series",
+                    "indicator",
+                    "company"
+                  ]
+                },
+                "id": {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                "name": {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                "geo": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                }
+              }
+            }
+          },
+          "rules": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "type": "object",
+              "required": [
+                "metric",
+                "op",
+                "value"
+              ],
+              "properties": {
+                "itemRef": {
+                  "oneOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "string",
+                      "enum": [
+                        "*"
+                      ]
+                    }
+                  ]
+                },
+                "metric": {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                "op": {
+                  "type": "string",
+                  "enum": [
+                    "<",
+                    ">",
+                    "<=",
+                    ">=",
+                    "crosses_above",
+                    "crosses_below",
+                    "changes_by_pct"
+                  ]
+                },
+                "value": {
+                  "type": "number"
+                },
+                "window": {
+                  "type": "string",
+                  "enum": [
+                    "1d",
+                    "7d",
+                    "30d"
+                  ]
+                }
+              }
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "MsaOccupation": {
+        "type": "object",
+        "description": "One occupation in an MSA. Keys are short because the tables ship with the app.",
+        "properties": {
+          "c": {
+            "type": "string",
+            "description": "SOC code, e.g. 15-1252; the taxonomy key shared with O*NET."
+          },
+          "t": {
+            "type": "string",
+            "description": "SOC title."
+          },
+          "e": {
+            "type": "number",
+            "description": "Employment in the MSA."
+          },
+          "w": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Annual mean wage in USD; null where BLS suppresses it."
+          },
+          "lq": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Location quotient against the national mix; null when either side is suppressed."
+          }
+        }
+      },
+      "MsaIndexEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "5-digit CBSA code."
+          },
+          "name": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "lat": {
+            "type": "number"
+          },
+          "lon": {
+            "type": "number"
+          },
+          "emp": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Total covered employment."
+          },
+          "dom": {
+            "type": "string",
+            "description": "SOC major group with the highest location quotient."
+          },
+          "domT": {
+            "type": "string",
+            "description": "Title of that group."
+          },
+          "domLq": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        }
+      },
+      "EconomyMsasResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "asOf": {
+                    "type": "string",
+                    "description": "OEWS release the tables come from, e.g. \"May 2025\"."
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "msas": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/MsaIndexEntry"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "msas"
+      },
+      "EconomyMsaJobsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "description": "Null when the release has no row for that CBSA code; the caveat says so.",
+                "properties": {
+                  "asOf": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "msa": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "top": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/components/schemas/MsaOccupation"
+                        },
+                        "description": "Top 30 detailed occupations by employment."
+                      },
+                      "major": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/components/schemas/MsaOccupation"
+                        },
+                        "description": "All 22 SOC major groups."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "msa-jobs"
+      }
+    }
+  }
+}
