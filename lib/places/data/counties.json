@@ -1,0 +1,34 @@
+{
+  "meta": {
+    "source": "SEED, not a pull: the union of lib/screener/fixtures.ts COUNTY_POINTS and the distinct countyFips in lib/companies/data/companies.json, with Census internal points to two decimals.",
+    "complete": false,
+    "pulled": null,
+    "count": 21,
+    "withCbsa": 0,
+    "cbsaMethod": "none: seed rows carry cbsa null. Run scripts/places-data.mjs on a host with egress to assign CBSA membership by point-in-polygon.",
+    "note": "Counties are the one dimension of the manifest that cannot be derived offline; while complete is false, lib/places/scope.ts validates county URLs structurally against the complete state table so every real county stays reachable. Places only: no addresses, no parcels, no people."
+  },
+  "rows": [
+    {"geoid":"02013","name":"Aleutians East Borough","stusab":"AK","stateFips":"02","stateName":"Alaska","lon":-161.9,"lat":55.2,"cbsa":null,"adj":[]},
+    {"geoid":"04013","name":"Maricopa County","stusab":"AZ","stateFips":"04","stateName":"Arizona","lon":-112.49,"lat":33.35,"cbsa":null,"adj":[]},
+    {"geoid":"05007","name":"Benton County","stusab":"AR","stateFips":"05","stateName":"Arkansas","lon":-94.26,"lat":36.34,"cbsa":null,"adj":[]},
+    {"geoid":"06037","name":"Los Angeles County","stusab":"CA","stateFips":"06","stateName":"California","lon":-118.23,"lat":34.31,"cbsa":null,"adj":[]},
+    {"geoid":"06075","name":"San Francisco County","stusab":"CA","stateFips":"06","stateName":"California","lon":-122.44,"lat":37.75,"cbsa":null,"adj":[]},
+    {"geoid":"06085","name":"Santa Clara County","stusab":"CA","stateFips":"06","stateName":"California","lon":-121.69,"lat":37.23,"cbsa":null,"adj":[]},
+    {"geoid":"12086","name":"Miami-Dade County","stusab":"FL","stateFips":"12","stateName":"Florida","lon":-80.5,"lat":25.61,"cbsa":null,"adj":[]},
+    {"geoid":"13121","name":"Fulton County","stusab":"GA","stateFips":"13","stateName":"Georgia","lon":-84.47,"lat":33.79,"cbsa":null,"adj":[]},
+    {"geoid":"17161","name":"Rock Island County","stusab":"IL","stateFips":"17","stateName":"Illinois","lon":-90.57,"lat":41.47,"cbsa":null,"adj":[]},
+    {"geoid":"31055","name":"Douglas County","stusab":"NE","stateFips":"31","stateName":"Nebraska","lon":-96.15,"lat":41.3,"cbsa":null,"adj":[]},
+    {"geoid":"36061","name":"New York County","stusab":"NY","stateFips":"36","stateName":"New York","lon":-73.97,"lat":40.78,"cbsa":null,"adj":[]},
+    {"geoid":"37119","name":"Mecklenburg County","stusab":"NC","stateFips":"37","stateName":"North Carolina","lon":-80.83,"lat":35.25,"cbsa":null,"adj":[]},
+    {"geoid":"38053","name":"McKenzie County","stusab":"ND","stateFips":"38","stateName":"North Dakota","lon":-103.4,"lat":47.74,"cbsa":null,"adj":[]},
+    {"geoid":"47157","name":"Shelby County","stusab":"TN","stateFips":"47","stateName":"Tennessee","lon":-89.9,"lat":35.18,"cbsa":null,"adj":[]},
+    {"geoid":"48029","name":"Bexar County","stusab":"TX","stateFips":"48","stateName":"Texas","lon":-98.52,"lat":29.45,"cbsa":null,"adj":[]},
+    {"geoid":"48113","name":"Dallas County","stusab":"TX","stateFips":"48","stateName":"Texas","lon":-96.78,"lat":32.77,"cbsa":null,"adj":[]},
+    {"geoid":"48201","name":"Harris County","stusab":"TX","stateFips":"48","stateName":"Texas","lon":-95.39,"lat":29.86,"cbsa":null,"adj":[]},
+    {"geoid":"48439","name":"Tarrant County","stusab":"TX","stateFips":"48","stateName":"Texas","lon":-97.29,"lat":32.77,"cbsa":null,"adj":[]},
+    {"geoid":"48453","name":"Travis County","stusab":"TX","stateFips":"48","stateName":"Texas","lon":-97.78,"lat":30.33,"cbsa":null,"adj":[]},
+    {"geoid":"48491","name":"Williamson County","stusab":"TX","stateFips":"48","stateName":"Texas","lon":-97.6,"lat":30.65,"cbsa":null,"adj":[]},
+    {"geoid":"53033","name":"King County","stusab":"WA","stateFips":"53","stateName":"Washington","lon":-121.83,"lat":47.49,"cbsa":null,"adj":[]}
+  ]
+}

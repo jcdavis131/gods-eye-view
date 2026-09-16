@@ -10,7 +10,8 @@ import { useSettings } from "@/lib/store/settings";
 import { useGlobe } from "@/lib/store/globe";
 import type { VoiceSession, VoiceStatus } from "@/lib/voice/types";
 
-export default function VoiceControl() {
+/** `compact`: icon-only button for the phone header; the transcript popover drops below it. */
+export default function VoiceControl({ compact = false }: { compact?: boolean } = {}) {
   const provider = useSettings((s) => s.prefs.voiceProvider);
   const keys = useSettings((s) => s.keys);
   const pushLog = useGlobe((s) => s.pushLog);
@@ -79,9 +80,10 @@ export default function VoiceControl() {
       <button
         type="button"
         onClick={() => (active ? stop() : start())}
-        className={`flex items-center gap-2 px-3 py-2 text-[11px] uppercase tracking-wider ${
+        className={`flex items-center gap-2 text-[11px] uppercase tracking-wider ${compact ? "size-9 justify-center" : "px-3 py-2"} ${
           active ? "bg-alert/15 text-alert" : "text-foreground/80 hover:bg-accent hover:text-primary"
         }`}
+        aria-label={compact ? label : undefined}
         title={`Voice control (${provider}). Try: "show me flights over Austin"`}
       >
         {status === "connecting" || status === "thinking" ? (
@@ -91,10 +93,10 @@ export default function VoiceControl() {
         ) : (
           <MicOff className="size-3.5" />
         )}
-        {label}
+        {!compact && <span className="hidden 2xl:inline">{label}</span>}
       </button>
       {(transcript || reply) && (
-        <div className="hud-panel absolute right-0 top-[calc(100%+8px)] w-[320px] px-3 py-2 text-[11px]">
+        <div className="hud-panel absolute right-0 top-[calc(100%+8px)] w-[320px] max-w-[calc(100vw-16px)] px-3 py-2 text-[11px]">
           {transcript && (
             <div className="text-foreground/90">
               <span className="hud-label mr-2">you</span>

@@ -64,7 +64,7 @@ export default function TourCaption() {
   return (
     <div
       data-tour-controls
-      className="pointer-events-auto absolute bottom-[84px] left-3 z-30 w-[380px] max-w-[calc(100vw-24px)] md:bottom-3 md:left-3"
+      className="pointer-events-auto absolute bottom-[120px] left-3 z-30 w-[380px] max-w-[calc(100vw-24px)] md:bottom-3 md:left-3"
     >
       <div className="hud-panel">
         <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
