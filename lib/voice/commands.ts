@@ -21,6 +21,14 @@ import { speakMarketReport } from "@/lib/economy/report";
 import { marketReportFromGlobe } from "@/lib/economy/reportClient";
 import { PRESETS, presetShare } from "@/lib/explore/presets";
 import { applyShare } from "@/lib/globe/share";
+import { useIndicators } from "@/lib/indicators/store";
+import { useReleases, isValidVintage, vintageClockMs } from "@/lib/releases/store";
+import { useWatchlists } from "@/lib/watch/store";
+import { useScreener } from "@/lib/screener/store";
+import { ENTITY_KINDS, type EntityKind } from "@/lib/screener/fields";
+import { useDesk } from "@/lib/desk/store";
+import { PERSONAS, personaFromWords } from "@/lib/personas/registry";
+import { applyPersona, useLens } from "@/lib/personas/store";
 
 export interface JsonSchema {
   type: "object";
@@ -104,6 +112,19 @@ const LAYER_ALIASES: Record<string, LayerId> = {
   rents: "realestate",
   property: "realestate",
   "property values": "realestate",
+  companies: "companies",
+  "public companies": "companies",
+  "listed companies": "companies",
+  stocks: "companies",
+  tickers: "companies",
+  banks: "banks",
+  "bank branches": "banks",
+  deposits: "banks",
+  spending: "spending",
+  "federal spending": "spending",
+  "federal dollars": "spending",
+  contracts: "spending",
+  grants: "spending",
 };
 
 export function resolveLayer(word: string | undefined): LayerId | null {
@@ -309,6 +330,135 @@ export const COMMANDS: CommandDef[] = [
       if (!p) return `No preset matches ${a.preset}. Try one of: ${PRESETS.map((x) => x.title).join(", ")}.`;
       applyShare(presetShare(p));
       return `${p.title}, ${p.region}. ${p.blurb}`;
+    },
+  },
+  {
+    name: "open_panel",
+    description: "Open or close one of the practitioner panels: the screener, the named indicators, the release calendar (or its movers tab), the watchlist, or desk mode.",
+    parameters: {
+      type: "object",
+      properties: {
+        panel: { type: "string", description: "Which panel", enum: ["screener", "indicators", "releases", "movers", "watchlist", "desk", "hud", "lens"] },
+        on: { type: "boolean", description: "true to open (default), false to close" },
+      },
+      required: ["panel"],
+    },
+    run: async (a) => {
+      const on = a.on !== false && a.on !== "false";
+      switch (String(a.panel)) {
+        case "screener":
+          useScreener.getState().setOpen(on);
+          return on ? "Screener open. Say 'screen counties where rents rising and jobs falling'." : "Screener closed.";
+        case "indicators":
+          useIndicators.getState().setOpen(on);
+          return on ? "Indicators open." : "Indicators closed.";
+        case "releases":
+          useReleases.getState().setTab("calendar");
+          useReleases.getState().setReleasesOpen(on);
+          return on ? "Release calendar open." : "Releases closed.";
+        case "movers":
+          useReleases.getState().setTab("movers");
+          useReleases.getState().setReleasesOpen(on);
+          return on ? "Showing the biggest movers since the last release." : "Releases closed.";
+        case "watchlist":
+          useWatchlists.getState().setOpen(on);
+          return on ? "Watchlist open. Say 'watch this' to add the selected object." : "Watchlist closed.";
+        case "lens":
+          useLens.getState().setPickerOpen(on);
+          return on ? "Pick a lens." : "Lens picker closed.";
+        case "hud":
+          useDesk.getState().setMode("hud");
+          return "Back to the HUD.";
+        case "desk":
+          useDesk.getState().setMode(on ? "desk" : "hud");
+          return on ? "Desk mode on." : "Back to the HUD.";
+        default:
+          return `Unknown panel ${a.panel}.`;
+      }
+    },
+  },
+  {
+    name: "screen",
+    description: "Run a screen: rank and filter counties, states, ports, border crossings or countries with the screener query language, e.g. 'rent.yoyPct > 5 AND jobs.yoy.emp < 0 SORT momentum DESC'.",
+    parameters: {
+      type: "object",
+      properties: {
+        kind: { type: "string", description: "Entity kind", enum: [...ENTITY_KINDS] },
+        query: { type: "string", description: "Screener query text; plain phrases like 'rents rising and jobs falling' are mapped to the nearest preset" },
+      },
+      required: ["kind", "query"],
+    },
+    run: async (a) => {
+      const kind = String(a.kind ?? "county") as EntityKind;
+      if (!ENTITY_KINDS.includes(kind)) return `Unknown kind ${a.kind}.`;
+      const raw = String(a.query ?? "").trim();
+      const phrases: Array<[RegExp, string]> = [
+        [/rent.*(rising|up).*jobs.*(falling|down)/, "rent.yoyPct > 0 AND jobs.yoy.emp < 0 SORT rent.yoyPct DESC"],
+        [/cheapest price.to.rent|price.to.rent/, "priceToRent > 0 SORT priceToRent ASC"],
+        [/hottest|momentum/, "SORT momentum DESC"],
+        [/busiest|trucks/, "SORT trucks DESC"],
+        [/losing (teu|containers)|teu (falling|down)/, "teu.yoyPct < 0 SORT teu DESC"],
+        [/surplus/, "balance > 0 SORT balance DESC"],
+        [/deficit/, "balance < 0 SORT balance ASC"],
+      ];
+      const hit = phrases.find(([re]) => re.test(raw.toLowerCase()));
+      const queryText = hit ? hit[1] : raw;
+      const st = useScreener.getState();
+      st.setOpen(true);
+      await st.runScreen({ kind, queryText });
+      const after = useScreener.getState();
+      if (after.error) return `Screen failed: ${after.error}`;
+      return `${after.rows.length} ${kind === "country" ? "countries" : kind === "county" ? "counties" : kind + "s"} match. Top: ${after.rows.slice(0, 3).map((r) => r.name).join(", ")}.`;
+    },
+  },
+  {
+    name: "watch_selected",
+    description: "Add the selected county, state, port, crossing, gauge or company to the active watchlist.",
+    parameters: { type: "object", properties: {} },
+    run: async () => {
+      const res = useWatchlists.getState().addSelection();
+      useWatchlists.getState().setOpen(true);
+      return res.ok ? "Added to your watchlist." : `Could not add it: ${res.reason ?? "select a county, port, crossing, gauge or company first"}.`;
+    },
+  },
+  {
+    name: "set_vintage",
+    description: "Pin a data vintage date (YYYY-MM-DD) on the permalink and the mission clock, or clear it when no date is given.",
+    parameters: {
+      type: "object",
+      properties: { date: { type: "string", description: "ISO date, e.g. 2026-08-15; omit to clear" } },
+    },
+    run: async (a) => {
+      const d = a.date ? String(a.date) : "";
+      if (!d) {
+        useReleases.getState().setVintage(null);
+        goLive();
+        return "Vintage cleared; back to live.";
+      }
+      if (!isValidVintage(d)) return `${d} is not a valid date.`;
+      useReleases.getState().setVintage(d);
+      setMissionTime(vintageClockMs(d));
+      return `Vintage pinned to ${d}.`;
+    },
+  },
+  {
+    name: "set_lens",
+    description: "Switch the lens (who is looking): real estate, economist, trader, water and ecology, supply chain, public finance, or explorer. Sets layers, the arrival panel and the camera.",
+    parameters: {
+      type: "object",
+      properties: {
+        lens: { type: "string", description: "Lens id or a role word such as 'realtor' or 'hydrologist'", enum: PERSONAS.map((p) => p.id) },
+      },
+      required: ["lens"],
+    },
+    run: async (a) => {
+      const p = personaFromWords(String(a.lens ?? ""));
+      if (!p) {
+        useLens.getState().setPickerOpen(true);
+        return `I do not know that lens. Pick one: ${PERSONAS.map((x) => x.title).join(", ")}.`;
+      }
+      applyPersona(p.id);
+      return `Lens: ${p.title}. ${p.tagline} Landing on ${p.start.label}.`;
     },
   },
   {

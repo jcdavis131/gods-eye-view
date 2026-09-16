@@ -11,12 +11,17 @@ import { PRESETS, PRESET_GROUPS, presetShare, type Preset } from "@/lib/explore/
 import { exportAreas, exportChips, exportGauges, exportTrade } from "@/lib/explore/export";
 import { applyShare, copyShareLink, shareQuery, shareUrl } from "@/lib/globe/share";
 import { useGlobe } from "@/lib/store/globe";
+import { useLens } from "@/lib/personas/store";
+import { PERSONA_BY_ID } from "@/lib/personas/registry";
 
 export default function ExploreDialog() {
   const open = useGlobe((s) => s.exploreOpen);
   const setOpen = useGlobe((s) => s.setExploreOpen);
   const status = useGlobe((s) => s.status);
   const [copied, setCopied] = useState<string | null>(null);
+  const personaId = useLens((s) => s.personaId);
+  const persona = personaId ? PERSONA_BY_ID[personaId] : null;
+  const lensPresets = persona ? persona.presets.map((id) => PRESETS.find((p) => p.id === id)).filter((p): p is Preset => !!p) : [];
 
   const go = (p: Preset) => {
     applyShare(presetShare(p));
@@ -60,6 +65,21 @@ export default function ExploreDialog() {
         </DialogHeader>
 
         <div className="space-y-5 px-5 py-4 text-[11px] leading-relaxed">
+          {persona && lensPresets.length > 0 && (
+            <section>
+              <div className="hud-label mb-2" style={{ color: persona.color }}>
+                For your lens · {persona.title}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {lensPresets.map((p) => (
+                  <button key={p.id} type="button" onClick={() => go(p)} className="border border-border px-2 py-1 text-left text-[11px] hover:border-primary/60 hover:text-primary" title={p.blurb}>
+                    <span className="text-foreground">{p.title}</span>
+                    <span className="text-muted-foreground"> · {p.region}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
           <section>
             <div className="mb-2 flex items-center justify-between">
               <div className="hud-label">Places</div>

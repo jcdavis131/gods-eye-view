@@ -8,6 +8,8 @@
 //   &sel=water:usgs:USGS-08180800   selected feature, best effort
 //   &report=1                    community water report open
 //   &market=1                    market report open
+//   &v=2026-08-15                data vintage (pins the mission clock to that day;
+//                                history-aware layers will read that release later)
 //   &embed=1                     no HUD chrome (iframes)
 //
 // The URL is rewritten with replaceState about once a second while things
@@ -18,6 +20,9 @@ import { useGlobe, type Selection } from "@/lib/store/globe";
 import { flyTo, flyToSelection } from "./camera";
 import { getRenderer } from "./registry";
 import { setMissionTime } from "./clock";
+import { getVintage, isValidVintage, useReleases, vintageClockMs } from "@/lib/releases/store";
+import { isPersonaId, type PersonaId } from "@/lib/personas/registry";
+import { applyPersona, useLens } from "@/lib/personas/store";
 
 export interface ShareState {
   lat?: number;
@@ -33,6 +38,14 @@ export interface ShareState {
   sel?: Selection;
   report?: boolean;
   market?: boolean;
+  /**
+   * Data vintage, ISO date (YYYY-MM-DD). Today it pins the mission clock to
+   * noon UTC of that day and shows "VINTAGE <date>" in the HUD; layers that
+   * can read history (series store, Zillow history) will honour it later.
+   */
+  vintage?: string;
+  /** Lens (who is looking): sets layers, the arrival panel and the camera unless the link carries its own. */
+  lens?: PersonaId;
   embed?: boolean;
 }
 
@@ -80,6 +93,10 @@ export function parseShare(search: string): ShareState {
   }
   if (q.get("report") === "1") out.report = true;
   if (q.get("market") === "1") out.market = true;
+  const v = q.get("v");
+  if (v && isValidVintage(v)) out.vintage = v;
+  const lens = q.get("lens");
+  if (isPersonaId(lens)) out.lens = lens;
   if (q.get("embed") === "1") out.embed = true;
   return out;
 }
@@ -101,6 +118,8 @@ export function shareQuery(s: ShareState): string {
   if (s.sel) q.set("sel", `${s.sel.layer}:${s.sel.id}`);
   if (s.report) q.set("report", "1");
   if (s.market) q.set("market", "1");
+  if (s.vintage && isValidVintage(s.vintage)) q.set("v", s.vintage);
+  if (s.lens) q.set("lens", s.lens);
   if (s.embed) q.set("embed", "1");
   const str = q.toString();
   return str ? `?${str}` : "";
@@ -121,6 +140,8 @@ export function currentShare(): ShareState {
     sel: st.selected ?? undefined,
     report: st.waterReportOpen || undefined,
     market: st.marketReportOpen || undefined,
+    vintage: getVintage() ?? undefined,
+    lens: useLens.getState().personaId ?? undefined,
     embed: st.embed || undefined,
   };
 }
@@ -162,8 +183,16 @@ export function startUrlSync(): () => void {
       schedule();
     }
   });
+  const unsubReleases = useReleases.subscribe((s, prev) => {
+    if (s.vintage !== prev.vintage) schedule();
+  });
+  const unsubLens = useLens.subscribe((s, prev) => {
+    if (s.personaId !== prev.personaId) schedule();
+  });
   return () => {
     unsub();
+    unsubReleases();
+    unsubLens();
     if (timer) clearTimeout(timer);
   };
 }
@@ -174,10 +203,17 @@ export function startUrlSync(): () => void {
  */
 export function applyShare(s: ShareState, opts: { fly?: boolean } = {}): void {
   const st = useGlobe.getState();
+  // A lens goes first so an explicit layer list or panel in the same link wins over its defaults.
+  if (s.lens) applyPersona(s.lens, { fly: opts.fly !== false && s.lat == null, configure: true });
   if (s.layers) {
     for (const id of LAYER_IDS) st.setLayer(id, s.layers.includes(id));
   }
   if (s.t != null) setMissionTime(s.t);
+  if (s.vintage) {
+    useReleases.getState().setVintage(s.vintage);
+    // An explicit clock wins; otherwise the vintage pins the clock to that day.
+    if (s.t == null) setMissionTime(vintageClockMs(s.vintage));
+  }
   if (s.report) st.setWaterReportOpen(true);
   if (s.market) st.setMarketReportOpen(true);
   if (opts.fly !== false && s.lat != null && s.lon != null) {
@@ -204,7 +240,7 @@ export async function copyShareLink(): Promise<string> {
   const url = shareUrl();
   try {
     await navigator.clipboard.writeText(url);
-    useGlobe.getState().pushLog({ level: "info", text: "Link copied. It carries the view, the layers, the clock, the selection and open reports." });
+    useGlobe.getState().pushLog({ level: "info", text: "Link copied. It carries the view, the layers, the clock, the vintage, the selection and open reports." });
   } catch {
     useGlobe.getState().pushLog({ level: "warn", text: `Clipboard blocked; the link is ${url}` });
   }

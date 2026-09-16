@@ -10,6 +10,7 @@ import { addBaseImagery, addNightLights, setGoogleTiles, setTerrain } from "@/li
 import { allRenderers, getRenderer } from "@/lib/globe/registry";
 import type { PickId } from "@/lib/globe/renderer";
 import { cinematicTick, followTick } from "@/lib/globe/camera";
+import { isMobileViewport } from "@/lib/hooks/useIsMobile";
 import { satWorker } from "@/lib/globe/satWorker";
 import { parseShare } from "@/lib/globe/share";
 import { flyTo } from "@/lib/globe/camera";
@@ -53,7 +54,8 @@ export default function CesiumGlobe() {
         selectionIndicator: false,
         vrButton: false,
         shouldAnimate: true,
-        msaaSamples: 4,
+        // Phones: 2x MSAA is the difference between 60 and 30 fps on a mid-range GPU.
+        msaaSamples: isMobileViewport() ? 2 : 4,
         creditContainer: creditRef.current ?? undefined,
         contextOptions: { webgl: { powerPreference: "high-performance" } },
       });
@@ -198,6 +200,7 @@ export default function CesiumGlobe() {
           followTick();
         } else if (
           useSettings.getState().prefs.cinematic &&
+          !isMobileViewport() &&
           now - lastInput > 12_000 &&
           !st.settingsOpen &&
           !st.searchOpen

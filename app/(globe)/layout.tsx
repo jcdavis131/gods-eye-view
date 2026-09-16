@@ -1,7 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Geist_Mono, Rajdhani } from "next/font/google";
-import "./globals.css";
-import { Providers } from "./providers";
+import "../globals.css";
+import { Providers } from "../providers";
+import { BASE_METADATA, BASE_DESCRIPTION } from "@/lib/seo/base";
 
 const mono = Geist_Mono({
   variable: "--font-geist-mono",
@@ -14,36 +15,24 @@ const display = Rajdhani({
   weight: ["500", "600", "700"],
 });
 
-const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "https://eye.jcamd.com";
-const DESCRIPTION =
-  "A spy satellite simulator in your browser, except the data is real: live aircraft, ships, satellites, earthquakes, launches, and the water that sustains communities. Rivers, reservoirs, aquifers, drought and Sentinel-2 turbidity, no API keys.";
-
+// A bare string, not a template: the globe is the home route and its rendered
+// <title> must not move.
 export const metadata: Metadata = {
-  metadataBase: new URL(SITE),
+  ...BASE_METADATA,
   title: "Embedding Atlas",
-  description: DESCRIPTION,
-  applicationName: "Embedding Atlas",
-  openGraph: {
-    title: "Embedding Atlas",
-    description: DESCRIPTION,
-    type: "website",
-    siteName: "Embedding Atlas",
-    images: [{ url: "/og.jpg", width: 1600, height: 960, alt: "Community water report over San Antonio on the Embedding Atlas globe" }],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Embedding Atlas",
-    description: DESCRIPTION,
-    images: ["/og.jpg"],
-  },
+  description: BASE_DESCRIPTION,
 };
 
 export const viewport: Viewport = {
   themeColor: "#03070a",
   colorScheme: "dark",
+  width: "device-width",
+  initialScale: 1,
+  // Let the HUD pad itself around the notch and the home indicator.
+  viewportFit: "cover",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function GlobeLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`dark ${mono.variable} ${display.variable} h-full antialiased`}>
       <head>

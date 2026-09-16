@@ -1,8 +1,15 @@
 "use client";
 
-import { Search, Settings2, Crosshair, Home, Droplets, Compass, Link2, Landmark, Menu } from "lucide-react";
+import { Search, Settings2, Crosshair, Home, Droplets, Compass, Link2, Landmark, Menu, Activity, CalendarDays, Bell, Table2, Aperture } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useState } from "react";
+import { useIndicators } from "@/lib/indicators/store";
+import { useReleases } from "@/lib/releases/store";
+import { useWatchlists } from "@/lib/watch/store";
+import { useScreener } from "@/lib/screener/store";
+import DeskToggle from "./DeskToggle";
+import { useLens } from "@/lib/personas/store";
+import { PERSONA_BY_ID } from "@/lib/personas/registry";
 import { copyShareLink } from "@/lib/globe/share";
 import { useNow } from "@/lib/hooks/useNow";
 import { useGlobe } from "@/lib/store/globe";
@@ -57,6 +64,18 @@ export default function TopBar() {
   const waterOpen = useGlobe((s) => s.waterReportOpen);
   const marketOpen = useGlobe((s) => s.marketReportOpen);
   const setExploreOpen = useGlobe((s) => s.setExploreOpen);
+  const indOpen = useIndicators((s) => s.open);
+  const toggleInd = useIndicators((s) => s.toggle);
+  const relOpen = useReleases((s) => s.releasesOpen);
+  const setRelOpen = useReleases((s) => s.setReleasesOpen);
+  const vintage = useReleases((s) => s.vintage);
+  const watchOpen = useWatchlists((s) => s.open);
+  const setWatchOpen = useWatchlists((s) => s.setOpen);
+  const screenOpen = useScreener((s) => s.open);
+  const toggleScreen = useScreener((s) => s.toggle);
+  const personaId = useLens((s) => s.personaId);
+  const setPickerOpen = useLens((s) => s.setPickerOpen);
+  const persona = personaId ? PERSONA_BY_ID[personaId] : null;
   const live = isLive(clock.offsetMs);
   const mission = now ? now + clock.offsetMs : 0;
 
@@ -93,13 +112,14 @@ export default function TopBar() {
 
   return (
     <header className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-start justify-between gap-2 p-2 sm:gap-3 sm:p-3">
+      {/* Widths: the actions strip is icon-only (titles + sr-only names) so twelve actions fit beside the clock; the subtitle and live contacts appear from 2xl, the clock readout from lg; the strip scrolls sideways before it ever clips. */}
       {/* brand */}
-      <div className="hud-panel pointer-events-auto flex shrink-0 items-center gap-3 px-3 py-2">
+      <div className="hud-panel pointer-events-auto flex shrink-0 items-center gap-3 px-3 py-2 sm:gap-4 sm:px-4">
         <div>
           <div className="hud-display whitespace-nowrap text-[15px] font-semibold leading-none text-primary sm:text-[17px]">
             Embedding Atlas
           </div>
-          <div className="hud-label mt-1 hidden text-[9px] sm:block">
+          <div className="hud-label mt-1 hidden whitespace-nowrap text-[9px] 2xl:block">
             spy satellite simulator · the data is real
           </div>
         </div>
@@ -111,18 +131,26 @@ export default function TopBar() {
           />
           <span className="hud-label">{ready ? "ONLINE" : "BOOT"}</span>
         </div>
-        {/* Mobile keeps just the status dot: the tagline and ONLINE text are
-            what wrapped and ghosted over each other at phone widths. */}
+        {/* Narrow viewports keep just the status dot: the tagline and ONLINE
+            text are what wrapped and ghosted over each other there. */}
         <span
           className={`hud-dot sm:hidden ${ready ? "text-primary" : "text-warn blink"}`}
           style={{ color: ready ? undefined : "var(--warn)" }}
           role="img"
           aria-label={ready ? "Online" : "Booting"}
         />
+        {persona && (
+          <>
+            <div className="hidden h-8 w-px bg-border sm:block" />
+            <button type="button" onClick={() => setPickerOpen(true)} className="hud-label hidden whitespace-nowrap hover:text-primary sm:block" style={{ color: persona.color }} title="Change lens">
+              lens · {persona.title}
+            </button>
+          </>
+        )}
       </div>
 
       {/* clock + camera readout */}
-      <div className="hud-panel pointer-events-auto hidden items-center gap-5 px-4 py-2 md:flex">
+      <div className="hud-panel pointer-events-auto hidden shrink-0 items-center gap-5 whitespace-nowrap px-4 py-2 lg:flex">
         <div>
           <div className="hud-label">Mission clock</div>
           <div className="mt-0.5 flex items-center gap-2 text-[13px] tabular-nums text-foreground">
@@ -134,6 +162,11 @@ export default function TopBar() {
             >
               {live ? "LIVE" : clock.offsetMs < 0 ? "REPLAY" : "FORWARD"}
             </span>
+            {vintage && (
+              <span className="rounded bg-warn/15 px-1 text-[9px] tracking-widest text-warn" title="Data vintage pinned by the permalink (&v=)">
+                VINTAGE {vintage}
+              </span>
+            )}
           </div>
         </div>
         <div className="h-8 w-px bg-border" />
@@ -144,8 +177,8 @@ export default function TopBar() {
             <span className="ml-2 text-muted-foreground">ALT {formatDistance(view.height)}</span>
           </div>
         </div>
-        <div className="h-8 w-px bg-border" />
-        <div>
+        <div className="hidden h-8 w-px bg-border 2xl:block" />
+        <div className="hidden 2xl:block">
           <div className="hud-label">Live contacts</div>
           <div className="mt-0.5 text-[13px] tabular-nums text-primary">
             {liveCount.toLocaleString()}
@@ -154,7 +187,16 @@ export default function TopBar() {
       </div>
 
       {/* actions */}
-      <div className="hud-panel pointer-events-auto flex shrink-0 items-center gap-1 p-1">
+      <div className="hud-panel pointer-events-auto flex min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap p-1 [scrollbar-width:none]">
+        <button
+          type="button"
+          onClick={() => setPickerOpen(true)}
+          className="flex items-center gap-2 px-3 py-2 text-[11px] uppercase tracking-wider text-foreground/80 hover:bg-accent hover:text-primary"
+          title="Lens: who is looking (real estate, economist, trader, water, supply chain, public finance, explorer)"
+        >
+          <Aperture className="size-3.5" />
+          <span className="sr-only">Lens</span>
+        </button>
         <VoiceControl />
         <button
           type="button"
@@ -163,7 +205,7 @@ export default function TopBar() {
           title="Curated places, guided tour, exports"
         >
           <Compass className="size-3.5" />
-          <span className="hidden sm:inline">Explore</span>
+          <span className="sr-only">Explore</span>
         </button>
         <button
           type="button"
@@ -172,8 +214,8 @@ export default function TopBar() {
           title="Search flights, ships, satellites, places (Ctrl+K)"
         >
           <Search className="size-3.5" />
-          Search
-          <span className="hud-kbd">⌘K</span>
+          <span className="sr-only">Search</span>
+          <span className="hud-kbd hidden 2xl:inline">⌘K</span>
         </button>
         <button
           type="button"
@@ -184,7 +226,7 @@ export default function TopBar() {
           title="Community water report for the current view"
         >
           <Droplets className="size-3.5" />
-          Water
+          <span className="sr-only">Water</span>
         </button>
         <button
           type="button"
@@ -195,8 +237,49 @@ export default function TopBar() {
           title="Market report for the current view: home values, rents, wages, jobs, trade gateways"
         >
           <Landmark className="size-3.5" />
-          Market
+          <span className="sr-only">Market</span>
         </button>
+        <button
+          type="button"
+          onClick={toggleInd}
+          aria-pressed={indOpen}
+          className={`flex items-center gap-2 px-3 py-2 text-[11px] uppercase tracking-wider hover:bg-accent hover:text-primary ${indOpen ? "text-primary" : "text-foreground/80"}`}
+          title="Named indicators with thresholds: river stages, freight, housing, energy, labour, trade"
+        >
+          <Activity className="size-3.5" />
+          <span className="sr-only">Signals</span>
+        </button>
+        <button
+          type="button"
+          onClick={toggleScreen}
+          aria-pressed={screenOpen}
+          className={`flex items-center gap-2 px-3 py-2 text-[11px] uppercase tracking-wider hover:bg-accent hover:text-primary ${screenOpen ? "text-primary" : "text-foreground/80"}`}
+          title="Screener: rank and filter counties, states, ports, crossings, countries"
+        >
+          <Table2 className="size-3.5" />
+          <span className="sr-only">Screen</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setRelOpen(!relOpen)}
+          aria-pressed={relOpen}
+          className={`flex items-center gap-2 px-3 py-2 text-[11px] uppercase tracking-wider hover:bg-accent hover:text-primary ${relOpen ? "text-primary" : "text-foreground/80"}`}
+          title="Release calendar, loaded vintages, movers since the last release"
+        >
+          <CalendarDays className="size-3.5" />
+          <span className="sr-only">Releases</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setWatchOpen(!watchOpen)}
+          aria-pressed={watchOpen}
+          className={`flex items-center gap-2 px-3 py-2 text-[11px] uppercase tracking-wider hover:bg-accent hover:text-primary ${watchOpen ? "text-primary" : "text-foreground/80"}`}
+          title="Watchlists with rules, RSS/Atom feeds and webhooks"
+        >
+          <Bell className="size-3.5" />
+          <span className="sr-only">Watch</span>
+        </button>
+        <DeskToggle />
         <button
           type="button"
           onClick={() => void copyShareLink()}
@@ -204,7 +287,7 @@ export default function TopBar() {
           title="Copy a link to exactly this view, layers, clock and selection"
         >
           <Link2 className="size-3.5" />
-          Share
+          <span className="sr-only">Share</span>
         </button>
         <button
           type="button"

@@ -19,6 +19,8 @@ import { findPasses, type SatPass } from "@/lib/globe/passes";
 import { useSettings } from "@/lib/store/settings";
 import { turbidityHex } from "@/lib/water/overlay";
 import EconomyAside from "./EconomyAsides";
+import CompanyAside from "./CompanyAside";
+import FinanceAside from "./FinanceAsides";
 
 function useRefresh(ms: number) {
   const [, set] = useState(0);
@@ -84,12 +86,12 @@ export default function InfoPanel() {
   const details = Object.entries(p.details ?? {}).filter(([, v]) => v != null && v !== "" && v !== false);
   const isLiveLayer =
     !p.simulated &&
-    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate"].includes(p.layer);
+    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "banks", "spending"].includes(p.layer);
   const gauge = p.layer === "water" && (p.kind === "gauge" || p.kind === "reservoir") && p.id.startsWith("usgs:") ? (p.extra as GaugeExtra) : null;
   const well = p.layer === "groundwater" && p.kind === "well" ? (p.extra as WellExtra) : null;
   const chip = p.layer === "turbidity" ? (p.extra as ChipExtra) : null;
   const sat = p.layer === "satellites" ? ((p.extra as SatExtra | undefined)?.omm ?? null) : null;
-  const estimate = p.layer === "turbidity" || p.layer === "realestate" ? "ESTIMATE" : null;
+  const estimate = p.layer === "turbidity" || p.layer === "realestate" || p.layer === "spending" ? "ESTIMATE" : null;
   const economy = p.layer === "trade" || p.layer === "commerce" || p.layer === "realestate";
 
   return (
@@ -177,6 +179,8 @@ export default function InfoPanel() {
         )}
         {sat && <SatPasses key={sat.NORAD_CAT_ID} omm={sat} />}
         {economy && <EconomyAside key={p.id} feature={feature} />}
+        {p.layer === "companies" && <CompanyAside key={p.id} feature={feature} />}
+        {(p.layer === "banks" || p.layer === "spending") && <FinanceAside key={p.id} feature={feature} />}
         {well && (
           <GaugeHistory
             key={`${well.site}:${well.primary}`}

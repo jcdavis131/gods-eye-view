@@ -15,6 +15,9 @@ import { turbidityLayer } from "./turbidity";
 import { tradeLayer } from "./trade";
 import { commerceLayer } from "./commerce";
 import { realestateLayer } from "./realestate";
+import { companiesLayer } from "./companies";
+import { banksLayer } from "./banks";
+import { spendingLayer } from "./spending";
 import { occupationsLayer } from "./occupations";
 import { weatherLayer } from "./weather";
 import { sportsLayer } from "./sports";
@@ -33,6 +36,9 @@ export const LAYERS: LayerDefinition[] = [
   tradeLayer,
   commerceLayer,
   realestateLayer,
+  companiesLayer,
+  banksLayer,
+  spendingLayer,
   occupationsLayer,
   weatherLayer,
   sportsLayer,
