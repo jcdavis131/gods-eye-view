@@ -126,6 +126,8 @@ export interface Prefs {
   terrain: boolean;
   /** CelesTrak GP groups to load. "active" is ~10k objects and opt-in. */
   satelliteGroups: string[];
+  /** Observer location for satellite pass predictions; null = not set. */
+  observer: { lat: number; lon: number; label: string } | null;
   aircraftSource: "auto" | "adsblol" | "opensky" | "adsbx";
   voiceProvider: "browser" | "elevenlabs" | "vapi";
 }
@@ -139,6 +141,7 @@ export const DEFAULT_PREFS: Prefs = {
   googleTiles: false,
   terrain: false,
   satelliteGroups: ["stations", "visual", "gps-ops", "military", "weather"],
+  observer: null,
   aircraftSource: "auto",
   voiceProvider: "browser",
 };

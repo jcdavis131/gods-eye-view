@@ -11,6 +11,8 @@ export { json2satrec, twoline2satrec } from "../../node_modules/satellite.js/dis
 export { propagate, gstime } from "../../node_modules/satellite.js/dist/propagation.js";
 export {
   eciToGeodetic,
+  eciToEcf,
+  ecfToLookAngles,
   degreesLat,
   degreesLong,
 } from "../../node_modules/satellite.js/dist/transforms.js";

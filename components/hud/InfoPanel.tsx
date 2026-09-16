@@ -14,6 +14,9 @@ import GaugeHistory from "./GaugeHistory";
 import type { GaugeExtra } from "@/lib/layers/water";
 import type { WellExtra } from "@/lib/layers/groundwater";
 import type { ChipExtra } from "@/lib/layers/turbidity";
+import type { SatExtra } from "@/lib/layers/satellites";
+import { findPasses, type SatPass } from "@/lib/globe/passes";
+import { useSettings } from "@/lib/store/settings";
 import { turbidityHex } from "@/lib/water/overlay";
 import EconomyAside from "./EconomyAsides";
 
@@ -85,6 +88,7 @@ export default function InfoPanel() {
   const gauge = p.layer === "water" && (p.kind === "gauge" || p.kind === "reservoir") && p.id.startsWith("usgs:") ? (p.extra as GaugeExtra) : null;
   const well = p.layer === "groundwater" && p.kind === "well" ? (p.extra as WellExtra) : null;
   const chip = p.layer === "turbidity" ? (p.extra as ChipExtra) : null;
+  const sat = p.layer === "satellites" ? ((p.extra as SatExtra | undefined)?.omm ?? null) : null;
   const estimate = p.layer === "turbidity" || p.layer === "realestate" ? "ESTIMATE" : null;
   const economy = p.layer === "trade" || p.layer === "commerce" || p.layer === "realestate";
 
@@ -171,6 +175,7 @@ export default function InfoPanel() {
         {gauge?.primary && (
           <GaugeHistory key={`${gauge.site}:${gauge.primary}`} site={gauge.site} param={gauge.primary} latest={gauge.readings[gauge.primary]?.value} />
         )}
+        {sat && <SatPasses key={sat.NORAD_CAT_ID} omm={sat} />}
         {economy && <EconomyAside key={p.id} feature={feature} />}
         {well && (
           <GaugeHistory
@@ -257,6 +262,82 @@ function CameraStill({ url, name }: { url: string; name: string }) {
       </div>
       <div className="absolute bottom-1 right-2 text-[9px] text-white/60">
         {new Date(stamp).toISOString().slice(11, 19)}Z
+      </div>
+    </div>
+  );
+}
+
+function SatPasses({ omm }: { omm: SatExtra["omm"] }) {
+  const observer = useSettings((s) => s.prefs.observer);
+  const [passes, setPasses] = useState<SatPass[] | null>(null);
+  useEffect(() => {
+    if (!observer) return;
+    let cancelled = false;
+    const compute = () => {
+      let next: SatPass[];
+      try {
+        next = findPasses(omm, observer, Date.now(), { hoursAhead: 48 });
+      } catch {
+        next = [];
+      }
+      if (!cancelled) setPasses(next);
+    };
+    const t0 = setTimeout(compute, 0);
+    const id = setInterval(compute, 60_000); // one satellite: cheap, keeps times fresh
+    return () => {
+      cancelled = true;
+      clearTimeout(t0);
+      clearInterval(id);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [omm.NORAD_CAT_ID, omm.EPOCH, observer?.lat, observer?.lon]);
+
+  // Without an observer there is nothing to predict against; stale results
+  // from a cleared observer are hidden rather than shown.
+  const shown = observer ? passes : null;
+
+  const fmt = (ms: number) => {
+    const d = new Date(ms);
+    return `${d.toISOString().slice(5, 10)} ${d.toISOString().slice(11, 16)}Z`;
+  };
+
+  return (
+    <div className="border-t border-border px-3 py-2">
+      <div className="hud-label mb-1">Upcoming passes{observer ? ` · ${observer.label}` : ""}</div>
+      {!observer && (
+        <div className="text-[10px] leading-snug text-muted-foreground">
+          Set an observer location in Settings → Data to predict passes overhead.
+        </div>
+      )}
+      {observer && shown && shown.length === 0 && (
+        <div className="text-[10px] leading-snug text-muted-foreground">
+          No passes above the horizon in the next 48 h from this location.
+        </div>
+      )}
+      {observer && shown && shown.length > 0 && (
+        <ul className="space-y-1">
+          {shown.slice(0, 5).map((ps, i) => (
+            <li key={`${ps.aosTime}-${i}`} className="text-[10px] leading-snug tabular-nums">
+              {ps.geostationary ? (
+                <span>
+                  Visible now · geostationary · max {ps.maxElevation.toFixed(0)}°
+                </span>
+              ) : (
+                <span>
+                  {fmt(ps.aosTime)} → {fmt(ps.losTime)}
+                  <span className="text-muted-foreground">
+                    {" "}
+                    · max {ps.maxElevation.toFixed(0)}° · {ps.aosAzimuth.toFixed(0)}°→
+                    {ps.losAzimuth.toFixed(0)}°
+                  </span>
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="mt-1 text-[9px] leading-snug text-muted-foreground">
+        Predicted from public CelesTrak elements via SGP4 — approximate, degrades as elements age.
       </div>
     </div>
   );
