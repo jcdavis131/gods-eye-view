@@ -49,6 +49,15 @@ export async function cached<T>(
   }
 }
 
+/**
+ * Drop one entry. For producers that can succeed while returning nothing
+ * useful — a degraded upstream set — so the next caller retries rather than
+ * inheriting the outage for the rest of the TTL.
+ */
+export function cacheDelete(key: string): void {
+  store.delete(key);
+}
+
 export function cacheStats() {
   return { entries: store.size, inflight: inflight.size };
 }

@@ -24,6 +24,7 @@ import { qcewSectors } from "@/lib/economy/sources";
 import { companyFacts, companyFactsUrl, parseFilings, parseProfile, submissions, submissionsUrl, tickers, tickersExchange } from "@/lib/companies/edgar";
 import { derivedRatios, factSeries, latestFacts } from "@/lib/companies/facts";
 import { BUNDLE, companiesCsv, companiesInBbox, companiesInCounty, findCompany, searchCompanies } from "@/lib/companies/features";
+import { BUNDLE_CAVEATS, bundleProvenance } from "@/lib/companies/section";
 import { parseBbox, parseCik, parseFips, parseFormat, parseLimit, parseQuery, parseTicker, DEFAULT_SEARCH_LIMIT, MAX_FEATURES } from "@/lib/companies/params";
 import { countySectorExposure, sicToSector } from "@/lib/companies/sectors";
 import type { CompanyProfile, ConceptKey, DerivedRatio, FactValue, Filing, SectorExposure } from "@/lib/companies/types";
@@ -47,17 +48,6 @@ interface OpResult<T = unknown> {
   ttlS: number;
 }
 
-function bundleProvenance(): Provenance[] {
-  const notes = [BUNDLE.pulled ? `snapshot pulled ${BUNDLE.pulled}` : "committed fixture; financial facts are null until scripts/companies-data.mjs runs"];
-  return [
-    provenance(source("sec-edgar"), { kind: "published", upstreamUrl: "https://www.sec.gov/files/company_tickers_exchange.json", releasedAt: BUNDLE.pulled ?? undefined, notes }),
-    provenance(source("census-zcta-county"), { kind: "published", notes: ["business-address ZIP to county, largest land-area share"] }),
-    provenance(source("census-tigerweb"), { kind: "published", notes: ["ZCTA centroid places the HQ; a city centroid is used where the fixture says so"] }),
-  ];
-}
-
-const BUNDLE_CAVEATS = ["Positions are ZIP or city centroids of the registered business address, not building footprints.", "Sector and ETF names are a stated convention (lib/companies/sectors.ts), not classification by MSCI/S&P and not advice."];
-
 function collection(features: LayerFeature[]) {
   return { type: "FeatureCollection" as const, features };
 }
@@ -67,7 +57,7 @@ function opNear(bbox: [number, number, number, number]): OpResult {
   return {
     data: collection(features),
     provenance: bundleProvenance(),
-    caveats: BUNDLE_CAVEATS,
+    caveats: [...BUNDLE_CAVEATS],
     meta: { source: "SEC EDGAR", bbox, count: features.length, capped: features.length >= MAX_FEATURES, pulled: BUNDLE.pulled, bundle: BUNDLE.counts },
     ttlS: 6 * 3600,
   };
@@ -78,7 +68,7 @@ function opCounty(fips: string): OpResult {
   return {
     data: collection(features),
     provenance: bundleProvenance(),
-    caveats: BUNDLE_CAVEATS,
+    caveats: [...BUNDLE_CAVEATS],
     meta: { source: "SEC EDGAR", fips, count: features.length, pulled: BUNDLE.pulled },
     ttlS: 6 * 3600,
   };
@@ -89,7 +79,7 @@ function opSearch(q: string, limit: number): OpResult {
   return {
     data: collection(features),
     provenance: bundleProvenance(),
-    caveats: BUNDLE_CAVEATS,
+    caveats: [...BUNDLE_CAVEATS],
     meta: { source: "SEC EDGAR", q, count: features.length, limit, pulled: BUNDLE.pulled },
     ttlS: 6 * 3600,
   };

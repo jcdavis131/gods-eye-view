@@ -11,6 +11,7 @@
 //   FRED                      fredgraph.csv, no key
 //   NGA World Port Index      bundled snapshot (lib/economy/data)
 
+import { bboxAround } from "@/lib/globe/geo";
 import { cached } from "@/lib/server/cache";
 import { polite, upstream, upstreamJson } from "@/lib/server/upstream";
 import { cellNum, parseCsv } from "./csv";
@@ -34,8 +35,6 @@ import {
 import wpiJson from "./data/wpi.json";
 import countriesJson from "./data/countries.json";
 import btsPortsJson from "./data/bts_ports.json";
-import msaIndexJson from "./data/msa_index.json";
-import msaJobsJson from "./data/msa_jobs.json";
 
 export const WPI: { source: string; pulled: string; ports: WpiPort[] } = wpiJson as unknown as { source: string; pulled: string; ports: WpiPort[] };
 export const COUNTRIES: { source: string; pulled: string; features: CountryFeatureIn[] } = countriesJson as unknown as {
@@ -346,6 +345,59 @@ export function tigerCountyAt(lon: number, lat: number): Promise<AreaPoly | null
     });
     return feats.map(toPoly).find((x): x is AreaPoly => !!x) ?? null;
   }).then((c) => c.value);
+}
+
+const COUNTY_FIPS_RE = /^[0-9]{5}$/;
+
+/**
+ * One county's generalized polygon by 5-digit FIPS, at 1:20M.
+ *
+ * The returned AreaPoly.stusab is ALWAYS undefined. County TIGER layers carry
+ * STATE (the 2-digit FIPS) but no STUSAB, so tigerQuery cannot ask for the
+ * field without earning a 400 — see its outFields above. Callers take the
+ * postal abbreviation and the state name from lib/places/registry instead;
+ * routing identity through stateLookup() would re-add exactly the round-trip
+ * the offline manifest exists to remove.
+ *
+ * Resolves to null rather than throwing when TIGERweb is unreachable, answers
+ * with nothing, or answers with a different county, so a place page can render
+ * the geometry section as unavailable instead of returning a 500. It throws
+ * only on a malformed FIPS, which is a programming error and must be caught
+ * before it can reach the query string.
+ *
+ * `fallback` is the county's Census internal point from the manifest. It is
+ * used only if the attribute query comes back empty.
+ */
+export async function tigerCountyByGeoid(fips: string, fallback?: { lon: number; lat: number }): Promise<AreaPoly | null> {
+  if (!COUNTY_FIPS_RE.test(fips)) throw new Error(`tigerCountyByGeoid: expected a 5-digit county FIPS, got ${JSON.stringify(fips)}`);
+  return cached(`tiger:geoid:${fips}`, 24 * H, async () => {
+    // tigerQuery writes where:"1=1" first and spreads ...params after it, so
+    // this override wins. The equality check below is the guard against that
+    // ordering ever changing: without it a spread that lost would quietly
+    // return the first of all 3,235 counties instead of the one asked for.
+    const feats = await tigerQuery(TIGER_LAYER.county["20M"], { where: `GEOID='${fips}'` });
+    const exact = feats.map(toPoly).find((x): x is AreaPoly => !!x && x.geoid === fips);
+    if (exact) return exact;
+    if (feats.length > 0 || !fallback) return null;
+    // The internal point is guaranteed to lie inside its own polygon, so a
+    // small bbox around it contains the county even when the attribute query
+    // is unsupported. One extra request, and only on the empty path.
+    const near = await tigerCounties(bboxAround(fallback.lat, fallback.lon, 30_000), "20M");
+    return near.find((c) => c.geoid === fips) ?? null;
+  })
+    .then((c) => c.value)
+    .catch(() => null);
+}
+
+/**
+ * One state's generalized polygon by 2-digit state FIPS. A filter over the
+ * tigerStates() 24 h cache, so it costs no additional upstream request.
+ * Unlike the county layer, the state layer does carry STUSAB.
+ */
+export function tigerStateByGeoid(stateFips: string): Promise<AreaPoly | null> {
+  return tigerStates()
+    .then((all) => all.find((s) => s.geoid === stateFips) ?? null)
+    .catch(() => null);
 }
 
 /** State FIPS -> USPS abbreviation and name, from the states layer. */
@@ -865,24 +917,7 @@ export function tigerCountyPoints(): Promise<AreaPoint[]> {
 
 // ---------------------------------------------------------------- BLS OEWS MSA occupations (bundled, keyless)
 
-import type { MsaIndexEntry, MsaJobs } from "./features";
-
-export const OEWS_AS_OF = "May 2025";
-const OEWS_SOURCE = "BLS Occupational Employment and Wage Statistics, May 2025 (MSA) + Census TIGERweb CBSA centroids";
-
-const MSA_INDEX = msaIndexJson as unknown as MsaIndexEntry[];
-const MSA_JOBS = msaJobsJson as unknown as Record<string, { top: MsaJobs["top"]; major: MsaJobs["major"] }>;
-const MSA_BY_ID = new Map(MSA_INDEX.map((m) => [m.id, m]));
-
-/** Every MSA: id, name, state, centroid, employment, distinctive major group. Static for the year. */
-export function oewsMsaIndex(): { asOf: string; source: string; msas: MsaIndexEntry[] } {
-  return { asOf: OEWS_AS_OF, source: OEWS_SOURCE, msas: MSA_INDEX };
-}
-
-/** Occupation mix for one MSA (5-digit CBSA code): top 30 detailed occupations + major-group rollup. */
-export function oewsMsaJobs(msa: string): { asOf: string; source: string; data: MsaJobs } | null {
-  const meta = MSA_BY_ID.get(msa);
-  const j = MSA_JOBS[msa];
-  if (!meta || !j) return null;
-  return { asOf: OEWS_AS_OF, source: OEWS_SOURCE, data: { msa, name: meta.name, top: j.top, major: j.major } };
-}
+// The implementation lives in ./oews so that a caller who only needs the
+// bundled occupation tables does not pay this module's static JSON imports.
+// Re-exported here because every existing caller reaches for it by this name.
+export { OEWS_AS_OF, oewsMsaIndex, oewsMsaJobs } from "./oews";

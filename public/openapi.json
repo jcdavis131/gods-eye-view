@@ -1622,6 +1622,91 @@
         }
       }
     },
+    "/api/brief": {
+      "get": {
+        "summary": "The deterministic place brief for a county, metro area or state, in the envelope",
+        "description": "The same brief the place pages and the /place, /metro and /state feeds carry. Findings are detected from published figures only and each one prints the arithmetic behind it. The brief is assembled once per scope and lens per hour, so two calls inside one window are byte-identical including `generatedAt`, which is the brief's own stamp rather than the moment the response was written.",
+        "tags": [
+          "brief"
+        ],
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^(county:[0-9]{5}|metro:[0-9]{5}|state:[A-Za-z]{2}|[0-9]{5}|[A-Za-z]{2})$"
+            },
+            "description": "county:48453 | metro:41700 | state:TX. A bare five-digit code is a county and a bare two-letter code is a state; the county and CBSA code spaces overlap, so a metro must carry the prefix."
+          },
+          {
+            "name": "lens",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "A persona id from /api/indicators' vocabulary, which narrows the findings to that persona's families. Omit for the unfiltered brief."
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json",
+                "txt"
+              ],
+              "default": "json"
+            },
+            "description": "txt is the plain-text rendering, with each finding's arithmetic printed under it. A brief is not a table, so there is no csv."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope { source, scope, lens, status, findings, page, provisional, rulesVersion, cacheAge, data, provenance[], generatedAt, caveats? } where data is the Brief; text/plain when format=txt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              },
+              "text/plain": {}
+            }
+          },
+          "400": {
+            "description": "Malformed scope, unknown lens or unknown format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Well-formed id that no place in the manifest answers to",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/mcp": {
       "get": {
         "summary": "MCP server description and tool manifest",

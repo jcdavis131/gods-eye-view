@@ -33,7 +33,6 @@ import { cached } from "@/lib/server/cache";
 import { jsonError } from "@/lib/server/upstream";
 import { badRequest, csv as csvResponse, ok, options, parseFormat, withCors, type CsvRow, type ResponseFormat } from "@/lib/server/respond";
 import type { Provenance } from "@/lib/provenance/types";
-import { dedupeProvenance } from "@/lib/provenance/collect";
 import {
   btsBorderProvenance,
   btsPortsProvenance,
@@ -63,16 +62,13 @@ import {
   PULSE_SERIES_COLUMNS,
   SECTOR_COLUMNS,
 } from "@/lib/economy/flatten";
-import { bboxAround, haversine } from "@/lib/globe/geo";
 import {
   buildAreas,
   buildCountries,
   buildCrossings,
   buildPorts,
   portSizeRank,
-  type AreaJoins,
   type AreaLevel,
-  type AreaPoly,
   type HomeValue,
   type PortStats,
   type WpiPort,
@@ -84,29 +80,22 @@ import {
   COUNTRIES,
   fred,
   FRED_SERIES,
-  metroRow,
   oewsMsaIndex,
   OEWS_AS_OF,
   oewsMsaJobs,
-  qcewLatest,
   qcewSectors,
-  stateLookup,
-  tigerCountyAt,
   tigerCounties,
   tigerStates,
   witsPartners,
   worldBank,
   WPI,
-  zillow,
   type PulseItem,
-  type TigerDetail,
 } from "@/lib/economy/sources";
-import { buildMarketReport } from "@/lib/economy/report";
-import type { LayerFeature } from "@/lib/layers/types";
+// The assembly layer these ops used to keep private: a server component needs a
+// MarketReport without an HTTP round-trip to its own origin. See lib/economy/assemble.ts.
+import { areaContext, detailFor, joinsFor, marketReportAt, snapBbox, withStusab } from "@/lib/economy/assemble";
 
 export const maxDuration = 60;
-
-const MAX_SPAN_DEG = 18;
 
 type Bbox = [number, number, number, number];
 
@@ -114,18 +103,6 @@ function parseBbox(raw: string | null): Bbox | null {
   const v = (raw ?? "").split(",").map(Number);
   if (v.length !== 4 || !v.every(Number.isFinite)) return null;
   return snapBbox(v as Bbox);
-}
-
-/** Clamp to MAX_SPAN_DEG around the centre and snap outward to a 1 degree grid. */
-function snapBbox(v: Bbox): Bbox {
-  let [w, s, e, n] = v;
-  const cx = (w + e) / 2;
-  const cy = (s + n) / 2;
-  w = Math.max(w, cx - MAX_SPAN_DEG / 2, -180);
-  e = Math.min(e, cx + MAX_SPAN_DEG / 2, 180);
-  s = Math.max(s, cy - MAX_SPAN_DEG / 2, -90);
-  n = Math.min(n, cy + MAX_SPAN_DEG / 2, 90);
-  return [Math.floor(w), Math.floor(s), Math.ceil(e), Math.ceil(n)];
 }
 
 interface OpResult {
@@ -142,57 +119,6 @@ interface OpResult {
 /** When a cached value was fetched: now minus its age. */
 function retrievedAt(ageMs: number): string {
   return new Date(Date.now() - ageMs).toISOString();
-}
-
-/** Generalization by box size: fine polygons for a city, coarse for a region. */
-function detailFor(b: Bbox): TigerDetail {
-  const span = Math.max(b[2] - b[0], b[3] - b[1]);
-  return span <= 2 ? "500K" : span <= 7 ? "5M" : "20M";
-}
-
-async function joinsFor(level: AreaLevel): Promise<{ joins: AreaJoins; sources: string[]; asOf: Record<string, string> }> {
-  const sources: string[] = [];
-  const asOf: Record<string, string> = {};
-  const joins: AreaJoins = { jobs: new Map(), home: new Map(), rent: new Map(), stateNames: new Map() };
-  const [q, h, r, states] = await Promise.all([
-    qcewLatest().catch(() => null),
-    zillow(level === "county" ? "zhviCounty" : "zhviState").catch(() => null),
-    level === "county" ? zillow("zoriCounty").catch(() => null) : Promise.resolve(null),
-    stateLookup().catch(() => null),
-  ]);
-  if (q) {
-    sources.push("BLS QCEW");
-    asOf.qcew = q.period;
-    joins.jobs = level === "county" ? q.counties : q.states;
-  }
-  if (h) {
-    sources.push("Zillow ZHVI");
-    asOf.zhvi = h.asOf;
-    if (level === "county") joins.home = h.rows;
-    else if (states) {
-      // The state file is keyed by name; TIGERweb gives us FIPS.
-      for (const [fips, s] of states) {
-        const row = h.byName.get(s.name);
-        if (row) joins.home.set(fips, row);
-      }
-    }
-  }
-  if (r) {
-    sources.push("Zillow ZORI");
-    asOf.zori = r.asOf;
-    joins.rent = r.rows;
-  }
-  if (states && level === "county") {
-    for (const [fips, s] of states) joins.stateNames!.set(fips, s.name);
-  }
-  return { joins, sources, asOf };
-}
-
-/** County polygons carry only a state FIPS prefix; give them the USPS code for labels. */
-async function withStusab(polys: AreaPoly[]): Promise<AreaPoly[]> {
-  const states = await stateLookup().catch(() => null);
-  if (!states) return polys;
-  return polys.map((p) => (p.stusab ? p : { ...p, stusab: states.get(p.geoid.slice(0, 2))?.stusab }));
 }
 
 async function opAreas(level: AreaLevel, bbox: Bbox | null): Promise<OpResult> {
@@ -226,35 +152,20 @@ async function opAreas(level: AreaLevel, bbox: Bbox | null): Promise<OpResult> {
 
 /** What a county dossier needs beyond the feature: sector mix and the metro / state / US home values. */
 async function opContext(fips: string): Promise<OpResult> {
-  const isState = fips.endsWith("000");
-  const geoid = isState ? fips.slice(0, 2) : fips;
-  const [sectors, county, metro, state, states] = await Promise.all([
-    qcewSectors(fips).catch(() => null),
-    isState ? Promise.resolve(null) : zillow("zhviCounty").catch(() => null),
-    zillow("zhviMetro").catch(() => null),
-    zillow("zhviState").catch(() => null),
-    stateLookup().catch(() => null),
-  ]);
-  const home = county?.rows.get(geoid);
-  const stateName = states?.get(geoid.slice(0, 2))?.name;
-  const slim = (h: HomeValue | undefined | null) => (h ? { name: h.name, latest: h.latest, yoyPct: h.yoyPct, yearly: h.yearly } : null);
-  const at = new Date().toISOString();
-  const provenance: Provenance[] = [];
-  if (sectors) provenance.push(qcewProvenance(sectors.period, at, { area: fips, sectors: true }));
-  if (home) provenance.push(zillowProvenance("zhviCounty", county?.asOf, at));
-  if (metro) provenance.push(zillowProvenance("zhviMetro", metro.asOf, at, ["metro and United States rows"]));
-  if (state && stateName) provenance.push(zillowProvenance("zhviState", state.asOf, at));
+  const c = await areaContext(fips);
+  // The envelope has always carried slimmed Zillow rows; areaContext returns the full ones for server components.
+  const slim = (h: HomeValue | null) => (h ? { name: h.name, latest: h.latest, yoyPct: h.yoyPct, yearly: h.yearly } : null);
   return {
     data: {
-      period: sectors?.period,
-      sectors: sectors?.sectors ?? [],
-      metroHome: home?.metro && metro ? slim(metroRow(metro, home.metro)) : null,
-      stateHome: stateName ? slim(state?.byName.get(stateName)) : null,
-      usHome: slim(metro?.rows.get("US")),
+      period: c.period ?? undefined,
+      sectors: c.sectors,
+      metroHome: slim(c.metroHome),
+      stateHome: slim(c.stateHome),
+      usHome: slim(c.usHome),
     },
     meta: { source: "BLS QCEW + Zillow ZHVI", fips },
     ttlS: 6 * 3600,
-    provenance,
+    provenance: c.provenance,
   };
 }
 
@@ -393,58 +304,15 @@ async function opPulse(series = false): Promise<OpResult> {
 }
 
 async function opReport(lon: number, lat: number, origin: string): Promise<OpResult> {
-  const now = Date.now();
-  const caveats: string[] = [];
-  const county = await tigerCountyAt(lon, lat).catch(() => null);
-  const areas: LayerFeature[] = [];
-  let metroHome: HomeValue | null = null;
-  let usHome: HomeValue | null = null;
-  let sectors: Awaited<ReturnType<typeof qcewSectors>>["sectors"] = [];
-  if (county) {
-    const [{ joins }, metro] = await Promise.all([joinsFor("county"), zillow("zhviMetro").catch(() => null)]);
-    const polys = await withStusab([county]);
-    areas.push(...buildAreas(polys, "county", joins));
-    const home = joins.home.get(county.geoid);
-    if (metro) {
-      usHome = metro.rows.get("US") ?? null;
-      if (home?.metro) metroHome = metroRow(metro, home.metro) ?? null;
-    }
-    sectors = (await qcewSectors(county.geoid).catch(() => null))?.sectors ?? [];
-  } else caveats.push("No US county under this point (TIGERweb); home values and jobs cover the United States only.");
-  const [pulse, ports, border] = await Promise.all([
-    opPulse().catch(() => null),
-    opPorts(snapBbox(bboxAround(lat, lon, 220_000)), "medium").catch(() => null),
-    opBorder().catch(() => null),
-  ]);
-  const trade: LayerFeature[] = [];
-  if (ports) trade.push(...(ports.data as { features: LayerFeature[] }).features);
-  if (border) {
-    trade.push(
-      ...(border.data as { features: LayerFeature<GeoJSON.Point>[] }).features.filter(
-        (f) => haversine(lat, lon, f.geometry.coordinates[1], f.geometry.coordinates[0]) <= 260_000,
-      ),
-    );
-  }
-  if (!pulse) caveats.push("National series (FRED / BTS) did not answer.");
-  const report = buildMarketReport(
-    lon,
-    lat,
-    {
-      areas,
-      trade,
-      loaded: { areas: !!county, trade: !!(ports || border), pulse: !!pulse },
-      pulse: (pulse?.data as PulseItem[] | undefined) ?? [],
-      sectors,
-      metroHome,
-      usHome,
-      caveats,
-    },
-    now,
-  );
+  const m = await marketReportAt(lon, lat);
   const globe = `${origin}/?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}&h=150000&layers=realestate,commerce,trade&market=1`;
-  // The report already carries per-section provenance and citations; the envelope repeats the union plus the polygon source.
-  const provenance = dedupeProvenance([county ? [tigerProvenance(new Date(now).toISOString())] : [], report.provenance]);
-  return { data: report, meta: { source: "zillow+qcew+tigerweb+bts+fred", county: county?.geoid ?? null, globe }, ttlS: 900, provenance, caveats: report.caveats };
+  return {
+    data: m.report,
+    meta: { source: "zillow+qcew+tigerweb+bts+fred", county: m.area?.geoid ?? null, globe },
+    ttlS: 900,
+    provenance: m.provenance,
+    caveats: m.report.caveats,
+  };
 }
 
 /** JSON envelope, or CSV when asked and the op is tabular. */

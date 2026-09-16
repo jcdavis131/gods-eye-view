@@ -29,14 +29,13 @@ import { jsonError } from "@/lib/server/upstream";
 import { badRequest, csv as csvResponse, notFound, ok, options, parseFormat, withCors, type CsvRow, type ResponseFormat } from "@/lib/server/respond";
 import { provenance, type Provenance } from "@/lib/provenance/types";
 import { source } from "@/lib/provenance/sources";
-import { dedupeProvenance } from "@/lib/provenance/collect";
 import { qcewProvenance, tigerProvenance } from "@/lib/economy/provenance";
 import type { AreaLevel, AreaPoly, JobsRow } from "@/lib/economy/features";
 import { qcewLatest, stateLookup, tigerCounties, tigerStates } from "@/lib/economy/sources";
 import { detailFor, parseBbox, parseCert, parseCountyFips, parseYear, type Bbox } from "@/lib/finance/api";
+import { financeFor } from "@/lib/finance/assemble";
 import { bankFailures, bankProfile, branchesForCounties, countyDeposits, fdicProvenance, latestSod, sodForCounties, sodYears } from "@/lib/finance/fdic";
 import { buildBranches, buildSpendingAreas, type SpendingJoins } from "@/lib/finance/features";
-import { perJob } from "@/lib/finance/estimates";
 import {
   BANK_SHARE_COLUMNS,
   BRANCH_COLUMNS,
@@ -51,7 +50,6 @@ import {
   flattenSpendingAreas,
   SPENDING_AREA_COLUMNS,
 } from "@/lib/finance/flatten";
-import { financeSection, type FinanceInputs } from "@/lib/finance/report";
 import type { AreaObligations, SodRow, ToDateObligations } from "@/lib/finance/types";
 import { countySpendingDetail, daysSinceFyClose, fiscalYearOf, latestCompleteFy, obligationsByArea, obligationsToDate, REPORTING_LAG_DAYS, toDateFor } from "@/lib/finance/usaspending";
 
@@ -266,39 +264,14 @@ async function opSpendingDetail(fips: string, fyIn: number | null): Promise<OpRe
 /** The finance section of the market report for one county, from the same caches the layers use. */
 async function opSection(fips: string, fyIn: number | null): Promise<OpResult> {
   const now = new Date();
-  const at = now.toISOString();
   const fy = fyIn ?? latestCompleteFy(now);
-  const states = await stateLookup().catch(() => null);
-  const stusab = states?.get(fips.slice(0, 2))?.stusab;
-  const [sod, table, q, detail] = await Promise.allSettled([
-    latestSod(fips, now),
-    obligationsByArea("county", fy),
-    qcewLatest(),
-    stusab ? countySpendingDetail(fips, stusab, fy) : Promise.reject(new Error("unknown state FIPS")),
-  ]);
-  const caveats: string[] = [];
-  const deposits = sod.status === "fulfilled" ? (sod.value ? countyDeposits(fips, sod.value.year, sod.value.rows, sod.value.url, at) : null) : undefined;
-  if (sod.status === "rejected") caveats.push("FDIC did not answer; no deposit figures.");
-  let spending: FinanceInputs["spending"];
-  if (table.status === "fulfilled") {
-    const ob = table.value.byArea.get(fips) ?? null;
-    if (ob) {
-      const jobs = q.status === "fulfilled" ? q.value.counties.get(fips) : undefined;
-      const pj = jobs && !jobs.suppressed ? perJob(ob.total, jobs.emp, jobs.period, fy) : null;
-      const prov = [table.value.provenance];
-      if (jobs) prov.push(qcewProvenance(jobs.period, at, { area: fips }));
-      spending = { obligations: ob, perJob: pj, provenance: prov };
-    } else spending = null;
-  } else caveats.push("USAspending did not answer; no obligation figures.");
-  const topRecipient = detail.status === "fulfilled" ? (detail.value.recipients[0] ?? null) : null;
-  const areaName = deposits?.county ? `${deposits.county}${deposits.state ? ", " + deposits.state : ""}` : stusab ? `county ${fips}, ${stusab}` : undefined;
-  const section = financeSection(fips, { deposits, spending, topRecipient, areaName, retrievedAt: at });
+  const r = await financeFor(fips, { fy, now });
   return {
-    data: section,
-    meta: { source: "FDIC Summary of Deposits + USAspending + BLS QCEW", fips, fy, sodYear: deposits?.year ?? null },
+    data: r.section,
+    meta: { source: "FDIC Summary of Deposits + USAspending + BLS QCEW", fips, fy, sodYear: r.section.data.deposits?.year ?? null, failed: r.failed },
     ttlS: 12 * 3600,
-    provenance: dedupeProvenance([section.provenance, detail.status === "fulfilled" ? detail.value.provenance : undefined]),
-    caveats,
+    provenance: r.provenance,
+    caveats: r.caveats,
   };
 }
 
