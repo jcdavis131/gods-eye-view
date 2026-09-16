@@ -188,7 +188,8 @@ async function fetchSatellites(ctx: FetchContext): Promise<FetchResult> {
 export const satellitesLayer: LayerDefinition = {
   id: "satellites",
   label: "Satellites",
-  description: "CelesTrak orbital elements propagated with SGP4 (satellite.js). Fully time-scrubbable.",
+  description:
+    "CelesTrak orbital elements propagated with SGP4 (satellite.js). Fully time-scrubbable; select a satellite for Look4Sat-style pass predictions over your observer location.",
   color: "#E6E6FA",
   updateIntervalMs: 2 * 3600 * 1000,
   defaultEnabled: true,

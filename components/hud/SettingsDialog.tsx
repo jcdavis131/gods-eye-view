@@ -2,7 +2,7 @@
 // Settings: optional API keys (stored in localStorage only), display prefs,
 // data source choices. Everything works with the form left empty.
 
-import { ExternalLink, Eye, EyeOff, Trash2 } from "lucide-react";
+import { ExternalLink, Eye, EyeOff, LocateFixed, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -57,6 +57,7 @@ export default function SettingsDialog() {
           <TabsContent value="data" className="space-y-5">
             <AircraftSource />
             <SatelliteGroups />
+            <ObserverLocation />
           </TabsContent>
         </Tabs>
       </DialogContent>
@@ -185,6 +186,101 @@ function SatelliteGroups() {
       </div>
       <div className="mt-1 text-[10px] text-muted-foreground">
         CelesTrak asks for at most one fetch per group every two hours; the server caches accordingly.
+      </div>
+    </section>
+  );
+}
+
+function ObserverLocation() {
+  const observer = useSettings((s) => s.prefs.observer);
+  const setPref = useSettings((s) => s.setPref);
+  const [lat, setLat] = useState("");
+  const [lon, setLon] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const useMyLocation = () => {
+    setError(null);
+    if (!("geolocation" in navigator)) {
+      setError("Geolocation is not available in this browser.");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) =>
+        setPref("observer", {
+          lat: +pos.coords.latitude.toFixed(4),
+          lon: +pos.coords.longitude.toFixed(4),
+          label: "My location",
+        }),
+      () => setError("Location permission denied — enter coordinates manually."),
+      { timeout: 10_000 },
+    );
+  };
+
+  const setManual = () => {
+    const la = parseFloat(lat);
+    const lo = parseFloat(lon);
+    if (!Number.isFinite(la) || !Number.isFinite(lo) || Math.abs(la) > 90 || Math.abs(lo) > 180) {
+      setError("Enter a valid latitude (-90…90) and longitude (-180…180).");
+      return;
+    }
+    setError(null);
+    setPref("observer", { lat: la, lon: lo, label: "Manual" });
+  };
+
+  return (
+    <section>
+      <div className="hud-label mb-2">Observer location (satellite passes)</div>
+      {observer ? (
+        <div className="flex items-center gap-2 text-[11px]">
+          <span className="tabular-nums">
+            {observer.label}: {observer.lat.toFixed(4)}°, {observer.lon.toFixed(4)}°
+          </span>
+          <button
+            type="button"
+            onClick={() => setPref("observer", null)}
+            className="ml-auto flex items-center gap-1 border border-border px-2 py-1 text-[10px] uppercase tracking-widest text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            <Trash2 className="size-3" /> Clear
+          </button>
+        </div>
+      ) : (
+        <div className="text-[11px] text-muted-foreground">Not set — pass predictions need it.</div>
+      )}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={useMyLocation}
+          className="flex items-center gap-1 border border-border px-2 py-1 text-[10px] uppercase tracking-widest text-foreground/80 hover:bg-accent hover:text-primary"
+        >
+          <LocateFixed className="size-3" /> Use my location
+        </button>
+        <Input
+          value={lat}
+          onChange={(e) => setLat(e.target.value)}
+          placeholder="lat"
+          inputMode="decimal"
+          className="h-7 w-20 text-[11px]"
+          aria-label="Latitude"
+        />
+        <Input
+          value={lon}
+          onChange={(e) => setLon(e.target.value)}
+          placeholder="lon"
+          inputMode="decimal"
+          className="h-7 w-20 text-[11px]"
+          aria-label="Longitude"
+        />
+        <button
+          type="button"
+          onClick={setManual}
+          className="border border-border px-2 py-1 text-[10px] uppercase tracking-widest text-foreground/80 hover:bg-accent hover:text-primary"
+        >
+          Set
+        </button>
+      </div>
+      {error && <div className="mt-1 text-[10px] text-warn">{error}</div>}
+      <div className="mt-1 text-[10px] text-muted-foreground">
+        Stored in this browser only. Used solely to predict satellite passes overhead.
       </div>
     </section>
   );
