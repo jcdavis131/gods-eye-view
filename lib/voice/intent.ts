@@ -10,7 +10,7 @@ export interface Intent {
 }
 
 const LAYER_WORDS =
-  "aircraft|airplanes|planes|flights|flight|jets|ships|ship|vessels|boats|satellites|satellite|sats|earthquakes|quakes|seismic|cameras|webcams|cctv|traffic|cars|launches|rockets|rocket|water quality|satellite water|stream gauges|water|rivers|river|lakes|lake|reservoirs|reservoir|gauges|floods|flooding|hydrology|groundwater|aquifers|aquifer|wells|drought|turbidity|sediment|trade|ports|port|harbours|harbors|shipping|borders|border crossings|crossings|commerce|jobs|employment|wages|business|economy|real estate|housing|home values|homes|rents|property values|property|companies|public companies|listed companies|stocks|tickers|banks|bank branches|deposits|spending|federal spending|federal dollars|contracts|grants";
+  "aircraft|airplanes|planes|flights|flight|jets|ships|ship|vessels|boats|satellites|satellite|sats|earthquakes|quakes|seismic|cameras|webcams|cctv|traffic|cars|launches|rockets|rocket|water quality|satellite water|stream gauges|water|rivers|river|lakes|lake|reservoirs|reservoir|gauges|floods|flooding|hydrology|groundwater|aquifers|aquifer|wells|drought|turbidity|sediment|trade|ports|port|harbours|harbors|shipping|borders|border crossings|crossings|commerce|jobs|employment|wages|business|economy|real estate|housing|home values|homes|rents|property values|property|companies|public companies|listed companies|stocks|tickers|banks|bank branches|deposits|spending|federal spending|federal dollars|contracts|grants|constructs|place fabric|jurisdictions|districts|watersheds|boundaries";
 
 const num = (s: string) => {
   const words: Record<string, number> = {

@@ -33,6 +33,10 @@
       "description": "Surface water, groundwater, drought, flood status: USGS, NOAA NWPS, TWDB, US Drought Monitor."
     },
     {
+      "name": "fabric",
+      "description": "Place fabric: the civic, electoral, statistical, hydrologic, ecological, hazard, service and federal constructs at a point: Census TIGERweb, USGS WBD and 3DEP, EPA ecoregions, FEMA NFHL, NWS."
+    },
+    {
       "name": "meta",
       "description": "This description."
     },
@@ -1749,6 +1753,100 @@
           },
           "415": {
             "description": "Content-Type must be application/json"
+          }
+        }
+      }
+    },
+    "/api/fabric": {
+      "get": {
+        "summary": "Every construct a point sits inside, smallest first, with the relations the unit systems define",
+        "description": "The place fabric: the human and scientific frames laid over one point. US points get Census TIGERweb units (state, county, incorporated place or CDP, tract, ZCTA, school districts, congressional and state legislative districts, metro/micro area, CSA, urban area, tribal land, census division and region), USGS WBD hydrologic units HUC-2 to HUC-12 with the downstream HUC-12, EPA level III/IV ecoregions, FEMA NFHL flood zone, NFIP community and FIRM panel, the NWS forecast office, forecast zone and time zone, USGS 3DEP elevation, and the EPA region, FEMA region and Federal Reserve district from published lists (split Reserve-district states are named as split). Anywhere, the Natural Earth country and continent. `edges` carry only relations the unit systems define (`nests-in`: GEOID and HUC nesting, OMB metro delineation) or an agency publishes (`assigned-to`: NWS zone to office, state to federal region; `drains-to`: WBD ToHUC). An upstream that fails is listed in `data.failed` and in `caveats`; the call still answers. The point is snapped to a 0.001 degree grid and cached six hours.",
+        "tags": [
+          "fabric"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "stack"
+              ],
+              "default": "stack"
+            },
+            "description": "stack: the constructs at a point."
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            },
+            "description": "Longitude of the point, degrees."
+          },
+          {
+            "name": "lat",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            },
+            "description": "Latitude of the point, degrees."
+          },
+          {
+            "name": "geometry",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "0",
+                "1"
+              ],
+              "default": "0"
+            },
+            "description": "1 adds each construct's generalised outline as `rings` (the globe layer asks for these)."
+          },
+          {
+            "$ref": "#/components/parameters/format"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope { source, snapped, constructs, cacheAge, globe, data, provenance[], generatedAt, caveats } where data is { point { lon, lat, elevationM? }, nodes [{ id, kind, domain, name, code?, areaKm2?, areaBasis?, anchor?, rings?, facts, links, source }], edges [{ from, to, relation, basis, external? }], answered[], failed[], coverage }; text/csv with one row per construct when format=csv",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              },
+              "text/csv": {}
+            }
+          },
+          "400": {
+            "description": "Missing or out-of-range lon/lat, unknown op or format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }

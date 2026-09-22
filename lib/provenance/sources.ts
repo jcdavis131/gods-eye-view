@@ -31,6 +31,12 @@ export const SOURCES = {
   "census-zcta-county": { id: "census-zcta-county", name: "ZCTA to county relationship file (2020)", publisher: "U.S. Census Bureau", url: "https://www.census.gov/geographies/reference-files/time-series/geo/relationship-files.html", license: "public domain" },
   "sentinel-2": { id: "sentinel-2", name: "Copernicus Sentinel-2 L2A", publisher: "ESA via Element 84 Earth Search", url: "https://earth-search.aws.element84.com/v1", license: "free and open (Copernicus)" },
   "natural-earth": { id: "natural-earth", name: "Natural Earth 1:110m cultural vectors", publisher: "Natural Earth", url: "https://www.naturalearthdata.com/", license: "public domain" },
+  "usgs-wbd": { id: "usgs-wbd", name: "Watershed Boundary Dataset", publisher: "U.S. Geological Survey", url: "https://www.usgs.gov/national-hydrography/watershed-boundary-dataset", license: "public domain" },
+  "epa-ecoregions": { id: "epa-ecoregions", name: "Level III and IV Ecoregions of the United States", publisher: "U.S. Environmental Protection Agency", url: "https://www.epa.gov/eco-research/ecoregions", license: "public domain" },
+  "fema-nfhl": { id: "fema-nfhl", name: "National Flood Hazard Layer", publisher: "Federal Emergency Management Agency", url: "https://www.fema.gov/flood-maps/national-flood-hazard-layer", license: "public domain" },
+  "nws-api": { id: "nws-api", name: "api.weather.gov points and zones", publisher: "NOAA National Weather Service", url: "https://www.weather.gov/documentation/services-web-api", license: "public domain" },
+  "usgs-epqs": { id: "usgs-epqs", name: "Elevation Point Query Service (3DEP)", publisher: "U.S. Geological Survey", url: "https://apps.nationalmap.gov/epqs/", license: "public domain" },
+  "federal-regions": { id: "federal-regions", name: "Federal regional office and Reserve district lists", publisher: "EPA, FEMA, Federal Reserve System", url: "https://www.federalreserve.gov/aboutthefed/federal-reserve-system.htm", license: "public domain" },
   "gev-snapshot": { id: "gev-snapshot", name: "Embedding Atlas feed snapshots", publisher: "Embedding Atlas", url: "https://github.com/jcdavis131/gods-eye-view", license: "MIT; derived counts of public feeds" },
 } as const satisfies Record<string, SourceRef>;
 

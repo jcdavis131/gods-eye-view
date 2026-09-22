@@ -125,6 +125,12 @@ const LAYER_ALIASES: Record<string, LayerId> = {
   "federal dollars": "spending",
   contracts: "spending",
   grants: "spending",
+  constructs: "constructs",
+  "place fabric": "constructs",
+  jurisdictions: "constructs",
+  districts: "constructs",
+  watersheds: "constructs",
+  boundaries: "constructs",
 };
 
 export function resolveLayer(word: string | undefined): LayerId | null {

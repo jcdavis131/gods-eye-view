@@ -450,6 +450,15 @@ export const TOOLS: ToolDef[] = [
     handler: (i, ctx) => relay(ctx, "/api/finance" + qs({ op: "spending", fips: i.fips })),
   }),
   defineTool({
+    name: "place_fabric",
+    title: "Every construct a point sits inside",
+    description:
+      "The place fabric for a lon/lat: the human and scientific constructs the point is inside, smallest first, each with kind, point of view (civic, representation, service, statistical, hydrologic, ecological, hazard, federal, world), name, code and published area (km2). US points get state, county, city, census tract, ZIP code area, school district, congressional and state legislative districts, metro area, urban area, tribal land, census division and region (Census TIGERweb); HUC-2 to HUC-12 watersheds with the downstream HUC (USGS WBD); level III/IV ecoregions (EPA); flood zone, NFIP community and FIRM panel (FEMA NFHL); NWS forecast office, zone and time zone; elevation (USGS 3DEP); EPA and FEMA regions and Federal Reserve district. Elsewhere, the country. edges[] carry only relations the unit systems define (nests-in, drains-to, assigned-to) with their basis. Upstreams that failed are listed in failed[]. Use it to connect reports: the county code feeds sectors / county_history / banks / federal_spending, the point feeds water_report and market_report. " +
+      ENVELOPE,
+    inputSchema: z.object({ lon, lat, geometry: z.boolean().optional().describe("Include each construct's generalised outline as rings of [lon, lat] (large). Default false.") }),
+    handler: (i, ctx) => relay(ctx, "/api/fabric" + qs({ op: "stack", lon: i.lon, lat: i.lat, geometry: i.geometry ? 1 : undefined })),
+  }),
+  defineTool({
     name: "openapi",
     title: "OpenAPI description of the HTTP API",
     description: "The OpenAPI 3 document for this server's /api routes (paths, parameters, response envelopes). Use it to call routes this tool list does not cover.",

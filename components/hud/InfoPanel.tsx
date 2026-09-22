@@ -21,6 +21,7 @@ import { turbidityHex } from "@/lib/water/overlay";
 import EconomyAside from "./EconomyAsides";
 import CompanyAside from "./CompanyAside";
 import FinanceAside from "./FinanceAsides";
+import ConstructAside, { ConstructContext } from "./ConstructAside";
 
 function useRefresh(ms: number) {
   const [, set] = useState(0);
@@ -83,10 +84,14 @@ export default function InfoPanel() {
     const [lon, lat, alt] = feature.geometry.coordinates;
     lonlat = [lon, lat, alt ?? 0];
   }
+  // A construct floats above the point it was asked about; report that point, not the stratum.
+  const ground = p.layer === "constructs" ? (p.extra as { ground?: [number, number] } | undefined)?.ground : undefined;
+  if (ground) lonlat = [ground[0], ground[1], 0];
   const details = Object.entries(p.details ?? {}).filter(([, v]) => v != null && v !== "" && v !== false);
   const isLiveLayer =
     !p.simulated &&
-    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "banks", "spending"].includes(p.layer);
+    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "banks", "spending", "constructs"].includes(p.layer);
+  const construct = p.layer === "constructs";
   const gauge = p.layer === "water" && (p.kind === "gauge" || p.kind === "reservoir") && p.id.startsWith("usgs:") ? (p.extra as GaugeExtra) : null;
   const well = p.layer === "groundwater" && p.kind === "well" ? (p.extra as WellExtra) : null;
   const chip = p.layer === "turbidity" ? (p.extra as ChipExtra) : null;
@@ -151,7 +156,7 @@ export default function InfoPanel() {
               <dd className="tabular-nums">{formatLatLon(lonlat[1], lonlat[0])}</dd>
             </>
           )}
-          {(p.altitude != null || (lonlat && lonlat[2] > 1)) && (
+          {!construct && (p.altitude != null || (lonlat && lonlat[2] > 1)) && (
             <>
               <dt className="hud-label">Altitude</dt>
               <dd className="tabular-nums">{formatAltitude(lonlat ? lonlat[2] : p.altitude)}</dd>
@@ -181,6 +186,7 @@ export default function InfoPanel() {
         {economy && <EconomyAside key={p.id} feature={feature} />}
         {p.layer === "companies" && <CompanyAside key={p.id} feature={feature} />}
         {(p.layer === "banks" || p.layer === "spending") && <FinanceAside key={p.id} feature={feature} />}
+        {construct ? <ConstructAside key={p.id} feature={feature} /> : <ConstructContext key={`ctx:${p.layer}:${p.id}`} feature={feature} />}
         {well && (
           <GaugeHistory
             key={`${well.site}:${well.primary}`}
