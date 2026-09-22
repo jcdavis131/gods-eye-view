@@ -32,6 +32,19 @@ function ringLines(rings: number[][][], alt: number, color: string, alpha: numbe
   }));
 }
 
+/** How long one stratum takes to rise, and the stagger between tiers, ms. */
+const RISE_MS = 1400;
+const STAGGER_MS = 70;
+
+/** 0..1 progress of a stratum's rise out of the ground (ease-out cubic). */
+export function riseProgress(born: number | undefined, tier: number, now: number): number {
+  if (born == null) return 1;
+  const t = (now - born - tier * STAGGER_MS) / RISE_MS;
+  if (t <= 0) return 0;
+  if (t >= 1) return 1;
+  return 1 - (1 - t) ** 3;
+}
+
 export const constructsStyle: LayerStyle = {
   color: "#E5E7EB",
   pointSize: (f) => (f.properties.kind === "here" ? 10 : 7),
@@ -41,6 +54,16 @@ export const constructsStyle: LayerStyle = {
     return n ? `${KINDS[n.kind].label.toUpperCase()} · ${n.name}` : f.properties.name;
   },
   labelMax: 0,
+  // Emergence: each stratum rises from the ground point to its place in the spiral.
+  position: (f) => {
+    if (f.geometry.type !== "Point") return null;
+    const [lon, lat, alt] = f.geometry.coordinates as [number, number, number];
+    const x = extraOf(f);
+    if (!x?.node) return [lon, lat, alt ?? 0];
+    const k = riseProgress(x.born, x.tier, Date.now());
+    return [x.ground[0] + (lon - x.ground[0]) * k, x.ground[1] + (lat - x.ground[1]) * k, (alt ?? 0) * k];
+  },
+  tickMs: 40,
   labelAlways: (f) => f.properties.kind === "here" || ALWAYS_LABEL.has(f.properties.kind ?? ""),
   lines: (f) => {
     const x = extraOf(f);

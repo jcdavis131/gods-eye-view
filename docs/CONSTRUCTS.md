@@ -21,6 +21,22 @@ Select any other object (a gauge, a well, a company, an aircraft) while the laye
 
 The white **Here** node at the ground lists the whole stack by point of view, with links to the water and market reports for the same point and the JSON and CSV behind it.
 
+## Emergence: constructs that take their state from the physical twin
+
+A construct has no sensors of its own. What it knows is what the physical layers put inside it. Two things make that visible.
+
+**The construct field** (Layers → *Construct field*, `?layers=field`) tiles the whole view with one kind of construct, from one point of view, and floats it as a plate above the globe. The kind **emerges from the zoom**: the hydrologic view is water regions (HUC-2) from orbit, then subregions, basins, subbasins, watersheds, and subwatersheds (HUC-12) over a county. The civic view goes state, county, city. Representation goes state, congressional district, state senate, state house. Statistical goes state, metro, county, tract. Ecological goes level III, then level IV. Service goes state, then school district. The ladder is in `lib/fabric/fieldScale.ts`.
+
+Every unit's **heat** is recomputed in the browser every four seconds from the physical features loaded inside its outline: gauges, wells, aircraft, ships, earthquakes, harbours, crossings, company headquarters, bank offices, cameras. Heat is the count or the density per 1,000 km², square-root scaled against the busiest unit in view (`lib/fabric/emergence.ts`, `components/globe/EmergenceBridge.tsx`). A unit's column of light rises with its heat, its outline and its ground wash warm from slate through cyan and gold to orange, and the busiest six carry a label. When an aircraft crosses into a district, the district changes. Only units whose vitals changed are redrawn. The Layers panel picks the point of view, what drives the heat (every physical signal, or one layer), and count versus density. Select a unit for its emergent state, its rank in view, and every loaded feature inside it.
+
+Rules the field keeps: simulated vehicles (the traffic layer) never count; only point features count, because an area layer (counties, countries) is a construct of its own; the weather sampling grid and metro-centroid statistics are not things on the ground and do not count; and every place that shows a heat says it is what is loaded now, not a census of the ground. The layer carries an ESTIMATE tag for that reason.
+
+**Where the water goes.** Water is the physical flow that links constructs. From the Here node, or any watershed, *Trace downstream* walks the Watershed Boundary Dataset's ToHUC links from the HUC-12 under the point to its terminal: ocean, closed basin, Canada or Mexico. It draws the path through each subwatershed's centre, with an arrow into the terminal and the subwatersheds' outlines on the ground. It then joins every loaded gauge and well along the way to it. Downtown Austin reaches Matagorda Bay in 29 subwatersheds. Say "where does the water go".
+
+The walk reads a bundled national drainage table (`lib/fabric/data/huc12-tohuc.json`, built by `node scripts/wbd-data.mjs`). The live WBD service answers cold queries in tens of seconds and often with a 502 or 504, so the table makes the walk instant. The outlines and names are still fetched live, in batches of 100, and the path fills in behind them. A basin missing from the table falls back to a live query. A leg that would not finish inside a serverless call stops with a `next` cursor, and the browser continues from there, so a long trace grows toward the sea instead of failing. The path joins watershed centres; it is the order the water takes through the watersheds, not the river's line, and the panel says so.
+
+**Civic & planning** is a lens (`?lens=civic`) that opens on the stack, the field and the physical layers that light it, over downtown Austin.
+
 ## The API
 
 ```bash
@@ -29,7 +45,14 @@ curl "https://eye.jcamd.com/api/fabric?op=stack&lon=-97.74&lat=30.27&geometry=1"
 curl "https://eye.jcamd.com/api/fabric?op=stack&lon=-97.74&lat=30.27&format=csv"   # one row per construct
 ```
 
-The MCP tool `place_fabric` wraps the same route. The county code, the point and the metro code it returns feed `sectors`, `county_history`, `banks`, `federal_spending`, `water_report` and `market_report`, so one call links an agent to every other report.
+```bash
+curl "https://eye.jcamd.com/api/fabric?op=field&kind=huc8&bbox=-100,28,-94,33"                  # every HUC-8 in a box
+curl "https://eye.jcamd.com/api/fabric?op=field&pov=civic&h=400000&bbox=-100,28,-94,33"          # the kind that emerges at 400 km
+curl "https://eye.jcamd.com/api/fabric?op=downstream&lon=-97.74&lat=30.27"                       # one leg of the walk to the sea
+curl "https://eye.jcamd.com/api/fabric?op=outlines&huc12=120902050306,120902050307"              # outlines, centroids, names
+```
+
+The MCP tools `place_fabric`, `construct_field` and `downstream` wrap the same route. The county code, the point and the metro code it returns feed `sectors`, `county_history`, `banks`, `federal_spending`, `water_report` and `market_report`, so one call links an agent to every other report.
 
 | Point of view | Constructs | Source |
 | --- | --- | --- |
@@ -63,6 +86,11 @@ Ground elevation comes from USGS 3DEP (EPQS). Outside the US, only the country a
 | `lib/fabric/graph.ts` | stack ordering, definition-based nesting, CSV rows |
 | `lib/fabric/fetch.ts` | parallel upstream calls, per-upstream cache and cool-down |
 | `lib/fabric/join.ts` | point-in-outline join used by the HUD |
+| `lib/fabric/fieldScale.ts`, `lib/fabric/field.ts` | the scale ladder per point of view, bbox clamping, the field parser |
+| `lib/fabric/emergence.ts`, `lib/fabric/emergenceState.ts`, `components/globe/EmergenceBridge.tsx` | vitals from the physical layers, heat, the live restyle loop |
+| `lib/layers/field.ts`, `lib/globe/fieldStyles.ts`, `components/hud/FieldControls.tsx` | the floating plate, the columns of light, the controls |
+| `lib/fabric/downstream.ts`, `lib/fabric/traceStore.ts`, `components/globe/TraceOverlay.tsx` | the resumable ToHUC walk, the trace state, the drawn path |
+| `scripts/wbd-data.mjs`, `lib/fabric/data/huc12-tohuc.json` | the bundled national drainage table |
 | `app/api/fabric/route.ts` | the envelope, CSV, caching |
 | `lib/layers/constructs.ts`, `lib/globe/constructStyles.ts` | the spiral strata, tethers and floating outlines |
 | `components/hud/ConstructAside.tsx` | the stack, relations, and the two-way join in the info panel |
@@ -72,7 +100,7 @@ Ground elevation comes from USGS 3DEP (EPQS). Outside the US, only the country a
 Candidate layers and constructs, roughly in order of value per effort. Every one is keyless and published by an agency, in keeping with the project's ground rules.
 
 1. **Pin a stack.** Click anywhere to pin a fabric at that point, keep several side by side, and compare two places construct by construct (`/compare` already exists for counties).
-2. **Construct-scoped reports.** Run the water report, the screener and the series store over a construct's outline rather than a radius: "gauges in HUC-8 12090205", "companies in TX-10", "bank deposits in this school district".
+2. **Construct-scoped reports.** (The field's heat and the join are the first step.) Run the water report, the screener and the series store over a construct's outline rather than a radius: "gauges in HUC-8 12090205", "companies in TX-10", "bank deposits in this school district".
 3. **More hydrology.** NHDPlus flowlines, walked downstream from the ToHUC chain to the sea; dams (USACE National Inventory of Dams); principal aquifer polygons (USGS) as a construct under every well.
 4. **More hazard.** Wildfire hazard potential (USFS), seismic design category (USGS), storm surge zones (NOAA SLOSH), and the NWS alerts active in the zone (`api.weather.gov/alerts/active?zone=`).
 5. **More service.** Public water systems (EPA SDWIS service areas), electric utility and balancing authority territories (HIFLD / EIA), 911 PSAPs, hospital service areas.

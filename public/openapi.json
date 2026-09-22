@@ -1759,8 +1759,8 @@
     },
     "/api/fabric": {
       "get": {
-        "summary": "Every construct a point sits inside, smallest first, with the relations the unit systems define",
-        "description": "The place fabric: the human and scientific frames laid over one point. US points get Census TIGERweb units (state, county, incorporated place or CDP, tract, ZCTA, school districts, congressional and state legislative districts, metro/micro area, CSA, urban area, tribal land, census division and region), USGS WBD hydrologic units HUC-2 to HUC-12 with the downstream HUC-12, EPA level III/IV ecoregions, FEMA NFHL flood zone, NFIP community and FIRM panel, the NWS forecast office, forecast zone and time zone, USGS 3DEP elevation, and the EPA region, FEMA region and Federal Reserve district from published lists (split Reserve-district states are named as split). Anywhere, the Natural Earth country and continent. `edges` carry only relations the unit systems define (`nests-in`: GEOID and HUC nesting, OMB metro delineation) or an agency publishes (`assigned-to`: NWS zone to office, state to federal region; `drains-to`: WBD ToHUC). An upstream that fails is listed in `data.failed` and in `caveats`; the call still answers. The point is snapped to a 0.001 degree grid and cached six hours.",
+        "summary": "The constructs at a point, one kind of construct across a box, or where a point's water goes",
+        "description": "The place fabric: the human and scientific frames laid over one point. US points get Census TIGERweb units (state, county, incorporated place or CDP, tract, ZCTA, school districts, congressional and state legislative districts, metro/micro area, CSA, urban area, tribal land, census division and region), USGS WBD hydrologic units HUC-2 to HUC-12 with the downstream HUC-12, EPA level III/IV ecoregions, FEMA NFHL flood zone, NFIP community and FIRM panel, the NWS forecast office, forecast zone and time zone, USGS 3DEP elevation, and the EPA region, FEMA region and Federal Reserve district from published lists (split Reserve-district states are named as split). Anywhere, the Natural Earth country and continent. `edges` carry only relations the unit systems define (`nests-in`: GEOID and HUC nesting, OMB metro delineation) or an agency publishes (`assigned-to`: NWS zone to office, state to federal region; `drains-to`: WBD ToHUC). An upstream that fails is listed in `data.failed` and in `caveats`; the call still answers. The point is snapped to a 0.001 degree grid and cached six hours. op=field returns every unit of one kind inside a bbox (kind, or pov + h for the kind that emerges at a camera height), clamped per kind. op=downstream walks WBD ToHUC from the HUC-12 under a point; WBD answers cold queries slowly, so each call stops at a time budget and returns `next`, and op=downstream&from=<next> continues. op=outlines returns outlines and centroids for the chain in batches.",
         "tags": [
           "fabric"
         ],
@@ -1771,33 +1771,36 @@
             "schema": {
               "type": "string",
               "enum": [
-                "stack"
+                "stack",
+                "field",
+                "downstream",
+                "outlines"
               ],
               "default": "stack"
             },
-            "description": "stack: the constructs at a point."
+            "description": "stack: the constructs at a point. field: every unit of one kind in a bbox. downstream: one time-boxed leg of the HUC-12 chain from a point (or `from` a HUC-12) toward its terminal. outlines: generalised outlines and centroids for up to 100 HUC-12s."
           },
           {
             "name": "lon",
             "in": "query",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "number",
               "minimum": -180,
               "maximum": 180
             },
-            "description": "Longitude of the point, degrees."
+            "description": "Longitude of the point, degrees. Required for op=stack and op=downstream."
           },
           {
             "name": "lat",
             "in": "query",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "number",
               "minimum": -90,
               "maximum": 90
             },
-            "description": "Latitude of the point, degrees."
+            "description": "Latitude of the point, degrees. Required for op=stack and op=downstream."
           },
           {
             "name": "geometry",
@@ -1810,7 +1813,85 @@
               ],
               "default": "0"
             },
-            "description": "1 adds each construct's generalised outline as `rings` (the globe layer asks for these)."
+            "description": "op=stack: 1 adds each construct's generalised outline as `rings`."
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{12}$"
+            },
+            "description": "op=downstream: continue a truncated walk from this HUC-12 (a previous leg's `next`)."
+          },
+          {
+            "name": "huc12",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "op=outlines: comma list of 1 to 100 twelve-digit HUC-12 codes."
+          },
+          {
+            "name": "bbox",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "op=field: west,south,east,north in degrees; clamped to the kind's widest span and snapped to a grid."
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "state",
+                "county",
+                "place",
+                "cd",
+                "sldu",
+                "sldl",
+                "cbsa",
+                "tract",
+                "zcta",
+                "school",
+                "huc2",
+                "huc4",
+                "huc6",
+                "huc8",
+                "huc10",
+                "huc12",
+                "eco3",
+                "eco4"
+              ]
+            },
+            "description": "op=field: the construct kind to tile the box with."
+          },
+          {
+            "name": "pov",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "hydrologic",
+                "civic",
+                "representation",
+                "statistical",
+                "ecological",
+                "service"
+              ]
+            },
+            "description": "op=field without kind: the point of view whose kind emerges at height h."
+          },
+          {
+            "name": "h",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": 0
+            },
+            "description": "op=field with pov: camera height in metres."
           },
           {
             "$ref": "#/components/parameters/format"
@@ -1840,6 +1921,16 @@
           },
           "502": {
             "description": "Upstream failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "op=downstream: no HUC-12 at the point",
             "content": {
               "application/json": {
                 "schema": {

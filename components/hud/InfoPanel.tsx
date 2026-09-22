@@ -85,18 +85,18 @@ export default function InfoPanel() {
     lonlat = [lon, lat, alt ?? 0];
   }
   // A construct floats above the point it was asked about; report that point, not the stratum.
-  const ground = p.layer === "constructs" ? (p.extra as { ground?: [number, number] } | undefined)?.ground : undefined;
+  const ground = p.layer === "constructs" || p.layer === "field" ? (p.extra as { ground?: [number, number] } | undefined)?.ground : undefined;
   if (ground) lonlat = [ground[0], ground[1], 0];
   const details = Object.entries(p.details ?? {}).filter(([, v]) => v != null && v !== "" && v !== false);
   const isLiveLayer =
     !p.simulated &&
-    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "banks", "spending", "constructs"].includes(p.layer);
-  const construct = p.layer === "constructs";
+    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "banks", "spending", "constructs", "field"].includes(p.layer);
+  const construct = p.layer === "constructs" || p.layer === "field";
   const gauge = p.layer === "water" && (p.kind === "gauge" || p.kind === "reservoir") && p.id.startsWith("usgs:") ? (p.extra as GaugeExtra) : null;
   const well = p.layer === "groundwater" && p.kind === "well" ? (p.extra as WellExtra) : null;
   const chip = p.layer === "turbidity" ? (p.extra as ChipExtra) : null;
   const sat = p.layer === "satellites" ? ((p.extra as SatExtra | undefined)?.omm ?? null) : null;
-  const estimate = p.layer === "turbidity" || p.layer === "realestate" || p.layer === "spending" ? "ESTIMATE" : null;
+  const estimate = p.layer === "turbidity" || p.layer === "realestate" || p.layer === "spending" || p.layer === "field" ? "ESTIMATE" : null;
   const economy = p.layer === "trade" || p.layer === "commerce" || p.layer === "realestate";
 
   return (

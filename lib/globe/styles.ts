@@ -15,6 +15,7 @@ import { commerceStyle, realestateStyle, tradeStyle } from "./economyStyles";
 import { companiesStyle } from "./companyStyles";
 import { bankStyle, spendingStyle } from "./financeStyles";
 import { constructsStyle } from "./constructStyles";
+import { fieldStyle } from "./fieldStyles";
 
 /** Distinctive major-group colours for the occupations layer: one hue per SOC major group. */
 const OCCUPATION_COLORS: Record<string, string> = {
@@ -381,6 +382,7 @@ export const STYLES: Partial<Record<LayerId, LayerStyle>> = {
   weather: weatherStyle,
   sports: sportsStyle,
   constructs: constructsStyle,
+  field: fieldStyle,
 };
 
 /** Camera range (m) to sit at when following an object of a given layer. */
@@ -405,4 +407,5 @@ export const FOLLOW_RANGE: Record<LayerId, number> = {
   weather: 500_000,
   sports: 500_000,
   constructs: 150_000,
+  field: 400_000,
 };

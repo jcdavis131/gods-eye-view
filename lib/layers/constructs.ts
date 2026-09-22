@@ -51,7 +51,7 @@ export function constructsViewKey(view: ViewState): string {
   return `${view.lon.toFixed(2)},${view.lat.toFixed(2)},${bucket}`;
 }
 
-export function fabricFeatures(fabric: Fabric, height: number): LayerFeature<Point>[] {
+export function fabricFeatures(fabric: Fabric, height: number, born = Date.now()): LayerFeature<Point>[] {
   const { lon, lat } = fabric.point;
   const features: LayerFeature<Point>[] = [];
   fabric.nodes.forEach((n, i) => {
@@ -64,7 +64,7 @@ export function fabricFeatures(fabric: Fabric, height: number): LayerFeature<Poi
       ...n.facts,
     };
     for (const l of n.links) if (/^https?:\/\//.test(l.url)) details[l.label.toLowerCase()] = l.url;
-    const extra: ConstructExtra = { node: n, alt: pos[2], tier: i, ground: [lon, lat] };
+    const extra: ConstructExtra = { node: n, alt: pos[2], tier: i, ground: [lon, lat], born };
     features.push({
       type: "Feature",
       geometry: { type: "Point", coordinates: pos },

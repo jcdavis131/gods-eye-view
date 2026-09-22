@@ -32,6 +32,8 @@ const EXPECTED_TOOL_NAMES = [
   "banks",
   "federal_spending",
   "place_fabric",
+  "construct_field",
+  "downstream",
   "openapi",
 ];
 

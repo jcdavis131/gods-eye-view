@@ -459,6 +459,38 @@ export const TOOLS: ToolDef[] = [
     handler: (i, ctx) => relay(ctx, "/api/fabric" + qs({ op: "stack", lon: i.lon, lat: i.lat, geometry: i.geometry ? 1 : undefined })),
   }),
   defineTool({
+    name: "construct_field",
+    title: "One kind of construct tiled across a box",
+    description:
+      "Every unit of one construct kind inside a bbox (US): county, place, cd (congressional district), sldu, sldl, cbsa, tract, zcta, school, huc2..huc12 (USGS watersheds), eco3/eco4 (EPA ecoregions), state. Each unit: id, kind, name, code, areaKm2 (land for Census, total for WBD, computed from the outline where the upstream publishes none, flagged in facts), anchor [lon, lat], and rings when geometry=true. Pass pov (hydrologic | civic | representation | statistical | ecological | service) with h (camera height, m) instead of kind to get the kind that emerges at that scale. The bbox is clamped per kind and snapped; the payload says which box was asked. " +
+      ENVELOPE,
+    inputSchema: z.object({
+      bbox,
+      kind: z.string().optional().describe("Construct kind; omit when passing pov and h."),
+      pov: z.enum(["hydrologic", "civic", "representation", "statistical", "ecological", "service"]).optional(),
+      h: z.number().positive().optional().describe("Camera height in metres, with pov."),
+      geometry: z.boolean().optional().describe("Keep each unit's generalised outline (large). Default false: rings are dropped."),
+    }),
+    handler: async (i, ctx) => {
+      if (!i.kind && !(i.pov && i.h)) throw new Error("pass kind, or pov and h");
+      const reply = await relay(ctx, "/api/fabric" + qs({ op: "field", kind: i.kind, pov: i.kind ? undefined : i.pov, h: i.kind ? undefined : i.h, bbox: bboxStr(i.bbox) }));
+      if (!i.geometry) {
+        const data = reply.payload.data as { units?: Array<Record<string, unknown>> } | undefined;
+        if (data?.units) for (const u of data.units) delete u.rings;
+      }
+      return reply;
+    },
+  }),
+  defineTool({
+    name: "downstream",
+    title: "Where the water from a point goes",
+    description:
+      "Walks USGS WBD ToHUC from the HUC-12 under a lon/lat to its terminal (ocean, closed basin, canada, mexico): steps [{ hop, huc12, name, areaKm2, centroid [lon, lat], to }], terminal, basins (HUC-4 codes crossed), totalAreaKm2, centroidPathKm (straight lines between unit centroids; not river length), truncated. The first walk through a basin can take tens of seconds (WBD is slow); later calls are cached. " +
+      ENVELOPE,
+    inputSchema: z.object({ lon, lat }),
+    handler: (i, ctx) => relay(ctx, "/api/fabric" + qs({ op: "downstream", lon: i.lon, lat: i.lat })),
+  }),
+  defineTool({
     name: "openapi",
     title: "OpenAPI description of the HTTP API",
     description: "The OpenAPI 3 document for this server's /api routes (paths, parameters, response envelopes). Use it to call routes this tool list does not cover.",

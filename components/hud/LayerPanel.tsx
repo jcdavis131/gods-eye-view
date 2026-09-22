@@ -10,6 +10,7 @@ import { useLens } from "@/lib/personas/store";
 import { PERSONA_BY_ID } from "@/lib/personas/registry";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import FieldControls from "./FieldControls";
 
 /** One layer in the pinned list: dot, name, badges, count, switch, status line. */
 function LayerRow({
@@ -82,6 +83,7 @@ function LayerRow({
           </span>
         </div>
       )}
+      {on && l.id === "field" && <FieldControls />}
     </li>
   );
 }
@@ -163,6 +165,7 @@ function CompactLayers({
   return (
     <div className="px-2 py-2">
       <Tiles items={groups.primary} layers={layers} status={status} setLayer={setLayer} />
+      {layers.field && <FieldControls />}
       {groups.more.length > 0 && (
         <>
           {showAll && (

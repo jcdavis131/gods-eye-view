@@ -6,7 +6,7 @@ import { cached } from "@/lib/server/cache";
 import { polite, upstreamJson } from "@/lib/server/upstream";
 import type { SourceId } from "@/lib/provenance/sources";
 import countriesJson from "@/lib/economy/data/countries.json";
-import { bboxContains, geojsonRings, ringsBbox, ringsContain, roundRings, type BBox } from "./geo";
+import { bboxContains, geojsonRings, ringCentroid, ringsBbox, ringsContain, roundRings, type BBox } from "./geo";
 import { assembleFabric } from "./graph";
 import {
   countryNodes,
@@ -24,7 +24,9 @@ import {
   type NwsNamed,
   type NwsPoints,
 } from "./parse";
-import type { ConstructEdge, ConstructNode, Fabric } from "./types";
+import type { ConstructEdge, ConstructKind, ConstructNode, Fabric } from "./types";
+import { FIELD_SPECS, fieldOffset, parseField, type ArcQueryResponse, type BBox as BBoxT, type FieldService, type FieldSpec } from "./field";
+import { basinFromBundle, parseBasinTable, walkDownstream, type BasinTable, type BundledDrainage, type DownstreamResult } from "./downstream";
 
 export const TIGER_URL = "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/tigerWMS_Current/MapServer";
 export const WBD_URL = "https://hydro.nationalmap.gov/arcgis/rest/services/wbd/MapServer";
@@ -219,4 +221,193 @@ export async function fetchFabric(lon: number, lat: number, opts: FabricOptions)
   });
 
   return assembleFabric({ lon, lat, elevationM, nodes, edges, answered, failed });
+}
+
+// ------------------------------------------------------------------ field
+
+const SERVICE_URL = { tiger: TIGER_URL, wbd: WBD_URL, eco: ECO_URL } as const;
+const SERVICE_SOURCE: Record<FieldService, SourceId> = { tiger: "census-tigerweb", wbd: "usgs-wbd", eco: "epa-ecoregions" };
+
+/** ArcGIS layer query by envelope, generalised to the bbox. */
+export function fieldQueryUrl(spec: FieldSpec, bbox: BBoxT): string {
+  const q = new URLSearchParams({
+    geometry: bbox.join(","),
+    geometryType: "esriGeometryEnvelope",
+    inSR: "4326",
+    spatialRel: "esriSpatialRelIntersects",
+    outFields: "*",
+    returnGeometry: "true",
+    maxAllowableOffset: String(fieldOffset(bbox)),
+    geometryPrecision: "4",
+    outSR: "4326",
+    resultRecordCount: "500",
+    f: "json",
+  });
+  return `${SERVICE_URL[spec.service]}/${spec.layer}/query?${q.toString()}`;
+}
+
+export interface FieldResult {
+  kind: ConstructKind;
+  bbox: BBoxT;
+  units: ConstructNode[];
+  /** The upstream stopped at its record limit; units at the edge of the view may be missing. */
+  truncated: boolean;
+  source: SourceId;
+}
+
+const FIELD_TTL_MS = 24 * 3600_000;
+
+/** Every unit of one kind in a bbox (already clamped by the caller). */
+export async function fetchField(kind: ConstructKind, bbox: BBoxT): Promise<FieldResult> {
+  const spec = FIELD_SPECS[kind];
+  if (!spec) throw new Error(`not a field kind: ${kind}`);
+  const r = await cached(`fabric-field:${kind}:${bbox.join(",")}`, FIELD_TTL_MS, async () => {
+    const name = spec.service === "tiger" ? "tigerweb" : spec.service === "wbd" ? "usgs-wbd" : "epa-ecoregions";
+    const res = await polite(name, 100, 30_000, () => upstreamJson<ArcQueryResponse>(name, fieldQueryUrl(spec, bbox), { timeoutMs: 45_000 }));
+    if (res.error) throw new Error(`${name}: ${res.error.message ?? "query failed"}`);
+    return { kind, bbox, units: parseField(kind, res), truncated: !!res.exceededTransferLimit, source: SERVICE_SOURCE[spec.service] };
+  });
+  return r.value;
+}
+
+// ------------------------------------------------------------------ downstream
+
+const BASIN_TTL_MS = 30 * 24 * 3600_000;
+
+/** Every HUC-12 in one HUC-4 with its ToHUC, attributes only, one page. */
+export function basinQueryUrl(huc4: string, offset = 0): string {
+  const q = new URLSearchParams({
+    where: `huc12 LIKE '${huc4}%'`,
+    outFields: "huc12,tohuc,name,areasqkm",
+    returnGeometry: "false",
+    orderByFields: "huc12",
+    resultOffset: String(offset),
+    resultRecordCount: "2000",
+    f: "json",
+  });
+  return `${WBD_URL}/6/query?${q.toString()}`;
+}
+
+/** WBD answers 504 when a cold query outlasts its gateway; the same query usually answers on a second try. */
+async function wbdOnce<T>(url: string, init?: RequestInit & { timeoutMs?: number }): Promise<T> {
+  const go = () => polite("usgs-wbd", 100, 30_000, () => upstreamJson<T>("usgs-wbd", url, { timeoutMs: 40_000, ...init }));
+  try {
+    return await go();
+  } catch (err) {
+    if (err instanceof Error && /\b50[234]\b/.test(err.message)) return go();
+    throw err;
+  }
+}
+
+let bundle: Promise<BundledDrainage | null> | null = null;
+
+/** The bundled national drainage table, loaded once per process and only by the downstream op. */
+function drainageBundle(): Promise<BundledDrainage | null> {
+  bundle ??= import("./data/huc12-tohuc.json").then(
+    (m) => (m.default ?? m) as unknown as BundledDrainage,
+    () => null,
+  );
+  return bundle;
+}
+
+export async function loadBasin(huc4: string): Promise<BasinTable> {
+  if (!/^\d{4}$/.test(huc4)) throw new Error(`bad HUC-4 ${huc4}`);
+  const b = await drainageBundle();
+  const fromBundle = b ? basinFromBundle(b, huc4) : null;
+  if (fromBundle) return fromBundle;
+  const r = await cached(`wbd-basin:${huc4}`, BASIN_TTL_MS, async () => {
+    const table: BasinTable = new Map();
+    for (let offset = 0; offset < 20_000; offset += 2000) {
+      const res = await wbdOnce<ArcQueryResponse>(basinQueryUrl(huc4, offset));
+      if (res.error) throw new Error(`usgs-wbd: ${res.error.message ?? "basin query failed"}`);
+      for (const [k, v] of parseBasinTable(res)) table.set(k, v);
+      if (!res.exceededTransferLimit) break;
+    }
+    return table;
+  });
+  return r.value;
+}
+
+/** The HUC-12 under a point, from the identify service. */
+export async function huc12At(lon: number, lat: number): Promise<{ huc12: string; name: string } | null> {
+  const r = await cached(`wbd-huc12-at:${lon},${lat}`, BASIN_TTL_MS, async () => {
+    const res = await identify("usgs-wbd", identifyUrl(WBD_URL, lon, lat, [6]), 12_000);
+    const n = parseWbd(res).nodes.find((x) => x.kind === "huc12");
+    return n?.code ? { huc12: n.code, name: n.name } : null;
+  });
+  return r.value;
+}
+
+/** Most HUC-12 codes one outline call takes. */
+export const OUTLINE_BATCH = 100;
+
+/** Generalised outlines and their centroids for up to OUTLINE_BATCH HUC-12s (POST: the IN list is long). */
+export interface OutlineBatch {
+  outlines: Record<string, number[][][]>;
+  centroids: Record<string, [number, number]>;
+  /** Name and area as WBD publishes them (the bundled drainage table carries codes only). */
+  names: Record<string, string>;
+  areas: Record<string, number>;
+}
+
+export async function huc12Outlines(codes: string[]): Promise<OutlineBatch> {
+  const clean = [...new Set(codes.filter((c) => /^\d{12}$/.test(c)))].sort().slice(0, OUTLINE_BATCH);
+  const r = await cached(`wbd-outlines:${clean.join(",")}`, BASIN_TTL_MS, async () => {
+    const body = new URLSearchParams({
+      where: `huc12 IN (${clean.map((c) => `'${c}'`).join(",")})`,
+      outFields: "huc12,name,areasqkm",
+      returnGeometry: "true",
+      maxAllowableOffset: "0.004",
+      geometryPrecision: "4",
+      outSR: "4326",
+      f: "json",
+    });
+    const res = await wbdOnce<ArcQueryResponse>(`${WBD_URL}/6/query`, {
+      method: "POST",
+      body: body.toString(),
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+    });
+    if (res.error) throw new Error(`usgs-wbd: ${res.error.message ?? "outline query failed"}`);
+    const outlines: Record<string, number[][][]> = {};
+    const centroids: Record<string, [number, number]> = {};
+    const names: Record<string, string> = {};
+    const areas: Record<string, number> = {};
+    for (const f of res.features ?? []) {
+      const a = Object.fromEntries(Object.entries(f.attributes ?? {}).map(([k, v]) => [k.toLowerCase(), v]));
+      const code = String(a.huc12 ?? "");
+      if (a.name != null) names[code] = String(a.name);
+      if (Number.isFinite(Number(a.areasqkm))) areas[code] = Number(a.areasqkm);
+      if (!f.geometry?.rings?.length) continue;
+      const rings = roundRings(f.geometry.rings);
+      outlines[code] = rings;
+      const c = ringCentroid(rings);
+      if (c) centroids[code] = [Math.round(c[0] * 1e4) / 1e4, Math.round(c[1] * 1e4) / 1e4];
+    }
+    return { outlines, centroids, names, areas };
+  });
+  return r.value;
+}
+
+export type { DownstreamResult } from "./downstream";
+
+/**
+ * One leg of the walk: from the HUC-12 under a point, or `from` a HUC-12 a
+ * previous leg stopped at. Stops at `budgetMs` so a serverless call finishes.
+ */
+export async function fetchDownstream(start: { lon: number; lat: number } | { from: string }, opts: { budgetMs?: number } = {}): Promise<DownstreamResult | null> {
+  let huc12: string;
+  let startName: string;
+  if ("from" in start) {
+    huc12 = start.from;
+    startName = start.from;
+  } else {
+    const at = await huc12At(start.lon, start.lat);
+    if (!at) return null;
+    huc12 = at.huc12;
+    startName = at.name;
+  }
+  // Worst case inside a 60 s function: identify 12 s + budget 6 s + one cold basin 40 s.
+  const walk = await walkDownstream(huc12, loadBasin, { budgetMs: opts.budgetMs ?? 6_000 });
+  if ("from" in start && walk.steps[0]) startName = walk.steps[0].name;
+  return { ...walk, ...("from" in start ? {} : { point: start }), startName };
 }

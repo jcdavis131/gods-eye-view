@@ -7,6 +7,7 @@
 //
 // Each command returns a short sentence the agent can speak back.
 
+import { useTrace } from "@/lib/fabric/traceStore";
 import { flyTo, flyToSelection, homeView, startFollowing, stopFollowing } from "@/lib/globe/camera";
 import { goLive, setMissionTime } from "@/lib/globe/clock";
 import { allFeatures } from "@/lib/globe/registry";
@@ -131,6 +132,9 @@ const LAYER_ALIASES: Record<string, LayerId> = {
   districts: "constructs",
   watersheds: "constructs",
   boundaries: "constructs",
+  field: "field",
+  "construct field": "field",
+  emergence: "field",
 };
 
 export function resolveLayer(word: string | undefined): LayerId | null {
@@ -290,6 +294,32 @@ export const COMMANDS: CommandDef[] = [
       const v = useGlobe.getState().view;
       const report = reportFromGlobe(v.lon, v.lat);
       return prefix + speakReport(report);
+    },
+  },
+  {
+    name: "trace_downstream",
+    description:
+      "Follow the water from a place or the current view to the sea: the chain of USGS subwatersheds (HUC-12) it drains through, drawn on the globe, and how it ends (ocean, closed basin, Mexico, Canada).",
+    parameters: {
+      type: "object",
+      properties: {
+        place: { type: "string", description: "Optional place to fly to first, e.g. 'Austin'" },
+      },
+    },
+    run: async (a) => {
+      let prefix = "";
+      if (a.place) prefix = (await goToPlace(String(a.place), 120)) + " ";
+      const st = useGlobe.getState();
+      st.setLayer("water", true);
+      const v = st.view;
+      await useTrace.getState().run(v.lon, v.lat);
+      const t = useTrace.getState();
+      if (!t.steps.length) return prefix + `I could not trace the water here${t.error ? `: ${t.error}` : "."}`;
+      return (
+        prefix +
+        `From ${t.startName}, the water passes through ${t.steps.length} subwatersheds` +
+        `${t.terminal ? ` to the ${t.terminal}` : ", and I stopped before it reached the end"}. The path is drawn on the globe.`
+      );
     },
   },
   {

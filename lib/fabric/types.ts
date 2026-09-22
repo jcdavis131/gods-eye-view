@@ -141,6 +141,8 @@ export interface ConstructExtra {
   tier: number;
   /** The point the stack was asked about, [lon, lat]; every stratum is tethered to it. */
   ground: [number, number];
+  /** Wall-clock ms the stratum was created; the style raises it out of the ground from here. */
+  born?: number;
   /** For the "here" anchor: the whole stack and its edges. */
   fabric?: Fabric;
 }

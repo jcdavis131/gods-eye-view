@@ -7,7 +7,7 @@ import type { LayerId } from "@/lib/layers/types";
 import type { CategoryFilter } from "@/lib/indicators/store";
 import type { EntityKind } from "@/lib/screener/fields";
 
-export type PersonaId = "realestate" | "economist" | "trader" | "water" | "logistics" | "banking" | "explorer";
+export type PersonaId = "realestate" | "economist" | "trader" | "water" | "logistics" | "banking" | "civic" | "explorer";
 
 /** Panels a lens can open on arrival; ids match lib/personas/actions.ts. */
 export type PanelId = "layers" | "water" | "market" | "signals" | "screen" | "releases" | "watch" | "explore" | "share";
@@ -28,7 +28,7 @@ export interface Persona {
   /** What you get, one line. */
   tagline: string;
   /** Lucide icon name resolved in components/hud/PersonaPicker.tsx. */
-  icon: "Home" | "LineChart" | "CandlestickChart" | "Droplets" | "Ship" | "Landmark" | "Globe2";
+  icon: "Home" | "LineChart" | "CandlestickChart" | "Droplets" | "Ship" | "Landmark" | "Layers" | "Globe2";
   color: string;
   /** Layers switched on (every other layer goes off). */
   layers: LayerId[];
@@ -183,6 +183,26 @@ export const PERSONAS: Persona[] = [
       { text: "The market report adds home values, wages and the companies headquartered there.", panel: "market" },
     ],
     aliases: ["banker", "banking", "public finance", "municipal", "muni", "government", "grant", "treasurer", "city"],
+  },
+  {
+    id: "civic",
+    title: "Civic & planning",
+    short: "Civic",
+    who: "Planners, local government, journalists, civic technologists, students",
+    tagline: "Every jurisdiction, district, watershed and ecoregion over a place, lit by what the physical layers put inside it.",
+    icon: "Layers",
+    color: "#c4b5fd",
+    layers: ["constructs", "field", "water", "companies", "banks", "earthquakes"],
+    start: { lon: -97.74, lat: 30.27, height: 90_000, label: "downtown Austin" },
+    open: "layers",
+    nav: ["layers", "explore", "water", "market", "signals", "screen", "releases", "watch", "share"],
+    presets: ["constructs-austin", "constructs-field-texas", "constructs-bexar"],
+    steps: [
+      { text: "Tap the white Here node for every construct over the camera target, grouped by point of view." },
+      { text: "Pick a point of view for the construct field and zoom: states give way to counties, water regions to subwatersheds.", panel: "layers" },
+      { text: "Select a watershed and trace where its water goes; gauges along the way are joined to it." },
+    ],
+    aliases: ["civic", "planner", "planning", "jurisdiction", "district", "constructs", "urbanist"],
   },
   {
     id: "explorer",
