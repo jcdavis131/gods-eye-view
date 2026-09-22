@@ -167,7 +167,8 @@ export async function walkDownstream(start: string, loadBasin: (huc4: string) =>
     if (!row) break;
     steps.push({ ...row, hop: steps.length });
     if (!/^\d{12}$/.test(row.to)) {
-      terminal = row.to ? row.to.toLowerCase() : "unknown";
+      // WBD spells terminals a few ways (CLOSED BASIN, CLOSED_BASIN, Canada).
+      terminal = row.to ? row.to.toLowerCase().replace(/_/g, " ") : "unknown";
       break;
     }
     cur = row.to;

@@ -33,7 +33,12 @@ function useRefresh(ms: number) {
 
 export default function InfoPanel() {
   const selected = useGlobe((s) => s.selected);
-  const feature = useGlobe((s) => s.selectedFeature);
+  const snapshot = useGlobe((s) => s.selectedFeature);
+  // Constructs and the field refetch as the camera moves under a stable id; show the live one.
+  const feature =
+    snapshot && (snapshot.properties.layer === "constructs" || snapshot.properties.layer === "field")
+      ? (getRenderer(snapshot.properties.layer)?.getFeature(snapshot.properties.id) ?? snapshot)
+      : snapshot;
   const following = useGlobe((s) => s.following);
   const clock = useGlobe((s) => s.clock);
   const log = useGlobe((s) => s.log);

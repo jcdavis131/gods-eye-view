@@ -207,7 +207,8 @@ describe("downstream", () => {
 
 describe("basinFromBundle", () => {
   it("reads the compact bundled drainage table and walks it", async () => {
-    const bundle = { pulled: "2026-09-22", complete: true, basins: { "1209": "120900000001>120900000002|120900000002>OCEAN|garbage" } };
+    const bundle = { pulled: "2026-09-22", complete: true, basins: { "1209": "120900000001>120900000002|120900000002>OCEAN|garbage", "1601": "160100000001>CLOSED_BASIN" } };
+    expect((await walkDownstream("160100000001", async (h) => basinFromBundle(bundle, h) ?? new Map())).terminal).toBe("closed basin");
     const t = basinFromBundle(bundle, "1209")!;
     expect(t.size).toBe(2);
     expect(t.get("120900000002")).toEqual({ huc12: "120900000002", to: "OCEAN", name: "120900000002" });

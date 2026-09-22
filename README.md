@@ -54,6 +54,10 @@ The layers above show the physical world. **Constructs** shows the frames laid o
 
 **Emergence.** A construct has no sensors of its own, so its state comes from the physical twin. *Construct field* tiles the whole view with one point of view's constructs and floats them as a plate above the globe. Which kind emerges depends on the zoom: water regions from orbit give way to subwatersheds over a county, states to counties to cities, congressional to state house districts. Each unit's column of light and colour rise with the physical signals loaded inside it (gauges, aircraft, ships, earthquakes, company headquarters, bank offices), recomputed every few seconds. **Where the water goes** walks the USGS drainage links from any point to the ocean and draws the path, then joins every gauge and well along it (downtown Austin reaches Matagorda Bay in 29 subwatersheds). The *Civic & planning* lens (`?lens=civic`) opens on all of it.
 
+| Construct field: Texas subbasins lit by the gauges, aircraft and companies inside them | Where the water goes: Denver to the Gulf through 217 subwatersheds |
+| --- | --- |
+| ![field](docs/screenshot-field-hydro.jpg) | ![trace](docs/screenshot-trace-denver.jpg) |
+
 Relations are only those the unit systems define (GEOID and HUC nesting, OMB metro delineation) or an agency publishes (NWS zone to office, state to federal region, WBD downstream HUC). An upstream that fails is named as missing, never treated as absent. `/api/fabric` serves the stack (`op=stack`, JSON or CSV), the field (`op=field`) and the trace (`op=downstream`, `op=outlines`), as do the MCP tools `place_fabric`, `construct_field` and `downstream`. Sources are Census TIGERweb, USGS WBD and 3DEP, EPA ecoregions, FEMA NFHL, NWS and Natural Earth, all keyless. The design, the guarantees and the roadmap are in [`docs/CONSTRUCTS.md`](docs/CONSTRUCTS.md).
 
 ## Lenses: who is looking

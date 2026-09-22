@@ -65,7 +65,10 @@ function KindChip({ node }: { node: ConstructNode }) {
   );
 }
 
-export default function ConstructAside({ feature }: { feature: LayerFeature }) {
+export default function ConstructAside({ feature: selected }: { feature: LayerFeature }) {
+  // The selection holds the feature as it was when clicked; the layer refetches
+  // as the camera moves, so read the live one by id (the "here" id is stable).
+  const feature = getRenderer(selected.properties.layer)?.getFeature(selected.properties.id) ?? selected;
   const x = extraOf(feature);
   if (!x) return null;
   if (x.fabric) return <Stack fabric={x.fabric} />;
