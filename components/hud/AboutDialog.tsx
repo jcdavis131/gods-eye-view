@@ -16,9 +16,10 @@ export default function AboutButton({ compact = false }: { compact?: boolean }) 
         className={
           compact
             ? "flex w-full items-center gap-2.5 rounded px-3 py-2.5 text-left text-[13px] text-foreground/85 hover:bg-accent hover:text-primary"
-            : "flex items-center gap-2 px-3 py-2 text-[11px] uppercase tracking-wider text-foreground/80 hover:bg-accent hover:text-primary"
+            : "hud-btn"
         }
         title="About, data sources and rules"
+        aria-label={compact ? undefined : "About, data sources and rules"}
       >
         <Info className={compact ? "size-4 shrink-0" : "size-3.5"} />
         {compact && "About & data sources"}

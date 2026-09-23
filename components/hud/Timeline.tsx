@@ -35,7 +35,7 @@ export default function Timeline({ compact = false }: { compact?: boolean } = {}
       className={
         compact
           ? "pointer-events-auto w-full"
-          : "pointer-events-auto absolute inset-x-3 bottom-3 z-30 md:inset-x-auto md:left-1/2 md:w-[720px] md:max-w-[calc(100vw-24px)] md:-translate-x-1/2"
+          : "pointer-events-auto absolute inset-x-3 bottom-3 z-30 md:inset-x-auto md:left-1/2 md:w-[720px] md:max-w-[calc(100vw-24px)] md:-translate-x-1/2 xl:w-[min(720px,calc(100vw_-_2*var(--col-w)_-_72px))]"
       }
     >
       <div className="hud-panel px-3 py-2">
@@ -44,7 +44,7 @@ export default function Timeline({ compact = false }: { compact?: boolean } = {}
             type="button"
             onClick={() => goLive()}
             className={`flex items-center gap-1.5 border px-2 py-1 text-[10px] uppercase tracking-widest ${
-              live ? "border-primary/60 bg-primary/15 text-primary" : "border-border text-foreground/70 hover:text-primary"
+              live ? "border-signal/60 bg-signal/10 text-signal" : "border-border text-foreground/70 hover:text-primary"
             }`}
             title="Snap the mission clock to now"
           >
@@ -85,7 +85,7 @@ export default function Timeline({ compact = false }: { compact?: boolean } = {}
           </button>
           <div className="ml-auto text-[11px] tabular-nums text-foreground/90">
             {compact ? fmtUtc(mission).slice(11) : fmtUtc(mission)}
-            <span className={`ml-2 text-[9px] tracking-widest ${live ? "text-primary" : "text-warn"}`}>
+            <span className={`ml-2 text-[9px] tracking-widest ${live ? "text-signal" : "text-warn"}`}>
               {live ? "T+0" : `${clock.offsetMs > 0 ? "+" : "−"}${fmtOffset(Math.abs(clock.offsetMs))}`}
             </span>
           </div>
@@ -110,8 +110,8 @@ export default function Timeline({ compact = false }: { compact?: boolean } = {}
               className="pointer-events-none absolute top-0 flex -translate-x-1/2 flex-col items-center"
               style={{ left: `${((h + 24) / 48) * 100}%` }}
             >
-              <div className={`h-2 w-px ${h === 0 ? "bg-primary" : "bg-border"}`} />
-              <div className="mt-2 text-[9px] tabular-nums text-muted-foreground">{h === 0 ? "NOW" : `${h > 0 ? "+" : ""}${h}h`}</div>
+              <div className={`h-2 w-px ${h === 0 ? "bg-foreground/60" : "bg-border"}`} />
+              <div className="mt-2 text-[9px] tabular-nums tracking-[0.12em] text-muted-foreground">{h === 0 ? "NOW" : `${h > 0 ? "+" : ""}${h}h`}</div>
             </div>
           ))}
           <input

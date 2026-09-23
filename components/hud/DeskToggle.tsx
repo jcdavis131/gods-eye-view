@@ -30,12 +30,11 @@ export default function DeskToggle() {
       type="button"
       onClick={toggleMode}
       aria-pressed={on}
-      className={`flex items-center gap-2 px-3 py-2 text-[11px] uppercase tracking-wider hover:bg-accent hover:text-primary ${on ? "text-primary" : "text-foreground/80"}`}
+      className="hud-btn"
       title={on ? "Back to the HUD (D)" : "Desk mode: light, dense table + chart + report workspace (D)"}
     >
       <LayoutPanelLeft className="size-3.5" />
       <span className="sr-only">Desk</span>
-      <span className="hud-kbd hidden 2xl:inline">D</span>
     </button>
   );
 }

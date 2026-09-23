@@ -26,19 +26,31 @@ export default function MobileTopBar() {
       className="pointer-events-none absolute inset-x-0 top-0 z-30 p-2"
       style={{ paddingTop: "max(8px, env(safe-area-inset-top))" }}
     >
-      <div className="hud-panel pointer-events-auto flex items-center gap-2 px-3 py-1.5">
-        <span className={`hud-dot shrink-0 ${ready ? "text-primary" : "text-warn blink"}`} style={{ color: ready ? undefined : "var(--warn)" }} aria-label={ready ? "online" : "booting"} />
-        <div className="hud-display min-w-0 truncate text-[13px] font-semibold leading-none text-primary">Embedding Atlas</div>
-        <span className={`shrink-0 rounded px-1 text-[9px] tracking-widest ${live ? "bg-primary/15 text-primary" : "bg-warn/15 text-warn"}`}>
-          {live ? "LIVE" : clock.offsetMs < 0 ? "REPLAY" : "FORWARD"}
-        </span>
-        {vintage && <span className="shrink-0 rounded bg-warn/15 px-1 text-[9px] tracking-widest text-warn">V {vintage}</span>}
-        {persona && (
-          <button type="button" onClick={() => setPickerOpen(true)} className="hidden shrink-0 rounded border px-1 text-[9px] uppercase tracking-widest min-[400px]:inline" style={{ color: persona.color, borderColor: persona.color + "66" }} aria-label={`Lens: ${persona.title}. Change lens`}>
-            {persona.title}
-          </button>
-        )}
-        <div className="ml-auto flex shrink-0 items-center">
+      {/* Symmetric about the axis: status on the left, the name centred, actions on the right. */}
+      <div className="hud-panel pointer-events-auto grid h-11 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className={ready ? "hud-lamp shrink-0" : "hud-lamp hud-lamp-off blink shrink-0"} role="img" aria-label={ready ? "Globe online" : "Globe starting"} />
+          <span className={`shrink-0 text-[9px] uppercase tracking-[0.2em] ${live ? "text-signal" : "text-warn"}`}>
+            {live ? "Live" : clock.offsetMs < 0 ? "Replay" : "Fwd"}
+          </span>
+          {vintage && <span className="truncate text-[9px] tracking-[0.12em] text-warn">V {vintage}</span>}
+        </div>
+        <button
+          type="button"
+          onClick={() => setPickerOpen(true)}
+          className="flex min-w-0 flex-col items-center"
+          aria-label={persona ? `Embedding Atlas. Lens: ${persona.title}. Change lens` : "Embedding Atlas. Choose a lens"}
+        >
+          <span className="hud-display truncate text-[11px] leading-none tracking-[0.28em] text-[#eef3f7]" style={{ marginRight: "-0.28em" }}>
+            Embedding Atlas
+          </span>
+          {persona && (
+            <span className="mt-1 truncate text-[8px] uppercase leading-none tracking-[0.22em]" style={{ color: persona.color }}>
+              {persona.short}
+            </span>
+          )}
+        </button>
+        <div className="flex shrink-0 items-center justify-end">
           <VoiceControl compact />
           <button
             type="button"
@@ -51,7 +63,7 @@ export default function MobileTopBar() {
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
-            className="flex size-9 items-center justify-center text-foreground/80 hover:text-primary"
+            className="-mr-2 flex size-9 items-center justify-center text-foreground/80 hover:text-primary"
             aria-label="Settings and keys"
           >
             <Settings2 className="size-4" />

@@ -10,6 +10,11 @@ import path from "node:path";
 const SPZ_STUB = "./lib/vendor/spz-loader-stub.ts";
 
 const nextConfig: NextConfig = {
+  // app/global-not-found.tsx: the app has two root layouts, so an unmatched
+  // URL needs its own themed 404 rather than the framework's white default.
+  experimental: {
+    globalNotFound: true,
+  },
   turbopack: {
     resolveAlias: {
       "@spz-loader/core": SPZ_STUB,

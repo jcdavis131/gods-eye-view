@@ -42,18 +42,32 @@ export default function InfoPanel() {
   const following = useGlobe((s) => s.following);
   const clock = useGlobe((s) => s.clock);
   const log = useGlobe((s) => s.log);
+  const layers = useGlobe((s) => s.layers);
+  const status = useGlobe((s) => s.status);
+  // Moving contacts only: aircraft, ships, satellites. Quakes and launch pads
+  // are events/places, not contacts.
+  const contacts = (["aircraft", "ships", "satellites"] as const).reduce(
+    (n, id) => n + (layers[id] && !LAYER_BY_ID[id]?.simulated ? (status[id]?.count ?? 0) : 0),
+    0,
+  );
   useRefresh(1000);
 
   if (!selected || !feature) {
     return (
       <aside className="pointer-events-auto hidden w-full md:block">
         <div className="hud-panel">
-          <div className="flex items-center justify-between border-b border-border px-3 py-2">
+          <div className="flex h-10 items-center justify-between border-b border-border px-3">
             <span className="hud-label">Signal log</span>
-            <span className="text-[9px] text-muted-foreground">click any object</span>
+            <span className="text-[9px] uppercase tracking-[0.18em] tabular-nums text-muted-foreground" title="Live contacts: aircraft, ships and satellites on the globe now">
+              {contacts > 0 ? `${contacts.toLocaleString()} contacts` : "standing by"}
+            </span>
           </div>
-          <ul className="max-h-[38vh] overflow-y-auto px-3 py-2 text-[10px] leading-relaxed">
-            {log.length === 0 && <li className="text-muted-foreground">Waiting for signals…</li>}
+          <ul className="max-h-[38vh] space-y-1 overflow-y-auto px-3 py-2.5 text-[10px] leading-relaxed" aria-live="polite">
+            {log.length === 0 && (
+              <li className="flex items-center gap-2 text-muted-foreground">
+                <span className="hud-lamp hud-lamp-off blink" aria-hidden /> Waiting for the first signal
+              </li>
+            )}
             {log.slice(0, 14).map((e, i) => (
               <li key={`${e.t}-${i}`} className="flex gap-2">
                 <span className="shrink-0 tabular-nums text-muted-foreground">
@@ -69,6 +83,7 @@ export default function InfoPanel() {
               </li>
             ))}
           </ul>
+          <div className="border-t border-border px-3 py-2 text-[9px] uppercase tracking-[0.18em] text-muted-foreground">Select any object on the globe for its dossier</div>
         </div>
       </aside>
     );
@@ -105,19 +120,22 @@ export default function InfoPanel() {
   const economy = p.layer === "trade" || p.layer === "commerce" || p.layer === "realestate";
 
   return (
-    <aside className="pointer-events-auto w-full">
-      <div className="hud-panel">
-        <div className="flex items-start justify-between gap-2 border-b border-border px-3 py-2">
+    <aside className="pointer-events-auto w-full" aria-label={`Selected: ${p.name}`}>
+      <div className="hud-panel hud-panel-lit hud-enter">
+        <div className="flex items-start justify-between gap-2 border-b border-border px-3 pb-2.5 pt-3">
           <div className="min-w-0">
-            <div className="hud-label" style={{ color }}>
-              {def?.label ?? p.layer} · {p.kind ?? "object"}
-              {p.simulated && <span className="ml-2 text-warn">SIMULATED</span>}
-              {estimate && <span className="ml-2 text-warn">{estimate}</span>}
+            <div className="hud-label flex items-center gap-2 text-[9px]">
+              <span className="size-1.5 shrink-0 rounded-full" style={{ background: color }} aria-hidden />
+              <span className="truncate">
+                {def?.label ?? p.layer} · {p.kind ?? "object"}
+              </span>
+              {p.simulated && <span className="text-warn">Simulated</span>}
+              {estimate && <span className="text-warn">{estimate}</span>}
             </div>
-            <div className="hud-display truncate text-[18px] font-semibold leading-tight text-foreground">
+            <h2 className="hud-display mt-1.5 truncate text-[16px] leading-tight text-[#eef3f7]" title={p.name}>
               {p.name}
-            </div>
-            <div className="text-[9px] text-muted-foreground">
+            </h2>
+            <div className="mt-1 text-[9px] text-muted-foreground">
               src {p.source}
               {p.observedAt ? ` · seen ${timeAgo(p.observedAt)}` : ""}
             </div>
@@ -125,8 +143,8 @@ export default function InfoPanel() {
           <button
             type="button"
             onClick={() => useGlobe.getState().select(null)}
-            className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-            aria-label="Close"
+            className="-mr-1 -mt-1 flex size-7 items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground"
+            aria-label="Close (Esc)"
           >
             <X className="size-3.5" />
           </button>
@@ -154,7 +172,7 @@ export default function InfoPanel() {
           </div>
         )}
 
-        <dl className="grid grid-cols-[92px_1fr] gap-x-2 gap-y-1 px-3 py-2 text-[11px]">
+        <dl className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-3 gap-y-1 px-3 py-2.5 text-[11px]">
           {lonlat && (
             <>
               <dt className="hud-label">Position</dt>
@@ -208,7 +226,7 @@ export default function InfoPanel() {
             onClick={() => (following ? stopFollowing() : startFollowing())}
             className={`flex flex-1 items-center justify-center gap-2 border px-2 py-1.5 text-[10px] uppercase tracking-widest ${
               following
-                ? "border-warn/60 bg-warn/15 text-warn"
+                ? "border-signal/60 bg-signal/10 text-signal"
                 : "border-border text-foreground/80 hover:bg-accent hover:text-primary"
             }`}
           >
@@ -237,9 +255,9 @@ function Row({ k, v }: { k: string; v: string | number | boolean | null | undefi
       <dt className="hud-label truncate" title={k}>
         {k}
       </dt>
-      <dd className="break-words">
+      <dd className="min-w-0 break-words">
         {isUrl ? (
-          <a href={v as string} target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">
+          <a href={v as string} target="_blank" rel="noreferrer" className="block truncate text-primary underline-offset-2 hover:underline" title={v as string}>
             {text.replace(/^https?:\/\//, "").slice(0, 40)}
           </a>
         ) : (

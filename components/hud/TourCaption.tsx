@@ -67,25 +67,25 @@ export default function TourCaption() {
   return (
     <div
       data-tour-controls
-      className="pointer-events-auto absolute bottom-[120px] left-3 z-30 w-[380px] max-w-[calc(100vw-24px)] md:bottom-3 md:left-3"
+      className="pointer-events-auto absolute inset-x-2 top-[calc(max(8px,env(safe-area-inset-top))_+_52px)] z-30 md:inset-x-auto md:bottom-[104px] md:left-1/2 md:top-auto md:w-[440px] md:-translate-x-1/2"
     >
-      <div className="hud-panel">
-        <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
-          <span className="hud-label text-primary">
+      <div className="hud-panel hud-panel-lit hud-enter">
+        <div className="flex h-9 items-center justify-between border-b border-border px-3">
+          <span className="hud-label text-signal">
             Tour · {tour.index + 1}/{PRESETS.length}
           </span>
-          <span className="text-[9px] tabular-nums text-muted-foreground">{tour.paused ? "paused" : `next in ${left}s`}</span>
+          <span className="text-[9px] uppercase tracking-[0.18em] tabular-nums text-muted-foreground">{tour.paused ? "paused" : `next in ${left}s`}</span>
         </div>
-        <div className="px-3 py-2">
-          <div className="hud-display text-[15px] font-semibold text-foreground">{preset.title}</div>
+        <div className="px-3 py-2.5">
+          <div className="hud-display text-[15px] text-[#eef3f7]">{preset.title}</div>
           <div className="text-[9px] uppercase tracking-widest text-muted-foreground">{preset.region}</div>
-          <p className="mt-1 text-[11px] leading-snug text-foreground/85">{preset.blurb}</p>
+          <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-foreground/85 md:line-clamp-none">{preset.blurb}</p>
         </div>
-        <div className="flex gap-1 border-t border-border p-2">
+        <div className="flex gap-2 border-t border-border p-2">
           <button
             type="button"
             onClick={() => setTour({ paused: !tour.paused, startedAt: tour.paused ? Date.now() : tour.startedAt })}
-            className="flex flex-1 items-center justify-center gap-2 border border-border px-2 py-1 text-[10px] uppercase tracking-widest text-foreground/80 hover:bg-accent hover:text-primary"
+            className="flex flex-1 items-center justify-center gap-2 border border-border h-8 px-3 text-[10px] uppercase tracking-[0.22em] text-foreground/80 hover:bg-accent hover:text-primary"
           >
             {tour.paused ? <Play className="size-3" /> : <Pause className="size-3" />}
             {tour.paused ? "Resume" : "Pause"}
@@ -93,15 +93,16 @@ export default function TourCaption() {
           <button
             type="button"
             onClick={next}
-            className="flex flex-1 items-center justify-center gap-2 border border-border px-2 py-1 text-[10px] uppercase tracking-widest text-foreground/80 hover:bg-accent hover:text-primary"
+            className="flex flex-1 items-center justify-center gap-2 border border-border h-8 px-3 text-[10px] uppercase tracking-[0.22em] text-foreground/80 hover:bg-accent hover:text-primary"
           >
             <SkipForward className="size-3" /> Next
           </button>
           <button
             type="button"
             onClick={() => setTour({ active: false, paused: false })}
-            className="flex items-center justify-center gap-2 border border-border px-2 py-1 text-[10px] uppercase tracking-widest text-foreground/80 hover:bg-accent hover:text-alert"
+            className="flex items-center justify-center gap-2 border border-border h-8 px-3 text-[10px] uppercase tracking-[0.22em] text-foreground/80 hover:bg-accent hover:text-alert"
             title="Stop the tour"
+            aria-label="Stop the tour"
           >
             <Square className="size-3" />
           </button>

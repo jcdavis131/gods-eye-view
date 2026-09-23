@@ -27,28 +27,22 @@ function LayerRow({
   const toggle = (checked: boolean) => setLayer(l.id, checked);
   return (
     <li className="flex min-h-[48px] flex-col justify-center px-3 py-2 md:min-h-0">
-      <div className="flex items-center gap-2">
-        <span className="hud-dot shrink-0" style={{ color: l.color, opacity: on ? 1 : 0.35 }} />
+      <div className="flex items-center gap-2.5">
+        <span
+          className="size-1.5 shrink-0 rounded-full"
+          aria-hidden
+          style={{ background: on ? l.color : "transparent", boxShadow: on ? `0 0 6px ${l.color}` : `inset 0 0 0 1px ${l.color}`, opacity: on ? 1 : 0.6 }}
+        />
         <button
           type="button"
           onClick={() => setLayer(l.id, !on)}
-          className="hud-display min-w-0 flex-1 text-left text-[14px] font-semibold tracking-wider md:text-[13px]"
-          style={{ color: on ? l.color : "var(--muted-foreground)" }}
+          className="hud-display min-w-0 flex-1 text-left text-[13px] leading-tight tracking-[0.1em] md:text-[11.5px]"
+          style={{ color: on ? "var(--accent-foreground)" : "var(--muted-foreground)" }}
           title={l.description}
         >
           {l.label}
         </button>
-        {l.simulated && (
-          <span className="shrink-0 rounded border border-warn/50 px-1 text-[8px] tracking-widest text-warn">
-            SIMULATED
-          </span>
-        )}
-        {l.estimate && (
-          <span className="shrink-0 rounded border border-warn/50 px-1 text-[8px] tracking-widest text-warn" title={l.estimate}>
-            ESTIMATE
-          </span>
-        )}
-        <span className="min-w-[44px] shrink-0 text-right text-[13px] tabular-nums text-foreground/90 md:text-[12px]">
+        <span className="min-w-[44px] shrink-0 text-right text-[13px] tabular-nums text-foreground/90 md:text-[11px]">
           {on && st ? st.count.toLocaleString() : "—"}
         </span>
         {/* Short-landscape phones keep the pinned panel, so both sizes stay. */}
@@ -67,20 +61,22 @@ function LayerRow({
           className="hidden shrink-0 md:block"
         />
       </div>
-      {on && (
+      {(on || l.simulated || l.estimate) && (
         <div className="mt-1 flex items-center justify-between gap-2 pl-4 text-[10px] text-muted-foreground md:text-[9px]">
-          <span className="truncate">
-            {st?.error ? (
-              <span className="text-alert">ERR {st.error.slice(0, 60)}</span>
-            ) : st?.note ? (
-              st.note
-            ) : (
-              l.attribution
+          <span className="flex min-w-0 items-center gap-2">
+            {l.simulated && <span className="shrink-0 border border-warn/40 px-1 text-[8px] tracking-[0.18em] text-warn">SIMULATED</span>}
+            {l.estimate && (
+              <span className="shrink-0 border border-warn/40 px-1 text-[8px] tracking-[0.18em] text-warn" title={l.estimate}>
+                ESTIMATE
+              </span>
+            )}
+            {on && (
+              <span className="truncate">
+                {st?.error ? <span className="text-alert">ERR {st.error.slice(0, 60)}</span> : st?.note ? st.note : l.attribution}
+              </span>
             )}
           </span>
-          <span className="shrink-0 tabular-nums">
-            {st?.loading ? <span className="blink text-primary">SYNC</span> : timeAgo(st?.fetchedAt)}
-          </span>
+          {on && <span className="shrink-0 tabular-nums">{st?.loading ? <span className="blink text-signal">SYNC</span> : timeAgo(st?.fetchedAt)}</span>}
         </div>
       )}
       {on && l.id === "field" && <FieldControls />}
@@ -108,10 +104,10 @@ export default function LayerPanel({ embedded = false }: { embedded?: boolean } 
 
   const on = Object.values(layers).filter(Boolean).length;
   const header = (
-    <div className="flex items-center justify-between border-b border-border px-3 py-2">
+    <div className="flex h-10 items-center justify-between border-b border-border px-3">
       <span className="hud-label">Signal layers</span>
-      <span className="text-[9px] text-muted-foreground">
-        {on}/{LAYERS.length} ON
+      <span className="text-[9px] uppercase tracking-[0.18em] tabular-nums text-muted-foreground">
+        <span className="text-foreground">{on}</span> / {LAYERS.length} on
       </span>
     </div>
   );
@@ -128,7 +124,14 @@ export default function LayerPanel({ embedded = false }: { embedded?: boolean } 
   }
 
   return (
-    <aside className="pointer-events-auto absolute left-3 top-[76px] z-30 max-h-[calc(100vh-190px)] w-[268px] max-w-[calc(100vw-24px)] overflow-y-auto [scrollbar-width:thin]">
+    // p-px and the 1 px offsets keep the panel on the 12 px grid while leaving
+    // room for its corner brackets inside the scroll box.
+    <aside
+      id="hud-layers"
+      tabIndex={-1}
+      aria-label="Signal layers"
+      className="pointer-events-auto absolute left-[11px] top-[71px] z-30 max-h-[calc(100vh-190px)] w-[calc(var(--col-w)+2px)] max-w-[calc(100vw-22px)] overflow-y-auto p-px outline-none [scrollbar-width:thin] xl:max-h-[calc(100vh-82px)]"
+    >
       <div className="hud-panel">
         {header}
         <ul className="divide-y divide-border/60">
