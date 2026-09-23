@@ -102,6 +102,8 @@
   --glass: rgba(6, 9, 13, 0.84);
   --glass-deep: rgba(4, 6, 9, 0.9);
   --bracket: rgba(214, 230, 242, 0.55);
+  /* Readouts and titles: the brightest ink in the chrome. */
+  --bright: #eef3f7;
 
   /* Type scale. One display face (Geist, tracked, uppercase) and one text face
      (Geist Mono, tabular). Components use these through the hud-* classes. */
@@ -648,6 +650,12 @@
   --sidebar-accent-foreground: #0b4f43;
   --sidebar-border: #cdd4dc;
   --sidebar-ring: #0b6e5c;
+  /* The signal stays warm on paper but dark enough for AA (5.3:1 on white). */
+  --signal: #a64b00;
+  --signal-foreground: #ffffff;
+  --bright: #0d1620;
+  --hairline: #cdd4dc;
+  --bracket: #9aa6b2;
   color-scheme: light;
 }
 [data-mode="desk"][data-theme="light"] ::selection {

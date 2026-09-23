@@ -41,7 +41,7 @@ export default function MobileTopBar() {
           className="flex min-w-0 flex-col items-center"
           aria-label={persona ? `Embedding Atlas. Lens: ${persona.title}. Change lens` : "Embedding Atlas. Choose a lens"}
         >
-          <span className="hud-display truncate text-[11px] leading-none tracking-[0.28em] text-[#eef3f7]" style={{ marginRight: "-0.28em" }}>
+          <span className="hud-display truncate text-[11px] leading-none tracking-[0.28em] text-[var(--bright)]" style={{ marginRight: "-0.28em" }}>
             Embedding Atlas
           </span>
           {persona && (

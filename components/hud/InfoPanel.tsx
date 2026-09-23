@@ -132,7 +132,7 @@ export default function InfoPanel() {
               {p.simulated && <span className="text-warn">Simulated</span>}
               {estimate && <span className="text-warn">{estimate}</span>}
             </div>
-            <h2 className="hud-display mt-1.5 truncate text-[16px] leading-tight text-[#eef3f7]" title={p.name}>
+            <h2 className="hud-display mt-1.5 truncate text-[16px] leading-tight text-[var(--bright)]" title={p.name}>
               {p.name}
             </h2>
             <div className="mt-1 text-[9px] text-muted-foreground">

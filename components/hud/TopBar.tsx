@@ -115,7 +115,7 @@ export default function TopBar() {
       <div className="hud-panel pointer-events-auto col-start-1 flex h-12 min-w-0 items-center justify-self-start overflow-x-auto [scrollbar-width:none]">
         <div className="flex shrink-0 items-center gap-3 pl-4 pr-4">
           <span className={ready ? "hud-lamp" : "hud-lamp hud-lamp-off blink"} role="img" aria-label={ready ? "Globe online" : "Globe starting"} />
-          <div className="hud-display whitespace-nowrap text-[13px] leading-none tracking-[0.3em] text-[#eef3f7]">Embedding Atlas</div>
+          <div className="hud-display whitespace-nowrap text-[13px] leading-none tracking-[0.3em] text-[var(--bright)]">Embedding Atlas</div>
         </div>
         <div className="hud-rule" />
         <div className="flex shrink-0 items-center px-1">
@@ -167,7 +167,7 @@ export default function TopBar() {
             )}
             <span className={live ? "text-signal" : "text-warn"}>{live ? "Live" : clock.offsetMs < 0 ? "Replay" : "Forward"}</span>
           </div>
-          <div className="mt-1 text-[13px] leading-none tabular-nums text-[#eef3f7]">{fmtUtc(mission)}</div>
+          <div className="mt-1 text-[13px] leading-none tabular-nums text-[var(--bright)]">{fmtUtc(mission)}</div>
         </div>
         <div className="relative w-px bg-[var(--hairline)]">
           <span className="absolute left-1/2 top-0 h-1.5 w-px -translate-x-1/2 bg-signal" aria-hidden />
@@ -177,7 +177,7 @@ export default function TopBar() {
             <span>Target</span>
             <span className="tabular-nums">alt {formatDistance(view.height)}</span>
           </div>
-          <div className="mt-1 text-[13px] leading-none tabular-nums text-[#eef3f7]">{formatLatLon(view.lat, view.lon)}</div>
+          <div className="mt-1 text-[13px] leading-none tabular-nums text-[var(--bright)]">{formatLatLon(view.lat, view.lon)}</div>
         </div>
       </div>
 

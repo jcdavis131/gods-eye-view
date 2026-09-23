@@ -77,7 +77,7 @@ export default function TourCaption() {
           <span className="text-[9px] uppercase tracking-[0.18em] tabular-nums text-muted-foreground">{tour.paused ? "paused" : `next in ${left}s`}</span>
         </div>
         <div className="px-3 py-2.5">
-          <div className="hud-display text-[15px] text-[#eef3f7]">{preset.title}</div>
+          <div className="hud-display text-[15px] text-[var(--bright)]">{preset.title}</div>
           <div className="text-[9px] uppercase tracking-widest text-muted-foreground">{preset.region}</div>
           <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-foreground/85 md:line-clamp-none">{preset.blurb}</p>
         </div>

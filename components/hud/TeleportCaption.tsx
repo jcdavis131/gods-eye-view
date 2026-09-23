@@ -69,7 +69,7 @@ export default function TeleportCaption() {
             <>
               <div className="flex items-center gap-2">
                 <span className="inline-block size-2.5 shrink-0 rounded-full" style={{ background: item.color }} aria-hidden />
-                <span className="hud-display text-[15px] text-[#eef3f7]">{item.title}</span>
+                <span className="hud-display text-[15px] text-[var(--bright)]">{item.title}</span>
               </div>
               <div className="mt-0.5 text-[11px] leading-snug text-foreground/85">{item.subtitle}</div>
               <div className="mt-1 text-[10px] text-muted-foreground">
