@@ -1,17 +1,20 @@
 import type { Metadata, Viewport } from "next";
-import { Geist_Mono, Rajdhani } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import "../globals.css";
 import { BASE_METADATA, BASE_DESCRIPTION } from "@/lib/seo/base";
 
 const mono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  display: "swap",
 });
 
-const display = Rajdhani({
+// One display face (tracked, uppercase, used with restraint) and one text face
+// (mono, tabular figures for every reading). Both variable, both display=swap.
+const display = Geist({
   variable: "--font-display",
   subsets: ["latin"],
-  weight: ["500", "600", "700"],
+  display: "swap",
 });
 
 // A second root layout, not a child of the globe's. Documents are long, they
