@@ -116,7 +116,22 @@ function cssColor(hex: string, alpha?: number): CesiumNS.Color {
   return c;
 }
 
-const LABEL_FONT = "12px Geist Mono, JetBrains Mono, Consolas, monospace";
+/**
+ * Globe labels are set in the HUD's own text face. next/font serves Geist Mono
+ * under a generated family name, so read it from the CSS variable the layout
+ * declares; fall back to a plain mono stack before the stylesheet is in.
+ */
+let labelFont: string | null = null;
+function labelFontCss(): string {
+  if (labelFont) return labelFont;
+  const fallback = "JetBrains Mono, Consolas, monospace";
+  let family = "";
+  if (typeof document !== "undefined") {
+    family = getComputedStyle(document.documentElement).getPropertyValue("--font-geist-mono").trim();
+  }
+  labelFont = `500 11px ${family ? `${family}, ` : ""}${fallback}`;
+  return labelFont;
+}
 const MAX_HISTORY = 240;
 
 export class LayerRenderer {
@@ -539,9 +554,9 @@ export class LayerRenderer {
       item.label = this.labels.add({
         text,
         position: item.pos ?? new C.Cartesian3(),
-        font: LABEL_FONT,
+        font: labelFontCss(),
         fillColor: cssColor(item.color),
-        outlineColor: C.Color.BLACK.withAlpha(0.9),
+        outlineColor: cssColor("#020305", 0.92),
         outlineWidth: 3,
         style: C.LabelStyle.FILL_AND_OUTLINE,
         pixelOffset: new C.Cartesian2(...(this.style.labelOffset ?? [14, -12])),

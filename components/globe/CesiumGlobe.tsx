@@ -17,6 +17,7 @@ import { flyTo } from "@/lib/globe/camera";
 import { useGlobe } from "@/lib/store/globe";
 import { useSettings } from "@/lib/store/settings";
 import type { ViewState } from "@/lib/layers/types";
+import { GLOBE_ERROR_EVENT } from "@/components/hud/TitleCard";
 
 function isPickId(v: unknown): v is PickId {
   return !!v && typeof v === "object" && "layer" in v && "id" in v;
@@ -31,7 +32,7 @@ export default function CesiumGlobe() {
     let viewer: CesiumNS.Viewer | undefined;
     const cleanups: Array<() => void> = [];
 
-    (async () => {
+    const start = async () => {
       const C = await loadCesium();
       if (disposed || !containerRef.current) return;
 
@@ -65,8 +66,19 @@ export default function CesiumGlobe() {
       const prefs = useSettings.getState().prefs;
       const keys = useSettings.getState().keys;
 
-      // Look & feel
-      globe.baseColor = C.Color.fromCssColorString("#02060a");
+      // Look & feel. The globe is the subject of every frame: a cold, slightly
+      // desaturated Earth (imagery tone lives in lib/globe/imagery.ts), a thin
+      // cool limb, a black sky, so the data layers and the one warm accent in
+      // the chrome carry the colour.
+      globe.baseColor = C.Color.fromCssColorString("#03070b");
+      globe.atmosphereSaturationShift = -0.28;
+      globe.atmosphereBrightnessShift = -0.06;
+      if (scene.skyAtmosphere) {
+        scene.skyAtmosphere.saturationShift = -0.32;
+        scene.skyAtmosphere.brightnessShift = -0.12;
+        scene.skyAtmosphere.hueShift = 0.02;
+      }
+      scene.backgroundColor = C.Color.fromCssColorString("#020305");
       globe.enableLighting = true;
       // Cesium measures these against the camera's distance from Earth's
       // centre (~6.4e6 m at the surface). Small lighting fades keep the
@@ -296,7 +308,16 @@ export default function CesiumGlobe() {
 
       useGlobe.getState().setReady(true);
       useGlobe.getState().pushLog({ level: "info", text: "Globe online. Keyless imagery stack: Esri World Imagery + NASA Black Marble." });
-    })();
+    };
+    // A browser without WebGL (or a module that fails to load) must not leave
+    // the visitor on a silent black screen: the title card turns into the
+    // error state and says what happened.
+    start().catch((err: unknown) => {
+      if (disposed) return;
+      const msg = err instanceof Error ? err.message : String(err);
+      useGlobe.getState().pushLog({ level: "alert", text: `Globe failed to start: ${msg}` });
+      window.dispatchEvent(new CustomEvent(GLOBE_ERROR_EVENT, { detail: "The globe could not start." }));
+    });
 
     return () => {
       disposed = true;

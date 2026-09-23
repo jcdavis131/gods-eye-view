@@ -10,6 +10,9 @@ import type { LayerStyle, LonLatAlt, StyledLine } from "./renderer";
 import { DOMAINS, KINDS } from "@/lib/fabric/catalog";
 import type { ConstructExtra } from "@/lib/fabric/types";
 
+/** The HUD's warm signal accent (app/globals.css --signal): selection is always drawn in it. */
+export const SIGNAL = "#FFA458";
+
 /** Kinds that keep a label however many strata there are: the ones people navigate by. */
 const ALWAYS_LABEL = new Set(["county", "place", "cd", "huc8", "eco3", "flood"]);
 
@@ -70,15 +73,18 @@ export const constructsStyle: LayerStyle = {
     if (!x?.node) return null;
     const [lon, lat, alt] = f.geometry.type === "Point" ? (f.geometry.coordinates as number[]) : [x.ground[0], x.ground[1], x.alt];
     const color = colorOf(f);
-    const out: StyledLine[] = [{ positions: [[lon, lat, alt], [x.ground[0], x.ground[1], 0]], color, alpha: 0.35, width: 1 }];
-    if (x.node.rings) out.push(...ringLines(x.node.rings, x.alt, color, 0.28, 1.1));
+    // Tethers and shells stay quiet so the stack reads as one composed column.
+    const out: StyledLine[] = [{ positions: [[lon, lat, alt], [x.ground[0], x.ground[1], 0]], color, alpha: 0.26, width: 1 }];
+    if (x.node.rings) out.push(...ringLines(x.node.rings, x.alt, color, 0.22, 1));
     return out;
   },
   selectedLines: (f) => {
     const x = extraOf(f);
     if (!x?.node?.rings) return null;
     const color = colorOf(f);
-    return [...ringLines(x.node.rings, x.alt, color, 0.95, 2.4), ...ringLines(x.node.rings, 30, color, 0.8, 1.6, true)];
+    // The shell brightens in its own point-of-view colour; the footprint it
+    // drops on the ground is the selection, in the signal accent.
+    return [...ringLines(x.node.rings, x.alt, color, 0.95, 2.2), ...ringLines(x.node.rings, 30, SIGNAL, 0.85, 1.6, true)];
   },
   scaleByDistance: [2e4, 1.0, 2e7, 0.4],
 };
