@@ -18,6 +18,7 @@ import { useGlobe } from "@/lib/store/globe";
 import { useSettings } from "@/lib/store/settings";
 import type { ViewState } from "@/lib/layers/types";
 import { GLOBE_ERROR_EVENT } from "@/components/hud/TitleCard";
+import { arbitrateLabels } from "@/lib/globe/labelArbiter";
 
 function isPickId(v: unknown): v is PickId {
   return !!v && typeof v === "object" && "layer" in v && "id" in v;
@@ -200,6 +201,7 @@ export default function CesiumGlobe() {
       window.addEventListener("keydown", markInput);
       cleanups.push(() => window.removeEventListener("keydown", markInput));
 
+      let lastLabelPass = 0;
       const offPreUpdate = scene.preUpdate.addEventListener(() => {
         const now = performance.now();
         const dt = Math.min(0.1, (now - lastFrame) / 1000);
@@ -207,6 +209,11 @@ export default function CesiumGlobe() {
         const t = C.JulianDate.toDate(viewer!.clock.currentTime).getTime();
         satWorker.tick(t);
         for (const r of allRenderers()) r.tick(t);
+        // Label discipline across layers: a screen-space budget and collision pass, ~6 times a second.
+        if (now - lastLabelPass > 160) {
+          lastLabelPass = now;
+          arbitrateLabels(viewer!, allRenderers());
+        }
         const st = useGlobe.getState();
         if (st.following) {
           followTick();

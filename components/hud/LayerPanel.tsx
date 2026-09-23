@@ -127,6 +127,7 @@ export default function LayerPanel({ embedded = false }: { embedded?: boolean } 
     // p-px and the 1 px offsets keep the panel on the 12 px grid while leaving
     // room for its corner brackets inside the scroll box.
     <aside
+      data-hud-occluder
       id="hud-layers"
       tabIndex={-1}
       aria-label="Signal layers"

@@ -16,6 +16,7 @@ import type { MultiLineString, MultiPolygon, Polygon } from "geojson";
 import { getCesium } from "./cesium";
 import { getGlow, getIcon, iconKey, type IconKind } from "./icons";
 import { DEG } from "./geo";
+import { LAYER_LABEL_PRIORITY } from "./labelBudget";
 import type { LayerCollection, LayerFeature, LayerId } from "@/lib/layers/types";
 
 export type LonLatAlt = [lon: number, lat: number, alt: number];
@@ -76,6 +77,8 @@ export interface LayerStyle {
   labelWhen?: (f: LayerFeature, timeMs: number) => boolean;
   /** Features that keep a label regardless of labelMax (major rivers, matched chips). */
   labelAlways?: (f: LayerFeature) => boolean;
+  /** Importance of a feature's label within its layer, 0..20; the label budget keeps higher ones first. */
+  labelPriority?: (f: LayerFeature) => number;
   /** Pixel offset of standing labels from the anchor; default [14, -12]. Lets two layers label one point. */
   labelOffset?: [number, number];
   /** Filled ground polygons for a feature (drought classes). */
@@ -101,6 +104,18 @@ interface Item {
   color: string;
   ground?: CesiumNS.GroundPrimitive;
   anchor?: LonLatAlt;
+  /** On the camera-facing side of the planet (the horizon test in occlude()). */
+  facing?: boolean;
+}
+
+/** One label as the cross-layer budget sees it (lib/globe/labelArbiter.ts). */
+export interface LabelSlot {
+  key: string;
+  pos: CesiumNS.Cartesian3;
+  text: string;
+  priority: number;
+  pinned: boolean;
+  offset: [number, number];
 }
 
 const colorCache = new Map<string, CesiumNS.Color>();
@@ -156,6 +171,8 @@ export class LayerRenderer {
   private lastTime = 0;
   private _show = true;
   private labelsEnabled = true;
+  /** Label keys the cross-layer budget let through; null = no budget applied yet. */
+  private labelMask: Set<string> | null = null;
   private destroyed = false;
 
   constructor(viewer: CesiumNS.Viewer, layer: LayerId, style: LayerStyle) {
@@ -246,6 +263,9 @@ export class LayerRenderer {
     }
     this.refreshLabels();
     this.applyOverlay();
+    // A refetch can hand back the selected feature as a new object (the
+    // constructs stack at a new height): redraw what hangs off the selection.
+    if (this.selectedId && this.items.has(this.selectedId)) this.refreshSelectedLines();
     this.tick(now, true);
   }
 
@@ -444,7 +464,7 @@ export class LayerRenderer {
     const visible = lla != null;
     if (item.point) item.point.show = visible;
     if (item.billboard) item.billboard.show = visible;
-    if (item.label) item.label.show = visible && this.labelVisible(item);
+    if (item.label) item.label.show = visible && item.facing !== false && this.labelShown(item);
     if (!lla) {
       item.pos = undefined;
       return;
@@ -512,10 +532,11 @@ export class LayerRenderer {
       // Polylines and ground fills are depth-tested by the globe itself.
       if (!item.point && !item.billboard && !item.label) continue;
       const visible = occ(item.pos);
+      item.facing = visible;
       if (item.point && item.point.show !== visible) item.point.show = visible;
       if (item.billboard && item.billboard.show !== visible) item.billboard.show = visible;
       if (item.label) {
-        const want = visible && this.labelVisible(item);
+        const want = visible && this.labelShown(item);
         if (item.label.show !== want) item.label.show = want;
       }
       for (const l of item.lines) if (l.show !== visible) l.show = visible;
@@ -523,6 +544,47 @@ export class LayerRenderer {
     if (this.glow && this.selectedId) {
       const cur = this.items.get(this.selectedId);
       this.glow.show = !!cur?.pos && occ(cur.pos);
+    }
+  }
+
+  private labelKey(item: Item): string {
+    return `${this.layer}:${item.feature.properties.id}`;
+  }
+
+  private isPinned(item: Item): boolean {
+    const id = item.feature.properties.id;
+    return id === this.selectedId || id === this.hoverId;
+  }
+
+  /** Wanted by the layer and let through by the cross-layer budget. */
+  private labelShown(item: Item): boolean {
+    if (!this.labelVisible(item)) return false;
+    return !this.labelMask || this.labelMask.has(this.labelKey(item));
+  }
+
+  /** Every label this layer wants on screen now, for the cross-layer budget. */
+  collectLabels(out: LabelSlot[]): void {
+    if (this.destroyed || !this._show || !this.style.label) return;
+    const base = LAYER_LABEL_PRIORITY[this.layer] ?? 10;
+    const offset = this.style.labelOffset ?? [14, -12];
+    for (const item of this.items.values()) {
+      if (!item.label || !item.pos || item.facing === false) continue;
+      if (!this.labelVisible(item)) continue;
+      const f = item.feature;
+      const pinned = this.isPinned(item);
+      const extra = (this.style.labelPriority?.(f) ?? 0) + (this.style.labelAlways?.(f) ? 5 : 0);
+      out.push({ key: this.labelKey(item), pos: item.pos, text: item.label.text, priority: base + extra, pinned, offset });
+    }
+  }
+
+  /** Apply the budget's verdict: labels whose key is not in `allowed` are hidden, not removed. */
+  applyLabelMask(allowed: Set<string> | null): void {
+    this.labelMask = allowed;
+    if (this.destroyed) return;
+    for (const item of this.items.values()) {
+      if (!item.label) continue;
+      const want = !!item.pos && item.facing !== false && this.labelShown(item);
+      if (item.label.show !== want) item.label.show = want;
     }
   }
 
@@ -564,7 +626,7 @@ export class LayerRenderer {
         verticalOrigin: C.VerticalOrigin.CENTER,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
         id: { layer: this.layer, id: item.feature.properties.id } satisfies PickId,
-        show: !!item.pos,
+        show: !!item.pos && item.facing !== false && (!this.labelMask || this.isPinned(item) || this.labelMask.has(this.labelKey(item))),
       });
       if (item.pos) item.label.position = item.pos;
     } else {

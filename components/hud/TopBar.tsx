@@ -104,7 +104,7 @@ export default function TopBar() {
 
   const btn = "hud-btn";
   return (
-    <header className="pointer-events-none absolute inset-x-0 top-0 z-30 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-3 p-3">
+    <header data-hud-occluder className="pointer-events-none absolute inset-x-0 top-0 z-30 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-3 p-3">
       {/* Composition: a strict three-column grid. The instrument readout sits on
           the vertical axis, directly above the reticle, its divider exactly on
           the centre line; the brand and the travel actions hold the left edge,

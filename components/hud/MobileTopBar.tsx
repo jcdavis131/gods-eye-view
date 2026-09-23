@@ -23,6 +23,7 @@ export default function MobileTopBar() {
   const live = isLive(clock.offsetMs);
   return (
     <header
+      data-hud-occluder
       className="pointer-events-none absolute inset-x-0 top-0 z-30 p-2"
       style={{ paddingTop: "max(8px, env(safe-area-inset-top))" }}
     >

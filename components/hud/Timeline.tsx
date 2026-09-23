@@ -32,6 +32,7 @@ export default function Timeline({ compact = false }: { compact?: boolean } = {}
 
   return (
     <div
+      data-hud-occluder
       className={
         compact
           ? "pointer-events-auto w-full"
