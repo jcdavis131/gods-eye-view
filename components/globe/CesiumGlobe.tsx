@@ -19,6 +19,8 @@ import { useSettings } from "@/lib/store/settings";
 import type { ViewState } from "@/lib/layers/types";
 import { GLOBE_ERROR_EVENT } from "@/components/hud/TitleCard";
 import { arbitrateLabels } from "@/lib/globe/labelArbiter";
+import { useStrata } from "@/lib/fabric/strataStore";
+import { currentFabric } from "@/lib/fabric/strataClient";
 
 function isPickId(v: unknown): v is PickId {
   return !!v && typeof v === "object" && "layer" in v && "id" in v;
@@ -229,9 +231,94 @@ export default function CesiumGlobe() {
       });
       cleanups.push(offPreUpdate);
 
+      // Compare: a second pin (B) for the constructs stack. Dropped by the
+      // rail's Compare button (next tap), a long-press on a phone, or a
+      // shift-click on a desktop, while the constructs layer is on.
+      const groundAt = (x: number, y: number): { lon: number; lat: number } | null => {
+        const hit = viewer!.camera.pickEllipsoid(new C.Cartesian2(x, y), ellipsoid);
+        if (!hit) return null;
+        const c = C.Cartographic.fromCartesian(hit);
+        return { lon: C.Math.toDegrees(c.longitude), lat: C.Math.toDegrees(c.latitude) };
+      };
+      const dropPinB = (x: number, y: number): boolean => {
+        if (!useGlobe.getState().layers.constructs) return false;
+        const p = groundAt(x, y);
+        if (!p) return false;
+        const strata = useStrata.getState();
+        const f = currentFabric();
+        if (!strata.pin && f) strata.setPin({ lon: f.point.lon, lat: f.point.lat });
+        strata.setRailOpen(true);
+        void strata.setCompare(p);
+        useGlobe.getState().pushLog({ level: "info", text: `Compare: pin B at ${p.lat.toFixed(3)}, ${p.lon.toFixed(3)}.` });
+        return true;
+      };
+      let press: { id: number; x: number; y: number; timer: ReturnType<typeof setTimeout> } | null = null;
+      let pressFired = false;
+      const onPressDown = (e: PointerEvent) => {
+        if (e.pointerType !== "touch" || !e.isPrimary) return;
+        if (press) clearTimeout(press.timer);
+        pressFired = false;
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        press = {
+          id: e.pointerId,
+          x: e.clientX,
+          y: e.clientY,
+          timer: setTimeout(() => {
+            press = null;
+            if (dropPinB(x, y)) {
+              pressFired = true;
+              navigator.vibrate?.(12);
+            }
+          }, 600),
+        };
+      };
+      const onPressMove = (e: PointerEvent) => {
+        if (press && e.pointerId === press.id && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 10) {
+          clearTimeout(press.timer);
+          press = null;
+        }
+      };
+      const onPressEnd = () => {
+        if (press) clearTimeout(press.timer);
+        press = null;
+      };
+      // A second finger (pinch) is not a long-press.
+      const onPressCancel = (e: PointerEvent) => {
+        if (!e.isPrimary) onPressEnd();
+      };
+      canvas.addEventListener("pointerdown", onPressDown);
+      canvas.addEventListener("pointerdown", onPressCancel);
+      canvas.addEventListener("pointermove", onPressMove);
+      for (const ev of ["pointerup", "pointercancel", "pointerleave"]) canvas.addEventListener(ev, onPressEnd);
+      cleanups.push(() => {
+        onPressEnd();
+        canvas.removeEventListener("pointerdown", onPressDown);
+        canvas.removeEventListener("pointerdown", onPressCancel);
+        canvas.removeEventListener("pointermove", onPressMove);
+        for (const ev of ["pointerup", "pointercancel", "pointerleave"]) canvas.removeEventListener(ev, onPressEnd);
+      });
+
       // Picking
       const handler = new C.ScreenSpaceEventHandler(canvas);
+      handler.setInputAction(
+        (e: CesiumNS.ScreenSpaceEventHandler.PositionedEvent) => {
+          dropPinB(e.position.x, e.position.y);
+        },
+        C.ScreenSpaceEventType.LEFT_CLICK,
+        C.KeyboardEventModifier.SHIFT,
+      );
       handler.setInputAction((e: CesiumNS.ScreenSpaceEventHandler.PositionedEvent) => {
+        // The long-press that dropped pin B also ends in a tap; it is not a selection.
+        if (pressFired) {
+          pressFired = false;
+          return;
+        }
+        if (useStrata.getState().picking) {
+          dropPinB(e.position.x, e.position.y);
+          return;
+        }
         const picked = scene.pick(e.position) as { id?: unknown } | undefined;
         const id = picked?.id;
         const st = useGlobe.getState();

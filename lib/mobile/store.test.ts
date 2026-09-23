@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { closeAllPanels, openPanels, useMobile } from "./store";
+import { closeAllPanels, openPanels, sheetStops, snapSheet, useMobile } from "./store";
+import { useStrata } from "@/lib/fabric/strataStore";
 import { useGlobe } from "@/lib/store/globe";
 import { useIndicators } from "@/lib/indicators/store";
 import { useReleases } from "@/lib/releases/store";
@@ -39,5 +40,27 @@ describe("mobile panel bookkeeping", () => {
     expect(useMobile.getState().sheet).toBe("tall");
     useMobile.getState().toggleSheet();
     expect(useMobile.getState().sheet).toBe("half");
+  });
+});
+
+describe("sheet stops", () => {
+  it("snaps a drag to the nearest of peek, half and tall, or closes it", () => {
+    const vh = 844;
+    const stops = sheetStops(vh);
+    expect(stops.peek).toBeLessThan(stops.half);
+    expect(stops.half).toBeLessThan(stops.tall);
+    expect(snapSheet(130, vh)).toBe("peek");
+    expect(snapSheet(stops.half + 20, vh)).toBe("half");
+    expect(snapSheet(vh, vh)).toBe("tall");
+    expect(snapSheet(20, vh)).toBeNull();
+  });
+  it("lists the strata rail while the constructs layer is on", () => {
+    closeAllPanels();
+    useGlobe.getState().setLayer("constructs", true);
+    useStrata.getState().setRailOpen(true);
+    expect(openPanels()).toEqual(["strata"]);
+    closeAllPanels();
+    expect(openPanels()).toEqual([]);
+    useGlobe.getState().setLayer("constructs", false);
   });
 });

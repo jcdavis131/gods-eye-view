@@ -26,6 +26,9 @@ import { useMobile } from "@/lib/mobile/store";
 import ExploreDialog from "./ExploreDialog";
 import TourCaption from "./TourCaption";
 import TeleportCaption from "./TeleportCaption";
+import StrataRail from "./StrataRail";
+import AscendCaption from "./AscendCaption";
+import { useStrata } from "@/lib/fabric/strataStore";
 import { applyShare, parseShare, startUrlSync } from "@/lib/globe/share";
 import Timeline from "./Timeline";
 import SettingsDialog from "./SettingsDialog";
@@ -53,6 +56,8 @@ export default function Cockpit({ initialMobile = false }: { initialMobile?: boo
   useEffect(() => {
     const share = parseShare(window.location.search);
     if (share.embed) useGlobe.getState().setEmbed(true);
+    // Anchor the constructs stack before its layer first asks for it.
+    if (share.pin) useStrata.getState().setPin(share.pin);
     if (share.layers) {
       for (const l of LAYERS) setLayer(l.id, share.layers.includes(l.id));
     } else {
@@ -171,11 +176,13 @@ export default function Cockpit({ initialMobile = false }: { initialMobile?: boo
           <MobileTopBar />
           {/* Bottom stack: sheet with every open panel, compact timeline, nav strip. Nothing overlaps. */}
           <div
+            data-hud-occluder
             className="mobile-stack pointer-events-none absolute inset-x-0 bottom-0 z-30 flex flex-col gap-2 px-2"
             style={{ paddingBottom: "max(8px, env(safe-area-inset-bottom))" }}
           >
             <MobileSheet>
               {layersOpen && <LayerPanel embedded />}
+              <StrataRail />
               <WaterReportPanel />
               <MarketReportPanel />
               <IndicatorsPanel />
@@ -189,6 +196,7 @@ export default function Cockpit({ initialMobile = false }: { initialMobile?: boo
           </div>
           <TourCaption />
           <TeleportCaption />
+          <AscendCaption />
           <SettingsDialog />
           <SearchCommand />
           <ExploreDialog />
@@ -201,7 +209,11 @@ export default function Cockpit({ initialMobile = false }: { initialMobile?: boo
           {/* The right column mirrors the layer column: same width, same top, same
               gutter, and it scrolls as one when a dossier runs past the frame.
               p-px and the 1 px offsets leave room for the panels' corner brackets. */}
-          <div className="desk-hud-only pointer-events-none absolute right-[11px] top-[71px] z-30 flex max-h-[calc(100vh-190px)] w-[calc(var(--col-w)+2px)] max-w-[calc(100vw-22px)] flex-col gap-2 overflow-y-auto p-px [scrollbar-width:thin] xl:max-h-[calc(100vh-82px)]">
+          <div
+            data-hud-occluder
+            className="desk-hud-only pointer-events-none absolute right-[11px] top-[71px] z-30 flex max-h-[calc(100vh-190px)] w-[calc(var(--col-w)+2px)] max-w-[calc(100vw-22px)] flex-col gap-2 overflow-y-auto p-px [scrollbar-width:thin] xl:max-h-[calc(100vh-82px)]"
+          >
+            <StrataRail />
             <StartHere />
             <WaterReportPanel />
             <MarketReportPanel />
@@ -210,12 +222,13 @@ export default function Cockpit({ initialMobile = false }: { initialMobile?: boo
             <WatchlistPanel />
             <InfoPanel />
           </div>
-          <div className="pointer-events-none absolute bottom-16 right-3 z-30 max-w-[calc(100vw-24px)]">
+          <div data-hud-occluder className="pointer-events-none absolute bottom-16 right-3 z-30 max-w-[calc(100vw-24px)]">
             <ScreenerPanel />
           </div>
           <Timeline />
           <TourCaption />
           <TeleportCaption />
+          <AscendCaption />
           <SettingsDialog />
           <SearchCommand />
           <ExploreDialog />

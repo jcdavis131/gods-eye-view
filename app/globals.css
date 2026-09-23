@@ -134,6 +134,11 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    /* Phones must not "boost" the HUD's small type: the grid is set in px. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
   html,
   body {
     height: 100%;
@@ -993,5 +998,95 @@
   button,
   [role="button"] {
     touch-action: manipulation;
+  }
+}
+
+/* ---------- Sheet heights and grip ----------
+   Peek holds the handle row and the top of the first panel (the strata rail's
+   focused construct), so a framed construct stays in view above it. */
+.mobile-sheet-peek {
+  max-height: 124px;
+}
+.mobile-sheet-peek .mobile-sheet-body {
+  overflow: hidden;
+}
+.mobile-sheet {
+  transition: max-height var(--dur-slow) var(--ease-slow);
+}
+.mobile-sheet-dragging {
+  transition: none;
+}
+.mobile-sheet-grip {
+  position: absolute;
+  left: 50%;
+  top: 3px;
+  width: 28px;
+  height: 2px;
+  margin-left: -14px;
+  background: color-mix(in oklab, var(--foreground) 32%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .mobile-sheet {
+    transition: none;
+  }
+}
+
+/* ---------- Strata rail ----------
+   One row per construct, smallest to largest. The focused row carries the
+   signal: a bar on its left edge and a faint warm wash. */
+.strata-list,
+.strata-head {
+  /* The kind column fits the longest short kind name (11 characters) at the rail's type size. */
+  --strata-kind-w: 68px;
+}
+.mobile-sheet .strata-list,
+.mobile-sheet .strata-head {
+  --strata-kind-w: 84px;
+}
+.strata-row {
+  position: relative;
+}
+.strata-row > button {
+  transition: background-color var(--dur-quick) var(--ease-slow);
+}
+.strata-row > button:hover {
+  background: var(--accent);
+}
+.strata-row-focus {
+  background: color-mix(in oklab, var(--signal) 7%, transparent);
+}
+.strata-row-focus::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--signal);
+}
+/* Ascend: the stack as a scale, one tick per stratum; the current one lit. */
+.ascend-scale {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+}
+.ascend-scale > span {
+  flex: 1;
+  background: color-mix(in oklab, var(--foreground) 22%, transparent);
+  transition:
+    background-color var(--dur-slow) var(--ease-slow),
+    height var(--dur-slow) var(--ease-slow);
+}
+.ascend-scale > span[data-state="past"] {
+  background: color-mix(in oklab, var(--signal) 45%, transparent);
+}
+.ascend-scale > span[data-state="now"] {
+  background: var(--signal);
+}
+@media (prefers-reduced-motion: reduce) {
+  .strata-row > button,
+  .ascend-scale > span {
+    transition: none;
   }
 }

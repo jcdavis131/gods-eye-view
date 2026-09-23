@@ -4,7 +4,7 @@
 // target; the active ones light up. The strip snaps so a flick lands on
 // whole chips.
 
-import { Activity, Aperture, Bell, CalendarDays, Compass, Droplets, Landmark, Layers, Link2, Table2, Zap } from "lucide-react";
+import { Activity, Aperture, Bell, CalendarDays, Compass, Droplets, Landmark, Layers, Layers3, Link2, Table2, Zap } from "lucide-react";
 import type { ComponentType } from "react";
 import { useGlobe } from "@/lib/store/globe";
 import { useIndicators } from "@/lib/indicators/store";
@@ -16,6 +16,7 @@ import { useLens } from "@/lib/personas/store";
 import { PERSONA_BY_ID, type PanelId } from "@/lib/personas/registry";
 import { togglePanel } from "@/lib/personas/actions";
 import { useTeleport } from "@/lib/live/teleportStore";
+import { useStrata } from "@/lib/fabric/strataStore";
 
 interface Chip {
   id: PanelId;
@@ -25,6 +26,7 @@ interface Chip {
 
 const CHIPS: Chip[] = [
   { id: "layers", label: "Layers", icon: Layers },
+  { id: "strata", label: "Strata", icon: Layers3 },
   { id: "water", label: "Water", icon: Droplets },
   { id: "market", label: "Market", icon: Landmark },
   { id: "signals", label: "Signals", icon: Activity },
@@ -51,6 +53,8 @@ export function orderChips(order: PanelId[] | undefined): Chip[] {
 
 export default function MobileNav() {
   const layersOpen = useMobile((s) => s.layersOpen);
+  const constructsOn = useGlobe((s) => s.layers.constructs);
+  const railOpen = useStrata((s) => s.railOpen);
   const waterOpen = useGlobe((s) => s.waterReportOpen);
   const marketOpen = useGlobe((s) => s.marketReportOpen);
   const indOpen = useIndicators((s) => s.open);
@@ -63,6 +67,7 @@ export default function MobileNav() {
   const persona = personaId ? PERSONA_BY_ID[personaId] : null;
   const active: Record<PanelId, boolean> = {
     layers: layersOpen,
+    strata: constructsOn && railOpen,
     water: waterOpen,
     market: marketOpen,
     signals: indOpen,

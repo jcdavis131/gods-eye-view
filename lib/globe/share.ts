@@ -11,6 +11,8 @@
 //   &v=2026-08-15                data vintage (pins the mission clock to that day;
 //                                history-aware layers will read that release later)
 //   &embed=1                     no HUD chrome (iframes)
+//   &pin=27.8000,-97.3960        the constructs stack anchored at this point (lat,lon)
+//   &cmp=27.8800,-97.3200        a second place compared with the pinned one (lat,lon)
 //
 // The URL is rewritten with replaceState about once a second while things
 // change; nothing here ever pushes history entries.
@@ -23,6 +25,7 @@ import { setMissionTime } from "./clock";
 import { getVintage, isValidVintage, useReleases, vintageClockMs } from "@/lib/releases/store";
 import { isPersonaId, type PersonaId } from "@/lib/personas/registry";
 import { applyPersona, useLens } from "@/lib/personas/store";
+import { useStrata, type LonLat } from "@/lib/fabric/strataStore";
 
 export interface ShareState {
   lat?: number;
@@ -47,6 +50,25 @@ export interface ShareState {
   /** Lens (who is looking): sets layers, the arrival panel and the camera unless the link carries its own. */
   lens?: PersonaId;
   embed?: boolean;
+  /** The point the constructs stack is anchored to (the "A" of a comparison). */
+  pin?: LonLat;
+  /** The second place of a comparison ("B"). */
+  cmp?: LonLat;
+}
+
+/** "lat,lon" in degrees, both in range, else undefined. */
+export function parseLatLon(v: string | null | undefined): LonLat | undefined {
+  if (!v) return undefined;
+  const m = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/.exec(v);
+  if (!m) return undefined;
+  const lat = Number(m[1]);
+  const lon = Number(m[2]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return undefined;
+  return { lat, lon };
+}
+
+export function formatLatLonParam(p: LonLat): string {
+  return `${p.lat.toFixed(4)},${p.lon.toFixed(4)}`;
 }
 
 const LAYER_SET = new Set<string>(LAYER_IDS);
@@ -98,6 +120,10 @@ export function parseShare(search: string): ShareState {
   const lens = q.get("lens");
   if (isPersonaId(lens)) out.lens = lens;
   if (q.get("embed") === "1") out.embed = true;
+  const pin = parseLatLon(q.get("pin"));
+  if (pin) out.pin = pin;
+  const cmp = parseLatLon(q.get("cmp"));
+  if (cmp) out.cmp = cmp;
   return out;
 }
 
@@ -121,6 +147,8 @@ export function shareQuery(s: ShareState): string {
   if (s.vintage && isValidVintage(s.vintage)) q.set("v", s.vintage);
   if (s.lens) q.set("lens", s.lens);
   if (s.embed) q.set("embed", "1");
+  if (s.pin) q.set("pin", formatLatLonParam(s.pin));
+  if (s.cmp) q.set("cmp", formatLatLonParam(s.cmp));
   const str = q.toString();
   return str ? `?${str}` : "";
 }
@@ -128,6 +156,7 @@ export function shareQuery(s: ShareState): string {
 /** The current cockpit as a ShareState. */
 export function currentShare(): ShareState {
   const st = useGlobe.getState();
+  const strata = useStrata.getState();
   const on = LAYER_IDS.filter((id) => st.layers[id]);
   return {
     lat: st.view.lat,
@@ -143,6 +172,8 @@ export function currentShare(): ShareState {
     vintage: getVintage() ?? undefined,
     lens: useLens.getState().personaId ?? undefined,
     embed: st.embed || undefined,
+    pin: strata.pin ?? undefined,
+    cmp: strata.compare ?? undefined,
   };
 }
 
@@ -189,10 +220,14 @@ export function startUrlSync(): () => void {
   const unsubLens = useLens.subscribe((s, prev) => {
     if (s.personaId !== prev.personaId) schedule();
   });
+  const unsubStrata = useStrata.subscribe((s, prev) => {
+    if (s.pin !== prev.pin || s.compare !== prev.compare) schedule();
+  });
   return () => {
     unsub();
     unsubReleases();
     unsubLens();
+    unsubStrata();
     if (timer) clearTimeout(timer);
   };
 }
@@ -213,6 +248,14 @@ export function applyShare(s: ShareState, opts: { fly?: boolean } = {}): void {
     useReleases.getState().setVintage(s.vintage);
     // An explicit clock wins; otherwise the vintage pins the clock to that day.
     if (s.t == null) setMissionTime(vintageClockMs(s.vintage));
+  }
+  // The constructs stack and a comparison: anchor first, so the layer asks for the linked point.
+  if (s.pin || s.cmp) {
+    const strata = useStrata.getState();
+    if (s.pin) strata.setPin(s.pin);
+    else if (s.lat != null && s.lon != null) strata.setPin({ lat: s.lat, lon: s.lon });
+    st.setLayer("constructs", true);
+    if (s.cmp) void strata.setCompare(s.cmp);
   }
   if (s.report) st.setWaterReportOpen(true);
   if (s.market) st.setMarketReportOpen(true);
@@ -240,7 +283,7 @@ export async function copyShareLink(): Promise<string> {
   const url = shareUrl();
   try {
     await navigator.clipboard.writeText(url);
-    useGlobe.getState().pushLog({ level: "info", text: "Link copied. It carries the view, the layers, the clock, the vintage, the selection and open reports." });
+    useGlobe.getState().pushLog({ level: "info", text: "Link copied. It carries the view, the layers, the clock, the vintage, the selection, open reports and any comparison." });
   } catch {
     useGlobe.getState().pushLog({ level: "warn", text: `Clipboard blocked; the link is ${url}` });
   }

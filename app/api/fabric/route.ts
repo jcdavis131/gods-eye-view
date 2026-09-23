@@ -13,6 +13,9 @@
 //                                                           subwatershed, as the smallest cover of whole WBD units
 //   /api/fabric?op=units&codes=1209,120902,1209020503       outlines, names and areas of WBD units of any level
 //                                                           (up to 100; geometry=0 for names and areas of up to 500)
+//   /api/fabric?op=compare&lon=-97.40&lat=27.80&lon2=-97.32&lat2=27.88
+//                                                           two stacks and which constructs they share, differ on,
+//                                                           or only one of them has (same county, different district)
 //
 // Upstreams, all keyless and asked in parallel: Census TIGERweb (state,
 // county, place, tract, ZCTA, school, congressional and state legislative
@@ -45,6 +48,7 @@ import {
 import { fetchFabric } from "@/lib/fabric/fetch";
 import { clampFieldBbox, FIELD_POVS, FIELD_SPECS, isFieldKind, kindForScale, type BBox, type FieldPov } from "@/lib/fabric/field";
 import { FABRIC_COLUMNS, fabricRows } from "@/lib/fabric/graph";
+import { compareFabrics, compareSummary } from "@/lib/fabric/compare";
 import type { Fabric } from "@/lib/fabric/types";
 import { provenance, type Provenance } from "@/lib/provenance/types";
 import { source } from "@/lib/provenance/sources";
@@ -55,7 +59,7 @@ import { jsonError } from "@/lib/server/upstream";
 export const maxDuration = 60;
 
 const TTL_S = 6 * 3600;
-const OPS = ["stack", "field", "downstream", "outlines", "upstream", "units"] as const;
+const OPS = ["stack", "field", "downstream", "outlines", "upstream", "units", "compare"] as const;
 const FIELD_TTL_S = 24 * 3600;
 const DOWNSTREAM_TTL_S = 7 * 24 * 3600;
 
@@ -81,6 +85,7 @@ export async function GET(req: NextRequest) {
   if (op === "outlines") return outlines(q);
   if (op === "upstream") return upstreamOp(q);
   if (op === "units") return units(q);
+  if (op === "compare") return compare(q);
   const lon = Number(q.get("lon"));
   const lat = Number(q.get("lat"));
   if (!q.get("lon") || !q.get("lat") || !Number.isFinite(lon) || !Number.isFinite(lat) || Math.abs(lon) > 180 || Math.abs(lat) > 90)
@@ -119,6 +124,62 @@ export async function GET(req: NextRequest) {
         globe: `/?lat=${sLat}&lon=${sLon}&h=120000&layers=constructs`,
       },
     });
+  } catch (err) {
+    return jsonError(err);
+  }
+}
+
+function parsePoint(q: URLSearchParams, lonKey: string, latKey: string): { lon: number; lat: number } | null {
+  const lon = Number(q.get(lonKey));
+  const lat = Number(q.get(latKey));
+  if (!q.get(lonKey) || !q.get(latKey) || !Number.isFinite(lon) || !Number.isFinite(lat) || Math.abs(lon) > 180 || Math.abs(lat) > 90) return null;
+  return { lon: Math.round(lon * 1000) / 1000, lat: Math.round(lat * 1000) / 1000 };
+}
+
+/** Two stacks side by side: which constructs the places share, which differ, which only one has. Attributes only. */
+async function compare(q: URLSearchParams) {
+  const a = parsePoint(q, "lon", "lat");
+  const b = parsePoint(q, "lon2", "lat2");
+  if (!a || !b) return badRequest("lon, lat, lon2 and lat2 are required degrees: /api/fabric?op=compare&lon=-97.40&lat=27.80&lon2=-97.32&lat2=27.88");
+  try {
+    const [ra, rb] = await Promise.all(
+      [a, b].map(async (p) => {
+        const key = `fabric:${p.lon},${p.lat}:0`;
+        const r = await cached(key, TTL_S * 1000, () => fetchFabric(p.lon, p.lat, { geometry: false }));
+        if (r.value.failed.length) cacheDelete(key);
+        return r;
+      }),
+    );
+    const c = compareFabrics(ra.value, rb.value);
+    const retrievedAt = new Date(Date.now() - Math.max(ra.age, rb.age)).toISOString();
+    const failed = [...new Set([...ra.value.failed, ...rb.value.failed].map((x) => x.source))];
+    const caveats = [
+      "Shared means both stacks hold the same unit (same kind and code). Differs means both hold a unit of that kind but not the same one. A kind only one stack has is reported as only-a / only-b: a published boundary missing at one point is not a difference.",
+      ...failed.map((s) => `${s} did not answer for at least one point; its constructs are missing from the comparison, not absent.`),
+    ];
+    const row = (r: (typeof c.rows)[number]) => ({
+      kind: r.kind,
+      status: r.status,
+      a: r.a ? { id: r.a.id, name: r.a.name, code: r.a.code ?? null, areaKm2: r.a.areaKm2 ?? null } : null,
+      b: r.b ? { id: r.b.id, name: r.b.name, code: r.b.code ?? null, areaKm2: r.b.areaKm2 ?? null } : null,
+    });
+    return ok(
+      {
+        a: ra.value.point,
+        b: rb.value.point,
+        summary: compareSummary(c),
+        shared: c.shared,
+        differs: c.differs,
+        meet: c.meet ? { id: c.meet.id, kind: c.meet.kind, name: c.meet.name } : null,
+        rows: c.rows.map(row),
+      },
+      {
+        provenance: [...new Set([...ra.value.answered, ...rb.value.answered])].map((id) => provenance(source(id), { kind: "published", retrievedAt })),
+        caveats,
+        ttlS: TTL_S,
+        meta: { source: "fabric", constructs: { a: ra.value.nodes.length, b: rb.value.nodes.length }, globe: `/?lat=${a.lat}&lon=${a.lon}&h=120000&layers=constructs&pin=${a.lat},${a.lon}&cmp=${b.lat},${b.lon}` },
+      },
+    );
   } catch (err) {
     return jsonError(err);
   }

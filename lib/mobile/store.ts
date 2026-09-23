@@ -9,15 +9,31 @@ import { useIndicators } from "@/lib/indicators/store";
 import { useReleases } from "@/lib/releases/store";
 import { useWatchlists } from "@/lib/watch/store";
 import { useScreener } from "@/lib/screener/store";
+import { useStrata } from "@/lib/fabric/strataStore";
 
-export type SheetHeight = "half" | "tall";
+/** Peek shows the sheet's header row (the strata rail's focused construct); half and tall show the panels. */
+export type SheetHeight = "peek" | "half" | "tall";
+
+/** Pixel heights of the three stops for a viewport height (the CSS classes use the same numbers). */
+export function sheetStops(vh: number): Record<SheetHeight, number> {
+  return { peek: 124, half: Math.min(vh * 0.48, 480), tall: Math.max(200, vh - 190) };
+}
+
+/** Where a drag that ended at `h` pixels settles: the nearest stop, or null (close) when dragged far below peek. */
+export function snapSheet(h: number, vh: number): SheetHeight | null {
+  const stops = sheetStops(vh);
+  if (h < stops.peek - 56) return null;
+  let best: SheetHeight = "peek";
+  for (const k of ["peek", "half", "tall"] as SheetHeight[]) if (Math.abs(stops[k] - h) < Math.abs(stops[best] - h)) best = k;
+  return best;
+}
 
 interface MobileState {
   /** The signal-layers list is open in the sheet. */
   layersOpen: boolean;
   setLayersOpen: (open: boolean) => void;
   toggleLayers: () => void;
-  /** Sheet height; the handle toggles it. */
+  /** Sheet height; the handle toggles it and dragging it snaps between the three. */
   sheet: SheetHeight;
   setSheet: (h: SheetHeight) => void;
   toggleSheet: () => void;
@@ -29,7 +45,7 @@ export const useMobile = create<MobileState>()((set) => ({
   toggleLayers: () => set((s) => ({ layersOpen: !s.layersOpen })),
   sheet: "half",
   setSheet: (sheet) => set({ sheet }),
-  toggleSheet: () => set((s) => ({ sheet: s.sheet === "half" ? "tall" : "half" })),
+  toggleSheet: () => set((s) => ({ sheet: s.sheet === "tall" ? "half" : "tall" })),
 }));
 
 /** Which panels are open right now, read from every store that owns one. */
@@ -37,6 +53,7 @@ export function openPanels(): string[] {
   const g = useGlobe.getState();
   const out: string[] = [];
   if (useMobile.getState().layersOpen) out.push("layers");
+  if (g.layers.constructs && useStrata.getState().railOpen) out.push("strata");
   if (g.waterReportOpen) out.push("water");
   if (g.marketReportOpen) out.push("market");
   if (useIndicators.getState().open) out.push("indicators");
@@ -50,6 +67,7 @@ export function openPanels(): string[] {
 /** Close every panel and drop the selection; the sheet disappears. */
 export function closeAllPanels(): void {
   useMobile.getState().setLayersOpen(false);
+  useStrata.getState().setRailOpen(false);
   const g = useGlobe.getState();
   g.setWaterReportOpen(false);
   g.setMarketReportOpen(false);
@@ -66,6 +84,9 @@ export function closeAllPanels(): void {
  */
 export function useOpenPanels(): string[] {
   const layers = useMobile((s) => s.layersOpen);
+  const constructsOn = useGlobe((s) => s.layers.constructs);
+  const railOpen = useStrata((s) => s.railOpen);
+  const strata = constructsOn && railOpen;
   const water = useGlobe((s) => s.waterReportOpen);
   const market = useGlobe((s) => s.marketReportOpen);
   const selected = useGlobe((s) => s.selected);
@@ -75,6 +96,7 @@ export function useOpenPanels(): string[] {
   const screen = useScreener((s) => s.open);
   const out: string[] = [];
   if (layers) out.push("layers");
+  if (strata) out.push("strata");
   if (water) out.push("water");
   if (market) out.push("market");
   if (ind) out.push("indicators");

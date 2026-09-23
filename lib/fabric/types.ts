@@ -144,6 +144,9 @@ export interface ConstructExtra {
   ground: [number, number];
   /** Wall-clock ms the stratum was created; the style raises it out of the ground from here. */
   born?: number;
+  /** The immediate parent and child of this construct (lib/fabric/strata.ts focusSet), ghosted when it is focused. */
+  parent?: ConstructNode;
+  child?: ConstructNode;
   /** For the "here" anchor: the whole stack and its edges. */
   fabric?: Fabric;
 }

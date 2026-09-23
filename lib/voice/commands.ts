@@ -32,6 +32,10 @@ import { ENTITY_KINDS, type EntityKind } from "@/lib/screener/fields";
 import { useDesk } from "@/lib/desk/store";
 import { PERSONAS, personaFromWords } from "@/lib/personas/registry";
 import { applyPersona, useLens } from "@/lib/personas/store";
+import { useStrata } from "@/lib/fabric/strataStore";
+import { currentFabric, useAscend } from "@/lib/fabric/strataClient";
+import { compareFabrics, compareSummary } from "@/lib/fabric/compare";
+import type { Fabric } from "@/lib/fabric/types";
 
 export interface JsonSchema {
   type: "object";
@@ -152,6 +156,19 @@ async function goToPlace(place: string, altitudeKm?: number): Promise<string> {
   const height = altitudeKm ? altitudeKm * 1000 : heightForPlace(h);
   flyTo(h.lon, h.lat, { height });
   return `Moving over ${h.name.split(",").slice(0, 2).join(",")}.`;
+}
+
+/** Switch the constructs stack on and wait (up to ~15 s) for it to land under the camera. */
+async function stackReady(): Promise<Fabric | null> {
+  const g = useGlobe.getState();
+  g.setLayer("constructs", true);
+  useStrata.getState().setRailOpen(true);
+  for (let i = 0; i < 30; i++) {
+    const f = currentFabric();
+    if (f?.nodes.length && !useGlobe.getState().status.constructs?.loading) return f;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  return currentFabric();
 }
 
 export const COMMANDS: CommandDef[] = [
@@ -532,6 +549,65 @@ export const COMMANDS: CommandDef[] = [
       }
       applyPersona(p.id);
       return `Lens: ${p.title}. ${p.tagline} Landing on ${p.start.label}.`;
+    },
+  },
+  {
+    name: "ascend",
+    description:
+      "Powers of Ten: fly up through the constructs stack at a place or the current view, one construct at a time from the smallest (flood zone, tract, subwatershed) to the country, each framed with its name, area and what is loaded inside it. Any tap or key stops it.",
+    parameters: {
+      type: "object",
+      properties: {
+        place: { type: "string", description: "Optional place to fly to first, e.g. 'Corpus Christi'" },
+      },
+    },
+    run: async (a) => {
+      let prefix = "";
+      if (a.place) {
+        prefix = (await goToPlace(String(a.place), 40)) + " ";
+        useStrata.getState().setPin(null);
+        await new Promise((r) => setTimeout(r, 4500));
+      }
+      const f = await stackReady();
+      if (!f?.nodes.length) return prefix + "The constructs stack did not load here, so there is nothing to ascend through.";
+      if (!useAscend.getState().start()) return prefix + "I could not start the ascent.";
+      const steps = useAscend.getState().steps;
+      const first = f.nodes.find((n) => n.id === steps[0]);
+      const last = f.nodes.find((n) => n.id === steps[steps.length - 1]);
+      return prefix + `Ascending through ${steps.length} constructs, from ${first?.name ?? "the ground"} to ${last?.name ?? "the top"}.`;
+    },
+  },
+  {
+    name: "compare_places",
+    description:
+      "Compare two places by the constructs they sit inside: which they share (same county, same watershed) and where they differ (different congressional district, different school district). Drops pin B on the globe, marks the shared constructs and puts the comparison in the share link.",
+    parameters: {
+      type: "object",
+      properties: {
+        place: { type: "string", description: "The second place (B), e.g. 'Portland, Texas'" },
+        from: { type: "string", description: "Optional first place (A); defaults to the current view" },
+      },
+      required: ["place"],
+    },
+    run: async (a) => {
+      let prefix = "";
+      if (a.from) {
+        prefix = (await goToPlace(String(a.from), 60)) + " ";
+        useStrata.getState().setPin(null);
+        await new Promise((r) => setTimeout(r, 4500));
+      }
+      const hits = await geocode(String(a.place ?? ""));
+      if (!hits.length) return prefix + `I could not find a place called ${a.place}.`;
+      const f = await stackReady();
+      if (!f?.nodes.length) return prefix + "The constructs stack did not load here, so there is nothing to compare.";
+      const strata = useStrata.getState();
+      strata.setPin({ lon: f.point.lon, lat: f.point.lat });
+      await strata.setCompare({ lon: hits[0].lon, lat: hits[0].lat });
+      const b = useStrata.getState().compareFabric;
+      const name = hits[0].name.split(",").slice(0, 2).join(",");
+      if (!b) return prefix + `I could not read the constructs at ${name}${useStrata.getState().compareError ? `: ${useStrata.getState().compareError}` : "."}`;
+      const c = compareFabrics(f, b);
+      return prefix + `Compared with ${name}: ${compareSummary(c) || "nothing in common among the usual constructs"}. ${c.shared} shared, ${c.differs} different.`;
     },
   },
   {
