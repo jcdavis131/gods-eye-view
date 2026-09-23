@@ -4,7 +4,7 @@
 // target; the active ones light up. The strip snaps so a flick lands on
 // whole chips.
 
-import { Activity, Aperture, Bell, CalendarDays, Compass, Droplets, Landmark, Layers, Link2, Table2, Zap } from "lucide-react";
+import { Activity, Aperture, Bell, CalendarDays, Compass, Droplets, Landmark, Layers, Layers3, Link2, Table2, Zap } from "lucide-react";
 import type { ComponentType } from "react";
 import { useGlobe } from "@/lib/store/globe";
 import { useIndicators } from "@/lib/indicators/store";
@@ -16,6 +16,7 @@ import { useLens } from "@/lib/personas/store";
 import { PERSONA_BY_ID, type PanelId } from "@/lib/personas/registry";
 import { togglePanel } from "@/lib/personas/actions";
 import { useTeleport } from "@/lib/live/teleportStore";
+import { useStrata } from "@/lib/fabric/strataStore";
 
 interface Chip {
   id: PanelId;
@@ -25,6 +26,7 @@ interface Chip {
 
 const CHIPS: Chip[] = [
   { id: "layers", label: "Layers", icon: Layers },
+  { id: "strata", label: "Strata", icon: Layers3 },
   { id: "water", label: "Water", icon: Droplets },
   { id: "market", label: "Market", icon: Landmark },
   { id: "signals", label: "Signals", icon: Activity },
@@ -51,6 +53,8 @@ export function orderChips(order: PanelId[] | undefined): Chip[] {
 
 export default function MobileNav() {
   const layersOpen = useMobile((s) => s.layersOpen);
+  const constructsOn = useGlobe((s) => s.layers.constructs);
+  const railOpen = useStrata((s) => s.railOpen);
   const waterOpen = useGlobe((s) => s.waterReportOpen);
   const marketOpen = useGlobe((s) => s.marketReportOpen);
   const indOpen = useIndicators((s) => s.open);
@@ -63,6 +67,7 @@ export default function MobileNav() {
   const persona = personaId ? PERSONA_BY_ID[personaId] : null;
   const active: Record<PanelId, boolean> = {
     layers: layersOpen,
+    strata: constructsOn && railOpen,
     water: waterOpen,
     market: marketOpen,
     signals: indOpen,
@@ -79,7 +84,7 @@ export default function MobileNav() {
       <button
         type="button"
         onClick={() => setPickerOpen(true)}
-        className="flex min-h-[48px] min-w-[68px] shrink-0 flex-col items-center justify-center gap-0.5 border-r border-border px-2 text-[9px] uppercase tracking-wider"
+        className="flex min-h-[52px] min-w-[68px] shrink-0 flex-col items-center justify-center gap-1 border-r border-border px-2 text-[8.5px] uppercase tracking-[0.16em]"
         style={{ color: persona?.color ?? "var(--primary)" }}
         aria-label={persona ? `Lens: ${persona.title}. Change lens` : "Choose a lens"}
       >
@@ -96,12 +101,13 @@ export default function MobileNav() {
               type="button"
               onClick={() => togglePanel(c.id)}
               aria-pressed={on}
-              className={`flex min-h-[48px] min-w-[68px] shrink-0 snap-start flex-col items-center justify-center gap-0.5 px-2 text-[9px] uppercase tracking-wider ${
-                on ? "text-primary" : "text-foreground/75"
+              className={`relative flex min-h-[52px] min-w-[68px] shrink-0 snap-start flex-col items-center justify-center gap-1 px-2 text-[8.5px] uppercase tracking-[0.16em] ${
+                on ? "text-primary" : "text-foreground/70"
               }`}
             >
               <Icon className="size-4" />
               {c.label}
+              {on && <span className="absolute inset-x-4 top-0 h-px bg-primary" aria-hidden />}
             </button>
           );
         })}

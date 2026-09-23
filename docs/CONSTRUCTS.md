@@ -6,13 +6,13 @@ A point is where all of those frames meet, so **the point is the join key**. Eve
 
 ## On the globe
 
-Switch on **Constructs** (Layers panel, `?layers=constructs`, or say "show constructs" / "show jurisdictions"). Around the camera target, every construct floats as a node in a rising spiral. The smallest (flood zone, tract) sits nearest the ground and the largest (census region, country) sits highest. Each node:
+Switch on **Constructs** (Layers panel, the **Strata** chip on a phone, `?layers=constructs`, or say "show constructs" / "show jurisdictions"). Around the camera target, every construct floats as a small node in a tight rosette, one stratum per construct: the smallest (flood zone, tract) nearest the ground, the largest (census region, country) highest, each with a short tether one stratum long beneath it. Nodes are coloured by **point of view**: civic (who governs it), representation (who speaks for it), service (who serves it), statistical (how it is counted), hydrologic (where its water goes), ecological (what grows there), hazard (what threatens it), federal (which federal office answers for it), world. When the stack opens under a camera looking straight down, the camera tilts to an oblique pitch so the strata read as layers.
 
-- is coloured by its **point of view**: civic (who governs it), representation (who speaks for it), service (who serves it), statistical (how it is counted), hydrologic (where its water goes), ecological (what grows there), hazard (what threatens it), federal (which federal office answers for it), world;
-- has a tether down to the point it was asked about;
-- has its outline drawn at the node's height, so the stack reads as nested shells.
+The globe carries no construct outlines or labels until one is focused; the names live in the **strata rail**.
 
-Select a construct and its outline brightens, with a dashed footprint dropped onto the ground. The info panel then shows:
+**The strata rail** (the head of the right column on a desktop, the bottom sheet on a phone) lists the stack smallest to largest. Each row: the point-of-view colour, the kind, the name, the published area in km², and **In**, the number of physical features loaded on the globe inside the construct's outline right now (the location join, `lib/fabric/join.ts`), with a dot in the WaterWatch colour when gauges inside are rated against today's flow percentiles. The phone sheet drags between peek, half and full; peek shows the focused construct.
+
+**Focus.** Select a row (or a node on the globe, or use the arrow keys in the list) and that construct alone draws its outline on the ground in the signal colour, its immediate parent (dashed) and child ghosted faintly beside it, and the camera flies to fit its extent at a pitch composed for its size (low for a neighbourhood, steeper for a basin, nearly overhead for a country). Focusing **pins** the stack to the point it was asked about, so it stays put while the camera frames each construct; the unlock button in the rail releases it. The info panel then shows:
 
 - **Relations**: which constructs it is inside or contains, and where its water drains to.
 - **Inside, joined by location**: every feature loaded on the globe right now that falls inside the construct's outline, grouped by layer. For example, the 40 USGS gauges and the two public companies inside Travis County, or the wells in a HUC-8. Click one to fly to it.
@@ -20,6 +20,12 @@ Select a construct and its outline brightens, with a dashed footprint dropped on
 Select any other object (a gauge, a well, a company, an aircraft) while the layer is on, and its panel lists **Inside these constructs**. That is the same join run in the other direction.
 
 The white **Here** node at the ground lists the whole stack by point of view, with links to the water and market reports for the same point and the JSON and CSV behind it.
+
+**Ascend** (the rail's first button, or say "ascend" / "powers of ten") flies up through the stack one construct at a time, smallest to largest, framing each with a caption built only from computed values: `SUBBASIN · South Corpus Christi Bay · 1,305 km² · 14 gauges · 2 warnings` (the area as published; counts of what is loaded now, the two largest layers named; warnings only while the Live warnings layer is on). A scale of ticks shows where in the stack the flight is. A tap or any key stops it. With reduced motion there is no flight and no autoplay: the camera cuts and the arrow keys step.
+
+**Compare two places.** Drop a second pin with a long-press (phone), a shift-click (desktop), or the rail's compare button and a tap. Pin A is the stack's point. The rail then says which constructs A and B share and where they part, in words (`different city, different county, same congressional district, same metro`), marks every row shared or names B's unit beside A's, and the globe draws both pins, the line between them, the smallest construct both are inside, and, when the focused construct differs at B, B's outline beside A's. The comparison is in the share link (`&pin=27.8000,-97.3960&cmp=27.8770,-97.3230`), in the API (`op=compare`) and in the MCP tool `place_compare`, and voice takes "compare with Portland Texas". A kind only one stack has (a flood zone mapped at A, none published at B) is reported as such, never as a difference.
+
+**Labels, all layers.** Every globe label goes through one screen-space budget (`lib/globe/labelBudget.ts`, run a few times a second by `lib/globe/labelArbiter.ts`): about one label per 24,000 px² (14 on a 390 px phone, 36 on a desktop), placed by priority (selection and hover first, then constructs and warnings, then the layers people navigate by, then dense readouts such as weather and venues), never over the HUD chrome, never overlapping another label and never running off the edge. A label that does not fit is dropped whole, not squashed.
 
 ## Emergence: constructs that take their state from the physical twin
 
@@ -55,6 +61,7 @@ Counties and watersheds change by the decade. An NWS warning is a construct that
 curl "https://eye.jcamd.com/api/fabric?op=stack&lon=-97.74&lat=30.27"              # attributes
 curl "https://eye.jcamd.com/api/fabric?op=stack&lon=-97.74&lat=30.27&geometry=1"   # plus generalised outlines
 curl "https://eye.jcamd.com/api/fabric?op=stack&lon=-97.74&lat=30.27&format=csv"   # one row per construct
+curl "https://eye.jcamd.com/api/fabric?op=compare&lon=-97.40&lat=27.80&lon2=-97.32&lat2=27.88"   # two places: shared, differs, only-a, only-b
 ```
 
 ```bash
@@ -68,7 +75,7 @@ curl "https://eye.jcamd.com/api/water?op=normals&sites=08158000,08167000&date=09
 curl "https://eye.jcamd.com/api/live"                                                            # warnings and earthquakes, tour order
 ```
 
-The MCP tools `place_fabric`, `construct_field`, `downstream`, `upstream`, `flow_normals` and `live_events` wrap the same routes. The county code, the point and the metro code it returns feed `sectors`, `county_history`, `banks`, `federal_spending`, `water_report` and `market_report`, so one call links an agent to every other report.
+The MCP tools `place_fabric`, `place_compare`, `construct_field`, `downstream`, `upstream`, `flow_normals` and `live_events` wrap the same routes. The county code, the point and the metro code it returns feed `sectors`, `county_history`, `banks`, `federal_spending`, `water_report` and `market_report`, so one call links an agent to every other report.
 
 | Point of view | Constructs | Source |
 | --- | --- | --- |
@@ -113,7 +120,11 @@ Ground elevation comes from USGS 3DEP (EPQS). Outside the US, only the country a
 | `lib/live/teleportStore.ts`, `components/hud/TeleportCaption.tsx` | Teleport: the hops, the landing, the card |
 | `scripts/wbd-data.mjs`, `lib/fabric/data/huc12-tohuc.json` | the bundled national drainage table |
 | `app/api/fabric/route.ts` | the envelope, CSV, caching |
-| `lib/layers/constructs.ts`, `lib/globe/constructStyles.ts` | the spiral strata, tethers and floating outlines |
+| `lib/layers/constructs.ts`, `lib/globe/constructStyles.ts` | the strata rosette, short tethers, the focused construct's ground outline with its parent and child |
+| `lib/fabric/strata.ts`, `lib/fabric/compare.ts` | pure rules: stack order, focus set, extents and framing pitch, captions, Ascend steps, the two-place comparison |
+| `lib/fabric/strataStore.ts`, `lib/fabric/strataClient.ts`, `lib/globe/strataCamera.ts` | the pin, the rail, pin B; joins and focus in the browser; Ascend; framing and auto-tilt |
+| `components/hud/StrataRail.tsx`, `components/hud/AscendCaption.tsx`, `components/globe/StrataOverlay.tsx` | the rail, the Ascend card, the compare pins and outlines |
+| `lib/globe/labelBudget.ts`, `lib/globe/labelArbiter.ts` | the cross-layer label budget and collision pass |
 | `components/hud/ConstructAside.tsx` | the stack, relations, and the two-way join in the info panel |
 
 ## Where this goes next

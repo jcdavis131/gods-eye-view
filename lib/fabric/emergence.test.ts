@@ -241,4 +241,10 @@ describe("rise animation and voice", () => {
     expect(parseIntent("trace the water from Austin")).toEqual({ command: "trace_downstream", args: { place: "austin" } });
     expect(parseIntent("show construct field")?.args).toMatchObject({ layer: "field" });
   });
+  it("hears Ascend and Compare", () => {
+    expect(parseIntent("Ascend")).toEqual({ command: "ascend", args: { place: undefined } });
+    expect(parseIntent("powers of ten over Corpus Christi")).toEqual({ command: "ascend", args: { place: "corpus christi" } });
+    expect(parseIntent("compare with Portland Texas")).toEqual({ command: "compare_places", args: { place: "portland texas" } });
+    expect(parseIntent("compare Corpus Christi with Rockport")).toEqual({ command: "compare_places", args: { from: "corpus christi", place: "rockport" } });
+  });
 });

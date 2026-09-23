@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist_Mono, Rajdhani } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import "../globals.css";
 import { Providers } from "../providers";
 import { BASE_METADATA, BASE_DESCRIPTION } from "@/lib/seo/base";
@@ -7,12 +7,15 @@ import { BASE_METADATA, BASE_DESCRIPTION } from "@/lib/seo/base";
 const mono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  display: "swap",
 });
 
-const display = Rajdhani({
+// One display face (tracked, uppercase, used with restraint) and one text face
+// (mono, tabular figures for every reading). Both variable, both display=swap.
+const display = Geist({
   variable: "--font-display",
   subsets: ["latin"],
-  weight: ["500", "600", "700"],
+  display: "swap",
 });
 
 // A bare string, not a template: the globe is the home route and its rendered
@@ -24,7 +27,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#03070a",
+  themeColor: "#05070a",
   colorScheme: "dark",
   width: "device-width",
   initialScale: 1,

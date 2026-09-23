@@ -11,12 +11,15 @@ import { useMobile } from "@/lib/mobile/store";
 import { copyShareLink } from "@/lib/globe/share";
 import { useTeleport } from "@/lib/live/teleportStore";
 import type { PanelId } from "./registry";
+import { useStrata } from "@/lib/fabric/strataStore";
 
 export function isPanelOpen(id: PanelId): boolean {
   const g = useGlobe.getState();
   switch (id) {
     case "layers":
       return useMobile.getState().layersOpen;
+    case "strata":
+      return g.layers.constructs && useStrata.getState().railOpen;
     case "water":
       return g.waterReportOpen;
     case "market":
@@ -42,6 +45,11 @@ export function setPanel(id: PanelId, on: boolean): void {
   switch (id) {
     case "layers":
       useMobile.getState().setLayersOpen(on);
+      return;
+    case "strata":
+      // The rail lists the constructs stack, so opening it switches the layer on.
+      if (on) g.setLayer("constructs", true);
+      useStrata.getState().setRailOpen(on);
       return;
     case "water":
       if (on) {

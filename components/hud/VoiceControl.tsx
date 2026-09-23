@@ -80,7 +80,7 @@ export default function VoiceControl({ compact = false }: { compact?: boolean } 
       <button
         type="button"
         onClick={() => (active ? stop() : start())}
-        className={`flex items-center gap-2 text-[11px] uppercase tracking-wider ${compact ? "size-9 justify-center" : "px-3 py-2"} ${
+        className={`${compact ? "flex size-9 items-center justify-center" : "hud-btn"} ${
           active ? "bg-alert/15 text-alert" : "text-foreground/80 hover:bg-accent hover:text-primary"
         }`}
         aria-label={compact ? label : undefined}

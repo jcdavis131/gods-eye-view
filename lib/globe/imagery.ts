@@ -22,10 +22,12 @@ export function addBaseImagery(viewer: CesiumNS.Viewer): CesiumNS.ImageryLayer {
     credit: new C.Credit("Imagery © Esri, Maxar, Earthstar Geographics, and the GIS User Community"),
   });
   const layer = viewer.imageryLayers.addImageryProvider(provider);
-  layer.brightness = 0.92;
-  layer.contrast = 1.08;
-  layer.saturation = 0.85;
-  layer.gamma = 1.05;
+  // A cold, quiet Earth: pulled-down saturation and a touch more contrast so
+  // coastlines and relief read crisply and the data layers own the colour.
+  layer.brightness = 0.86;
+  layer.contrast = 1.16;
+  layer.saturation = 0.58;
+  layer.gamma = 1.08;
   return layer;
 }
 

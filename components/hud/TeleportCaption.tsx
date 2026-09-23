@@ -46,21 +46,21 @@ export default function TeleportCaption() {
   if (!t.active) return null;
   const item = t.items[t.index];
   const left = Math.max(0, Math.ceil(DWELL_S - (now - t.startedAt) / 1000));
-  const btn = "flex flex-1 items-center justify-center gap-2 border border-border px-2 py-1 text-[10px] uppercase tracking-widest text-foreground/80 hover:bg-accent hover:text-primary";
+  const btn = "flex flex-1 items-center justify-center gap-2 border border-border h-8 px-3 text-[10px] uppercase tracking-[0.22em] text-foreground/80 hover:bg-accent hover:text-primary";
 
   return (
-    <div data-teleport-controls className="pointer-events-auto absolute bottom-[120px] left-3 z-30 w-[380px] max-w-[calc(100vw-24px)] md:bottom-3 md:left-3">
-      <div className="hud-panel">
-        <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
-          <span className="hud-label text-primary">
+    <div data-teleport-controls className="pointer-events-auto absolute inset-x-2 top-[calc(max(8px,env(safe-area-inset-top))_+_52px)] z-30 md:inset-x-auto md:bottom-[104px] md:left-1/2 md:top-auto md:w-[440px] md:-translate-x-1/2">
+      <div className="hud-panel hud-panel-lit hud-enter">
+        <div className="flex h-9 items-center justify-between border-b border-border px-3">
+          <span className="hud-label text-signal">
             Teleport{t.items.length ? ` · ${t.index + 1}/${t.items.length}` : ""}
           </span>
-          <span className="text-[9px] tabular-nums text-muted-foreground">{t.auto ? `next in ${left}s` : "live · strongest first"}</span>
+          <span className="text-[9px] uppercase tracking-[0.18em] tabular-nums text-muted-foreground">{t.auto ? `next in ${left}s` : "live · strongest first"}</span>
         </div>
-        <div className="px-3 py-2">
+        <div className="px-3 py-2.5">
           {t.status === "loading" && (
             <div className="text-[11px] text-muted-foreground">
-              <span className="blink text-primary">listening</span> to NWS alerts and USGS earthquakes…
+              <span className="blink text-signal">listening</span> to NWS alerts and USGS earthquakes…
             </div>
           )}
           {t.status === "error" && <div className="text-[11px] text-alert">{t.error}</div>}
@@ -69,7 +69,7 @@ export default function TeleportCaption() {
             <>
               <div className="flex items-center gap-2">
                 <span className="inline-block size-2.5 shrink-0 rounded-full" style={{ background: item.color }} aria-hidden />
-                <span className="hud-display text-[15px] font-semibold text-foreground">{item.title}</span>
+                <span className="hud-display text-[15px] text-[var(--bright)]">{item.title}</span>
               </div>
               <div className="mt-0.5 text-[11px] leading-snug text-foreground/85">{item.subtitle}</div>
               <div className="mt-1 text-[10px] text-muted-foreground">
@@ -80,7 +80,7 @@ export default function TeleportCaption() {
                   {item.kind === "alert" ? "NWS alert" : "USGS event"} <ExternalLink className="size-2.5" />
                 </a>
               </div>
-              <div className="mt-1 text-[9px] leading-snug text-muted-foreground">
+              <div className="mt-1 hidden text-[9px] leading-snug text-muted-foreground md:block">
                 {item.kind === "alert"
                   ? "Landed in the constructs world: the warning is drawn as a live construct; select it to see the gauges and everything else loaded inside it, and the stack of constructs under the camera."
                   : "Landed on the epicentre with the earthquake layer on and the stack of constructs under the camera."}
@@ -88,7 +88,7 @@ export default function TeleportCaption() {
             </>
           )}
         </div>
-        <div className="flex gap-1 border-t border-border p-2">
+        <div className="flex gap-2 border-t border-border p-2">
           <button type="button" className={btn} onClick={() => t.setAuto(!t.auto)} disabled={!t.items.length}>
             {t.auto ? <Pause className="size-3" /> : <Play className="size-3" />}
             {t.auto ? "Pause" : "Autoplay"}
@@ -99,8 +99,9 @@ export default function TeleportCaption() {
           <button
             type="button"
             onClick={() => t.stop()}
-            className="flex items-center justify-center gap-2 border border-border px-2 py-1 text-[10px] uppercase tracking-widest text-foreground/80 hover:bg-accent hover:text-alert"
+            className="flex items-center justify-center gap-2 border border-border h-8 px-3 text-[10px] uppercase tracking-[0.22em] text-foreground/80 hover:bg-accent hover:text-alert"
             title="Stop teleporting"
+            aria-label="Stop teleporting"
           >
             <Square className="size-3" />
           </button>

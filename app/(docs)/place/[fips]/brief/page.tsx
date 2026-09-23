@@ -63,7 +63,7 @@ interface PageProps {
 
 // Page metadata replaces the layout's openGraph rather than merging into it, so
 // the shared card image is repeated here. Per-place og images are out of scope.
-const OG_IMAGES = [{ url: "/og.jpg", width: 1600, height: 960, alt: "The Embedding Atlas globe" }];
+const OG_IMAGES = [{ url: "/og.jpg", width: 1200, height: 630, alt: "The Embedding Atlas globe" }];
 
 /**
  * Facts and brief in one call. buildBrief is pure and takes both timestamps

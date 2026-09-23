@@ -26,20 +26,21 @@ import { useMobile } from "@/lib/mobile/store";
 import ExploreDialog from "./ExploreDialog";
 import TourCaption from "./TourCaption";
 import TeleportCaption from "./TeleportCaption";
+import StrataRail from "./StrataRail";
+import AscendCaption from "./AscendCaption";
+import { useStrata } from "@/lib/fabric/strataStore";
 import { applyShare, parseShare, startUrlSync } from "@/lib/globe/share";
 import Timeline from "./Timeline";
 import SettingsDialog from "./SettingsDialog";
 import SearchCommand from "./SearchCommand";
+import TitleCard from "./TitleCard";
 import { useGlobe } from "@/lib/store/globe";
 import { LAYERS } from "@/lib/layers";
 
 const CesiumGlobe = dynamic(() => import("@/components/globe/CesiumGlobe"), {
   ssr: false,
-  loading: () => (
-    <div className="absolute inset-0 grid place-items-center bg-background">
-      <div className="hud-label animate-pulse text-primary/70">ACQUIRING GLOBE…</div>
-    </div>
-  ),
+  // The title card (below) is the loading frame; this just holds the black.
+  loading: () => <div className="absolute inset-0 bg-background" />,
 });
 
 export default function Cockpit({ initialMobile = false }: { initialMobile?: boolean } = {}) {
@@ -55,6 +56,8 @@ export default function Cockpit({ initialMobile = false }: { initialMobile?: boo
   useEffect(() => {
     const share = parseShare(window.location.search);
     if (share.embed) useGlobe.getState().setEmbed(true);
+    // Anchor the constructs stack before its layer first asks for it.
+    if (share.pin) useStrata.getState().setPin(share.pin);
     if (share.layers) {
       for (const l of LAYERS) setLayer(l.id, share.layers.includes(l.id));
     } else {
@@ -72,8 +75,19 @@ export default function Cockpit({ initialMobile = false }: { initialMobile?: boo
     // First visit with a bare URL: ask who is looking. A shared link (layers,
     // selection, lens, embed) is never interrupted.
     const bare = !share.lens && !share.layers && !share.sel && !share.report && !share.market && !share.embed;
-    if (bare && useLens.getState().personaId == null) useLens.getState().setPickerOpen(true);
-    return startUrlSync();
+    // Let the title card clear the frame before the question is asked.
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const ask = window.setTimeout(
+      () => {
+        if (bare && useLens.getState().personaId == null) useLens.getState().setPickerOpen(true);
+      },
+      reduced ? 0 : 1600,
+    );
+    const stopSync = startUrlSync();
+    return () => {
+      window.clearTimeout(ask);
+      stopSync();
+    };
   }, [ready]);
 
   // Console API for inspection: window.atlas.{globe,settings,run,say,flyTo,layers,features}
@@ -143,9 +157,18 @@ export default function Cockpit({ initialMobile = false }: { initialMobile?: boo
 
   return (
     <main className="relative h-full w-full select-none overflow-hidden bg-background">
+      {!embed && (
+        <a
+          href="#hud-layers"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-1/2 focus:top-16 focus:z-50 focus:-translate-x-1/2 focus:bg-popover focus:px-3 focus:py-2 focus:text-[11px] focus:uppercase focus:tracking-[0.22em] focus:text-foreground"
+        >
+          Skip to the layer controls
+        </a>
+      )}
       <CesiumGlobe />
       <LayerHost />
       <HudFrame />
+      {!embed && <TitleCard />}
       {embed ? (
         <EmbedBadge />
       ) : mobile ? (
@@ -153,11 +176,13 @@ export default function Cockpit({ initialMobile = false }: { initialMobile?: boo
           <MobileTopBar />
           {/* Bottom stack: sheet with every open panel, compact timeline, nav strip. Nothing overlaps. */}
           <div
+            data-hud-occluder
             className="mobile-stack pointer-events-none absolute inset-x-0 bottom-0 z-30 flex flex-col gap-2 px-2"
             style={{ paddingBottom: "max(8px, env(safe-area-inset-bottom))" }}
           >
             <MobileSheet>
               {layersOpen && <LayerPanel embedded />}
+              <StrataRail />
               <WaterReportPanel />
               <MarketReportPanel />
               <IndicatorsPanel />
@@ -171,6 +196,7 @@ export default function Cockpit({ initialMobile = false }: { initialMobile?: boo
           </div>
           <TourCaption />
           <TeleportCaption />
+          <AscendCaption />
           <SettingsDialog />
           <SearchCommand />
           <ExploreDialog />
@@ -180,7 +206,14 @@ export default function Cockpit({ initialMobile = false }: { initialMobile?: boo
         <>
           <TopBar />
           <LayerPanel />
-          <div className="desk-hud-only pointer-events-none absolute right-3 top-[76px] z-30 flex w-[320px] max-w-[calc(100vw-24px)] flex-col gap-2">
+          {/* The right column mirrors the layer column: same width, same top, same
+              gutter, and it scrolls as one when a dossier runs past the frame.
+              p-px and the 1 px offsets leave room for the panels' corner brackets. */}
+          <div
+            data-hud-occluder
+            className="desk-hud-only pointer-events-none absolute right-[11px] top-[71px] z-30 flex max-h-[calc(100vh-190px)] w-[calc(var(--col-w)+2px)] max-w-[calc(100vw-22px)] flex-col gap-2 overflow-y-auto p-px [scrollbar-width:thin] xl:max-h-[calc(100vh-82px)]"
+          >
+            <StrataRail />
             <StartHere />
             <WaterReportPanel />
             <MarketReportPanel />
@@ -189,12 +222,13 @@ export default function Cockpit({ initialMobile = false }: { initialMobile?: boo
             <WatchlistPanel />
             <InfoPanel />
           </div>
-          <div className="pointer-events-none absolute bottom-16 right-3 z-30 max-w-[calc(100vw-24px)]">
+          <div data-hud-occluder className="pointer-events-none absolute bottom-16 right-3 z-30 max-w-[calc(100vw-24px)]">
             <ScreenerPanel />
           </div>
           <Timeline />
           <TourCaption />
           <TeleportCaption />
+          <AscendCaption />
           <SettingsDialog />
           <SearchCommand />
           <ExploreDialog />
@@ -213,9 +247,10 @@ function EmbedBadge() {
       href={typeof window === "undefined" ? "/" : window.location.href.replace(/([?&])embed=1&?/, "$1").replace(/[?&]$/, "")}
       target="_blank"
       rel="noreferrer"
-      className="hud-panel pointer-events-auto absolute left-3 top-3 z-30 flex items-center gap-2 px-3 py-1.5 text-[10px] uppercase tracking-wider text-primary hover:text-foreground"
+      className="hud-panel pointer-events-auto absolute left-3 top-3 z-30 flex items-center gap-2.5 px-3 py-1.5 text-[10px] uppercase tracking-[0.22em] text-foreground hover:text-primary"
       title="Open the full cockpit"
     >
+      <span className="hud-lamp" aria-hidden />
       Embedding Atlas
       <span className="text-muted-foreground">· open full view</span>
     </a>

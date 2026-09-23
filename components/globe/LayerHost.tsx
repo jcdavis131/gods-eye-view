@@ -16,9 +16,11 @@ import { satWorker } from "@/lib/globe/satWorker";
 import { useGlobe } from "@/lib/store/globe";
 import { useSettings, type Prefs } from "@/lib/store/settings";
 import { useNow } from "@/lib/hooks/useNow";
+import { useStrata } from "@/lib/fabric/strataStore";
 import EmergenceBridge from "./EmergenceBridge";
 import TraceOverlay from "./TraceOverlay";
 import UpstreamOverlay from "./UpstreamOverlay";
+import StrataOverlay from "./StrataOverlay";
 
 /** Which preferences each layer's fetch() depends on (changes trigger a refetch). */
 const OPTION_KEYS: Partial<Record<LayerDefinition["id"], Array<keyof Prefs>>> = {
@@ -38,6 +40,7 @@ export default function LayerHost() {
       <EmergenceBridge />
       <TraceOverlay />
       <UpstreamOverlay />
+      <StrataOverlay />
     </>
   );
 }
@@ -71,6 +74,9 @@ function useSettledView(delayMs = 700, followCadenceMs = 5000) {
 
 function LayerBridge({ def }: { def: LayerDefinition }) {
   const enabled = useGlobe((s) => s.layers[def.id]);
+  // The constructs stack can be pinned to a point (lib/fabric/strataStore.ts);
+  // its view key reads the pin, so a pin change must re-render the bridge.
+  useStrata((s) => (def.id === "constructs" ? s.pin : null));
   const view = useSettledView();
   const setStatus = useGlobe((s) => s.setStatus);
   const pushLog = useGlobe((s) => s.pushLog);

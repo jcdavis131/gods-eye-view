@@ -1,17 +1,30 @@
 "use client";
-// How the constructs layer is drawn: every stratum a node coloured by its
-// point of view, a tether from the node down to the point the stack was asked
-// about, and the construct's outline floating at the stratum's height. The
-// selected stratum brightens and drops its outline to the ground as a dashed
-// footprint, so the construct and the physical ground it covers read together.
+// How the constructs layer is drawn. Focus, not clutter:
+//
+//  - Every stratum is a small node in its point-of-view colour, floating at
+//    its height in a tight rosette over the point, with a short tether one
+//    stratum long beneath it. No outlines, no labels: the strata rail in the
+//    HUD lists the stack and carries the names.
+//  - The focused stratum (the selection) draws its outline on the ground in
+//    the signal colour, its tether all the way down, and its immediate parent
+//    and child ghosted faintly on the ground, so the shell it sits in and the
+//    shell inside it read together.
+//  - "Here" keeps its label; the focused stratum gets one from the renderer.
 
 import type { LayerFeature } from "@/lib/layers/types";
 import type { LayerStyle, LonLatAlt, StyledLine } from "./renderer";
 import { DOMAINS, KINDS } from "@/lib/fabric/catalog";
+import { densifyRing } from "@/lib/fabric/strata";
 import type { ConstructExtra } from "@/lib/fabric/types";
+import { useStrata } from "@/lib/fabric/strataStore";
 
-/** Kinds that keep a label however many strata there are: the ones people navigate by. */
-const ALWAYS_LABEL = new Set(["county", "place", "cd", "huc8", "eco3", "flood"]);
+/** The HUD's warm signal accent (app/globals.css --signal): selection is always drawn in it. */
+export const SIGNAL = "#FFA458";
+/** The chrome's ice (app/globals.css --primary): ghosts of the parent and child. */
+export const ICE = "#B4DCF2";
+
+/** Ground outlines float a few metres up so they clear the imagery without visible parallax. */
+const GROUND_ALT = 60;
 
 function extraOf(f: LayerFeature): ConstructExtra | undefined {
   return f.properties.extra as ConstructExtra | undefined;
@@ -22,9 +35,10 @@ function colorOf(f: LayerFeature): string {
   return n ? DOMAINS[n.domain].color : "#FFFFFF";
 }
 
-function ringLines(rings: number[][][], alt: number, color: string, alpha: number, width: number, dashed = false): StyledLine[] {
+/** Outline rings as ground polylines, densified so long edges do not sag into the globe. */
+export function groundRings(rings: number[][][], color: string, alpha: number, width: number, dashed = false): StyledLine[] {
   return rings.map((ring) => ({
-    positions: ring.map((p) => [p[0], p[1], alt] as LonLatAlt),
+    positions: densifyRing(ring).map((p) => [p[0], p[1], GROUND_ALT] as LonLatAlt),
     color,
     alpha,
     width,
@@ -45,40 +59,52 @@ export function riseProgress(born: number | undefined, tier: number, now: number
   return 1 - (1 - t) ** 3;
 }
 
+function reducedMotion(): boolean {
+  return typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+}
+
 export const constructsStyle: LayerStyle = {
   color: "#E5E7EB",
-  pointSize: (f) => (f.properties.kind === "here" ? 10 : 7),
+  pointSize: (f) => (f.properties.kind === "here" ? 9 : 5),
   colorFor: colorOf,
   label: (f) => {
     const n = extraOf(f)?.node;
     return n ? `${KINDS[n.kind].label.toUpperCase()} · ${n.name}` : f.properties.name;
   },
+  // Only "Here" keeps a standing label; the focused stratum is labelled as the selection.
   labelMax: 0,
-  // Emergence: each stratum rises from the ground point to its place in the spiral.
+  // While two places are compared, pin A stands on "Here" and carries the name.
+  labelAlways: (f) => f.properties.kind === "here" && !useStrata.getState().compare,
+  // Emergence: each stratum rises from the ground point to its place in the rosette.
   position: (f) => {
     if (f.geometry.type !== "Point") return null;
     const [lon, lat, alt] = f.geometry.coordinates as [number, number, number];
     const x = extraOf(f);
     if (!x?.node) return [lon, lat, alt ?? 0];
-    const k = riseProgress(x.born, x.tier, Date.now());
+    const k = reducedMotion() ? 1 : riseProgress(x.born, x.tier, Date.now());
     return [x.ground[0] + (lon - x.ground[0]) * k, x.ground[1] + (lat - x.ground[1]) * k, (alt ?? 0) * k];
   },
   tickMs: 40,
-  labelAlways: (f) => f.properties.kind === "here" || ALWAYS_LABEL.has(f.properties.kind ?? ""),
   lines: (f) => {
     const x = extraOf(f);
-    if (!x?.node) return null;
-    const [lon, lat, alt] = f.geometry.type === "Point" ? (f.geometry.coordinates as number[]) : [x.ground[0], x.ground[1], x.alt];
-    const color = colorOf(f);
-    const out: StyledLine[] = [{ positions: [[lon, lat, alt], [x.ground[0], x.ground[1], 0]], color, alpha: 0.35, width: 1 }];
-    if (x.node.rings) out.push(...ringLines(x.node.rings, x.alt, color, 0.28, 1.1));
-    return out;
+    if (!x?.node || f.geometry.type !== "Point") return null;
+    const [lon, lat, alt] = f.geometry.coordinates as number[];
+    // A short drop, one stratum long: tilted, the nodes read as a stair of layers; from above, as quiet dots.
+    const step = (alt ?? 0) / (x.tier + 1);
+    return [{ positions: [[lon, lat, alt], [lon, lat, Math.max(0, alt - step * 0.85)]], color: colorOf(f), alpha: 0.42, width: 1 }];
   },
   selectedLines: (f) => {
     const x = extraOf(f);
-    if (!x?.node?.rings) return null;
-    const color = colorOf(f);
-    return [...ringLines(x.node.rings, x.alt, color, 0.95, 2.4), ...ringLines(x.node.rings, 30, color, 0.8, 1.6, true)];
+    if (!x?.node || f.geometry.type !== "Point") return null;
+    const [lon, lat, alt] = f.geometry.coordinates as number[];
+    const out: StyledLine[] = [
+      // The focused stratum's tether runs all the way to the point it contains.
+      { positions: [[lon, lat, alt], [x.ground[0], x.ground[1], 0]], color: SIGNAL, alpha: 0.75, width: 1.2 },
+    ];
+    if (x.parent?.rings) out.push(...groundRings(x.parent.rings, ICE, 0.26, 1, true));
+    if (x.child?.rings) out.push(...groundRings(x.child.rings, ICE, 0.34, 1));
+    if (x.node.rings) out.push(...groundRings(x.node.rings, SIGNAL, 0.95, 2.2));
+    return out;
   },
-  scaleByDistance: [2e4, 1.0, 2e7, 0.4],
+  scaleByDistance: [2e4, 1.0, 2e7, 0.5],
 };

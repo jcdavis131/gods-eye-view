@@ -65,6 +65,17 @@ export function parseIntent(raw: string): Intent | null {
   if (/^(?:teleport(?: me)?(?: somewhere)?|next teleport|show me (?:something|what'?s) happening|what'?s happening(?: in the world)?)$/.test(t)) {
     return { command: "teleport", args: {} };
   }
+  // "ascend", "powers of ten", "climb the stack", "ascend from corpus christi"
+  if ((m = t.match(/^(?:ascend|powers of ten|climb (?:the|through the) (?:stack|constructs|strata))(?:\s+(?:from|over|at|in)\s+(.+))?$/))) {
+    return { command: "ascend", args: { place: m[1]?.trim() || undefined } };
+  }
+  // "compare with portland", "compare corpus christi with portland texas", "compare here and rockport"
+  if ((m = t.match(/^compare\s+(?:(?:here|this)\s+(?:with|to|and)\s+|(?:with|to)\s+)(.+)$/))) {
+    return { command: "compare_places", args: { place: m[1].trim() } };
+  }
+  if ((m = t.match(/^compare\s+(.+?)\s+(?:with|to|and|vs\.?|versus)\s+(.+)$/))) {
+    return { command: "compare_places", args: { from: m[1].trim(), place: m[2].trim() } };
+  }
   // "water report", "water report for san antonio", "how is the water in austin"
   if ((m = t.match(/^(?:water report|water status|how(?:'s| is) the water|is the water (?:ok|safe))(?:\s+(?:for|in|near|around|over|at)\s+(.+))?$/))) {
     return { command: "water_report", args: { place: m[1]?.trim() || undefined } };

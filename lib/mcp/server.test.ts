@@ -32,6 +32,7 @@ const EXPECTED_TOOL_NAMES = [
   "banks",
   "federal_spending",
   "place_fabric",
+  "place_compare",
   "construct_field",
   "downstream",
   "upstream",

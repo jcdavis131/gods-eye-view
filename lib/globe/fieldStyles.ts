@@ -10,6 +10,7 @@ import type { LayerStyle, LonLatAlt, StyledLine, StyledPolygon } from "./rendere
 import { heatColor } from "@/lib/fabric/emergence";
 import { vitalsFor } from "@/lib/fabric/emergenceState";
 import type { FieldExtra } from "@/lib/layers/field";
+import { SIGNAL } from "./constructStyles";
 
 function extraOf(f: LayerFeature): FieldExtra | undefined {
   return f.properties.extra as FieldExtra | undefined;
@@ -74,7 +75,7 @@ export const fieldStyle: LayerStyle = {
     const out: StyledLine[] = [];
     for (const ring of x.node.rings) {
       out.push({ positions: ring.map((p) => [p[0], p[1], x.plate] as LonLatAlt), color: "#FFFFFF", alpha: 0.95, width: 2.6 });
-      out.push({ positions: ring.map((p) => [p[0], p[1], 30] as LonLatAlt), color: "#FFFFFF", alpha: 0.7, width: 1.4, dashed: true });
+      out.push({ positions: ring.map((p) => [p[0], p[1], 30] as LonLatAlt), color: SIGNAL, alpha: 0.8, width: 1.4, dashed: true });
     }
     return out;
   },

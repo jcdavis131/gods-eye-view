@@ -459,6 +459,20 @@ export const TOOLS: ToolDef[] = [
     handler: (i, ctx) => relay(ctx, "/api/fabric" + qs({ op: "stack", lon: i.lon, lat: i.lat, geometry: i.geometry ? 1 : undefined })),
   }),
   defineTool({
+    name: "place_compare",
+    title: "Which constructs two places share",
+    description:
+      "Compare the place fabric of two points: for every construct kind, whether both points are inside the same unit (shared), in different units of that kind (differs: same county, different congressional district), or only one point has a unit of that kind (only-a / only-b; a boundary published at one point is not a difference). Returns a one-line summary, counts, the smallest construct both are inside (meet), and one row per kind with each side's id, name, code and area, plus a globe link that opens the comparison. " +
+      ENVELOPE,
+    inputSchema: z.object({
+      lon,
+      lat,
+      lon2: lon.describe("Longitude of point B, degrees."),
+      lat2: lat.describe("Latitude of point B, degrees."),
+    }),
+    handler: (i, ctx) => relay(ctx, "/api/fabric" + qs({ op: "compare", lon: i.lon, lat: i.lat, lon2: i.lon2, lat2: i.lat2 })),
+  }),
+  defineTool({
     name: "construct_field",
     title: "One kind of construct tiled across a box",
     description:
