@@ -25,7 +25,7 @@ export interface Preset {
   /** Open the market report on arrival. */
   market?: boolean;
   /** Gallery section; water presets carry no group. */
-  group?: "markets";
+  group?: "markets" | "constructs";
 }
 
 export const PRESETS: Preset[] = [
@@ -243,6 +243,42 @@ export const PRESETS: Preset[] = [
     layers: ["realestate", "commerce"],
     dwellS: 25,
   },
+  {
+    id: "constructs-austin",
+    title: "What governs downtown Austin",
+    region: "Central Texas",
+    group: "constructs",
+    blurb: "Thirty-odd constructs float over one block of Congress Avenue: city, county, three legislative districts, school district, tract, metro, six nested watersheds, two ecoregions, a flood zone, a forecast office and three federal regions. Select one to see the gauges and companies inside it.",
+    lon: -97.74,
+    lat: 30.27,
+    height: 60_000,
+    layers: ["constructs", "water", "companies"],
+    dwellS: 35,
+  },
+  {
+    id: "constructs-field-texas",
+    title: "Where Texas's watersheds are busiest",
+    region: "Texas",
+    group: "constructs",
+    blurb: "Subbasins (HUC-8) float over Texas and rise with what the physical layers put inside them: stream gauges, aircraft, company headquarters, earthquakes. Zoom in and subwatersheds emerge; switch the point of view in Layers to see counties or districts instead.",
+    lon: -97.7,
+    lat: 29.6,
+    height: 420_000,
+    layers: ["field", "water", "aircraft", "companies", "earthquakes"],
+    dwellS: 35,
+  },
+  {
+    id: "constructs-bexar",
+    title: "San Antonio's water constructs",
+    region: "South Texas",
+    group: "constructs",
+    blurb: "The watershed chain the San Antonio River drains through, the Blackland Prairie ecoregion and the county and districts over it, with the city's gauges and wells joined to each one by location.",
+    lon: -98.49,
+    lat: 29.42,
+    height: 90_000,
+    layers: ["constructs", "water", "groundwater"],
+    dwellS: 30,
+  },
 ];
 
 export const PRESET_BY_ID = new Map(PRESETS.map((p) => [p.id, p]));
@@ -255,4 +291,5 @@ export function presetShare(p: Preset): ShareState {
 export const PRESET_GROUPS: Array<{ title: string; presets: Preset[] }> = [
   { title: "Water", presets: PRESETS.filter((p) => !p.group) },
   { title: "Trade & markets", presets: PRESETS.filter((p) => p.group === "markets") },
+  { title: "Constructs", presets: PRESETS.filter((p) => p.group === "constructs") },
 ];

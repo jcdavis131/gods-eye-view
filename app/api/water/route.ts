@@ -15,6 +15,11 @@
 //                                       (simplified, via the USDM ArcGIS service).
 //   /api/water?op=history&site=..&param=..            USGS daily values, 365 d.
 //   /api/water?op=matchup&site=..&param=..&from=..&to=..  USGS instantaneous values.
+//   /api/water?op=normals&sites=08158000,..&date=09-23
+//                                       USGS daily-mean discharge percentiles
+//                                       (5th to 95th) for a calendar day,
+//                                       per site; what the field's streamflow
+//                                       condition compares the latest flow to.
 //   /api/water?op=report&lon=..&lat=..  The community water report for a point,
 //                                       built server-side from the ops above
 //                                       (no satellite turbidity: that needs a
@@ -37,6 +42,9 @@ import { jsonError } from "@/lib/server/upstream";
 import { badRequest, csv as csvResponse, ok, options, parseFormat, withCors, type CsvRow, type ResponseFormat } from "@/lib/server/respond";
 import type { Provenance } from "@/lib/provenance/types";
 import { usgsProvenance } from "@/lib/water/provenance";
+import { flowNormals, MAX_SITES } from "@/lib/water/normals";
+import { provenance } from "@/lib/provenance/types";
+import { source } from "@/lib/provenance/sources";
 import { flattenGauges, flattenHistory, flattenMatchup, flattenNwps, flattenTwdb, flattenWells, GAUGE_COLUMNS, HISTORY_COLUMNS, MATCHUP_COLUMNS, NWPS_COLUMNS, TWDB_COLUMNS, WELL_COLUMNS } from "@/lib/water/flatten";
 import {
   opDrought,
@@ -158,6 +166,27 @@ async function opMatchup(site: string, param: string, from: string, to: string):
   };
 }
 
+async function normalsOp(sites: string[], month: number, day: number): Promise<OpResult> {
+  const data = await flowNormals(sites, month, day);
+  const rated = Object.values(data).filter(Boolean).length;
+  return {
+    data,
+    meta: { source: "usgs-stat", month, day, sites: Object.keys(data).length, rated },
+    ttlS: 24 * 3600,
+    provenance: [
+      provenance(source("usgs-stat"), {
+        kind: "published",
+        period: `${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+        method: "observationNormals, day of year: percentiles (5th to 95th) of approved daily-mean discharge (00060) for the calendar day",
+      }),
+    ],
+    caveats: [
+      "Percentiles are of approved daily means; comparing an instantaneous reading with them is an estimate of where today stands.",
+      "A site with fewer years of record, or regulated flow, has less meaningful percentiles; `years` says how many are behind each table.",
+    ],
+  };
+}
+
 /** The community water report, server-side, plus the globe permalink that reproduces it in the browser. */
 async function reportOp(lon: number, lat: number, origin: string): Promise<OpResult> {
   const a = await waterReportAt(lon, lat);
@@ -224,6 +253,16 @@ export async function GET(req: NextRequest) {
         if (from >= to) return bad("from must be before to");
         return respond(await opMatchup(site, param, from, to), format, op);
       }
+      case "normals": {
+        const sites = (q.get("sites") ?? "").split(",").filter(Boolean);
+        if (!sites.length || sites.length > MAX_SITES || !sites.every((s) => /^(USGS-)?\d{8,15}$/.test(s))) return bad(`sites=08158000,... (1 to ${MAX_SITES} USGS site numbers) required`);
+        const d = /^(\d{2})-(\d{2})$/.exec(q.get("date") ?? "");
+        const now = new Date();
+        const month = d ? Number(d[1]) : now.getUTCMonth() + 1;
+        const day = d ? Number(d[2]) : now.getUTCDate();
+        if (month < 1 || month > 12 || day < 1 || day > 31) return bad("date=MM-DD");
+        return respond(await normalsOp(sites, month, day), format, op);
+      }
       case "report": {
         const lon = Number(q.get("lon"));
         const lat = Number(q.get("lat"));
@@ -233,7 +272,7 @@ export async function GET(req: NextRequest) {
         return respond(await reportOp(lon, lat, req.nextUrl.origin), format, op);
       }
       default:
-        return bad("unknown op: gauges | wells | nwps | twdb | drought | history | matchup | report");
+        return bad("unknown op: gauges | wells | nwps | twdb | drought | history | matchup | normals | report");
     }
   } catch (err) {
     return withCors(jsonError(err));

@@ -16,11 +16,15 @@ import { satWorker } from "@/lib/globe/satWorker";
 import { useGlobe } from "@/lib/store/globe";
 import { useSettings, type Prefs } from "@/lib/store/settings";
 import { useNow } from "@/lib/hooks/useNow";
+import EmergenceBridge from "./EmergenceBridge";
+import TraceOverlay from "./TraceOverlay";
+import UpstreamOverlay from "./UpstreamOverlay";
 
 /** Which preferences each layer's fetch() depends on (changes trigger a refetch). */
 const OPTION_KEYS: Partial<Record<LayerDefinition["id"], Array<keyof Prefs>>> = {
   aircraft: ["aircraftSource"],
   satellites: ["satelliteGroups"],
+  field: ["fieldPov"],
 };
 
 export default function LayerHost() {
@@ -31,6 +35,9 @@ export default function LayerHost() {
       {LAYERS.map((def) => (
         <LayerBridge key={def.id} def={def} />
       ))}
+      <EmergenceBridge />
+      <TraceOverlay />
+      <UpstreamOverlay />
     </>
   );
 }

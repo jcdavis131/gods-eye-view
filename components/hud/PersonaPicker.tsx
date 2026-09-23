@@ -3,13 +3,13 @@
 // from the Lens button. One card per lens: who it is for, what it turns on,
 // where it lands. Choosing applies the lens; "Just explore" is the old default.
 
-import { CandlestickChart, Droplets, Globe2, Home, Landmark, LineChart, Ship, type LucideIcon } from "lucide-react";
+import { CandlestickChart, Droplets, Globe2, Home, Landmark, Layers, LineChart, Ship, type LucideIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { LAYER_BY_ID } from "@/lib/layers";
 import { PERSONAS, type Persona } from "@/lib/personas/registry";
 import { applyPersona, useLens } from "@/lib/personas/store";
 
-const ICONS: Record<Persona["icon"], LucideIcon> = { Home, LineChart, CandlestickChart, Droplets, Ship, Landmark, Globe2 };
+const ICONS: Record<Persona["icon"], LucideIcon> = { Home, LineChart, CandlestickChart, Droplets, Ship, Landmark, Layers, Globe2 };
 
 export default function PersonaPicker() {
   const open = useLens((s) => s.pickerOpen);

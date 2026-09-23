@@ -70,6 +70,14 @@ describe("every tool asks for the exact route URL", () => {
     ["companies_near", { bbox: [-98, 30, -97, 31] }, "/api/companies?op=near&bbox=-98,30,-97,31"],
     ["banks", { fips: "48453" }, "/api/finance?op=banks&fips=48453"],
     ["federal_spending", { fips: "48453" }, "/api/finance?op=spending&fips=48453"],
+    ["place_fabric", { lon: -97.74, lat: 30.27 }, "/api/fabric?op=stack&lon=-97.74&lat=30.27"],
+    ["place_fabric", { lon: -97.74, lat: 30.27, geometry: true }, "/api/fabric?op=stack&lon=-97.74&lat=30.27&geometry=1"],
+    ["construct_field", { bbox: [-100, 28, -94, 33], kind: "huc8" }, "/api/fabric?op=field&kind=huc8&bbox=-100,28,-94,33"],
+    ["construct_field", { bbox: [-100, 28, -94, 33], pov: "civic", h: 400000 }, "/api/fabric?op=field&pov=civic&h=400000&bbox=-100,28,-94,33"],
+    ["downstream", { lon: -97.74, lat: 30.27 }, "/api/fabric?op=downstream&lon=-97.74&lat=30.27"],
+    ["upstream", { lon: -97.74, lat: 30.27 }, "/api/fabric?op=upstream&lon=-97.74&lat=30.27"],
+    ["flow_normals", { sites: ["08158000", "USGS-08167000"], date: "09-23" }, "/api/water?op=normals&sites=08158000,USGS-08167000&date=09-23"],
+    ["live_events", {}, "/api/live"],
     ["openapi", {}, "/api/openapi"],
   ];
   for (const [name, input, url] of cases) {

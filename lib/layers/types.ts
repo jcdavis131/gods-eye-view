@@ -27,7 +27,10 @@ export type LayerId =
   | "spending"
   | "occupations"
   | "weather"
-  | "sports";
+  | "sports"
+  | "constructs"
+  | "field"
+  | "alerts";
 
 export const LAYER_IDS: LayerId[] = [
   "aircraft",
@@ -49,6 +52,9 @@ export const LAYER_IDS: LayerId[] = [
   "occupations",
   "weather",
   "sports",
+  "constructs",
+  "field",
+  "alerts",
 ];
 
 /** Properties every feature carries, whatever the layer. */

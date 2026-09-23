@@ -33,6 +33,14 @@
       "description": "Surface water, groundwater, drought, flood status: USGS, NOAA NWPS, TWDB, US Drought Monitor."
     },
     {
+      "name": "fabric",
+      "description": "Place fabric: the civic, electoral, statistical, hydrologic, ecological, hazard, service and federal constructs at a point: Census TIGERweb, USGS WBD and 3DEP, EPA ecoregions, FEMA NFHL, NWS."
+    },
+    {
+      "name": "live",
+      "description": "Live NWS warnings and earthquakes: the constructs that are born and die, and the Teleport tour."
+    },
+    {
       "name": "meta",
       "description": "This description."
     },
@@ -281,10 +289,11 @@
                 "drought",
                 "history",
                 "matchup",
+                "normals",
                 "report"
               ]
             },
-            "description": "gauges: USGS latest continuous readings in a bbox (flow, stage, temperature, DO, conductance, pH, turbidity, reservoir elevation/storage). wells: USGS latest daily groundwater levels with aquifer names. nwps: NOAA NWPS gauges with flood categories. twdb: Texas reservoirs. drought: US Drought Monitor current polygons. history: 365 days of daily means for one site and parameter. matchup: instantaneous values for one site and parameter in a window. report: the community water report for a point."
+            "description": "gauges: USGS latest continuous readings in a bbox (flow, stage, temperature, DO, conductance, pH, turbidity, reservoir elevation/storage). wells: USGS latest daily groundwater levels with aquifer names. nwps: NOAA NWPS gauges with flood categories. twdb: Texas reservoirs. drought: US Drought Monitor current polygons. history: 365 days of daily means for one site and parameter. matchup: instantaneous values for one site and parameter in a window. normals: USGS daily-mean discharge percentiles (5th to 95th) for a calendar day, per site (sites=, date=MM-DD). report: the community water report for a point."
           },
           {
             "$ref": "#/components/parameters/format"
@@ -338,6 +347,25 @@
           },
           {
             "$ref": "#/components/parameters/lat"
+          },
+          {
+            "name": "sites",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "op=normals: comma list of up to 200 USGS site numbers (with or without USGS-)."
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{2}-\\d{2}$"
+            },
+            "description": "op=normals: MM-DD, the calendar day; today (UTC) when omitted."
           }
         ],
         "responses": {
@@ -375,6 +403,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/WaterMatchupResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/WaterNormalsResponse"
                     },
                     {
                       "$ref": "#/components/schemas/WaterReportResponse"
@@ -1749,6 +1780,216 @@
           },
           "415": {
             "description": "Content-Type must be application/json"
+          }
+        }
+      }
+    },
+    "/api/fabric": {
+      "get": {
+        "summary": "The constructs at a point, one kind of construct across a box, where a point's water goes, or what drains to it",
+        "description": "The place fabric: the human and scientific frames laid over one point. US points get Census TIGERweb units (state, county, incorporated place or CDP, tract, ZCTA, school districts, congressional and state legislative districts, metro/micro area, CSA, urban area, tribal land, census division and region), USGS WBD hydrologic units HUC-2 to HUC-12 with the downstream HUC-12, EPA level III/IV ecoregions, FEMA NFHL flood zone, NFIP community and FIRM panel, the NWS forecast office, forecast zone and time zone, USGS 3DEP elevation, and the EPA region, FEMA region and Federal Reserve district from published lists (split Reserve-district states are named as split). Anywhere, the Natural Earth country and continent. `edges` carry only relations the unit systems define (`nests-in`: GEOID and HUC nesting, OMB metro delineation) or an agency publishes (`assigned-to`: NWS zone to office, state to federal region; `drains-to`: WBD ToHUC). An upstream that fails is listed in `data.failed` and in `caveats`; the call still answers. The point is snapped to a 0.001 degree grid and cached six hours. op=field returns every unit of one kind inside a bbox (kind, or pov + h for the kind that emerges at a camera height), clamped per kind. op=downstream walks WBD ToHUC from the HUC-12 under a point; WBD answers cold queries slowly, so each call stops at a time budget and returns `next`, and op=downstream&from=<next> continues. op=outlines returns outlines and centroids for the chain in batches. op=upstream reads the bundled national ToHUC table backwards: every HUC-12 that drains to the outlet of the subwatershed under a point, compacted to the smallest cover of whole WBD units (level 2 to 12 digits). op=units returns names, published areas and (unless geometry=0) generalised outlines for WBD units of any level.",
+        "tags": [
+          "fabric"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "stack",
+                "field",
+                "downstream",
+                "outlines",
+                "upstream",
+                "units"
+              ],
+              "default": "stack"
+            },
+            "description": "stack: the constructs at a point. field: every unit of one kind in a bbox. downstream: one time-boxed leg of the HUC-12 chain from a point (or `from` a HUC-12) toward its terminal. outlines: generalised outlines and centroids for up to 100 HUC-12s. upstream: the catchment of the HUC-12 under a point (or huc12=), as a cover of whole WBD units. units: names, areas and outlines for WBD units of any level (codes=, up to 100; geometry=0 for up to 500 without outlines)."
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            },
+            "description": "Longitude of the point, degrees. Required for op=stack and op=downstream."
+          },
+          {
+            "name": "lat",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            },
+            "description": "Latitude of the point, degrees. Required for op=stack and op=downstream."
+          },
+          {
+            "name": "geometry",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "0",
+                "1"
+              ],
+              "default": "0"
+            },
+            "description": "op=stack: 1 adds each construct's generalised outline as `rings`. For op=units, geometry=0 returns names and areas only."
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{12}$"
+            },
+            "description": "op=downstream: continue a truncated walk from this HUC-12 (a previous leg's `next`)."
+          },
+          {
+            "name": "huc12",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "op=outlines: comma list of 1 to 100 twelve-digit HUC-12 codes."
+          },
+          {
+            "name": "bbox",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "op=field: west,south,east,north in degrees; clamped to the kind's widest span and snapped to a grid."
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "state",
+                "county",
+                "place",
+                "cd",
+                "sldu",
+                "sldl",
+                "cbsa",
+                "tract",
+                "zcta",
+                "school",
+                "huc2",
+                "huc4",
+                "huc6",
+                "huc8",
+                "huc10",
+                "huc12",
+                "eco3",
+                "eco4"
+              ]
+            },
+            "description": "op=field: the construct kind to tile the box with."
+          },
+          {
+            "name": "pov",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "hydrologic",
+                "civic",
+                "representation",
+                "statistical",
+                "ecological",
+                "service"
+              ]
+            },
+            "description": "op=field without kind: the point of view whose kind emerges at height h."
+          },
+          {
+            "name": "h",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": 0
+            },
+            "description": "op=field with pov: camera height in metres."
+          },
+          {
+            "$ref": "#/components/parameters/format"
+          },
+          {
+            "name": "codes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "op=units: comma list of WBD codes of 2, 4, 6, 8, 10 or 12 digits, e.g. 12,1209,120902,12090205."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope { source, snapped, constructs, cacheAge, globe, data, provenance[], generatedAt, caveats } where data is { point { lon, lat, elevationM? }, nodes [{ id, kind, domain, name, code?, areaKm2?, areaBasis?, anchor?, rings?, facts, links, source }], edges [{ from, to, relation, basis, external? }], answered[], failed[], coverage }; text/csv with one row per construct when format=csv",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              },
+              "text/csv": {}
+            }
+          },
+          "400": {
+            "description": "Missing or out-of-range lon/lat, unknown op or format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "op=downstream: no HUC-12 at the point",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/live": {
+      "get": {
+        "summary": "Where the world is doing something unusual right now",
+        "description": "NWS active alerts rated Severe or Extreme (with the polygon the forecaster drew, or the outlines of the zones the alert names) and the past day's M4.5+ USGS earthquakes, plus both merged into one list in tour order: severity, urgency and certainty as NWS rates them (warnings in force now before later ones), magnitude and PAGER alert as USGS publishes them. The order is for a tour, not a risk score. Cached five minutes; a failing feed is listed in data.failed and in caveats.",
+        "tags": [
+          "live"
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope with data: { alerts, quakes, items, failed, unmapped }."
           }
         }
       }
@@ -3562,6 +3803,70 @@
           "value",
           "unit"
         ]
+      },
+      "WaterNormalsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "description": "site number -> the day's percentiles, or null when USGS publishes none",
+                "additionalProperties": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "site": {
+                          "type": "string"
+                        },
+                        "month": {
+                          "type": "integer"
+                        },
+                        "day": {
+                          "type": "integer"
+                        },
+                        "p": {
+                          "type": "object",
+                          "description": "percentile (5, 10, 25, 50, 75, 90, 95) -> daily-mean discharge, cfs",
+                          "additionalProperties": {
+                            "type": "number"
+                          }
+                        },
+                        "years": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "description": "years of approved record behind the statistics"
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              "month": {
+                "type": "integer"
+              },
+              "day": {
+                "type": "integer"
+              },
+              "sites": {
+                "type": "integer"
+              },
+              "rated": {
+                "type": "integer"
+              }
+            }
+          }
+        ],
+        "x-op": "normals"
       },
       "WaterReportResponse": {
         "allOf": [

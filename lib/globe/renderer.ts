@@ -234,6 +234,20 @@ export class LayerRenderer {
     this.tick(now, true);
   }
 
+  /**
+   * Re-run the style for some features without new data: for styles that read
+   * state outside the feature (the construct field reads live vitals).
+   */
+  restyle(ids?: Iterable<string>) {
+    if (this.destroyed) return;
+    const now = this.currentTimeMs();
+    const want = ids ? new Set(ids) : null;
+    for (const [id, item] of this.items) if (!want || want.has(id)) this.applyStatic(item, now);
+    if (this.selectedId && (!want || want.has(this.selectedId))) this.refreshSelectedLines();
+    this.refreshLabels();
+    this.tick(now, true);
+  }
+
   private applyOverlay() {
     if (!this.style.overlay) return;
     const C = getCesium();

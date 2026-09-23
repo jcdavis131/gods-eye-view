@@ -9,6 +9,7 @@ import { useWatchlists } from "@/lib/watch/store";
 import { useScreener } from "@/lib/screener/store";
 import { useMobile } from "@/lib/mobile/store";
 import { copyShareLink } from "@/lib/globe/share";
+import { useTeleport } from "@/lib/live/teleportStore";
 import type { PanelId } from "./registry";
 
 export function isPanelOpen(id: PanelId): boolean {
@@ -28,6 +29,8 @@ export function isPanelOpen(id: PanelId): boolean {
       return useReleases.getState().releasesOpen;
     case "watch":
       return useWatchlists.getState().open;
+    case "teleport":
+      return useTeleport.getState().active;
     default:
       return false;
   }
@@ -69,6 +72,10 @@ export function setPanel(id: PanelId, on: boolean): void {
       return;
     case "explore":
       g.setExploreOpen(on);
+      return;
+    case "teleport":
+      if (on) void useTeleport.getState().start();
+      else useTeleport.getState().stop();
       return;
     case "share":
       if (on) void copyShareLink();

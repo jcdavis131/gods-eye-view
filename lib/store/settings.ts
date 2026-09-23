@@ -4,6 +4,8 @@
 // baseline feature. Keys are only ever sent to this app's own /api routes
 // (as request headers) or to the vendor SDK they belong to (voice).
 
+import type { FieldPov } from "@/lib/fabric/fieldScale";
+import type { Measure, Normalise } from "@/lib/fabric/emergence";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
@@ -130,6 +132,12 @@ export interface Prefs {
   observer: { lat: number; lon: number; label: string } | null;
   aircraftSource: "auto" | "adsblol" | "opensky" | "adsbx";
   voiceProvider: "browser" | "elevenlabs" | "vapi";
+  /** Construct field: the point of view whose constructs tile the view. */
+  fieldPov: FieldPov;
+  /** Construct field: which physical signals set each construct's heat ("all" or a layer id). */
+  fieldMeasure: Measure;
+  /** Construct field: raw counts, or per 1,000 km² so big units do not win by size. */
+  fieldNormalise: Normalise;
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -144,6 +152,9 @@ export const DEFAULT_PREFS: Prefs = {
   observer: null,
   aircraftSource: "auto",
   voiceProvider: "browser",
+  fieldPov: "hydrologic",
+  fieldMeasure: "all",
+  fieldNormalise: "density",
 };
 
 interface SettingsState {

@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, Settings2, Crosshair, Home, Droplets, Compass, Link2, Landmark, Menu, Activity, CalendarDays, Bell, Table2, Aperture } from "lucide-react";
+import { Search, Settings2, Crosshair, Home, Droplets, Compass, Link2, Landmark, Menu, Activity, CalendarDays, Bell, Table2, Aperture, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { useIndicators } from "@/lib/indicators/store";
@@ -19,6 +19,7 @@ import { isLive } from "@/lib/globe/clock";
 import { LAYERS } from "@/lib/layers";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import VoiceControl from "./VoiceControl";
+import { useTeleport } from "@/lib/live/teleportStore";
 import AboutButton from "./AboutDialog";
 
 export function fmtUtc(ms: number): string {
@@ -206,6 +207,19 @@ export default function TopBar() {
         >
           <Compass className="size-3.5" />
           <span className="sr-only">Explore</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            const t = useTeleport.getState();
+            if (t.active) t.next();
+            else void t.start();
+          }}
+          className="flex items-center gap-2 px-3 py-2 text-[11px] uppercase tracking-wider text-foreground/80 hover:bg-accent hover:text-primary"
+          title="Teleport: fly to wherever the world is doing something unusual right now (NWS warnings, earthquakes), strongest first"
+        >
+          <Zap className="size-3.5" />
+          <span className="hidden lg:inline">Teleport</span>
         </button>
         <button
           type="button"

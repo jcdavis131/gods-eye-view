@@ -7,6 +7,9 @@
 //
 // Each command returns a short sentence the agent can speak back.
 
+import { useTrace } from "@/lib/fabric/traceStore";
+import { upstreamAreaKm2, useUpstream } from "@/lib/fabric/upstreamStore";
+import { useTeleport } from "@/lib/live/teleportStore";
 import { flyTo, flyToSelection, homeView, startFollowing, stopFollowing } from "@/lib/globe/camera";
 import { goLive, setMissionTime } from "@/lib/globe/clock";
 import { allFeatures } from "@/lib/globe/registry";
@@ -125,6 +128,15 @@ const LAYER_ALIASES: Record<string, LayerId> = {
   "federal dollars": "spending",
   contracts: "spending",
   grants: "spending",
+  constructs: "constructs",
+  "place fabric": "constructs",
+  jurisdictions: "constructs",
+  districts: "constructs",
+  watersheds: "constructs",
+  boundaries: "constructs",
+  field: "field",
+  "construct field": "field",
+  emergence: "field",
 };
 
 export function resolveLayer(word: string | undefined): LayerId | null {
@@ -284,6 +296,67 @@ export const COMMANDS: CommandDef[] = [
       const v = useGlobe.getState().view;
       const report = reportFromGlobe(v.lon, v.lat);
       return prefix + speakReport(report);
+    },
+  },
+  {
+    name: "trace_downstream",
+    description:
+      "Follow the water from a place or the current view to the sea: the chain of USGS subwatersheds (HUC-12) it drains through, drawn on the globe, and how it ends (ocean, closed basin, Mexico, Canada).",
+    parameters: {
+      type: "object",
+      properties: {
+        place: { type: "string", description: "Optional place to fly to first, e.g. 'Austin'" },
+      },
+    },
+    run: async (a) => {
+      let prefix = "";
+      if (a.place) prefix = (await goToPlace(String(a.place), 120)) + " ";
+      const st = useGlobe.getState();
+      st.setLayer("water", true);
+      const v = st.view;
+      await useTrace.getState().run(v.lon, v.lat);
+      const t = useTrace.getState();
+      if (!t.steps.length) return prefix + `I could not trace the water here${t.error ? `: ${t.error}` : "."}`;
+      return (
+        prefix +
+        `From ${t.startName}, the water passes through ${t.steps.length} subwatersheds` +
+        `${t.terminal ? ` to the ${t.terminal}` : ", and I stopped before it reached the end"}. The path is drawn on the globe.`
+      );
+    },
+  },
+  {
+    name: "trace_upstream",
+    description:
+      "Show everything that drains to a place or the current view: its catchment as whole USGS watersheds, the area, and what the gauges inside it read against normal for today.",
+    parameters: {
+      type: "object",
+      properties: {
+        place: { type: "string", description: "Optional place to fly to first, e.g. 'Austin'" },
+      },
+    },
+    run: async (a) => {
+      let prefix = "";
+      if (a.place) prefix = (await goToPlace(String(a.place), 120)) + " ";
+      const v = useGlobe.getState().view;
+      await useUpstream.getState().run(v.lon, v.lat);
+      const u = useUpstream.getState();
+      if (!u.cover.length) return prefix + `I could not find what drains here${u.error ? `: ${u.error}` : "."}`;
+      const { km2 } = upstreamAreaKm2(u);
+      return prefix + `${u.huc12s.toLocaleString("en-US")} subwatersheds drain to ${u.startName}${km2 ? `, about ${Math.round(km2).toLocaleString("en-US")} square kilometres` : ""}. The catchment is drawn on the globe.`;
+    },
+  },
+  {
+    name: "teleport",
+    description: "Teleport to wherever the world is doing something unusual right now: NWS warnings rated Severe or Extreme and M4.5+ earthquakes, strongest first. Say it again for the next one.",
+    parameters: { type: "object", properties: {} },
+    run: async () => {
+      const t = useTeleport.getState();
+      if (t.active && t.items.length) t.next();
+      else await t.start();
+      const s = useTeleport.getState();
+      const item = s.items[s.index];
+      if (!item) return s.error ? `I could not reach the live feeds: ${s.error}` : "Nothing rated Severe or Extreme is active right now. A quiet planet.";
+      return `${item.title}: ${item.subtitle}.`;
     },
   },
   {
