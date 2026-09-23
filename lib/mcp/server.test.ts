@@ -34,6 +34,9 @@ const EXPECTED_TOOL_NAMES = [
   "place_fabric",
   "construct_field",
   "downstream",
+  "upstream",
+  "flow_normals",
+  "live_events",
   "openapi",
 ];
 

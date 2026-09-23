@@ -9,6 +9,10 @@
 //   /api/fabric?op=downstream&lon=-97.74&lat=30.27          the HUC-12 chain from the point toward the sea, one time-boxed leg
 //   /api/fabric?op=downstream&from=120902050307             the next leg, from a truncated leg's `next`
 //   /api/fabric?op=outlines&huc12=120902050306,...          outlines and centroids for up to 100 HUC-12s
+//   /api/fabric?op=upstream&lon=-97.74&lat=30.27            the catchment: every HUC-12 that drains to the point's
+//                                                           subwatershed, as the smallest cover of whole WBD units
+//   /api/fabric?op=units&codes=1209,120902,1209020503       outlines, names and areas of WBD units of any level
+//                                                           (up to 100; geometry=0 for names and areas of up to 500)
 //
 // Upstreams, all keyless and asked in parallel: Census TIGERweb (state,
 // county, place, tract, ZCTA, school, congressional and state legislative
@@ -25,7 +29,19 @@
 // Places and public boundaries only; nothing here is about a person.
 
 import type { NextRequest } from "next/server";
-import { fetchDownstream, fetchField, huc12Outlines, OUTLINE_BATCH, type DownstreamResult, type FieldResult } from "@/lib/fabric/fetch";
+import {
+  fetchDownstream,
+  fetchField,
+  fetchUpstream,
+  huc12Outlines,
+  OUTLINE_BATCH,
+  UNITS_BATCH,
+  UNITS_BATCH_ATTRS,
+  wbdUnits,
+  type DownstreamResult,
+  type FieldResult,
+  type UpstreamResult,
+} from "@/lib/fabric/fetch";
 import { fetchFabric } from "@/lib/fabric/fetch";
 import { clampFieldBbox, FIELD_POVS, FIELD_SPECS, isFieldKind, kindForScale, type BBox, type FieldPov } from "@/lib/fabric/field";
 import { FABRIC_COLUMNS, fabricRows } from "@/lib/fabric/graph";
@@ -39,7 +55,7 @@ import { jsonError } from "@/lib/server/upstream";
 export const maxDuration = 60;
 
 const TTL_S = 6 * 3600;
-const OPS = ["stack", "field", "downstream", "outlines"] as const;
+const OPS = ["stack", "field", "downstream", "outlines", "upstream", "units"] as const;
 const FIELD_TTL_S = 24 * 3600;
 const DOWNSTREAM_TTL_S = 7 * 24 * 3600;
 
@@ -63,6 +79,8 @@ export async function GET(req: NextRequest) {
   if (op === "field") return field(q);
   if (op === "downstream") return downstream(q);
   if (op === "outlines") return outlines(q);
+  if (op === "upstream") return upstreamOp(q);
+  if (op === "units") return units(q);
   const lon = Number(q.get("lon"));
   const lat = Number(q.get("lat"));
   if (!q.get("lon") || !q.get("lat") || !Number.isFinite(lon) || !Number.isFinite(lat) || Math.abs(lon) > 180 || Math.abs(lat) > 90)
@@ -188,6 +206,64 @@ async function outlines(q: URLSearchParams) {
       caveats: ["Outlines are generalised for display; centroids are computed by Embedding Atlas from the generalised outline."],
       ttlS: DOWNSTREAM_TTL_S,
       meta: { source: "usgs-wbd", units: Object.keys(r.outlines).length },
+    });
+  } catch (err) {
+    return jsonError(err);
+  }
+}
+
+async function upstreamOp(q: URLSearchParams) {
+  const huc12 = q.get("huc12");
+  let start: { lon: number; lat: number } | { huc12: string };
+  if (huc12) {
+    if (!/^\d{12}$/.test(huc12)) return badRequest("huc12 is a 12-digit code", { huc12 });
+    start = { huc12 };
+  } else {
+    const lon = Number(q.get("lon"));
+    const lat = Number(q.get("lat"));
+    if (!q.get("lon") || !q.get("lat") || !Number.isFinite(lon) || !Number.isFinite(lat) || Math.abs(lon) > 180 || Math.abs(lat) > 90)
+      return badRequest("lon and lat (or huc12=<code>) are required: /api/fabric?op=upstream&lon=-97.74&lat=30.27");
+    start = { lon: Math.round(lon * 1000) / 1000, lat: Math.round(lat * 1000) / 1000 };
+  }
+  const key = `fabric-upstream:${"huc12" in start ? start.huc12 : `${start.lon},${start.lat}`}`;
+  try {
+    const r = await cached(key, DOWNSTREAM_TTL_S * 1000, () => fetchUpstream(start));
+    const u: UpstreamResult | null = r.value;
+    if (!u) return notFound("no HUC-12 at this point (outside the US, or water WBD does not cover)", start);
+    return ok(u, {
+      provenance: [
+        provenance(source("usgs-wbd"), {
+          kind: "estimate",
+          retrievedAt: new Date(Date.now() - r.age).toISOString(),
+          method: "every HUC-12 whose WBD ToHUC chain reaches the start, from the bundled national table (pulled 2026-09-22); compacted to whole units by code nesting",
+        }),
+      ],
+      caveats: [
+        "The catchment drains to the outlet of the subwatershed under the point, not to the point itself.",
+        "Built from WBD ToHUC links; areas that WBD marks as draining elsewhere (closed basins, non-contributing playas) are not in it.",
+        "Outlines, names and published areas of the cover come from op=units.",
+      ],
+      ttlS: DOWNSTREAM_TTL_S,
+      meta: { source: "usgs-wbd", huc12s: u.huc12s, units: u.cover.length, cacheAge: r.age },
+    });
+  } catch (err) {
+    return jsonError(err);
+  }
+}
+
+async function units(q: URLSearchParams) {
+  const geometry = q.get("geometry") !== "0" && q.get("geometry") !== "false";
+  const max = geometry ? UNITS_BATCH : UNITS_BATCH_ATTRS;
+  const codes = (q.get("codes") ?? "").split(",").map((c) => c.trim()).filter(Boolean);
+  if (!codes.length || codes.length > max || codes.some((c) => !/^(\d{2}){1,6}$/.test(c)))
+    return badRequest(`codes is a comma list of 1 to ${max} WBD codes of 2, 4, 6, 8, 10 or 12 digits`);
+  try {
+    const r = await wbdUnits(codes, { geometry });
+    return ok(r, {
+      provenance: [provenance(source("usgs-wbd"), { kind: "published", retrievedAt: new Date().toISOString(), notes: ["names and areas as published; outlines generalised by level"] })],
+      caveats: geometry ? ["Outlines are generalised for display, coarser for bigger units; centroids are computed from them."] : [],
+      ttlS: DOWNSTREAM_TTL_S,
+      meta: { source: "usgs-wbd", units: Object.keys(r.areas).length },
     });
   } catch (err) {
     return jsonError(err);

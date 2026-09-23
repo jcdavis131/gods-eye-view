@@ -27,6 +27,7 @@ import {
 import type { ConstructEdge, ConstructKind, ConstructNode, Fabric } from "./types";
 import { FIELD_SPECS, fieldOffset, parseField, type ArcQueryResponse, type BBox as BBoxT, type FieldService, type FieldSpec } from "./field";
 import { basinFromBundle, parseBasinTable, walkDownstream, type BasinTable, type BundledDrainage, type DownstreamResult } from "./downstream";
+import { buildIndex, HUC_LEVELS, upstream, type DrainageIndex, type HucLevel, type Upstream } from "./upstream";
 
 export const TIGER_URL = "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/tigerWMS_Current/MapServer";
 export const WBD_URL = "https://hydro.nationalmap.gov/arcgis/rest/services/wbd/MapServer";
@@ -411,3 +412,102 @@ export async function fetchDownstream(start: { lon: number; lat: number } | { fr
   if ("from" in start && walk.steps[0]) startName = walk.steps[0].name;
   return { ...walk, ...("from" in start ? {} : { point: start }), startName };
 }
+
+// ------------------------------------------------------------------ upstream
+
+let index: Promise<DrainageIndex | null> | null = null;
+
+/** The reversed national drainage table, built once per process from the bundle. */
+function drainageIndex(): Promise<DrainageIndex | null> {
+  index ??= drainageBundle().then((b) => (b?.complete ? buildIndex(b) : null));
+  return index;
+}
+
+export interface UpstreamResult extends Upstream {
+  point?: { lon: number; lat: number };
+  startName: string;
+}
+
+/** The catchment of the HUC-12 under a point (or of a given HUC-12), from the bundled table. */
+export async function fetchUpstream(start: { lon: number; lat: number } | { huc12: string }): Promise<UpstreamResult | null> {
+  const idx = await drainageIndex();
+  if (!idx) throw new Error("the upstream walk needs the bundled national drainage table (scripts/wbd-data.mjs)");
+  let huc12: string;
+  let startName: string;
+  if ("huc12" in start) {
+    huc12 = start.huc12;
+    startName = `HUC ${start.huc12}`;
+  } else {
+    const at = await huc12At(start.lon, start.lat);
+    if (!at) return null;
+    huc12 = at.huc12;
+    startName = at.name;
+  }
+  const u = upstream(huc12, idx);
+  if (!u) return null;
+  return { ...u, ...("huc12" in start ? {} : { point: start }), startName };
+}
+
+/** Generalisation per level: coarse units are big, so their outlines can be coarser. */
+const LEVEL_OFFSET: Record<HucLevel, string> = { 2: "0.03", 4: "0.015", 6: "0.008", 8: "0.005", 10: "0.004", 12: "0.004" };
+
+/** Most codes one units call takes with outlines, and without (names and areas only). */
+export const UNITS_BATCH = 100;
+export const UNITS_BATCH_ATTRS = 500;
+
+/**
+ * Outlines, names and published areas for WBD units of any level (2 to 12
+ * digits), one query per level. With `geometry: false` only names and areas
+ * come back, which is cheap enough for a few hundred units at once.
+ */
+export async function wbdUnits(codes: string[], opts: { geometry?: boolean } = {}): Promise<OutlineBatch> {
+  const geometry = opts.geometry ?? true;
+  const clean = [...new Set(codes.filter((c) => /^\d{2,12}$/.test(c) && c.length % 2 === 0))].sort().slice(0, geometry ? UNITS_BATCH : UNITS_BATCH_ATTRS);
+  const byLevel = new Map<HucLevel, string[]>();
+  for (const c of clean) {
+    const l = c.length as HucLevel;
+    byLevel.set(l, [...(byLevel.get(l) ?? []), c]);
+  }
+  const out: OutlineBatch = { outlines: {}, centroids: {}, names: {}, areas: {} };
+  await Promise.all(
+    [...byLevel].map(async ([level, list]) => {
+      const r = await cached(`wbd-units:${geometry ? 1 : 0}:${list.join(",")}`, BASIN_TTL_MS, async () => {
+        const field = `huc${level}`;
+        const body = new URLSearchParams({
+          where: `${field} IN (${list.map((c) => `'${c}'`).join(",")})`,
+          outFields: `${field},name,areasqkm`,
+          returnGeometry: String(geometry),
+          ...(geometry ? { maxAllowableOffset: LEVEL_OFFSET[level], geometryPrecision: "4", outSR: "4326" } : {}),
+          f: "json",
+        });
+        const layer = HUC_LEVELS.indexOf(level) + 1;
+        const res = await wbdOnce<ArcQueryResponse>(`${WBD_URL}/${layer}/query`, {
+          method: "POST",
+          body: body.toString(),
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+        });
+        if (res.error) throw new Error(`usgs-wbd: ${res.error.message ?? "unit query failed"}`);
+        const part: OutlineBatch = { outlines: {}, centroids: {}, names: {}, areas: {} };
+        for (const f of res.features ?? []) {
+          const a = Object.fromEntries(Object.entries(f.attributes ?? {}).map(([k, v]) => [k.toLowerCase(), v]));
+          const code = String(a[field] ?? "");
+          if (!code) continue;
+          if (a.name != null) part.names[code] = String(a.name);
+          if (Number.isFinite(Number(a.areasqkm))) part.areas[code] = Number(a.areasqkm);
+          if (!f.geometry?.rings?.length) continue;
+          const rings = roundRings(f.geometry.rings);
+          part.outlines[code] = rings;
+          const c = ringCentroid(rings);
+          if (c) part.centroids[code] = [Math.round(c[0] * 1e4) / 1e4, Math.round(c[1] * 1e4) / 1e4];
+        }
+        return part;
+      });
+      Object.assign(out.outlines, r.value.outlines);
+      Object.assign(out.centroids, r.value.centroids);
+      Object.assign(out.names, r.value.names);
+      Object.assign(out.areas, r.value.areas);
+    }),
+  );
+  return out;
+}
+

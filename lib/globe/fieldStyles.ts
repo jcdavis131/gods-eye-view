@@ -19,22 +19,24 @@ function heatOf(f: LayerFeature): number {
   return vitalsFor(f.properties.id)?.heat ?? 0;
 }
 
-function fmt(v: number): string {
-  return v >= 100 ? Math.round(v).toLocaleString("en-US") : v >= 10 ? v.toFixed(0) : v.toFixed(1);
+/** The flow class colour under the streamflow measure, else the heat ramp. */
+function colorOf(f: LayerFeature): string {
+  const v = vitalsFor(f.properties.id);
+  return v?.color ?? heatColor(v?.heat ?? 0);
 }
 
 export const fieldStyle: LayerStyle = {
   color: "#22D3EE",
   pointSize: (f) => 4 + heatOf(f) * 7,
-  colorFor: (f) => heatColor(heatOf(f)),
+  colorFor: colorOf,
   label: (f) => {
     const v = vitalsFor(f.properties.id);
-    return v && v.value > 0 ? `${f.properties.name} · ${fmt(v.value)}` : f.properties.name;
+    return v?.display ? `${f.properties.name} · ${v.display}` : f.properties.name;
   },
   labelMax: 0,
   labelAlways: (f) => {
     const v = vitalsFor(f.properties.id);
-    return !!v && v.value > 0 && v.rank < 6;
+    return !!v && !!v.display && v.value > 0 && v.rank < 6;
   },
   // The node sits on top of its column.
   position: (f) => {
@@ -47,11 +49,13 @@ export const fieldStyle: LayerStyle = {
     const x = extraOf(f);
     if (!x?.node?.rings) return null;
     const h = heatOf(f);
-    const color = heatColor(h);
+    const color = colorOf(f);
+    // A rated unit sitting at normal still shows its class colour, faintly.
+    const floor = vitalsFor(f.properties.id)?.condition?.rated ? 0.35 : 0.18;
     const out: StyledLine[] = x.node.rings.map((ring) => ({
       positions: ring.map((p) => [p[0], p[1], x.plate] as LonLatAlt),
       color,
-      alpha: 0.18 + 0.6 * h,
+      alpha: floor + 0.6 * h,
       width: 1 + 1.5 * h,
     }));
     if (h > 0) out.push({ positions: [[x.ground[0], x.ground[1], x.plate], [x.ground[0], x.ground[1], x.plate + x.column * h]], color, alpha: 0.85, width: 3 + 5 * h, glow: true });
@@ -60,8 +64,9 @@ export const fieldStyle: LayerStyle = {
   polygons: (f) => {
     const x = extraOf(f);
     const h = heatOf(f);
-    if (!x?.node?.rings || h <= 0) return null;
-    return [{ rings: x.node.rings, color: heatColor(h), alpha: 0.05 + 0.25 * h } satisfies StyledPolygon];
+    const rated = !!vitalsFor(f.properties.id)?.condition?.rated;
+    if (!x?.node?.rings || (h <= 0 && !rated)) return null;
+    return [{ rings: x.node.rings, color: colorOf(f), alpha: (rated ? 0.08 : 0.05) + 0.25 * h } satisfies StyledPolygon];
   },
   selectedLines: (f) => {
     const x = extraOf(f);

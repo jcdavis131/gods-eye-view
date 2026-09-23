@@ -18,6 +18,7 @@ import { useSettings, type Prefs } from "@/lib/store/settings";
 import { useNow } from "@/lib/hooks/useNow";
 import EmergenceBridge from "./EmergenceBridge";
 import TraceOverlay from "./TraceOverlay";
+import UpstreamOverlay from "./UpstreamOverlay";
 
 /** Which preferences each layer's fetch() depends on (changes trigger a refetch). */
 const OPTION_KEYS: Partial<Record<LayerDefinition["id"], Array<keyof Prefs>>> = {
@@ -36,6 +37,7 @@ export default function LayerHost() {
       ))}
       <EmergenceBridge />
       <TraceOverlay />
+      <UpstreamOverlay />
     </>
   );
 }

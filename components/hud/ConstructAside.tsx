@@ -11,20 +11,24 @@
 // directions are plain point-in-polygon over what is already in the browser;
 // nothing is fetched and nothing is inferred beyond the published outlines.
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useGlobe } from "@/lib/store/globe";
 import { LAYER_BY_ID } from "@/lib/layers";
 import type { LayerFeature, LayerId } from "@/lib/layers/types";
 import { allRenderers, getRenderer } from "@/lib/globe/registry";
-import { flyToSelection } from "@/lib/globe/camera";
+import { flyTo, flyToSelection } from "@/lib/globe/camera";
 import { DOMAIN_ORDER, DOMAINS, KINDS } from "@/lib/fabric/catalog";
 import { ringsContain } from "@/lib/fabric/geo";
 import { joinInside, pointOf } from "@/lib/fabric/join";
 import type { ConstructExtra, ConstructNode, Fabric } from "@/lib/fabric/types";
-import { heatColor } from "@/lib/fabric/emergence";
+import { conditionVitals, heatColor, type UnitCondition, type Vitals } from "@/lib/fabric/emergence";
+import { FLOW_CLASS_ORDER, FLOW_CLASSES, flowClass, ordinal } from "@/lib/fabric/condition";
 import { vitalsFor } from "@/lib/fabric/emergenceState";
+import { conditionOf, ensureNormals } from "@/lib/fabric/normalsClient";
 import { useSettings } from "@/lib/store/settings";
 import { tracePathKm, useTrace } from "@/lib/fabric/traceStore";
+import { DRAW_CAP, upstreamAreaKm2, upstreamCondition, useUpstream } from "@/lib/fabric/upstreamStore";
+import { describeCover } from "@/lib/fabric/upstream";
 
 function extraOf(f: LayerFeature): ConstructExtra | undefined {
   return f.properties.extra as ConstructExtra | undefined;
@@ -46,7 +50,7 @@ function constructFeature(id: string): LayerFeature | undefined {
 function loadedFeatures(): LayerFeature[] {
   const out: LayerFeature[] = [];
   for (const r of allRenderers()) {
-    if (!r.show || r.layer === "constructs" || r.layer === "field") continue;
+    if (!r.show || r.layer === "constructs" || r.layer === "field" || r.layer === "alerts") continue;
     for (const f of r.features()) out.push(f);
   }
   return out;
@@ -130,6 +134,7 @@ function Stack({ fabric }: { fabric: Fabric }) {
         </a>
       </div>
       <TraceSection lon={lon} lat={lat} bare />
+      <UpstreamSection lon={lon} lat={lat} bare />
       <div className="mt-1 text-[9px] leading-snug text-muted-foreground">
         Every construct here contains this point. Select one to join it to whatever is loaded on the globe inside it.
       </div>
@@ -155,6 +160,7 @@ function One({ node, field = false, ground }: { node: ConstructNode; field?: boo
     <>
       {field && <FieldVitals id={node.id} />}
       {node.domain === "hydrologic" && <TraceSection lon={ground[0]} lat={ground[1]} />}
+      {node.domain === "hydrologic" && <UpstreamSection lon={ground[0]} lat={ground[1]} />}
       {(edges.length > 0 || node.links.some((l) => l.url.startsWith("/"))) && (
         <div className="border-t border-border px-3 py-2">
           <div className="hud-label mb-1">Relations</div>
@@ -196,6 +202,7 @@ function One({ node, field = false, ground }: { node: ConstructNode; field?: boo
             ))}
         </div>
       )}
+      {!field && joined?.get("water") && <RiversInside gauges={joined.get("water")!} />}
       <div className="border-t border-border px-3 py-2">
         <div className="hud-label mb-1">Inside, joined by location</div>
         {!joined && (
@@ -347,6 +354,176 @@ function TraceSection({ lon, lat, bare = false }: { lon: number; lat: number; ba
   );
 }
 
+/**
+ * The rivers inside a construct right now: the loaded gauges joined into its
+ * outline, each placed against the day's flow percentiles. Under a flood
+ * warning this is the physical twin answering the forecast.
+ */
+function RiversInside({ gauges }: { gauges: LayerFeature[] }) {
+  const [, bump] = useState(0);
+  const key = gauges.map((g) => g.properties.id).join(",");
+  useEffect(() => {
+    let live = true;
+    void ensureNormals(gauges).then((got) => {
+      if (got && live) bump((n) => n + 1);
+    });
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  const c = conditionVitals(gauges.map(conditionOf).filter((x): x is NonNullable<typeof x> => !!x)).condition!;
+  if (!c.gauges) return null;
+  const cls = c.median != null ? flowClass(c.median) : null;
+  return (
+    <div className="border-t border-border px-3 py-2">
+      <div className="hud-label mb-1">Rivers inside now</div>
+      <div className="text-[10px] leading-snug">
+        {c.gauges} gauge{c.gauges === 1 ? "" : "s"}
+        {c.median != null && cls ? (
+          <>
+            {" "}
+            · median <span className="tabular-nums">{ordinal(c.median)}</span> percentile for today, <span style={{ color: FLOW_CLASSES[cls].color }}>{FLOW_CLASSES[cls].label}</span>
+          </>
+        ) : (
+          " · reading daily statistics…"
+        )}
+        {c.flooding > 0 && <span className="text-alert"> · {c.flooding} forecast point{c.flooding === 1 ? "" : "s"} in flood</span>}
+      </div>
+      <div className="mt-1 flex h-2 w-full overflow-hidden rounded" aria-label="Gauges inside by flow class">
+        {FLOW_CLASS_ORDER.map((k) => {
+          const n = c.classes[k] ?? 0;
+          return n ? <span key={k} style={{ background: FLOW_CLASSES[k].color, flexGrow: n }} title={`${n} ${FLOW_CLASSES[k].label}`} /> : null;
+        })}
+      </div>
+      <div className="mt-0.5 text-[9px] text-muted-foreground">Latest flow at each loaded USGS gauge inside against its published daily-mean percentiles (an estimate); unrated gauges are left out.</div>
+    </div>
+  );
+}
+
+/**
+ * What drains to a point: the catchment as whole WBD units (drawn by
+ * UpstreamOverlay) and the gauges inside it near the outlet, read against the
+ * day's flow percentiles: what is coming down toward the point.
+ */
+function UpstreamSection({ lon, lat, bare = false }: { lon: number; lat: number; bare?: boolean }) {
+  const u = useUpstream();
+  const mine = !!u.point && Math.abs(u.point.lon - lon) < 1e-6 && Math.abs(u.point.lat - lat) < 1e-6;
+  const area = upstreamAreaKm2(u);
+  const cond = upstreamCondition(u.gauges);
+  const cls = cond.median != null ? flowClass(cond.median) : null;
+  return (
+    <div className={bare ? "mt-2" : "border-t border-border px-3 py-2"}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="hud-label">What drains here</span>
+        {mine && u.status !== "idle" ? (
+          <button type="button" className="text-[9px] text-muted-foreground hover:text-foreground" onClick={() => u.clear()}>
+            clear
+          </button>
+        ) : (
+          <button type="button" className="text-[10px] text-primary hover:underline" onClick={() => u.run(lon, lat)}>
+            ← Trace upstream
+          </button>
+        )}
+      </div>
+      {!mine && u.status !== "idle" && u.startName && (
+        <div className="mt-1 text-[10px] text-muted-foreground">
+          The globe shows the catchment of {u.startName}.{" "}
+          <button type="button" className="text-primary hover:underline" onClick={() => u.clear()}>
+            clear it
+          </button>
+        </div>
+      )}
+      {mine && u.status === "error" && <div className="mt-1 text-[10px] text-alert">{u.error}</div>}
+      {mine && u.status === "loading" && !u.cover.length && (
+        <div className="mt-1 text-[10px] text-muted-foreground">
+          <span className="blink text-primary">reading</span> the national drainage table…
+        </div>
+      )}
+      {mine && u.cover.length > 0 && (
+        <div className="mt-1 space-y-1 text-[10px] leading-snug">
+          <div>
+            <span className="tabular-nums">{u.huc12s.toLocaleString("en-US")}</span> subwatershed{u.huc12s === 1 ? "" : "s"} drain to the outlet of{" "}
+            <span className="text-foreground">{u.startName}</span>
+            {area.known > 0 && (
+              <>
+                : <span className="tabular-nums" style={{ color: "#A78BFA" }}>{Math.round(area.km2).toLocaleString("en-US")} km²</span>
+                {area.known < u.cover.length && " so far"}
+              </>
+            )}
+            .
+          </div>
+          <div className="text-muted-foreground">
+            Drawn as {describeCover(u.byLevel)}
+            {u.cover.length > DRAW_CAP && ` (the ${DRAW_CAP} largest outlined; all counted)`} · basins {u.basins.slice(0, 6).join(", ")}
+            {u.basins.length > 6 && ` +${u.basins.length - 6}`}
+          </div>
+          {u.pending > 0 && <div className="text-muted-foreground">{u.pending.toLocaleString("en-US")} units still loading from USGS WBD.</div>}
+          {u.gaugeStatus === "loading" && (
+            <div className="text-muted-foreground">
+              <span className="blink text-primary">reading</span> gauges near the outlet…
+            </div>
+          )}
+          {u.gaugeStatus === "ready" && (
+            <div>
+              <div className="hud-label mb-0.5">Upstream now</div>
+              {u.gauges.length === 0 ? (
+                <div className="text-muted-foreground">No USGS flow gauge reports inside the catchment near the outlet.</div>
+              ) : (
+                <>
+                  <div>
+                    {u.gauges.length} gauge{u.gauges.length === 1 ? "" : "s"}
+                    {cond.median != null && cls && (
+                      <>
+                        {" "}
+                        · median <span className="tabular-nums">{ordinal(cond.median)}</span> percentile, <span style={{ color: FLOW_CLASSES[cls].color }}>{FLOW_CLASSES[cls].label}</span>
+                      </>
+                    )}
+                    {cond.flooding > 0 && <span className="text-alert"> · {cond.flooding} in flood</span>}
+                  </div>
+                  <div className="mt-0.5 flex h-2 w-full overflow-hidden rounded" aria-label="Upstream gauges by flow class">
+                    {FLOW_CLASS_ORDER.map((k) => {
+                      const n = cond.classes[k] ?? 0;
+                      return n ? <span key={k} style={{ background: FLOW_CLASSES[k].color, flexGrow: n }} title={`${n} ${FLOW_CLASSES[k].label}`} /> : null;
+                    })}
+                  </div>
+                  <ul className="mt-0.5 max-h-[96px] overflow-y-auto [scrollbar-width:thin]">
+                    {u.gauges.slice(0, 12).map((g) => (
+                      <li key={g.site}>
+                        <button type="button" className="flex w-full items-baseline gap-2 text-left hover:text-primary" onClick={() => flyTo(g.lon, g.lat, { height: 20_000 })}>
+                          <span className="w-[52px] shrink-0 tabular-nums" style={{ color: g.cls ? FLOW_CLASSES[g.cls].color : undefined }}>
+                            {g.pct != null ? `${ordinal(g.pct)}` : "—"}
+                          </span>
+                          <span className="truncate">{g.name}</span>
+                          {g.flood && <span className="shrink-0 text-alert">{g.flood}</span>}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              {u.floods.length > 0 && (
+                <div className="text-alert">
+                  In flood: {u.floods.map((f) => `${f.name} (${f.category})`).join(", ")}
+                </div>
+              )}
+              {u.gaugeBox && (
+                <div className="mt-0.5 text-[9px] text-muted-foreground">
+                  Gauges within {(u.gaugeBox[2] - u.gaugeBox[0]).toFixed(1)}° × {(u.gaugeBox[3] - u.gaugeBox[1]).toFixed(1)}° of the outlet; percentile of the latest flow among USGS daily-mean
+                  percentiles for today (an estimate).
+                </div>
+              )}
+            </div>
+          )}
+          <div className="text-[9px] text-muted-foreground">
+            From WBD ToHUC read backwards (bundled national table); areas are WBD&apos;s published unit areas. The catchment is that of the subwatershed&apos;s outlet, not the exact point.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** The emergent state of a field unit: its heat, rank and what lit it. */
 function FieldVitals({ id }: { id: string }) {
   useJoinTick();
@@ -354,7 +531,8 @@ function FieldVitals({ id }: { id: string }) {
   const measure = useSettings((s) => s.prefs.fieldMeasure) ?? "all";
   const normalise = useSettings((s) => s.prefs.fieldNormalise) ?? "density";
   if (!v) return null;
-  const what = measure === "all" ? "every physical signal" : (LAYER_BY_ID[measure]?.label.toLowerCase() ?? measure);
+  if (v.condition) return <ConditionVitals v={v} c={v.condition} />;
+  const what = measure === "all" || measure === "streamflow" ? "every physical signal" : (LAYER_BY_ID[measure]?.label.toLowerCase() ?? measure);
   return (
     <div className="border-t border-border px-3 py-2">
       <div className="hud-label mb-1">Emergent state</div>
@@ -374,16 +552,63 @@ function FieldVitals({ id }: { id: string }) {
   );
 }
 
+/** Under the streamflow measure: where the unit's rivers stand against the day's record. */
+function ConditionVitals({ v, c }: { v: Vitals; c: UnitCondition }) {
+  const cls = c.median != null ? flowClass(c.median) : null;
+  return (
+    <div className="border-t border-border px-3 py-2">
+      <div className="hud-label mb-1">Emergent state · streamflow</div>
+      {c.gauges === 0 ? (
+        <div className="text-[10px] leading-snug text-muted-foreground">No gauge with a flow reading is loaded inside. Switch on Surface water and zoom in to load them.</div>
+      ) : (
+        <>
+          <div className="flex items-center gap-2 text-[10px]">
+            <span className="block h-2 w-16 shrink-0 rounded" style={{ background: v.color ?? heatColor(0) }} aria-hidden />
+            <span>
+              {c.median != null && cls ? (
+                <>
+                  median <span className="tabular-nums">{ordinal(c.median)}</span> percentile · <span style={{ color: FLOW_CLASSES[cls].color }}>{FLOW_CLASSES[cls].label}</span>
+                </>
+              ) : (
+                "no gauge inside has daily statistics yet"
+              )}
+            </span>
+          </div>
+          {c.flooding > 0 && (
+            <div className="mt-0.5 text-[10px] text-alert">
+              {c.flooding} NWS forecast point{c.flooding === 1 ? "" : "s"} inside at or above minor flood
+            </div>
+          )}
+          <div className="mt-1 flex h-2 w-full overflow-hidden rounded" aria-label="Gauges by flow class">
+            {FLOW_CLASS_ORDER.map((k) => {
+              const n = c.classes[k] ?? 0;
+              return n ? <span key={k} style={{ background: FLOW_CLASSES[k].color, flexGrow: n }} title={`${n} ${FLOW_CLASSES[k].label}`} /> : null;
+            })}
+          </div>
+          <div className="mt-0.5 text-[10px] text-muted-foreground">
+            {c.rated} of {c.gauges} gauge{c.gauges === 1 ? "" : "s"} rated · #{v.rank + 1} furthest from normal in view
+          </div>
+        </>
+      )}
+      <div className="mt-1 text-[9px] leading-snug text-muted-foreground">
+        Latest instantaneous flow at each USGS gauge inside, placed among the published daily-mean percentiles for today&apos;s date (an estimate: instantaneous against daily means). A gauge without a
+        table is left out, not assumed normal.
+      </div>
+    </div>
+  );
+}
+
 /** For any other selected feature: the loaded constructs whose outlines contain it. */
 export function ConstructContext({ feature }: { feature: LayerFeature }) {
   const on = useGlobe((s) => s.layers.constructs);
   const fieldOn = useGlobe((s) => s.layers.field);
+  const alertsOn = useGlobe((s) => s.layers.alerts);
   const tick = useJoinTick();
   const inside = useMemo(() => {
     const p = pointOf(feature);
-    if (!p || (!on && !fieldOn)) return [];
+    if (!p || (!on && !fieldOn && !alertsOn)) return [];
     const out: LayerFeature[] = [];
-    for (const layer of ["constructs", "field"] as const) {
+    for (const layer of ["constructs", "field", "alerts"] as const) {
       const r = getRenderer(layer);
       if (!r?.show) continue;
       for (const f of r.features()) {
@@ -393,7 +618,7 @@ export function ConstructContext({ feature }: { feature: LayerFeature }) {
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [feature.properties.layer, feature.properties.id, on, fieldOn, tick]);
+  }, [feature.properties.layer, feature.properties.id, on, fieldOn, alertsOn, tick]);
   if (!inside.length) return null;
   return (
     <div className="border-t border-border px-3 py-2">

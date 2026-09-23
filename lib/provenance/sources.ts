@@ -16,6 +16,7 @@ export const SOURCES = {
   "worldbank-wits": { id: "worldbank-wits", name: "WITS TradeStats", publisher: "World Bank", url: "https://wits.worldbank.org/", license: "CC BY 4.0" },
   "census-tigerweb": { id: "census-tigerweb", name: "TIGERweb", publisher: "U.S. Census Bureau", url: "https://tigerweb.geo.census.gov/", license: "public domain" },
   "usgs-water": { id: "usgs-water", name: "USGS Water Data API", publisher: "U.S. Geological Survey", url: "https://api.waterdata.usgs.gov/", license: "public domain" },
+  "usgs-stat": { id: "usgs-stat", name: "USGS Water Data Statistics API (daily streamflow percentiles)", publisher: "U.S. Geological Survey", url: "https://api.waterdata.usgs.gov/statistics/v0/", license: "public domain" },
   "noaa-nwps": { id: "noaa-nwps", name: "National Water Prediction Service", publisher: "NOAA National Weather Service", url: "https://api.water.noaa.gov/", license: "public domain" },
   twdb: { id: "twdb", name: "Water Data for Texas reservoirs", publisher: "Texas Water Development Board", url: "https://www.waterdatafortexas.org/reservoirs", license: "public" },
   usdm: { id: "usdm", name: "U.S. Drought Monitor", publisher: "National Drought Mitigation Center, USDA, NOAA", url: "https://droughtmonitor.unl.edu/", license: "public with attribution" },

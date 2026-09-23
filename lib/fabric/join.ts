@@ -10,13 +10,15 @@ export function pointOf(f: LayerFeature): [number, number] | null {
   return f.properties.anchor ?? null;
 }
 
-/** Features inside `rings`, grouped by layer; constructs, the field and simulated features are skipped. */
+const CONSTRUCT_LAYERS = new Set<LayerId>(["constructs", "field", "alerts"]);
+
+/** Features inside `rings`, grouped by layer; constructs (the stack, the field, live warnings) and simulated features are skipped. */
 export function joinInside(rings: number[][][], features: Iterable<LayerFeature>): Map<LayerId, LayerFeature[]> {
   const out = new Map<LayerId, LayerFeature[]>();
   const box = ringsBbox(rings);
   if (!box) return out;
   for (const f of features) {
-    if (f.properties.layer === "constructs" || f.properties.layer === "field" || f.properties.simulated) continue;
+    if (CONSTRUCT_LAYERS.has(f.properties.layer) || f.properties.simulated) continue;
     const p = pointOf(f);
     if (!p || !bboxContains(box, p[0], p[1]) || !ringsContain(rings, p[0], p[1])) continue;
     const list = out.get(f.properties.layer) ?? [];

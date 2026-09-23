@@ -10,7 +10,7 @@ import type { EntityKind } from "@/lib/screener/fields";
 export type PersonaId = "realestate" | "economist" | "trader" | "water" | "logistics" | "banking" | "civic" | "explorer";
 
 /** Panels a lens can open on arrival; ids match lib/personas/actions.ts. */
-export type PanelId = "layers" | "water" | "market" | "signals" | "screen" | "releases" | "watch" | "explore" | "share";
+export type PanelId = "layers" | "water" | "market" | "signals" | "screen" | "releases" | "watch" | "explore" | "teleport" | "share";
 
 export interface PersonaStep {
   text: string;
@@ -192,10 +192,10 @@ export const PERSONAS: Persona[] = [
     tagline: "Every jurisdiction, district, watershed and ecoregion over a place, lit by what the physical layers put inside it.",
     icon: "Layers",
     color: "#c4b5fd",
-    layers: ["constructs", "field", "water", "companies", "banks", "earthquakes"],
+    layers: ["constructs", "field", "alerts", "water", "companies", "banks", "earthquakes"],
     start: { lon: -97.74, lat: 30.27, height: 90_000, label: "downtown Austin" },
     open: "layers",
-    nav: ["layers", "explore", "water", "market", "signals", "screen", "releases", "watch", "share"],
+    nav: ["layers", "explore", "teleport", "water", "market", "signals", "screen", "releases", "watch", "share"],
     presets: ["constructs-austin", "constructs-field-texas", "constructs-bexar"],
     steps: [
       { text: "Tap the white Here node for every construct over the camera target, grouped by point of view." },
@@ -215,7 +215,7 @@ export const PERSONAS: Persona[] = [
     layers: ["aircraft", "ships", "satellites", "earthquakes", "launches", "water"],
     heavy: ["satellites", "aircraft"],
     start: { lon: -97.74, lat: 30.27, height: 12_000_000, label: "orbit" },
-    nav: ["layers", "explore", "water", "market", "signals", "screen", "releases", "watch", "share"],
+    nav: ["layers", "explore", "teleport", "water", "market", "signals", "screen", "releases", "watch", "share"],
     presets: ["planet", "bexar-reservoirs", "world-trade"],
     steps: [
       { text: "Tap anything on the globe for its dossier; the layers panel says what each feed covers.", panel: "layers" },

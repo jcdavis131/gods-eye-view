@@ -25,6 +25,7 @@ import { useIsMobile } from "@/lib/hooks/useIsMobile";
 import { useMobile } from "@/lib/mobile/store";
 import ExploreDialog from "./ExploreDialog";
 import TourCaption from "./TourCaption";
+import TeleportCaption from "./TeleportCaption";
 import { applyShare, parseShare, startUrlSync } from "@/lib/globe/share";
 import Timeline from "./Timeline";
 import SettingsDialog from "./SettingsDialog";
@@ -169,6 +170,7 @@ export default function Cockpit({ initialMobile = false }: { initialMobile?: boo
             <MobileNav />
           </div>
           <TourCaption />
+          <TeleportCaption />
           <SettingsDialog />
           <SearchCommand />
           <ExploreDialog />
@@ -192,6 +194,7 @@ export default function Cockpit({ initialMobile = false }: { initialMobile?: boo
           </div>
           <Timeline />
           <TourCaption />
+          <TeleportCaption />
           <SettingsDialog />
           <SearchCommand />
           <ExploreDialog />

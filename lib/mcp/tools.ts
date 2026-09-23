@@ -491,6 +491,40 @@ export const TOOLS: ToolDef[] = [
     handler: (i, ctx) => relay(ctx, "/api/fabric" + qs({ op: "downstream", lon: i.lon, lat: i.lat })),
   }),
   defineTool({
+    name: "upstream",
+    title: "Everything that drains to a point",
+    description:
+      "The catchment of the HUC-12 under a lon/lat, from the bundled national WBD ToHUC table read backwards: start, startName, huc12s (count upstream, the start included), cover [{ code, level }] (the smallest set of whole WBD units, level 2 to 12 digits, that is exactly the catchment), byLevel, basins (HUC-4). Names, outlines and published areas of the cover come from GET /api/fabric?op=units&codes=... Answers in about a second. " +
+      ENVELOPE,
+    inputSchema: z.object({ lon, lat }),
+    handler: (i, ctx) => relay(ctx, "/api/fabric" + qs({ op: "upstream", lon: i.lon, lat: i.lat })),
+  }),
+  defineTool({
+    name: "flow_normals",
+    title: "Daily streamflow percentiles for USGS gauges",
+    description:
+      "USGS daily-mean discharge percentiles (5th, 10th, 25th, 50th, 75th, 90th, 95th, cfs) for one calendar day, per site, from the Water Data Statistics API: { <site>: { p: { 5: .., 50: .., 95: .. }, years } | null }. Place a gauge's latest flow (from gauges) among them to say whether its river is below, near or above normal for the date. " +
+      ENVELOPE,
+    inputSchema: z.object({
+      sites: z.array(z.string().regex(/^(USGS-)?\d{8,15}$/)).min(1).max(200).describe("USGS site numbers, with or without the USGS- prefix"),
+      date: z
+        .string()
+        .regex(/^\d{2}-\d{2}$/)
+        .optional()
+        .describe("MM-DD; today (UTC) when omitted"),
+    }),
+    handler: (i, ctx) => relay(ctx, "/api/water" + qs({ op: "normals", sites: i.sites.join(","), date: i.date })),
+  }),
+  defineTool({
+    name: "live_events",
+    title: "Where the world is doing something unusual now",
+    description:
+      "NWS active alerts rated Severe or Extreme (event, severity, urgency, certainty, headline, areaDesc, onset, expires, outline rings) and the past day's M4.5+ earthquakes, plus both merged in tour order (items: kind, title, subtitle, lon, lat, bbox, time, until, url). The order uses only NWS and USGS published fields; it is not a risk score. " +
+      ENVELOPE,
+    inputSchema: z.object({}),
+    handler: (_i, ctx) => relay(ctx, "/api/live"),
+  }),
+  defineTool({
     name: "openapi",
     title: "OpenAPI description of the HTTP API",
     description: "The OpenAPI 3 document for this server's /api routes (paths, parameters, response envelopes). Use it to call routes this tool list does not cover.",

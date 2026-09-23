@@ -6,6 +6,8 @@
 // (lib/fabric/emergence.ts), publishes the vitals, and restyles only the
 // units whose vitals changed, so a plane crossing into a district or a new
 // batch of gauges lights the construct above it without redrawing the rest.
+// With the streamflow measure it also fetches the day's flow percentiles for
+// gauges it has not seen, and recomputes when they land.
 
 import { useEffect } from "react";
 import { useGlobe } from "@/lib/store/globe";
@@ -13,6 +15,7 @@ import { useSettings } from "@/lib/store/settings";
 import { allRenderers, getRenderer } from "@/lib/globe/registry";
 import { computeVitals, vitalsKey, type Vitals } from "@/lib/fabric/emergence";
 import { setVitals, vitalsFor } from "@/lib/fabric/emergenceState";
+import { conditionOf, ensureNormals } from "@/lib/fabric/normalsClient";
 import type { LayerFeature } from "@/lib/layers/types";
 import type { ConstructExtra, ConstructNode } from "@/lib/fabric/types";
 
@@ -32,9 +35,15 @@ function recompute() {
     for (const f of other.features()) physical.push(f);
   }
   const { fieldMeasure, fieldNormalise } = useSettings.getState().prefs;
-  const next = computeVitals(nodes, physical, fieldMeasure ?? "all", fieldNormalise ?? "density");
+  const measure = fieldMeasure ?? "all";
+  if (measure === "streamflow")
+    void ensureNormals(physical).then((got) => {
+      if (got) recompute();
+    });
+  const next = computeVitals(nodes, physical, measure, fieldNormalise ?? "density", conditionOf);
   const changed: string[] = [];
-  const differs = (a: Vitals | undefined, b: Vitals | undefined) => !a || !b || a.value !== b.value || Math.abs(a.heat - b.heat) > 0.02 || (a.rank < 6) !== (b.rank < 6);
+  const differs = (a: Vitals | undefined, b: Vitals | undefined) =>
+    !a || !b || a.value !== b.value || a.display !== b.display || a.color !== b.color || Math.abs(a.heat - b.heat) > 0.02 || (a.rank < 6) !== (b.rank < 6);
   for (const [id, v] of next) if (differs(vitalsFor(id), v)) changed.push(id);
   if (setVitals(next, vitalsKey(next), Date.now()) || changed.length) r.restyle(changed);
 }

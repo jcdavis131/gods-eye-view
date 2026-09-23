@@ -36,7 +36,7 @@ export default function InfoPanel() {
   const snapshot = useGlobe((s) => s.selectedFeature);
   // Constructs and the field refetch as the camera moves under a stable id; show the live one.
   const feature =
-    snapshot && (snapshot.properties.layer === "constructs" || snapshot.properties.layer === "field")
+    snapshot && (snapshot.properties.layer === "constructs" || snapshot.properties.layer === "field" || snapshot.properties.layer === "alerts")
       ? (getRenderer(snapshot.properties.layer)?.getFeature(snapshot.properties.id) ?? snapshot)
       : snapshot;
   const following = useGlobe((s) => s.following);
@@ -96,7 +96,7 @@ export default function InfoPanel() {
   const isLiveLayer =
     !p.simulated &&
     !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "banks", "spending", "constructs", "field"].includes(p.layer);
-  const construct = p.layer === "constructs" || p.layer === "field";
+  const construct = p.layer === "constructs" || p.layer === "field" || p.layer === "alerts";
   const gauge = p.layer === "water" && (p.kind === "gauge" || p.kind === "reservoir") && p.id.startsWith("usgs:") ? (p.extra as GaugeExtra) : null;
   const well = p.layer === "groundwater" && p.kind === "well" ? (p.extra as WellExtra) : null;
   const chip = p.layer === "turbidity" ? (p.extra as ChipExtra) : null;

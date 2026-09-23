@@ -63,6 +63,7 @@ export type ConstructKind =
   | "eco4"
   | "flood"
   | "flood-community"
+  | "nws-alert"
   | "epa-region"
   | "fema-region"
   | "fed-district";

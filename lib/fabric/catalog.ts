@@ -23,6 +23,7 @@ export const KINDS: Record<ConstructKind, KindMeta> = {
   cdp: { label: "Census designated place", domain: "statistical", orderKm2: 200 },
   sldl: { label: "State house district", domain: "representation", orderKm2: 300 },
   "flood-community": { label: "NFIP community", domain: "hazard", orderKm2: 500 },
+  "nws-alert": { label: "NWS warning", domain: "hazard", orderKm2: 5_000 },
   school: { label: "School district", domain: "service", orderKm2: 600 },
   huc10: { label: "Watershed (HUC-10)", domain: "hydrologic", orderKm2: 700 },
   urban: { label: "Urban area", domain: "statistical", orderKm2: 1_500 },

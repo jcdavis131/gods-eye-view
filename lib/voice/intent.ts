@@ -57,6 +57,14 @@ export function parseIntent(raw: string): Intent | null {
   if ((m = t.match(/^(?:where does (?:the |this )?water go|trace (?:the )?(?:water|downstream|river)(?: downstream)?)(?:\s+(?:from|in|near|at)\s+(.+))?$/))) {
     return { command: "trace_downstream", args: { place: m[1]?.trim() || undefined } };
   }
+  // "what drains here", "trace upstream", "where does the water come from in austin"
+  if ((m = t.match(/^(?:what drains (?:here|to (?:here|this))|trace (?:the )?(?:water )?upstream|where does (?:the |this )?water come from)(?:\s+(?:from|in|near|at|to)\s+(.+))?$/))) {
+    return { command: "trace_upstream", args: { place: m[1]?.trim() || undefined } };
+  }
+  // "teleport", "teleport me", "show me something happening", "what's happening"
+  if (/^(?:teleport(?: me)?(?: somewhere)?|next teleport|show me (?:something|what'?s) happening|what'?s happening(?: in the world)?)$/.test(t)) {
+    return { command: "teleport", args: {} };
+  }
   // "water report", "water report for san antonio", "how is the water in austin"
   if ((m = t.match(/^(?:water report|water status|how(?:'s| is) the water|is the water (?:ok|safe))(?:\s+(?:for|in|near|around|over|at)\s+(.+))?$/))) {
     return { command: "water_report", args: { place: m[1]?.trim() || undefined } };
