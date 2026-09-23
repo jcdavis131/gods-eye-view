@@ -52,9 +52,9 @@ export const BASE_METADATA: Metadata = {
     images: [
       {
         url: "/og.jpg",
-        width: 1600,
-        height: 960,
-        alt: "Community water report over San Antonio on the Embedding Atlas globe",
+        width: 1200,
+        height: 630,
+        alt: "The Embedding Atlas globe over the Americas with live satellites and earthquakes, under the title",
       },
     ],
   },

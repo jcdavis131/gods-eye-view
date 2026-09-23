@@ -60,7 +60,7 @@ interface PageProps {
   params: Promise<{ fips: string; lens: string }>;
 }
 
-const OG_IMAGES = [{ url: "/og.jpg", width: 1600, height: 960, alt: "The Embedding Atlas globe" }];
+const OG_IMAGES = [{ url: "/og.jpg", width: 1200, height: 630, alt: "The Embedding Atlas globe" }];
 
 /** The national indicator set a lens narrows to; "explorer" and an "all" category narrow nothing. */
 function categoryFor(lens: PersonaId): IndicatorCategory | undefined {

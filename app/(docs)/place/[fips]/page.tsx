@@ -95,7 +95,7 @@ const TABLE_ROWS = 12;
 // card image has to be repeated here or a place page would ship none. Per-place
 // og images are out of scope: ImageResponse needs a font, and fetching one at
 // build time is exactly the network the build does not have.
-const OG_IMAGES = [{ url: "/og.jpg", width: 1600, height: 960, alt: "The Embedding Atlas globe" }];
+const OG_IMAGES = [{ url: "/og.jpg", width: 1200, height: 630, alt: "The Embedding Atlas globe" }];
 
 /**
  * The scope and the facts. notFound() is reached only for a FIPS the offline
