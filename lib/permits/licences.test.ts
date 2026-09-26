@@ -1,12 +1,14 @@
 // Licence adapters on payloads captured from each registry on 2026-09-26 with
-// the route's own requests, curated to about 18 rows each. Names that may be
-// a person's (registrant and legal names without an entity form, San
-// Francisco's ownership_name and mailing address, trade names on the rows
-// the home heuristic withholds) were replaced in the fixtures with a
-// "[removed from this fixture: ...]" marker; the tests prove those fields
-// never reach a record either way. No network.
+// the route's own requests, curated to about 18 rows each (Chicago: the Loop,
+// -87.6375,41.875,-87.6225,41.885; San Francisco: the Financial District,
+// -122.405,37.785,-122.395,37.795). Names that may be a person's (registrant
+// and legal names without an entity form, a trade name equal to one, the
+// names on the rows the home heuristic withholds) were replaced in the
+// fixtures with one "[removed from this fixture: ...]" marker, so a trade name
+// and a legal name that were the same name are still the same string; the
+// tests prove the marker never reaches a record. No network.
 import { describe, expect, it } from "vitest";
-import { buildLicences, displayName, homeBased, isEntityName, licenceRequestUrl, type LicenceSourceId } from "./licences";
+import { buildLicences, displayName, homeBased, isEntityName, licenceRequestUrl, SAME_AS_REGISTRANT, type LicenceSourceId } from "./licences";
 
 import nysla from "./fixtures/licences-nysla.json";
 import chicago from "./fixtures/licences-chicago.json";
@@ -30,6 +32,16 @@ describe("name rules", () => {
     const none = displayName(undefined, "A PERSON");
     expect(none.name).toBeUndefined();
     expect(none.nameNote).toMatch(/may be a person/);
+  });
+  it("withholds a trade name that is a person-shaped registrant's own name, ignoring case, spacing and punctuation", () => {
+    for (const [dba, legal] of [["Jane Q Public", "JANE Q PUBLIC"], ["Jane Q. Public", "JANE Q PUBLIC"], ["JANE  Q  PUBLIC", "Jane Q Public"]]) {
+      expect(displayName(dba, legal), `${dba} / ${legal}`).toEqual({ nameNote: SAME_AS_REGISTRANT });
+    }
+    // Only the same name: a trade name that merely contains it is shown as published.
+    expect(displayName("Jane Q Public Bakery", "JANE Q PUBLIC")).toEqual({ name: "Jane Q Public Bakery" });
+    // A company trading under its own name keeps it.
+    expect(displayName("Hora Express LLC", "Hora Express LLC")).toEqual({ name: "Hora Express LLC" });
+    expect(displayName("PREMIUM PARKING SERVICE, L.L.C.", "PREMIUM PARKING SERVICE, L.L.C.")).toEqual({ name: "PREMIUM PARKING SERVICE, L.L.C." });
   });
 });
 
@@ -66,19 +78,28 @@ describe("registries on captured payloads", () => {
     expect(b.records.every((r) => r.category)).toBe(true);
   });
 
-  it("Chicago: trade names only (legal_name is not requested); unit addresses withheld and counted", () => {
+  it("Chicago: trade names, withheld where one is the person-shaped legal name; legal_name asked for that, never shown; unit addresses withheld", () => {
     const b = check("chicago", R(chicago));
-    expect(b.withheld).toBe(3);
-    expect(b.records.map((r) => r.name)).toContain("Halsted Street Deli & Bagel");
-    expect(licenceRequestUrl("chicago", [-87.635, 41.88, -87.625, 41.887], "2026-09-26")).not.toContain("legal_name");
+    expect(b.withheld).toBe(2);
+    expect(b.records.length).toBe(16);
+    expect(b.records.map((r) => r.name)).toEqual(expect.arrayContaining(["THE KTM KITCHEN", "HFR HOLDINGS, LLC", "WORLD HAIR INSTITUTE"]));
+    // The two rows whose trade name was the registrant's own name carry the note, not a name.
+    expect(b.records.filter((r) => r.nameNote === SAME_AS_REGISTRANT).length).toBe(2);
+    // An entity's legal name behind a different trade name is not shown either.
+    expect(JSON.stringify(b.records)).not.toContain("KTM KITCHEN LLC");
+    expect(new URL(licenceRequestUrl("chicago", [-87.635, 41.88, -87.625, 41.887], "2026-09-26")).searchParams.get("$select")).toContain("legal_name");
   });
 
-  it("San Francisco: ownership_name and the mailing address never reach a record", () => {
+  it("San Francisco: ownership_name asked for the comparison only; it and the mailing address never reach a record", () => {
     const b = check("sanfrancisco", R(sf));
     expect(b.withheld).toBe(4);
+    expect(b.records.length).toBe(15);
     const json = JSON.stringify(b.records);
     expect(json).not.toMatch(/ownership|mailing|mail_/i);
-    expect(b.records.map((r) => r.name)).toContain("Genmo, Inc.");
+    expect(json).not.toContain("Buena Esperanza Inc");
+    expect(b.records.map((r) => r.name)).toEqual(expect.arrayContaining(["Genmo, Inc.", "B E Properties"]));
+    expect(b.records.filter((r) => r.nameNote === SAME_AS_REGISTRANT).length).toBe(2);
+    expect(new URL(licenceRequestUrl("sanfrancisco", [-1, 1, 0, 2], "2026-09-26")).searchParams.get("$select")).toContain("ownership_name");
   });
 
   it("Los Angeles: DBA first, entity business names second, no name for the rest", () => {

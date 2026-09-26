@@ -82,7 +82,7 @@ describe("the search allowlist", () => {
 
   it("searches permit and licence numbers and licence types, never an address, contractor, facility, project or licensee", () => {
     for (const k of ["permit number", "licence number", "licence type", "permit id"]) expect(searchableDetail(k), k).toBe(true);
-    for (const k of ["address", "contractor (company)", "facility (as EPA publishes it)", "project (as the Corps publishes it)", "name", "registry", "publisher", "description"]) {
+    for (const k of ["address", "contractor (as published)", "facility (as EPA publishes it)", "project (as the Corps publishes it)", "name", "registry", "publisher", "description"]) {
       expect(searchableDetail(k), k).toBe(false);
     }
   });

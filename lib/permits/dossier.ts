@@ -57,7 +57,7 @@ export function permitFeature(f: RecordFeature<PermitRecord>): LayerFeature {
   d.address = r.address;
   d[r.parcel ? `parcel (${r.parcel.scheme === "blocklot" ? "block/lot" : r.parcel.scheme.toUpperCase()})` : "parcel"] = r.parcel?.id;
   d["zoning printed on the permit"] = r.zoning;
-  d["contractor (company)"] = r.contractorCompany;
+  d["contractor (as published)"] = r.contractorCompany;
   for (const [k, v] of Object.entries(r.published)) d[k] = v;
   d["city record"] = r.url;
   d.city = city?.name;

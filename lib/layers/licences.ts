@@ -4,9 +4,10 @@
 // Francisco registered business locations, Los Angeles active businesses and
 // New York City premises licences.
 //
-// Trade names only: a registrant that may be a person is not named, and a
-// licence at an apartment or unit address is withheld (a home-business
-// heuristic, counted in the note). Nothing searches a licensee or an address.
+// Trade names, except one that is a non-company registrant's own name; a
+// registrant's legal name is never shown unless it is a company's. A licence
+// at an apartment or unit address is withheld (a home-business heuristic,
+// counted in the note). Nothing searches a licensee or an address.
 
 import type { FetchContext, FetchResult, LayerDefinition, ViewState } from "./types";
 import { proxy } from "./aircraft";
@@ -68,7 +69,7 @@ export const licencesLayer: LayerDefinition = {
   id: "licences",
   label: "Business licences",
   description:
-    "Licensed premises as five registries publish them (New York State liquor licences, Chicago business licences, San Francisco registered businesses, Los Angeles active businesses, New York City premises licences), below 3 km inside a dashed box. Trade names only; a registrant that may be a person is not named, and licences at apartment or unit addresses are withheld as likely homes.",
+    "Licensed premises as five registries publish them (New York State liquor licences, Chicago business licences, San Francisco registered businesses, Los Angeles active businesses, New York City premises licences), below 3 km inside a dashed box. Named by trade name, except a trade name that is a non-company registrant's own name; a registrant's legal name is never shown unless it is a company's, and licences at apartment or unit addresses are withheld as likely homes.",
   color: "#67E8F9",
   updateIntervalMs: 60 * 60_000,
   defaultEnabled: false,

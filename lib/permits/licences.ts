@@ -5,13 +5,18 @@
 // These registries list sole proprietors next to companies, often at a home
 // address, so three rules hold here, before anything leaves the server:
 //
-//   1. The name shown is the trade name (DBA) the registry publishes. The
-//      legal or registrant name (Chicago legal_name, San Francisco
-//      ownership_name, Los Angeles business_name, New York business_name and
-//      the SLA's legalname) is used only when there is no DBA and it ends in
-//      an entity form (LLC, Inc, Corp, Ltd...); otherwise no name is shown
-//      and the dossier says why. Owner and officer datasets (Chicago's
-//      Business Owners) are never read.
+//   1. The name shown is the trade name (DBA) the registry publishes, except
+//      a trade name that is the registrant's own name when the registrant is
+//      not a company (a sole proprietor trading under their own name): then
+//      no name is shown and the dossier says why. The legal or registrant
+//      name (Chicago legal_name, San Francisco ownership_name, Los Angeles
+//      business_name, New York business_name and the SLA's legalname) is
+//      requested for that comparison and to test for an entity form (LLC,
+//      Inc, Corp, Ltd...): it is shown only when there is no DBA and it ends
+//      in an entity form, and is discarded here otherwise. A trade name is
+//      otherwise shown as published, and can still contain a person's name
+//      (a first name in a shop's name, "Law Offices of ..."). Owner and
+//      officer datasets (Chicago's Business Owners) are never read.
 //   2. A record whose address carries an apartment or unit number (APT,
 //      UNIT, a bare #) is withheld altogether: a heuristic for a business run
 //      from a home, counted and labelled as a heuristic. A # after SUITE,
@@ -104,11 +109,25 @@ function joinAddress(...parts: unknown[]): string | undefined {
   return s || undefined;
 }
 
-/** The trade name, else an entity's legal name; the note says why a name is missing. */
+/** Case, spacing and punctuation dropped: "Jane Q. Public" and "JANE Q PUBLIC" are one name. */
+function nameKey(s: string): string {
+  return s.normalize("NFKD").toUpperCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
+
+export const SAME_AS_REGISTRANT = "the trade name is the registrant's own name, and the registrant may be a person, so no name is shown";
+
+/**
+ * The trade name, unless it is the registrant's own name and the registrant
+ * is not a company; else an entity's legal name. The note says why a name is
+ * missing. The legal name itself is never returned unless it is an entity's.
+ */
 export function displayName(dba: unknown, legal: unknown): { name?: string; nameNote?: string } {
   const d = str(dba);
-  if (d) return { name: d };
   const l = str(legal);
+  if (d) {
+    if (l && !isEntityName(l) && nameKey(d) !== "" && nameKey(d) === nameKey(l)) return { nameNote: SAME_AS_REGISTRANT };
+    return { name: d };
+  }
   if (isEntityName(l)) return { name: l };
   return { nameNote: l ? "no trade name published, and the registrant may be a person, so no name is shown" : "no name published" };
 }
@@ -128,19 +147,20 @@ export const NYSLA_SELECT = [
   "city", "zipcode", "originalissuedate", "lastissuedate", "effectivedate", "expirationdate", "georeference",
 ] as const;
 export const CHICAGO_LICENCES = "https://data.cityofchicago.org/resource/r5kz-chrr";
-/** legal_name is not requested: a DBA is on every row in probing, and the legal name is often a person's. */
+/** legal_name is requested only for displayName's comparison and entity test, and discarded there. */
 export const CHICAGO_LICENCE_SELECT = [
-  "license_id", "license_number", "doing_business_as_name", "address", "zip_code", "ward", "community_area_name", "license_description",
+  "license_id", "license_number", "doing_business_as_name", "legal_name", "address", "zip_code", "ward", "community_area_name", "license_description",
   "business_activity", "application_type", "license_start_date", "expiration_date", "date_issued", "license_status", "latitude", "longitude",
 ] as const;
 /**
  * data.sf.gov, not data.sfgov.org: the old host 301-redirects every request
  * there, and its redirector answers any $select with a 403 (probed
- * 2026-09-26). The mailing address is never requested.
+ * 2026-09-26). The mailing address is never requested; ownership_name only
+ * for displayName's comparison and entity test, and discarded there.
  */
 export const SF_LICENCES = "https://data.sf.gov/resource/g8m3-pdis";
 export const SF_LICENCE_SELECT = [
-  "certificate_number", "uniqueid", "dba_name", "full_business_address", "business_zip", "location_start_date", "dba_start_date", "self_reported_naics_code",
+  "certificate_number", "uniqueid", "dba_name", "ownership_name", "full_business_address", "business_zip", "location_start_date", "dba_start_date", "self_reported_naics_code",
   "lic_code_description", "neighborhoods_analysis_boundaries", "supervisor_district", "business_corridor", "location",
 ] as const;
 export const LA_LICENCES = "https://data.lacity.org/resource/6rrh-rzua";
@@ -223,7 +243,7 @@ function chicago(r: Row): Partial_ | null {
   return {
     lon: ll[0],
     lat: ll[1],
-    ...displayName(r.doing_business_as_name, undefined),
+    ...displayName(r.doing_business_as_name, r.legal_name),
     category: str(r.license_description),
     activity: str(r.business_activity),
     number,
@@ -248,8 +268,7 @@ function sanFrancisco(r: Row): Partial_ | null {
   return {
     lon: ll[0],
     lat: ll[1],
-    // ownership_name is never used, entity or not: San Francisco publishes a DBA on every row.
-    ...displayName(r.dba_name, undefined),
+    ...displayName(r.dba_name, r.ownership_name),
     category: str(r.lic_code_description) ?? (str(r.self_reported_naics_code) ? `NAICS ${str(r.self_reported_naics_code)}` : undefined),
     number,
     started: isoDate(r.location_start_date) ?? isoDate(r.dba_start_date),

@@ -26,12 +26,12 @@ describe("permit dossiers", () => {
   });
 
   it("finds a permit by its number, never by its address or contractor", () => {
-    const p = f.find((x) => x.properties.details?.["contractor (company)"] && x.properties.details?.address)!;
+    const p = f.find((x) => x.properties.details?.["contractor (as published)"] && x.properties.details?.address)!;
     const num = String(p.properties.details?.["permit number"]).toLowerCase();
     expect(matchScore(p.properties, num)).toBeGreaterThan(0);
-    expect(matchScore(p.properties, String(p.properties.details?.["contractor (company)"]).toLowerCase())).toBe(0);
+    expect(matchScore(p.properties, String(p.properties.details?.["contractor (as published)"]).toLowerCase())).toBe(0);
     expect(matchScore(p.properties, String(p.properties.details?.address).toLowerCase())).toBe(0);
-    for (const k of ["address", "contractor (company)", "description", "city record"]) expect(searchableDetail(k), k).toBe(false);
+    for (const k of ["address", "contractor (as published)", "description", "city record"]) expect(searchableDetail(k), k).toBe(false);
   });
 
   it("colours by the city's own words", () => {
