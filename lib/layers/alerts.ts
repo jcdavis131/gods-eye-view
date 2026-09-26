@@ -106,7 +106,10 @@ async function fetchAlerts(ctx: FetchContext): Promise<FetchResult> {
     collection: { type: "FeatureCollection", features },
     source: "NWS active alerts",
     fetchedAt: Date.now(),
-    note: `${features.length} Severe/Extreme alerts on the map · ${warnings} warnings${env.data.unmapped ? ` · ${env.data.unmapped} without an outline` : ""}`,
+    note:
+      `${features.length} Severe/Extreme alerts on the map · ${warnings} warnings${env.data.unmapped ? ` · ${env.data.unmapped} without an outline` : ""}` +
+      // A failed NWS request answers with no alerts: say so, so none is read as calm.
+      (env.data.failed?.some((f) => f.source === "nws-api") ? " · NWS did not answer: alerts missing, not absent" : ""),
   };
 }
 
