@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Info } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { LAYERS } from "@/lib/layers";
+import DataTerms from "./DataTerms";
 
 export default function AboutButton({ compact = false }: { compact?: boolean }) {
   const [open, setOpen] = useState(false);
@@ -68,6 +69,7 @@ export default function AboutButton({ compact = false }: { compact?: boolean }) 
                 ))}
               </ul>
             </section>
+            <DataTerms />
             <section>
               <div className="hud-label mb-1">Globe</div>
               <p className="text-foreground/80">

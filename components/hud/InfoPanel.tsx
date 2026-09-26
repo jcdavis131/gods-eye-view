@@ -24,6 +24,7 @@ import EconomyAside from "./EconomyAsides";
 import CompanyAside from "./CompanyAside";
 import FinanceAside from "./FinanceAsides";
 import ConstructAside, { ConstructContext } from "./ConstructAside";
+import { requiredDisclaimer } from "@/lib/civic/terms";
 
 function useRefresh(ms: number) {
   const [, set] = useState(0);
@@ -122,6 +123,7 @@ export default function InfoPanel() {
   const sat = p.layer === "satellites" ? ((p.extra as SatExtra | undefined)?.omm ?? null) : null;
   const estimate = p.layer === "turbidity" || p.layer === "realestate" || p.layer === "spending" || p.layer === "field" ? "ESTIMATE" : null;
   const economy = p.layer === "trade" || p.layer === "commerce" || p.layer === "realestate";
+  const disclaimer = requiredDisclaimer(p);
 
   return (
     <aside className="pointer-events-auto w-full" aria-label={`Selected: ${p.name}`}>
@@ -211,6 +213,8 @@ export default function InfoPanel() {
           ))}
         </dl>
 
+        {disclaimer && <p className="border-t border-border/60 px-3 py-2 text-[9px] leading-snug text-muted-foreground">{disclaimer}</p>}
+
         {gauge?.primary && (
           <GaugeHistory key={`${gauge.site}:${gauge.primary}`} site={gauge.site} param={gauge.primary} latest={gauge.readings[gauge.primary]?.value} />
         )}
@@ -263,7 +267,7 @@ const BANNER: Partial<Record<string, string>> = {
   fires: "SATELLITE HOTSPOT · NOT A CONFIRMED FIRE",
   zoning: "AS THE CITY'S GIS PUBLISHES IT · THE ADOPTED MAP AND CODE GOVERN · NOT A ZONING VERIFICATION",
   permits: "A PERMIT AS THE CITY PUBLISHES IT · PERMISSION TO BUILD, NOT PROOF WORK HAPPENED",
-  licences: "AS THE REGISTRY PUBLISHES IT · TRADE NAMES ONLY · APARTMENT AND UNIT ADDRESSES WITHHELD",
+  licences: "AS THE REGISTRY PUBLISHES IT · BY TRADE NAME, NOT A SOLE PROPRIETOR'S OWN NAME · APARTMENT AND UNIT ADDRESSES WITHHELD",
   envpermits: "AS EPA ECHO OR THE CORPS PUBLISHES IT · COMPLIANCE IN ECHO'S OWN WORDS",
 };
 
