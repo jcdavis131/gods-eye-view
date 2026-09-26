@@ -84,8 +84,8 @@ export const soilsStyle = picture("#C98B4E", () => [
     wmsParameters: { version: "1.1.1", styles: "" },
     tileSize: 512,
     maximumLevel: 19,
-    // The WMS draws map units only at fine scales (ScaleHint ~88 m a pixel), so level 11 and finer.
-    floorLevel: 11,
+    // The WMS draws map units only finer than its ScaleHint (about 88 m a pixel): 512 px tiles from level 10.
+    floorLevel: 10,
     alpha: 0.9,
     z: TILE_Z.soils,
     maxHeight: SOILS_MAX_HEIGHT_M,

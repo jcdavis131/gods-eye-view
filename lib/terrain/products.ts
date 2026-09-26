@@ -161,7 +161,7 @@ export const DIRECT_SOURCES: DirectSource[] = [
     host: "sdmdataaccess.sc.egov.usda.gov",
     template: `${SDM_WMS} (WMS 1.1.1 GetMap, LAYERS=mapunitpoly, SRS=EPSG:3857, 512 px, transparent PNG)`,
     maxZoom: 18,
-    note: "The WMS draws map units only at fine scales (its ScaleHint), from about zoom 11.",
+    note: "The WMS draws map units only finer than its ScaleHint (about 88 m a pixel), so from level 10 of 512 px tiles.",
   },
   {
     id: "firehazard",
