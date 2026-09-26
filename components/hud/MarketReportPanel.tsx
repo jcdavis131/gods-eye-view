@@ -264,7 +264,7 @@ export default function MarketReportPanel() {
             {report.caveats.map((c) => (
               <p key={c}>· {c}</p>
             ))}
-            <p>· Aggregates only: counties, metros and states. No parcels, no addresses, no owners.</p>
+            <p>· Aggregates: counties, metros and states.</p>
           </div>
           <details className="group border-t border-border/60 px-3 py-2">
             <summary className="flex cursor-pointer list-none items-baseline justify-between gap-2 [&::-webkit-details-marker]:hidden">

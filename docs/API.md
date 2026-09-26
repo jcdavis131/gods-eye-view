@@ -1,6 +1,6 @@
 # Embedding Atlas data API
 
-Keyless, CORS-open JSON and CSV over the same public sources the globe draws: USGS, NOAA, TWDB and the Drought Monitor for water; BLS QCEW, Zillow, BTS, the World Port Index, the World Bank and FRED for jobs, homes and trade. Every number carries provenance. This guide is for people calling it from a notebook, a script or their own page.
+Keyless, CORS-open JSON and CSV over the same public sources the globe draws: USGS, NOAA, TWDB and the Drought Monitor for water; BLS QCEW, Zillow, BTS, the World Port Index, the World Bank and FRED for jobs, homes and trade; NIFC, NASA FIRMS, NWS, GDACS and EONET for hazards (`/api/hazards`); FEMA, USFWS, USGS PAD-US and 3DEP for land (`/api/land`); GFZ and NASA DONKI for space weather (`/api/space`). Every number carries provenance. This guide is for people calling it from a notebook, a script or their own page.
 
 Machine-readable description: [`/api/openapi`](https://eye.jcamd.com/api/openapi) (also `public/openapi.json` in the repo).
 
@@ -140,8 +140,14 @@ TTLs follow upstream cadence:
 | Countries, partners | 12–24 h | 24 h |
 | Pulse (FRED + BTS) | 30 min | 1 h / 6 h |
 | Reports | 5–15 min | built from the tables above |
+| Wildfires (WFIGS) | 5 min | 5 min |
+| Fire hotspots (FIRMS) | 10 min (2 min while a file is missing) | 30 min per 24 h file; the box selection 10 min |
+| Hazard alerts (NWS, GDACS, EONET) | 2 min (1 min while a source is down) | 2 min (NWS), 10 min (GDACS), 30 min (EONET) |
+| Flood zones, wetlands, public lands | 1 h (wetlands 10 min while NWI's imagery layer is missing) | 1 day per snapped box |
+| Elevation (EPQS) | 1 day (10 min for a "no value" answer) | 1 day per point |
+| Space weather, ISS stream | 15 min (2 min while a source is down) | 15 min, 30 min |
 
-Bounding boxes are snapped outward (water: 0.5° grid, 4° max span; economy: 1° grid, 18° max span), so two callers a few kilometres apart share one entry. The snapped box comes back in `bbox`.
+Bounding boxes are snapped outward (water: 0.5° grid, 4° max span; economy: 1° grid, 18° max span; fire hotspots: 1° grid, up to the whole globe; flood zones and wetlands: 0.02° grid, 0.08° max span; public lands: 0.25° grid, 2° max span), so two callers a few kilometres apart share one entry. The snapped box comes back in `bbox`.
 
 ## Rate limits and courtesy
 
@@ -181,6 +187,18 @@ A number you fetch today may not be the number the same query returns next month
 **US Drought Monitor** (`usdm`). Released Thursdays for the week ending the previous Tuesday and never revised; the feature service we read carries only the class, not the week, so the record says so in `notes` rather than inventing a date.
 
 **NGA World Port Index, Natural Earth** (`nga-wpi`, `natural-earth`). Bundled copies; `retrievedAt` is the day the copy was taken (`wpiPulled`, `nePulled` at the top level of those responses).
+
+**Hazard feeds** (`nifc-wfigs`, `nasa-firms`, `nws-api`, `gdacs`, `nasa-eonet`). Snapshots of live feeds (`kind: "snapshot"`): perimeters are redrawn, alerts updated and cancelled, events closed, and FIRMS's 24 h files are rewritten as new passes arrive, so the same call later answers differently and nothing is kept here. A FIRMS record carries the file's `Last-Modified` as `releasedAt`. Every hazards answer says in `caveats` that it is not a warning service; a source that did not answer is named there and its events are missing, not absent.
+
+**FEMA NFHL** (`fema-nfhl`). The effective regulatory flood map; FEMA revises panels through map revisions and new studies, so a zone can change between fetches. A regulatory map, not a forecast, and a box with no zone is not a finding of no risk.
+
+**USFWS NWI** (`usfws-nwi`). Each polygon is as old as the imagery its mapping project was drawn from; `imageYears` (and each feature's `mapped from`) says which years, and `null` means NWI's source layer did not answer, not that the year is unknown to NWI.
+
+**USGS PAD-US** (`usgs-padus`). Version 4.1 (doi:10.5066/P96WBCHS), relayed as published, owners and easement holders included; a later version replaces it. Public-access codes are PAD-US's, not permission to enter.
+
+**USGS EPQS** (`usgs-epqs`). The 3DEP DEM that covers the point answers; `resolutionM` says which resolution it was, and 3DEP replaces DEMs as new lidar arrives. Outside 3DEP coverage there is no value, never a guessed one.
+
+**GFZ Kp and NASA DONKI** (`gfz-kp`, `nasa-donki`). GFZ marks recent Kp values preliminary (`status: "pre"`) and replaces them with definitive ones later; the provenance `revision` says `preliminary` while any value in the answer is. DONKI calls itself experimental research information and points to NOAA SWPC as the official source.
 
 **Estimates** (`kind: "estimate"`). Deterministic given their inputs; the inputs are the records next to them. Re-running with revised inputs gives a different estimate, and `method` shows exactly which numbers went in.
 
