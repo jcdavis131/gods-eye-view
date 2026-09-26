@@ -8,7 +8,9 @@ import { buildFloodZones } from "@/lib/land/features";
 import { buildTransmission, type Row } from "@/lib/infra/features";
 import transmission from "@/lib/infra/fixtures/transmission-austin.json";
 import { featureInside, lengthInside, metres, pointInPolygon, sampleGrid, type Ring } from "./geometry";
-import { featuresInside, insideCsv, insideGeoJson, newWatch, watchCsv, watchStep } from "./area";
+import { featuresInside, insideCsv, insideGeoJson, newWatch, watchCsv, watchStep, WATCH_LAYERS, type WatchEvent, type WatchMode } from "./area";
+import { ringKey, useArea, watchModes } from "./store";
+import type { LayerStatus } from "@/lib/store/globe";
 import { areaReport, reportText } from "./report";
 
 const sq = (w: number, s: number, e: number, n: number): Ring => [[w, s], [e, s], [e, n], [w, n]];
@@ -83,26 +85,114 @@ describe("featuresInside and the exports", () => {
 
 describe("watchStep", () => {
   const ring = sq(0, 0, 1, 1);
-  const on = new Set<LayerId>(["aircraft", "earthquakes"]);
+  type M = WatchMode;
+  const modes = (m: Partial<Record<LayerId, M>>) => new Map(Object.entries(m) as Array<[LayerId, M]>);
+  const step = (key = "static"): M => ({ mode: "step", key });
+  const ids = (es: WatchEvent[]) => es.map((e) => `${e.kind}:${e.id}`).sort();
   it("takes a silent baseline, then reports arrivals and departures", () => {
     const w = newWatch();
-    expect(watchStep(w, [point("aircraft", "a1", 0.5, 0.5)], ring, on, 1)).toEqual([]);
-    const e2 = watchStep(w, [point("aircraft", "a1", 1.5, 0.5), point("aircraft", "a2", 0.4, 0.4)], ring, on, 2);
-    expect(e2.map((e) => `${e.kind}:${e.id}`).sort()).toEqual(["arrived:a2", "left:a1"]);
+    expect(watchStep(w, [point("earthquakes", "q1", 0.5, 0.5)], ring, modes({ earthquakes: step() }), 1)).toEqual([]);
+    const e2 = watchStep(w, [point("earthquakes", "q1", 1.5, 0.5), point("earthquakes", "q2", 0.4, 0.4)], ring, modes({ earthquakes: step() }), 2);
+    expect(ids(e2)).toEqual(["arrived:q2", "left:q1"]);
     expect(w.log).toHaveLength(2);
     expect(watchCsv(w.log).split("\r\n")[0]).toBe("time,event,layer,id,name");
   });
+  it("does not watch aircraft or ships", () => {
+    expect(WATCH_LAYERS.has("aircraft")).toBe(false);
+    expect(WATCH_LAYERS.has("ships")).toBe(false);
+    const w = newWatch();
+    watchStep(w, [point("aircraft", "a1", 0.5, 0.5)], ring, modes({ aircraft: step() }), 1);
+    expect(watchStep(w, [point("aircraft", "a2", 0.5, 0.5)], ring, modes({ aircraft: step() }), 2)).toEqual([]);
+    expect(w.inside.size).toBe(0);
+  });
   it("never reports a layer switched off as everything leaving, nor its return as arrivals", () => {
     const w = newWatch();
-    watchStep(w, [point("aircraft", "a1", 0.5, 0.5)], ring, on, 1);
-    expect(watchStep(w, [], ring, new Set<LayerId>(["earthquakes"]), 2)).toEqual([]);
-    expect(watchStep(w, [point("aircraft", "a1", 0.5, 0.5), point("aircraft", "a3", 0.6, 0.6)], ring, on, 3)).toEqual([]);
-    expect(watchStep(w, [point("aircraft", "a1", 0.5, 0.5)], ring, on, 4).map((e) => `${e.kind}:${e.id}`)).toEqual(["left:a3"]);
+    watchStep(w, [point("earthquakes", "q1", 0.5, 0.5)], ring, modes({ earthquakes: step() }), 1);
+    expect(watchStep(w, [], ring, modes({ earthquakes: { mode: "drop" } }), 2)).toEqual([]);
+    expect(watchStep(w, [point("earthquakes", "q1", 0.5, 0.5), point("earthquakes", "q3", 0.6, 0.6)], ring, modes({ earthquakes: step() }), 3)).toEqual([]);
+    expect(ids(watchStep(w, [point("earthquakes", "q1", 0.5, 0.5)], ring, modes({ earthquakes: step() }), 4))).toEqual(["left:q3"]);
+  });
+  it("reports nothing while a layer is loading, whatever its features do, and keeps its baseline", () => {
+    const w = newWatch();
+    watchStep(w, [point("fires", "f1", 0.5, 0.5)], ring, modes({ fires: step("A") }), 1);
+    // Refetching: the renderer can hold anything (the previous view's answer); nothing is reported.
+    expect(watchStep(w, [], ring, modes({ fires: { mode: "hold" } }), 2)).toEqual([]);
+    expect(watchStep(w, [point("fires", "f9", 0.2, 0.2)], ring, modes({ fires: { mode: "hold" } }), 3)).toEqual([]);
+    expect(w.inside.has("fires:f1")).toBe(true);
+    // Settled again on the same view: compared with the baseline, so only real changes show.
+    expect(watchStep(w, [point("fires", "f1", 0.5, 0.5)], ring, modes({ fires: step("A") }), 4)).toEqual([]);
+    expect(ids(watchStep(w, [point("fires", "f2", 0.5, 0.5)], ring, modes({ fires: step("A") }), 5))).toEqual(["arrived:f2", "left:f1"]);
+  });
+  it("retakes the baseline silently when a layer answers for another view", () => {
+    const w = newWatch();
+    watchStep(w, [point("fires", "f1", 0.5, 0.5)], ring, modes({ fires: step("A") }), 1);
+    expect(watchStep(w, [point("fires", "f2", 0.5, 0.5)], ring, modes({ fires: step("B") }), 2)).toEqual([]);
+    expect(ids(watchStep(w, [point("fires", "f3", 0.5, 0.5)], ring, modes({ fires: step("B") }), 3))).toEqual(["arrived:f3", "left:f2"]);
+  });
+  it("forgets a view-dependent layer while the area is out of view, and comes back silently", () => {
+    const w = newWatch();
+    watchStep(w, [point("fires", "f1", 0.5, 0.5)], ring, modes({ fires: step("A") }), 1);
+    expect(watchStep(w, [], ring, modes({ fires: { mode: "hold", stale: true } }), 2)).toEqual([]);
+    expect(w.seen.has("fires")).toBe(false);
+    // Back in view with the same view key, but the baseline is gone: silent.
+    expect(watchStep(w, [point("fires", "f2", 0.5, 0.5)], ring, modes({ fires: step("A") }), 3)).toEqual([]);
+    expect(ids(watchStep(w, [], ring, modes({ fires: step("A") }), 4))).toEqual(["left:f2"]);
   });
   it("ignores layers that do not come and go", () => {
     const w = newWatch();
-    watchStep(w, [], ring, new Set<LayerId>(["dams"]), 1);
-    expect(watchStep(w, [point("dams", "d", 0.5, 0.5)], ring, new Set<LayerId>(["dams"]), 2)).toEqual([]);
+    watchStep(w, [], ring, modes({ dams: step() }), 1);
+    expect(watchStep(w, [point("dams", "d", 0.5, 0.5)], ring, modes({ dams: step() }), 2)).toEqual([]);
+  });
+});
+
+describe("watchModes", () => {
+  const status = (x: Partial<LayerStatus>): LayerStatus => ({ count: 0, source: "t", fetchedAt: 1, loading: false, ...x });
+  const info = (id: LayerId) => ({ fires: { viewDependent: true }, hazards: { dependsOn: ["earthquakes", "alerts"] as LayerId[] } })[id as "fires" | "hazards"];
+  it("steps a settled layer on the view key its answer was fetched for", () => {
+    const m = watchModes({ fires: true, earthquakes: true }, { fires: status({ viewKey: "12,4" }), earthquakes: status({ viewKey: "static" }) }, true, info);
+    expect(m.get("fires")).toEqual({ mode: "step", key: "12,4" });
+    expect(m.get("earthquakes")).toEqual({ mode: "step", key: "static" });
+  });
+  it("holds a layer that is loading, and forgets a view-dependent one while the area is out of view", () => {
+    expect(watchModes({ earthquakes: true }, { earthquakes: status({ loading: true }) }, true, info).get("earthquakes")).toEqual({ mode: "hold" });
+    const out = watchModes({ fires: true, earthquakes: true }, { fires: status({}), earthquakes: status({}) }, false, info);
+    expect(out.get("fires")).toEqual({ mode: "hold", stale: true });
+    // A layer that loads the whole world keeps watching while the camera is elsewhere.
+    expect(out.get("earthquakes")?.mode).toBe("step");
+  });
+  it("drops a layer that is off, failed or has not answered", () => {
+    const m = watchModes({ earthquakes: false, fires: true, events: true }, { earthquakes: status({}), fires: status({ error: "x" }), events: status({ fetchedAt: 0 }) }, true, info);
+    expect([m.get("earthquakes"), m.get("fires"), m.get("events")]).toEqual([{ mode: "drop" }, { mode: "drop" }, { mode: "drop" }]);
+  });
+  it("leaves Hazard alerts out while a layer it hands events to is on, so a hand-off is never a departure", () => {
+    const st = { hazards: status({}), earthquakes: status({}) };
+    expect(watchModes({ hazards: true }, st, true, info).get("hazards")?.mode).toBe("step");
+    expect(watchModes({ hazards: true, earthquakes: true }, st, true, info).get("hazards")).toEqual({ mode: "drop" });
+    expect(watchModes({ hazards: true, alerts: true }, st, true, info).get("hazards")).toEqual({ mode: "drop" });
+    // Switching Earthquakes on mid-watch: the hazard quakes it takes over are not logged as leaving.
+    const ring = sq(0, 0, 1, 1);
+    const w = newWatch();
+    watchStep(w, [point("hazards", "h1", 0.5, 0.5)], ring, watchModes({ hazards: true }, st, true, info), 1);
+    expect(watchStep(w, [], ring, watchModes({ hazards: true, earthquakes: true }, st, true, info), 2)).toEqual([]);
+    expect(watchStep(w, [point("hazards", "h1", 0.5, 0.5)], ring, watchModes({ hazards: true }, st, true, info), 3)).toEqual([]);
+  });
+});
+
+describe("a redrawn area", () => {
+  it("is told apart by value, and restarting the watch clears the baseline and the log", () => {
+    expect(ringKey(sq(0, 0, 1, 1))).toBe(ringKey(sq(0, 0, 1, 1)));
+    expect(ringKey(sq(0, 0, 1, 1))).not.toBe(ringKey(sq(0, 0, 2, 1)));
+    const st = useArea.getState();
+    st.startWatch();
+    st.watch.log.push({ at: 1, kind: "arrived", layer: "earthquakes", id: "q", name: "q" });
+    st.watch.seen.set("earthquakes", "static");
+    useArea.getState().restartWatch(ringKey(sq(0, 0, 2, 1)));
+    const after = useArea.getState();
+    expect(after.watching).toBe(true);
+    expect(after.watchRing).toBe(ringKey(sq(0, 0, 2, 1)));
+    expect(after.watch.log).toEqual([]);
+    expect(after.watch.seen.size).toBe(0);
+    useArea.getState().stopWatch();
   });
 });
 

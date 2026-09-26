@@ -7,7 +7,7 @@
 import { create } from "zustand";
 import type { LayerId } from "@/lib/layers/types";
 import type { LayerStatus } from "@/lib/store/globe";
-import { newWatch, type WatchState } from "./area";
+import { newWatch, WATCH_LAYERS, type WatchMode, type WatchState } from "./area";
 import type { Ring } from "./geometry";
 
 interface AreaStore {
@@ -19,9 +19,13 @@ interface AreaStore {
   /** When the watch started; the log counts from here. */
   watchSince: number | null;
   watch: WatchState;
+  /** The area the watch's baseline and log belong to (ringKey); null until its first step. */
+  watchRing: string | null;
   /** Bumped on every watch step so the panel re-renders the log. */
   tick: number;
   startWatch: () => void;
+  /** Start over for another area: a new baseline and an empty log, still watching. */
+  restartWatch: (ring: string) => void;
   stopWatch: () => void;
   bump: () => void;
 }
@@ -34,8 +38,10 @@ export const useArea = create<AreaStore>()((set) => ({
   watching: false,
   watchSince: null,
   watch: newWatch(),
+  watchRing: null,
   tick: 0,
-  startWatch: () => set({ watching: true, watchSince: Date.now(), watch: newWatch(), tick: 0 }),
+  startWatch: () => set({ watching: true, watchSince: Date.now(), watch: newWatch(), watchRing: null, tick: 0 }),
+  restartWatch: (ring) => set({ watchSince: Date.now(), watch: newWatch(), watchRing: ring, tick: 0 }),
   stopWatch: () => set({ watching: false }),
   bump: () => set((s) => ({ tick: s.tick + 1 })),
 }));
@@ -44,6 +50,47 @@ export const useArea = create<AreaStore>()((set) => ({
 export function areaRing(shape: { kind: "line" | "area"; points: Array<[number, number]> } | null | undefined): Ring | null {
   if (!shape || shape.kind !== "area" || shape.points.length < 3) return null;
   return shape.points.map(([lon, lat]) => [lon, lat] as [number, number]);
+}
+
+/** A drawn area by value, so a redrawn area is told apart from a re-render of the same one. */
+export function ringKey(ring: Ring): string {
+  return ring.map(([x, y]) => `${x},${y}`).join(";");
+}
+
+/** What the watch needs to know about a layer's definition. */
+export interface WatchLayerInfo {
+  viewDependent?: boolean;
+  /** Layers this one hands some of its events to while they are on (hazards: earthquakes, alerts). */
+  dependsOn?: LayerId[];
+}
+
+/**
+ * What the watch does with each watched layer this step (see WatchMode in ./area.ts):
+ *   drop  off, failed or never answered; or it hands events to another layer that is on
+ *         (Hazard alerts steps aside for Earthquakes and Live warnings), so its features
+ *         would vanish without leaving: it is left out of the watch while they are on
+ *   hold  refetching; or view-dependent while the area is out of view (stale: its
+ *         baseline is retaken silently when the area is back and the layer has settled)
+ *   step  settled, keyed by the view its answer was fetched for (LayerStatus.viewKey), so
+ *         an answer for another view sets a new baseline instead of being compared
+ */
+export function watchModes(
+  on: Partial<Record<LayerId, boolean>>,
+  status: Partial<Record<LayerId, LayerStatus>>,
+  inView: boolean,
+  info: (id: LayerId) => WatchLayerInfo | undefined,
+): Map<LayerId, WatchMode> {
+  const out = new Map<LayerId, WatchMode>();
+  for (const id of WATCH_LAYERS) {
+    const st = status[id];
+    const def = info(id);
+    if (!on[id] || !st || st.error || !(st.fetchedAt > 0)) out.set(id, { mode: "drop" });
+    else if (def?.dependsOn?.some((d) => on[d])) out.set(id, { mode: "drop" });
+    else if (def?.viewDependent && !inView) out.set(id, { mode: "hold", stale: true });
+    else if (st.loading) out.set(id, { mode: "hold" });
+    else out.set(id, { mode: "step", key: st.viewKey ?? "static" });
+  }
+  return out;
 }
 
 /** Layers that are on and have an answer on the globe: a finished fetch that did not fail. */

@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Binoculars, ClipboardCopy, Download, FileText, Link2, ScanSearch, X } from "lucide-react";
 import { useGlobe } from "@/lib/store/globe";
-import { useArea, areaRing, answeringLayers, areaInView } from "@/lib/aoi/store";
+import { useArea, areaRing, answeringLayers, areaInView, ringKey, watchModes } from "@/lib/aoi/store";
 import { featuresInside, insideCsv, insideGeoJson, watchCsv, watchStep, WATCH_LAYERS, type InsideGroup } from "@/lib/aoi/area";
 import { areaReport, reportText, type AreaReport } from "@/lib/aoi/report";
 import { measureShape, fmtArea } from "@/lib/globe/measure";
@@ -99,6 +99,9 @@ function Watch({ inView }: { inView: boolean }) {
   const stop = useArea((s) => s.stopWatch);
   const on = useGlobe((s) => s.layers);
   const watched = [...WATCH_LAYERS].filter((l) => on[l]);
+  // Hazard alerts hands some events to these layers while they are on, so it sits out the watch then.
+  const handsOff = (LAYER_BY_ID.hazards?.dependsOn ?? []).filter((l) => on[l]);
+  const viewDependent = watched.filter((l) => LAYER_BY_ID[l]?.viewDependent);
   return (
     <div className="px-3 py-2">
       <div className="flex items-center gap-2">
@@ -117,8 +120,15 @@ function Watch({ inView }: { inView: boolean }) {
         )}
       </div>
       <div className="mt-1 text-[9px] leading-snug text-muted-foreground">
-        Reports what arrives and what leaves among {watched.length ? watched.map((l) => labels[l] ?? l).join(", ") : "the layers that come and go (switch on aircraft, ships, earthquakes, fires or alerts)"}. The first pass sets the baseline silently; a layer switched off is not counted as leaving.
-        {watching && !inView && <span className="block text-warn">Paused: bring the area into view, since the layers only load what is near the camera.</span>}
+        Reports what arrives and what leaves among {watched.length ? watched.map((l) => labels[l] ?? l).join(", ") : "the layers that come and go (switch on earthquakes, active fires, wildfires, hazard alerts, live warnings or news events)"}. The first pass sets the baseline silently, and so does a layer&apos;s first answer after it reloads for another view; a layer switched off or still loading is not counted as leaving. Aircraft and ships are not watched.
+        {on.hazards && handsOff.length > 0 && (
+          <span className="block">
+            {labels.hazards ?? "Hazard alerts"} is not watched while {handsOff.map((l) => labels[l] ?? l).join(" or ")} is on: it hands some events to {handsOff.length === 1 ? "that layer" : "those layers"}.
+          </span>
+        )}
+        {watching && !inView && viewDependent.length > 0 && (
+          <span className="block text-warn">Paused for {viewDependent.map((l) => labels[l] ?? l).join(", ")}: bring the area into view, since {viewDependent.length === 1 ? "it loads" : "they load"} only what is near the camera.</span>
+        )}
         {watching && since && <span className="block">Watching since {new Date(since).toLocaleTimeString()}.</span>}
       </div>
       {log.length > 0 && (
@@ -222,14 +232,18 @@ export default function AreaPanel() {
     return () => clearInterval(id);
   }, [open, ring]);
 
-  // The watch: one step every 5 s while the area is in view.
+  // The watch: one step every 5 s. A redrawn area starts over (new baseline, empty log);
+  // view-dependent layers sit out while the area is out of view and retake their baseline
+  // silently when it is back (watchModes).
   useEffect(() => {
     if (!open || !ring || !watching) return;
+    const key = ringKey(ring);
+    if (useArea.getState().watchRing !== key) useArea.getState().restartWatch(key);
     const step = () => {
       const g = useGlobe.getState();
-      if (!areaInView(ring, g.view)) return;
       const st = useArea.getState();
-      watchStep(st.watch, allFeatures(), ring, answeringLayers(g.layers, g.status), Date.now());
+      const modes = watchModes(g.layers, g.status, areaInView(ring, g.view), (id) => LAYER_BY_ID[id]);
+      watchStep(st.watch, allFeatures(), ring, modes, Date.now());
       st.bump();
     };
     step();
