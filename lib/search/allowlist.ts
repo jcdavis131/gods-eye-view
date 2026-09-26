@@ -1,12 +1,16 @@
 // What the ⌘K palette (and nothing else) may match a query against.
 //
 // A feature is found by its name, its id, or one of the dossier fields on
-// SEARCHABLE_DETAILS: published identifiers and place names only. Owner,
-// operator, manager, easement-holder, bank and recipient fields are never on
-// the list, so there is no search from a person's or company's name to what
-// they own or operate (README, Ethics; CONTRIBUTING, ground rules). A new
-// layer's identifier is added here explicitly; nothing is searchable by
-// default. Pure, so the rule is tested without a globe.
+// SEARCHABLE_DETAILS: published identifiers, categories and place names.
+// Owner, operator, manager, easement-holder, bank, provider and recipient
+// fields are never on the list, so the palette never goes from a person's
+// name, or an owner's, to what they own through those fields. Institutions
+// are found by the names their publishers give the feature, and some of
+// those names carry the institution: an FDIC branch is "<bank> · <office>",
+// so a bank's name lists the branches of it that are loaded (README, Ethics;
+// CONTRIBUTING, ground rules). A new layer's identifier is added here
+// explicitly; nothing is searchable by default. Pure, so the rule is tested
+// without a globe.
 
 import type { BaseProps } from "@/lib/layers/types";
 

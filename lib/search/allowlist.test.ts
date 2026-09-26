@@ -63,6 +63,15 @@ describe("the search allowlist", () => {
     expect(matchScore(launch, "spacex")).toBe(0);
   });
 
+  it("finds a bank branch by the bank's name only because FDIC puts it in the branch name, never through the bank field", () => {
+    // lib/finance/features.ts names a branch "<bank> · <office>"; the ethics text says so rather than claiming otherwise.
+    const branch = props({ layer: "banks", id: "3511:1", name: "Wells Fargo Bank · CONGRESS AVENUE BRANCH", details: { bank: "Wells Fargo Bank, National Association", "FDIC cert": 3511 } });
+    expect(matchScore(branch, "wells fargo")).toBe(2);
+    expect(matchScore(branch, "congress avenue")).toBe(1);
+    // Only the bank field carries the legal name; the palette never reads it.
+    expect(matchScore(branch, "national association")).toBe(0);
+  });
+
   it("scores exact over prefix over contained, and never matches a loaded box", () => {
     expect(matchScore(props({ name: "Zone AE" }), "zone ae")).toBe(3);
     expect(matchScore(props({ name: "Zone AE" }), "zone")).toBe(2);
