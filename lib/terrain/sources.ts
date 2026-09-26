@@ -62,10 +62,12 @@ export async function renderTile(product: RenderProductId, z: number, x: number,
       const body = new Uint8Array(await res.arrayBuffer());
       if (!type.startsWith("image/")) {
         const text = new TextDecoder().decode(body.slice(0, 300)).replace(/\s+/g, " ").trim();
-        throw new UpstreamError(p.gate, 502, `${p.gate}: answered ${type || "no content type"} instead of an image: ${text.slice(0, 120)}`);
+        // 415, not 5xx: an error body is the same on every try, so it is not retried (the caller still gets a 502).
+        throw new UpstreamError(p.gate, 415, `${p.gate}: answered ${type || "no content type"} instead of an image: ${text.slice(0, 120)}`);
       }
       return { body, contentType: type, upstreamUrl: url };
-    }, 3)
+      // Two tries at most: two 25 s attempts still end inside the route's 60 s.
+    }, 2)
       .then((v) => {
         tileStore(key, v);
         return v;
@@ -131,7 +133,8 @@ async function sda(query: string): Promise<SdaJson> {
     const res = await polite("nrcs-sda", 250, 30_000, () =>
       upstream("nrcs-sda", SDA_TABULAR, {
         method: "POST",
-        timeoutMs: 20_000,
+        // A point takes two queries, each at most two tries: 12 s keeps the whole answer inside 60 s (SDA answers in well under 1 s).
+        timeoutMs: 12_000,
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ query, format: "JSON+COLUMNNAME" }),
       }),
