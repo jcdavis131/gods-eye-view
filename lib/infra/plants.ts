@@ -49,7 +49,7 @@ export type EiaPlantRow = [
 /** nuclear-wikidata.json as the script writes it. */
 export interface WikidataSnapshot {
   pulled: string;
-  /** [qid, name, lon, lat, country, status[], nameplateMW[], coordinateCount] */
+  /** [qid, name, lon, lat, country, status[], nameplateMW[], distinct coordinate locations] */
   plants: Array<[string, string | null, number, number, string | null, string[], number[], number]>;
 }
 
@@ -160,7 +160,8 @@ export function wikidataNuclear(s: WikidataSnapshot, bbox: [number, number, numb
           status: status.length ? status.join(", ") : "not recorded in Wikidata",
           "nameplate capacity": mws.length ? mws.map(fmtMw).join(" / ") : "not recorded in Wikidata",
           country: country ?? undefined,
-          "coordinate statements": coords > 1 ? `${coords} (the first is drawn)` : undefined,
+          // Distinct best-rank coordinate locations (scripts/infra-data.mjs); the westernmost is drawn.
+          "coordinate locations": coords > 1 ? `${coords} in Wikidata (the westernmost is drawn)` : undefined,
           "item page": `https://www.wikidata.org/wiki/${qid}`,
           "what this is": "a Wikidata item (CC0); its completeness and status are Wikidata's, and a plant with no status statement says so",
         },
@@ -169,4 +170,37 @@ export function wikidataNuclear(s: WikidataSnapshot, bbox: [number, number, numb
     });
   }
   return out;
+}
+
+/** The larger of a plant's operating and planned nameplate MW (0 when neither is published). */
+function plantMw(f: LayerFeature): number {
+  const x = f.properties.extra as PlantExtra | undefined;
+  return Math.max(x?.mw ?? 0, x?.plannedMw ?? 0);
+}
+
+export interface LargestFirst {
+  features: LayerFeature[];
+  /** True when some plants were left out to fit the budget. */
+  truncated: boolean;
+  /** The smallest capacity kept (MW) when truncated: the floor the answer reached. */
+  floorMw?: number;
+}
+
+/**
+ * Plants that fit in `budgetBytes` of JSON, largest first (by the larger of
+ * operating and planned nameplate MW) when they do not all fit; every plant, in
+ * its own order, when they do. The floor it reached is the smallest plant kept.
+ */
+export function largestFirst(features: LayerFeature[], budgetBytes: number): LargestFirst {
+  const sizes = features.map((f) => JSON.stringify(f).length + 1);
+  if (sizes.reduce((a, b) => a + b, 0) <= budgetBytes) return { features, truncated: false };
+  const order = features.map((_, i) => i).sort((a, b) => plantMw(features[b]) - plantMw(features[a]) || a - b);
+  const kept: LayerFeature[] = [];
+  let used = 0;
+  for (const i of order) {
+    if (used + sizes[i] > budgetBytes) break;
+    used += sizes[i];
+    kept.push(features[i]);
+  }
+  return { features: kept, truncated: true, floorMw: kept.length ? plantMw(kept[kept.length - 1]) : undefined };
 }

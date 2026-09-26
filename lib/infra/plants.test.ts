@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { searchableDetail } from "@/lib/search/allowlist";
 import eiaJson from "./data/plants-eia860m.json";
 import wdJson from "./data/nuclear-wikidata.json";
-import { eiaPlants, fuelFamily, wikidataNuclear, type EiaSnapshot, type PlantExtra, type WikidataSnapshot } from "./plants";
+import { eiaPlants, fuelFamily, largestFirst, wikidataNuclear, type EiaSnapshot, type PlantExtra, type WikidataSnapshot } from "./plants";
 
 const eia = eiaJson as unknown as EiaSnapshot;
 const wd = wdJson as unknown as WikidataSnapshot;
@@ -57,7 +57,50 @@ describe("EIA-860M plants", () => {
   });
 });
 
+describe("largestFirst", () => {
+  const mw = (f: { properties: { extra?: unknown } }) => {
+    const x = f.properties.extra as PlantExtra;
+    return Math.max(x.mw ?? 0, x.plannedMw ?? 0);
+  };
+  it("sends every plant, as they came, when they fit", () => {
+    const sa = eiaPlants(eia, SA);
+    const r = largestFirst(sa, 10_000_000);
+    expect(r.truncated).toBe(false);
+    expect(r.features).toBe(sa);
+  });
+  it("keeps the world at min=0 under one response, largest first, and names the floor it reached", () => {
+    const world = eiaPlants(eia, [-180, -90, 180, 90]);
+    expect(JSON.stringify(world).length).toBeGreaterThan(4_500_000);
+    const r = largestFirst(world, 3_000_000);
+    expect(r.truncated).toBe(true);
+    expect(JSON.stringify(r.features).length).toBeLessThanOrEqual(3_000_000);
+    expect(r.features.length).toBeGreaterThan(1000);
+    const kept = r.features.map(mw);
+    for (let i = 1; i < kept.length; i++) expect(kept[i]).toBeLessThanOrEqual(kept[i - 1]);
+    expect(r.floorMw).toBe(kept[kept.length - 1]);
+    // Nothing left out is larger than the floor.
+    const keptIds = new Set(r.features.map((f) => f.properties.id));
+    for (const f of world) if (!keptIds.has(f.properties.id)) expect(mw(f)).toBeLessThanOrEqual(r.floorMw!);
+  });
+});
+
 describe("Wikidata nuclear plants", () => {
+  it("counts distinct coordinate locations, not query rows, and draws a fixed one", () => {
+    // Phenix (Q113368) has one coordinate and two capacity statements; the row product once made it "2".
+    const phenix = wd.plants.find((p) => p[0] === "Q113368")!;
+    expect(phenix[7]).toBe(1);
+    expect(phenix[6]).toEqual([233, 130]);
+    // Q123002687 has two coordinate statements in Wikidata; the westernmost is drawn.
+    const two = wd.plants.find((p) => p[0] === "Q123002687")!;
+    expect(two[7]).toBe(2);
+    expect(two[2]).toBe(109.4825);
+    const [f] = wikidataNuclear(wd, [109, 21, 110, 22]).filter((x) => x.properties.id === "wd:Q123002687");
+    expect(f.properties.details?.["coordinate locations"]).toBe("2 in Wikidata (the westernmost is drawn)");
+    // Leningrad's three capacity statements stay three figures on one coordinate.
+    const len = wd.plants.find((p) => p[0] === "Q3279825")!;
+    expect([len[6].length, len[7]]).toEqual([3, 1]);
+  });
+
   it("leaves out plants in the United States, which EIA covers", () => {
     expect(wd.plants.length).toBe(286);
     expect(wd.plants.some((p) => /United States/.test(p[4] ?? ""))).toBe(false);

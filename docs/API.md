@@ -157,7 +157,7 @@ TTLs follow upstream cadence:
 | Air quality (`/api/air`) | 10 min | 20 min per hourly file |
 | News events (`/api/events`) | 10 min | 6 h per 15-minute export file; lastupdate.txt 5 min |
 
-Bounding boxes are snapped outward (water: 0.5° grid, 4° max span; economy: 1° grid, 18° max span; fire hotspots: 1° grid, up to the whole globe; flood zones and wetlands: 0.02° grid, 0.08° max span; public lands: 0.25° grid, 2° max span; infrastructure: transmission 2° / 0.25°, pipelines 4° / 0.5°, rail 1° / 0.1°, airports 8° / 1°, dams and faults 1.5° / 0.25°, landslides 0.5° / 0.1°, PLSS townships 2° / 0.25° and sections 0.4° / 0.05°, plants any span on a 1° grid), so two callers a few kilometres apart share one entry. The snapped box comes back in `bbox`.
+Bounding boxes are snapped outward (water: 0.5° grid, 4° max span; economy: 1° grid, 18° max span; fire hotspots: 1° grid, up to the whole globe; flood zones and wetlands: 0.02° grid, 0.08° max span; public lands: 0.25° grid, 2° max span; infrastructure: transmission 2° / 0.25°, pipelines 4° / 0.5°, rail 1° / 0.1°, airports 8° / 1°, dams and faults 1.5° / 0.25°, landslides 0.5° / 0.1°, PLSS townships 2° / 0.25° and sections 0.4° / 0.05°, plants any span on a 1° grid, but a box whose US plants would not fit in one response returns the largest first, with `truncated` and a caveat naming the floor reached), so two callers a few kilometres apart share one entry. The snapped box comes back in `bbox`.
 
 ## Rate limits and courtesy
 

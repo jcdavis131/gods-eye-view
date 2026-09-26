@@ -42,7 +42,7 @@ Infrastructure registries name who owns or runs things: a transmission line's ow
 
 A camera source is added only after reading the agency's own terms, and only when they allow reuse; quote the operative sentence in `lib/cameras/agencies.ts`, in the source's licence and in the README's attribution. Stills must be https (the page upgrades http). Agencies left out and why are listed in the same file.
 
-`node scripts/infra-data.mjs` rebuilds the two power plant snapshots in `lib/infra/data/`: the newest EIA-860M generator workbook that answers (the EIA page links months that are not published yet; they redirect) and a Wikidata SPARQL pull of nuclear plants outside the US. Both carry the file or query and the date they were pulled; do not hand-edit them.
+`node scripts/infra-data.mjs` rebuilds the two power plant snapshots in `lib/infra/data/`: the newest EIA-860M generator workbook that answers (the EIA page links months that are not published yet; they redirect) and a Wikidata SPARQL pull of nuclear plants outside the US. `node scripts/infra-data.mjs eia` or `... nuclear` rebuilds only that one. Both carry the file or query and the date they were pulled; do not hand-edit them.
 
 ## Refreshing the bundled port and country data
 

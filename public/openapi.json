@@ -2549,7 +2549,7 @@
     "/api/infra": {
       "get": {
         "summary": "Transmission lines, pipelines, rail, airports, dams, power plants, Quaternary faults, landslides and the PLSS grid in a box; T-R-S search; the geologic unit at a point",
-        "description": "op=transmission: HIFLD U.S. Electric Power Transmission Lines, the archived snapshot Esri hosts (last data update 2024-09-30): voltage (HIFLD's -999999 sentinel dropped), class, type, status, owner and end substations as HIFLD published them, highest voltage first. op=pipelines: EIA natural gas (interstate, intrastate, gathering), crude oil trunk, petroleum product and HGL pipelines with the operator EIA published; generalized routes with no diameter or pressure, not for locating a line. `counts` gives segments per commodity, null for a service that did not answer. op=rail: FRA/BTS North American Rail Network lines with FRA's network, passenger and STRACNET codes decoded from the service's domains and the owning railroads' reporting marks; physically removed track and rail-trails are left out; longest segments first. op=airports: FAA ADDS public-use airports, heliports and seaplane bases only (PRIVATEUSE = 0). op=dams: USACE National Inventory of Dams (public service): hazard potential (consequence of a failure, not condition), condition assessment and its date, height, storage, purposes; no owner, designer or representative names are requested; largest storage first. op=plants: EIA-860M plants from a bundled monthly snapshot (nameplate MW by technology, operating and planned, the reporting entity as EIA publishes it) plus Wikidata (CC0) nuclear plants outside the US; `min` sets a US MW floor. op=faults: USGS Quaternary faults with USGS's age class, slip rate and sense, line type and mapping certainty. op=landslides: USGS US Landslide Inventory v3 points (type, date range, fatalities, confidence, source inventory); most confident first. op=plss: BLM CadNSDI townships or sections. op=plss-search: the townships (or sections) a T-R-S description names under every principal meridian, with boxes and centres; it reads survey numbers only. op=geology: Macrostrat's geologic map units at a point, most detailed map first, each with the map it comes from. Owners and operators are never searchable anywhere in this app.",
+        "description": "op=transmission: HIFLD U.S. Electric Power Transmission Lines, the archived snapshot Esri hosts (last data update 2024-09-30): voltage (HIFLD's -999999 sentinel dropped), class, type, status, owner and end substations as HIFLD published them, highest voltage first. op=pipelines: EIA natural gas (interstate, intrastate, gathering), crude oil trunk, petroleum product and HGL pipelines with the operator EIA published; generalized routes with no diameter or pressure, not for locating a line. `counts` gives segments per commodity, null for a service that did not answer. op=rail: FRA/BTS North American Rail Network lines with FRA's network, passenger and STRACNET codes decoded from the service's domains and the owning railroads' reporting marks; physically removed track and rail-trails are left out; longest segments first. op=airports: FAA ADDS public-use airports, heliports and seaplane bases only (PRIVATEUSE = 0). op=dams: USACE National Inventory of Dams (public service): hazard potential (consequence of a failure, not condition), condition assessment and its date, height, storage, purposes; no owner, designer or representative names are requested; largest storage first. op=plants: EIA-860M plants from a bundled monthly snapshot (nameplate MW by technology, operating and planned, the reporting entity as EIA publishes it) plus Wikidata (CC0) nuclear plants outside the US; `min` sets a US MW floor, and a box whose US plants would not fit in one response returns the largest first (`truncated`, `matched`). op=faults: USGS Quaternary faults with USGS's age class, slip rate and sense, line type and mapping certainty. op=landslides: USGS US Landslide Inventory v3 points (type, date range, fatalities, confidence, source inventory); most confident first. op=plss: BLM CadNSDI townships or sections. op=plss-search: the townships (or sections) a T-R-S description names under every principal meridian, with boxes and centres; it reads survey numbers only. op=geology: Macrostrat's geologic map units at a point, most detailed map first, each with the map it comes from. Owners and operators are never searchable anywhere in this app.",
         "tags": [
           "infra"
         ],
@@ -2582,7 +2582,7 @@
             "schema": {
               "$ref": "#/components/schemas/Bbox"
             },
-            "description": "`w,s,e,n` degrees, required for every op except plss-search and geology. Clamped and snapped per op: transmission 2° (0.25° grid), pipelines 4° (0.5°), rail 1° (0.1°), airports 8° (1°), dams 1.5° (0.25°), faults 1.5° (0.25°), landslides 0.5° (0.1°), plss townships 2° (0.25°) or sections 0.4° (0.05°), plants any size (1°). The snapped box comes back in `bbox`."
+            "description": "`w,s,e,n` degrees, required for every op except plss-search and geology. Clamped and snapped per op: transmission 2° (0.25° grid), pipelines 4° (0.5°), rail 1° (0.1°), airports 8° (1°), dams 1.5° (0.25°), faults 1.5° (0.25°), landslides 0.5° (0.1°), plss townships 2° (0.25°) or sections 0.4° (0.05°), plants any size (1°; past one response's size, the largest plants first). The snapped box comes back in `bbox`."
           },
           {
             "name": "min",
@@ -5968,10 +5968,19 @@
               },
               "truncated": {
                 "type": "boolean",
-                "description": "true when the service's record limit was hit (the note says which features come first)."
+                "description": "true when the box held more US plants than one response carries: the largest (by the larger of operating and planned nameplate MW) are returned and a caveat names the floor reached. Ask with a higher min or a smaller box for the rest."
               },
               "minMW": {
                 "type": "number"
+              },
+              "matched": {
+                "type": "object",
+                "description": "US plants in the box at this min before any size cap; counts.eia is how many were returned.",
+                "properties": {
+                  "eia": {
+                    "type": "integer"
+                  }
+                }
               },
               "counts": {
                 "type": "object",

@@ -16,7 +16,8 @@
 //   /api/infra?op=dams&bbox=…                USACE National Inventory of Dams: hazard potential,
 //                                            condition, height, storage. Box at most 1.5 degrees.
 //   /api/infra?op=plants&bbox=…&min=MW       EIA-860M plants (bundled monthly snapshot) and
-//                                            Wikidata nuclear plants outside the US.
+//                                            Wikidata nuclear plants outside the US. Any box;
+//                                            past one response's size, the largest US plants.
 //   /api/infra?op=faults&bbox=…              USGS Quaternary faults. Box at most 1.5 degrees.
 //   /api/infra?op=landslides&bbox=…          USGS landslide inventory points. Box at most 0.5.
 //   /api/infra?op=plss&bbox=…&level=section  BLM PLSS townships (2 degrees) or sections (0.4).
@@ -51,7 +52,7 @@ import {
   type PipelineKind,
   type Row,
 } from "@/lib/infra/features";
-import { eiaPlants, wikidataNuclear, type EiaSnapshot, type WikidataSnapshot } from "@/lib/infra/plants";
+import { eiaPlants, largestFirst, wikidataNuclear, type EiaSnapshot, type WikidataSnapshot } from "@/lib/infra/plants";
 import { parseTrs, plssCandidates, sectionWhere, townshipWhere, trsLabel } from "@/lib/infra/plss";
 import { parseMacrostrat } from "@/lib/infra/geology";
 
@@ -430,17 +431,26 @@ function plantData() {
 
 async function opPlants(bbox: Bbox, minMw: number): Promise<OpResult> {
   const [eia, wd] = await plantData();
-  const us = eiaPlants(eia, bbox, minMw);
   const nuclear = wikidataNuclear(wd, bbox);
+  // Every US plant in a large box does not fit in one response (the world at min=0 is
+  // about 12 MB): past the budget, the largest are kept. The Wikidata set is small and
+  // always sent whole.
+  const matched = eiaPlants(eia, bbox, minMw);
+  const cap = largestFirst(matched, MAX_BYTES - JSON.stringify(nuclear).length);
+  const us = cap.features;
   const caveats = [
     `EIA-860M is EIA's preliminary monthly inventory (${eia.inventoryAsOf}); capacities are nameplate megawatts summed over each plant's generators of 1 MW or more, and a generator with no nameplate value is counted, not added as 0.`,
     "Outside the United States, only nuclear plants are shown, from Wikidata (CC0); their status and capacity are Wikidata's and can be missing.",
     "The reporting entity is as EIA publishes it; it is not searchable here and nothing is joined across the two sources.",
   ];
   if (minMw > 0) caveats.push(`Only US plants of at least ${minMw} MW (operating or planned) are returned; ask with min=0 for every plant.`);
+  if (cap.truncated)
+    caveats.push(
+      `This box holds ${matched.length.toLocaleString("en-US")} US plants, more than one response carries: the ${us.length.toLocaleString("en-US")} largest are returned (by the larger of operating and planned nameplate MW, down to ${cap.floorMw ?? 0} MW). Ask with a higher min or a smaller box for the rest.`,
+    );
   return {
     data: fc([...us, ...nuclear]),
-    meta: { source: "EIA-860M + Wikidata", bbox, minMW: minMw, counts: { eia: us.length, wikidata: nuclear.length }, inventoryAsOf: eia.inventoryAsOf, snapshotsPulled: { eia: eia.pulled, wikidata: wd.pulled } },
+    meta: { source: "EIA-860M + Wikidata", bbox, minMW: minMw, truncated: cap.truncated, counts: { eia: us.length, wikidata: nuclear.length }, matched: { eia: matched.length }, inventoryAsOf: eia.inventoryAsOf, snapshotsPulled: { eia: eia.pulled, wikidata: wd.pulled } },
     ttlS: 24 * 3600,
     provenance: [
       provenance(source("eia-860m"), {

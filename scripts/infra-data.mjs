@@ -10,7 +10,8 @@
 //
 // Both change monthly at most, so they ride in the repo with the date they were
 // pulled and the file or query they came from; /api/infra?op=plants serves them by
-// box. Re-run to refresh:  node scripts/infra-data.mjs
+// box. Re-run to refresh:  node scripts/infra-data.mjs  (or add `eia` or `nuclear`
+// to rebuild only that snapshot).
 //
 // Nothing here is typed in by hand. The EIA workbook is read cell by cell (a
 // minimal .xlsx reader below: the zip's central directory, deflate, the shared
@@ -324,14 +325,31 @@ async function buildPlants() {
 
 // ------------------------------------------------------------------ Wikidata nuclear plants
 
+// wdt: answers best-rank values only (a preferred statement hides the normal ones).
+// Capacity is read per statement (?capSt) so two units of the same size stay two
+// figures, and deprecated capacity statements are left out. The OPTIONAL joins
+// multiply the rows (coordinates x countries x statuses x capacities), so every
+// field is collected as a set of distinct values, never counted by rows.
 const NUCLEAR_QUERY = `
-SELECT ?p ?pLabel ?c ?country ?countryLabel ?statusLabel ?watts WHERE {
+SELECT ?p ?pLabel ?c ?country ?countryLabel ?statusLabel ?capSt ?watts WHERE {
   ?p wdt:P31/wdt:P279* wd:Q134447; wdt:P625 ?c.
   OPTIONAL { ?p wdt:P17 ?country }
   OPTIONAL { ?p wdt:P5817 ?status }
-  OPTIONAL { ?p p:P2109/psn:P2109/wikibase:quantityAmount ?watts }
+  OPTIONAL {
+    ?p p:P2109 ?capSt.
+    ?capSt psn:P2109/wikibase:quantityAmount ?watts.
+    FILTER NOT EXISTS { ?capSt wikibase:rank wikibase:DeprecatedRank }
+  }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en,mul,fr,de,es,ja,zh,ru,uk,ko,pt,it,sv,cs,fi,nl". }
 }`;
+
+/** Coordinates as distinct "lon lat" values, sorted west to east (then south to north), so the drawn one is fixed. */
+function distinctCoords(set) {
+  return [...set]
+    .map((k) => k.split(" ").map(Number))
+    .filter(([lon, lat]) => Number.isFinite(lon) && Number.isFinite(lat))
+    .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+}
 
 async function buildNuclear() {
   const url = `${WDQS}?format=json&query=${encodeURIComponent(NUCLEAR_QUERY)}`;
@@ -343,20 +361,21 @@ async function buildNuclear() {
     const q = b.p.value.replace(/^.*\//, "");
     let e = byQ.get(q);
     if (!e) {
-      e = { q, name: undefined, coords: [], countries: new Set(), countryQs: new Set(), status: new Set(), watts: new Set() };
+      e = { q, name: undefined, coords: new Set(), countries: new Set(), countryQs: new Set(), status: new Set(), watts: new Map() };
       byQ.set(q, e);
     }
     const label = b.pLabel?.value;
     // The label service answers the bare Q-id when no listed language has a label.
     if (label && label !== q) e.name = label;
     const m = (b.c?.value ?? "").match(/Point\(([-\d.eE]+) ([-\d.eE]+)\)/);
-    if (m) e.coords.push([Number(m[1]), Number(m[2])]);
+    if (m) e.coords.add(`${Number(m[1])} ${Number(m[2])}`);
     if (b.country) {
       e.countryQs.add(b.country.value.replace(/^.*\//, ""));
       if (b.countryLabel?.value) e.countries.add(b.countryLabel.value);
     }
     if (b.statusLabel?.value) e.status.add(b.statusLabel.value);
-    if (b.watts?.value != null && Number.isFinite(Number(b.watts.value))) e.watts.add(Number(b.watts.value));
+    // Keyed by statement: the row product repeats each one, and two statements can share a value.
+    if (b.capSt?.value && b.watts?.value != null && Number.isFinite(Number(b.watts.value))) e.watts.set(b.capSt.value, Number(b.watts.value));
   }
   const rows = [];
   let us = 0;
@@ -367,18 +386,19 @@ async function buildNuclear() {
       continue;
     }
     if (!e.countryQs.size) noCountry++;
-    const [lon, lat] = e.coords[0] ?? [];
-    if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+    const coords = distinctCoords(e.coords);
+    if (!coords.length) continue;
+    const [lon, lat] = coords[0];
     // Several capacity statements (a plant and its extension): keep them all rather than pick one.
-    const mw = [...e.watts].map((w) => Math.round(w / 1e4) / 100).sort((a, b) => b - a);
-    rows.push([e.q, e.name ?? null, Number(lon.toFixed(5)), Number(lat.toFixed(5)), [...e.countries].join(" / ") || null, [...e.status].sort(), mw, e.coords.length]);
+    const mw = [...e.watts.values()].map((w) => Math.round(w / 1e4) / 100).sort((a, b) => b - a);
+    rows.push([e.q, e.name ?? null, Number(lon.toFixed(5)), Number(lat.toFixed(5)), [...e.countries].sort().join(" / ") || null, [...e.status].sort(), mw, coords.length]);
   }
   const doc = {
     source: "Wikidata (CC0), items that are an instance of nuclear power plant (Q134447) or a subclass, with a coordinate location",
     query: NUCLEAR_QUERY.trim(),
     endpoint: WDQS,
     pulled: new Date().toISOString().slice(0, 10),
-    note: "Plants in the United States (country Q30) are left out: the layer shows them from EIA-860M. Status labels (P5817) and nameplate capacity (P2109, converted from Wikidata's normalised watts) only where Wikidata has them; completeness is Wikidata's.",
+    note: "Plants in the United States (country Q30) are left out: the layer shows them from EIA-860M. Status labels (P5817) and nameplate capacity (P2109, converted from Wikidata's normalised watts, one figure per non-deprecated statement) only where Wikidata has them; completeness is Wikidata's. coordinateCount is the number of distinct best-rank coordinate locations (P625); when there are several, lon/lat is the westernmost.",
     columns: ["qid", "name", "lon", "lat", "country", "status[]", "nameplateMW[]", "coordinateCount"],
     leftOutInUS: us,
     withoutCountry: noCountry,
@@ -389,5 +409,8 @@ async function buildNuclear() {
   console.log(`Wikidata: ${rows.length} plants outside the US (${us} US left out, ${noCountry} with no country) -> ${file}`);
 }
 
-await buildPlants();
-await buildNuclear();
+// `node scripts/infra-data.mjs` rebuilds both; `... eia` or `... nuclear` rebuilds one.
+const only = process.argv[2];
+if (only && only !== "eia" && only !== "nuclear") throw new Error(`unknown snapshot ${only}: eia | nuclear`);
+if (!only || only === "eia") await buildPlants();
+if (!only || only === "nuclear") await buildNuclear();
