@@ -127,10 +127,10 @@ export async function GET(req: NextRequest) {
           r.value.cams,
           "caltrans-cwwp2",
           "caltrans",
-          "https://cwwp2.dot.ca.gov/data/d{1..12}/cctv/cctvStatusD{01..12}.json",
+          "https://cwwp2.dot.ca.gov/documentation/cctv/cctv.htm",
           r.age,
           r.value.failed.length ? 600 : 1800,
-          { notes: ["12 district files"] },
+          { seriesId: "cctvStatusD01.json to cctvStatusD12.json", notes: ["12 district files, e.g. https://cwwp2.dot.ca.gov/data/d7/cctv/cctvStatusD07.json"] },
           r.value.failed.length ? [`Caltrans district file${r.value.failed.length === 1 ? "" : "s"} ${r.value.failed.join(", ")} did not answer; those cameras are missing, not absent.`] : [],
         );
       }
