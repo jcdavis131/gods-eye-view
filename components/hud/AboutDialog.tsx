@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Info } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { LAYERS } from "@/lib/layers";
+import { TERRARIUM_ATTRIBUTION } from "@/lib/terrain/products";
 
 export default function AboutButton({ compact = false }: { compact?: boolean }) {
   const [open, setOpen] = useState(false);
@@ -72,7 +73,7 @@ export default function AboutButton({ compact = false }: { compact?: boolean }) 
               <div className="hud-label mb-1">Globe</div>
               <p className="text-foreground/80">
                 CesiumJS with Esri World Imagery and NASA Black Marble night lights, no account required. Add a Google Maps
-                key for Photorealistic 3D Tiles or a Cesium ion token for world terrain in Settings.
+                key for Photorealistic 3D Tiles in Settings. 3D terrain (Settings) is keyless: AWS Terrain Tiles (Mapzen / Tilezen), or Cesium World Terrain with a Cesium ion token. Terrain data credits: {TERRARIUM_ATTRIBUTION.join("; ")}.
               </p>
             </section>
             <section>
