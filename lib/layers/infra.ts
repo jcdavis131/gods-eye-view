@@ -22,7 +22,7 @@
 
 import type { FeatureCollection } from "geojson";
 import { bboxAround } from "@/lib/globe/geo";
-import type { FetchContext, FetchResult, LayerDefinition, LayerFeature, LayerId, ViewState } from "./types";
+import type { FetchContext, FetchResult, LayerDefinition, LayerFeature, LayerId, LoadedBoxExtra, ViewState } from "./types";
 import { proxy } from "./aircraft";
 import { FeatureMemo } from "./featureMemo";
 
@@ -82,8 +82,12 @@ export function boxViewKey(tiers: BoxTier[]) {
   };
 }
 
-/** The box a layer loaded, as a dashed outline feature (kind "loaded-box"; never counted or searched). */
-export function loadedBox(layer: LayerId, b: [number, number, number, number], what: string): LayerFeature {
+/**
+ * The box a layer loaded, as a dashed outline feature (kind "loaded-box"; never counted or
+ * searched). Its extra says what the answer left out (a record limit, coarsened outlines, a
+ * size floor), so the area report can say a length or a count is partial.
+ */
+export function loadedBox(layer: LayerId, b: [number, number, number, number], what: string, extra: LoadedBoxExtra = {}): LayerFeature {
   const [w, s, e, n] = b;
   return {
     type: "Feature",
@@ -98,6 +102,7 @@ export function loadedBox(layer: LayerId, b: [number, number, number, number], w
         "what this is": `the box ${what} were loaded for. Outside it nothing is loaded, which is not the same as none being there`,
         box: `${w}, ${s} to ${e}, ${n}`,
       },
+      extra,
     },
   };
 }
@@ -142,7 +147,9 @@ function boxLayer(o: BoxLayerOptions): LayerDefinition {
       const meta = env as unknown as Record<string, unknown>;
       const features = memo.stable(env.data.features as unknown as LayerFeature[]);
       const loaded = Array.isArray(meta.bbox) && meta.bbox.length === 4 ? (meta.bbox as [number, number, number, number]) : bbox;
-      const drawn = o.loadedBox && !t.world ? [...features, loadedBox(o.id, loaded, o.label.toLowerCase())] : features;
+      const floorMw = t.params?.startsWith("min=") ? Number(t.params.slice(4)) : undefined;
+      const left: LoadedBoxExtra = { truncated: meta.truncated === true, coarsenedForSize: meta.coarsenedForSize === true, floorMw: floorMw || undefined };
+      const drawn = o.loadedBox && !t.world ? [...features, loadedBox(o.id, loaded, o.label.toLowerCase(), left)] : features;
       const trunc = meta.truncated ? " · record limit hit, zoom in for the rest" : "";
       const coarse = meta.coarsenedForSize ? " · outlines coarsened to fit" : "";
       return {

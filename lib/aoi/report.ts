@@ -13,9 +13,11 @@
 //
 // A layer that is off, still loading or failing is listed as missing, never
 // as zero; samples outside the box a layer loaded are "not loaded", never
-// "none". Pure, tested.
+// "none". A line length or a count over an area that runs past the loaded box,
+// or from an answer that hit a record limit or was coarsened, says it is
+// partial. Pure, tested.
 
-import type { LayerFeature, LayerId } from "@/lib/layers/types";
+import type { LayerFeature, LayerId, LoadedBoxExtra } from "@/lib/layers/types";
 import type { Access, FloodZoneExtra, PublicLandExtra, WetlandExtra } from "@/lib/land/features";
 import type { FaultExtra, PipelineExtra, RailExtra, TransmissionExtra } from "@/lib/infra/features";
 import { FAULT_AGE_LEGEND, PIPELINE_LABEL } from "@/lib/infra/features";
@@ -104,6 +106,32 @@ function loadedBoxOf(fs: LayerFeature[]): Box | null {
   return ringBox(b.geometry.coordinates[0]);
 }
 
+/** What the loaded box says the answer left out (record limit, coarsening, a size floor). */
+function loadedExtraOf(fs: LayerFeature[]): LoadedBoxExtra {
+  return (fs.find((f) => f.properties.kind === "loaded-box")?.properties.extra as LoadedBoxExtra | undefined) ?? {};
+}
+
+const boxWithin = (a: Box, b: Box) => a[0] >= b[0] && a[1] >= b[1] && a[2] <= b[2] && a[3] <= b[3];
+const boxesMeet = (a: Box, b: Box) => a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] >= b[1];
+
+/** How much of the area a near-only layer's answer covers: all of it, part of it, or none. */
+function coverage(own: LayerFeature[], area: Box): "all" | "part" | "none" | "unknown" {
+  const loaded = loadedBoxOf(own);
+  if (!loaded) return "unknown";
+  if (boxWithin(area, loaded)) return "all";
+  return boxesMeet(area, loaded) ? "part" : "none";
+}
+
+/** Notes for an answer that is partial: the area runs past the loaded box, the record limit, coarsened outlines. */
+function partialNotes(own: LayerFeature[], area: Box, what: string, limitOrder?: string): string[] {
+  const notes: string[] = [];
+  const x = loadedExtraOf(own);
+  if (coverage(own, area) === "part") notes.push(`Part of the area lies outside the box this layer loaded: ${what} cover only the loaded part, so they are not totals. Move the camera over the area, or draw a smaller one.`);
+  if (x.truncated) notes.push(`The service's record limit was hit when this layer loaded${limitOrder ? ` (${limitOrder} first)` : ""}: ${what} are a floor, not a total. Zoom in for the rest.`);
+  if (x.coarsenedForSize) notes.push(`Outlines were coarsened to fit the response: ${what} are approximate.`);
+  return notes;
+}
+
 interface ShareSpec {
   layer: LayerId;
   title: string;
@@ -153,13 +181,32 @@ interface LengthSpec {
   title: string;
   source: string;
   classOf: (f: LayerFeature) => string;
+  /** Which segments the route returns first when the record limit is hit. */
+  limitOrder?: string;
 }
 
 function lengthSection(spec: LengthSpec, all: LayerFeature[], ring: Ring): ReportSection | null {
   const box = ringBox(ring);
+  const own = all.filter((f) => f.properties.layer === spec.layer);
+  // Every line layer draws its loaded box whenever it loaded anything: none means nothing
+  // was loaded (the camera is above the heights it loads at), and an area outside it is unloaded.
+  const cover = coverage(own, box);
+  if (cover === "unknown" || cover === "none")
+    return {
+      title: spec.title,
+      source: spec.source,
+      lines: [
+        {
+          label: "inside the area",
+          value: "not loaded",
+          formula: cover === "none" ? "the area lies outside the box this layer loaded; move the camera over it" : "this layer has loaded nothing here (it loads only near the camera); move the camera down over the area",
+        },
+      ],
+    };
+  const notes = partialNotes(own, box, "lengths", spec.limitOrder);
   const by = new Map<string, { m: number; n: number }>();
-  for (const f of all) {
-    if (f.properties.layer !== spec.layer || !countable(f)) continue;
+  for (const f of own) {
+    if (!countable(f)) continue;
     let m = 0;
     for (const part of lineParts(f.geometry)) m += lengthInside(part, ring, box);
     if (m <= 0) continue;
@@ -169,11 +216,11 @@ function lengthSection(spec: LengthSpec, all: LayerFeature[], ring: Ring): Repor
     cur.n++;
     by.set(c, cur);
   }
-  if (!by.size) return { title: spec.title, source: spec.source, lines: [{ label: "inside the area", value: "none of the loaded lines" }] };
+  if (!by.size) return { title: spec.title, source: spec.source, lines: [{ label: "inside the area", value: "none of the loaded lines" }], notes };
   const lines = [...by.entries()]
     .sort((a, b) => b[1].m - a[1].m)
-    .map(([c, v]) => ({ label: c, value: fmtKm(v.m), formula: `Σ of 200 m steps whose midpoint is inside, over ${v.n} segment${v.n === 1 ? "" : "s"}` }));
-  return { title: spec.title, source: spec.source, lines };
+    .map(([c, v]) => ({ label: c, value: fmtKm(v.m), formula: `Σ of 200 m steps whose midpoint is inside, over ${v.n} loaded segment${v.n === 1 ? "" : "s"}` }));
+  return { title: spec.title, source: spec.source, lines, notes };
 }
 
 const ACCESS_WORD: Record<Access, string> = { open: "open access", restricted: "restricted access", closed: "closed", unknown: "access unknown" };
@@ -236,10 +283,10 @@ export function areaReport(input: ReportInput): AreaReport {
   }
 
   const lengths: LengthSpec[] = [
-    { layer: "transmission", title: "Transmission lines (HIFLD archive)", source: "HIFLD, last updated 2024-09-30", classOf: (f) => { const x = f.properties.extra as TransmissionExtra | undefined; return x?.kv != null ? `${x.kv} kV` : "voltage not published"; } },
-    { layer: "pipelines", title: "Pipelines (EIA, generalized)", source: "EIA pipeline maps", classOf: (f) => PIPELINE_LABEL[(f.properties.extra as PipelineExtra | undefined)?.commodity ?? "natgas"] },
-    { layer: "rail", title: "Rail (FRA/BTS)", source: "North American Rail Network", classOf: (f) => (f.properties.extra as RailExtra | undefined)?.cls ?? "rail" },
-    { layer: "faults", title: "Quaternary faults (USGS)", source: "USGS Qfaults · not a forecast", classOf: (f) => FAULT_AGE_LEGEND[(f.properties.extra as FaultExtra | undefined)?.ageClass ?? "unspecified"] },
+    { layer: "transmission", title: "Transmission lines (HIFLD archive)", source: "HIFLD, last updated 2024-09-30", limitOrder: "highest voltage", classOf: (f) => { const x = f.properties.extra as TransmissionExtra | undefined; return x?.kv != null ? `${x.kv} kV` : "voltage not published"; } },
+    { layer: "pipelines", title: "Pipelines (EIA, generalized)", source: "EIA pipeline maps", limitOrder: "in each service's own order", classOf: (f) => PIPELINE_LABEL[(f.properties.extra as PipelineExtra | undefined)?.commodity ?? "natgas"] },
+    { layer: "rail", title: "Rail (FRA/BTS)", source: "North American Rail Network", limitOrder: "longest segments", classOf: (f) => (f.properties.extra as RailExtra | undefined)?.cls ?? "rail" },
+    { layer: "faults", title: "Quaternary faults (USGS)", source: "USGS Qfaults · not a forecast", limitOrder: "longest traces", classOf: (f) => FAULT_AGE_LEGEND[(f.properties.extra as FaultExtra | undefined)?.ageClass ?? "unspecified"] },
   ];
   for (const s of lengths) {
     if (!on[s.layer]) continue;
@@ -263,16 +310,32 @@ export function areaReport(input: ReportInput): AreaReport {
     arr.push(f);
   }
   const pointLines: ReportLine[] = [];
+  const pointNotes: string[] = [];
   for (const [l, fs] of counts) {
     pointLines.push({ label: label(l), value: `${fs.length}` });
+    const own = features.filter((f) => f.properties.layer === l);
+    for (const n of partialNotes(own, box, "counts and sums", undefined)) pointNotes.push(`${label(l)}: ${n}`);
     if (l === "plants") {
       const eia = fs.filter((f) => (f.properties.extra as PlantExtra | undefined)?.source === "eia");
+      const wd = fs.length - eia.length;
       const mws = eia.map((f) => (f.properties.extra as PlantExtra).mw).filter((x): x is number => x != null);
+      const floor = loadedExtraOf(own).floorMw;
+      const loadedAsWorld = !loadedBoxOf(own);
       if (mws.length)
         pointLines.push({
           label: "operating nameplate capacity (EIA-860M)",
           value: `${Math.round(mws.reduce((a, b) => a + b, 0)).toLocaleString("en-US")} MW`,
-          formula: `Σ of ${mws.length} plants' published nameplate MW${eia.length > mws.length ? `; ${eia.length - mws.length} planned-only plants add none` : ""}`,
+          formula: [
+            `Σ of ${mws.length} loaded US plants' published operating nameplate MW`,
+            ...(eia.length > mws.length ? [`${eia.length - mws.length} planned-only plants add none`] : []),
+            "a generator EIA lists with no nameplate value adds nothing to its plant's MW (the plant's dossier counts it)",
+            ...(wd ? [`${wd} nuclear plant${wd === 1 ? "" : "s"} from Wikidata ${wd === 1 ? "is" : "are"} not summed (another source)`] : []),
+            ...(floor
+              ? [`at this camera height the layer loads only US plants of ${floor} MW or more, so smaller plants are not in the sum`]
+              : loadedAsWorld
+                ? ["the layer was loaded as its world view, which asks only for its largest plants (its note gives the floor), so smaller plants are not in the sum"]
+                : []),
+          ].join("; "),
         });
     }
     if (l === "dams") {
@@ -284,7 +347,7 @@ export function areaReport(input: ReportInput): AreaReport {
       pointLines.push({ label: "dams by hazard potential (NID)", value: [...by.entries()].map(([k, v]) => `${k} ${v}`).join(", "), formula: "hazard potential is the consequence of a failure, not the dam's condition" });
     }
   }
-  if (pointLines.length) sections.push({ title: "Counted inside", source: "every loaded point layer", lines: pointLines, notes: ["Only what the layers that are on had loaded; a layer's box can end inside the area."] });
+  if (pointLines.length) sections.push({ title: "Counted inside", source: "every loaded point layer", lines: pointLines, notes: ["Only what the layers that are on had loaded; a layer's box can end inside the area.", ...pointNotes] });
 
   for (const l of ["landcover", "firehazard", "slope", "soils", "geology"] as LayerId[]) {
     if (on[l]) missing.push(`${label(l)}: a picture, not features; click the ground inside the area for its value there`);

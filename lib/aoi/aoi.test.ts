@@ -3,7 +3,7 @@
 // known answer; the line layer is HIFLD's captured Austin payload.
 
 import { describe, expect, it } from "vitest";
-import type { LayerFeature, LayerId } from "@/lib/layers/types";
+import type { LayerFeature, LayerId, LoadedBoxExtra } from "@/lib/layers/types";
 import { buildFloodZones } from "@/lib/land/features";
 import { buildTransmission, type Row } from "@/lib/infra/features";
 import transmission from "@/lib/infra/fixtures/transmission-austin.json";
@@ -12,6 +12,12 @@ import { featuresInside, insideCsv, insideGeoJson, newWatch, watchCsv, watchStep
 import { areaReport, reportText } from "./report";
 
 const sq = (w: number, s: number, e: number, n: number): Ring => [[w, s], [e, s], [e, n], [w, n]];
+/** A near-only layer's dashed loaded box, with what the answer left out. */
+const loaded = (layer: LayerId, w: number, s: number, e: number, n: number, extra: LoadedBoxExtra = {}): LayerFeature => ({
+  type: "Feature",
+  geometry: { type: "Polygon", coordinates: [[[w, s], [e, s], [e, n], [w, n], [w, s]]] },
+  properties: { id: `${layer}:loaded-box`, layer, name: "Loaded area", kind: "loaded-box", source: "this app", extra },
+});
 const point = (layer: LayerId, id: string, lon: number, lat: number, extra: Partial<LayerFeature["properties"]> = {}): LayerFeature => ({
   type: "Feature",
   geometry: { type: "Point", coordinates: [lon, lat, 0] },
@@ -131,13 +137,52 @@ describe("areaReport", () => {
     expect(r.missing).toEqual(expect.arrayContaining(["flood: off (switch it on to include it)", "Wetlands: no answer yet, or it failed"]));
     expect(r.missing.some((m) => m.startsWith("landcover: a picture"))).toBe(true);
   });
+  const lines = buildTransmission(transmission.features as Row[] as never);
+  const tl = (ring: Ring, box: LayerFeature | null) =>
+    areaReport({ ring, areaM2: 1e10, features: box ? [...lines, box] : lines, answering: new Set<LayerId>(["transmission"]), on: { transmission: true } }).sections.find((s) => s.title.startsWith("Transmission"))!;
   it("sums line length inside the area by class, on HIFLD's Austin lines", () => {
-    const lines = buildTransmission(transmission.features as Row[] as never);
     const big: Ring = sq(-98, 30, -97, 31);
-    const r = areaReport({ ring: big, areaM2: 1e10, features: lines, answering: new Set<LayerId>(["transmission"]), on: { transmission: true } });
+    const r = areaReport({ ring: big, areaM2: 1e10, features: [...lines, loaded("transmission", -99, 29, -96, 32)], answering: new Set<LayerId>(["transmission"]), on: { transmission: true } });
     const t = r.sections.find((s) => s.title.startsWith("Transmission"))!;
     expect(t.lines.length).toBeGreaterThan(0);
     expect(t.lines[0].formula).toMatch(/200 m steps/);
+    expect(t.notes ?? []).toEqual([]);
     expect(reportText(r, "test")).toContain("Transmission lines (HIFLD archive)");
+  });
+  it("says a length is partial when the area runs past the loaded box, and not loaded outside it", () => {
+    const big: Ring = sq(-98, 30, -97, 31);
+    const part = tl(big, loaded("transmission", -98, 30, -97.5, 31));
+    expect(part.lines[0].value).not.toBe("not loaded");
+    expect(part.notes?.some((n) => /outside the box this layer loaded: lengths cover only the loaded part/.test(n))).toBe(true);
+    const away = tl(big, loaded("transmission", -90, 40, -89, 41));
+    expect(away.lines).toEqual([expect.objectContaining({ value: "not loaded" })]);
+    // No loaded box: the layer loaded nothing here (it was above the heights it loads at), which is not "none".
+    const none = tl(big, null);
+    expect(none.lines).toEqual([expect.objectContaining({ value: "not loaded" })]);
+  });
+  it("says a length from a capped or coarsened answer is a floor, not a total", () => {
+    const t = tl(sq(-98, 30, -97, 31), loaded("transmission", -99, 29, -96, 32, { truncated: true, coarsenedForSize: true }));
+    expect(t.notes?.some((n) => /record limit was hit when this layer loaded \(highest voltage first\): lengths are a floor, not a total/.test(n))).toBe(true);
+    expect(t.notes?.some((n) => /coarsened to fit the response: lengths are approximate/.test(n))).toBe(true);
+  });
+  it("names what the plant sum leaves out: planned-only plants, no-nameplate generators, Wikidata plants and the size floor", () => {
+    const ring = sq(0, 0, 1, 1);
+    const plant = (id: string, extra: object) => point("plants", id, 0.5, 0.5, { extra });
+    const fs = [
+      plant("a", { family: "gas", mw: 500, source: "eia" }),
+      plant("b", { family: "solar", plannedMw: 80, source: "eia" }),
+      plant("c", { family: "nuclear", mw: 1000, source: "wikidata" }),
+      loaded("plants", -1, -1, 2, 2, { floorMw: 50 }),
+    ];
+    const r = areaReport({ ring, areaM2: 1e10, features: fs, answering: new Set<LayerId>(["plants"]), on: { plants: true } });
+    const sum = r.sections.find((s) => s.title === "Counted inside")!.lines.find((l) => l.label.startsWith("operating nameplate"))!;
+    expect(sum.value).toBe("500 MW");
+    expect(sum.formula).toContain("1 planned-only plants add none");
+    expect(sum.formula).toContain("no nameplate value adds nothing");
+    expect(sum.formula).toContain("1 nuclear plant from Wikidata is not summed");
+    expect(sum.formula).toContain("only US plants of 50 MW or more");
+    // Loaded as the world view (no loaded box): the sum says so rather than passing as a total.
+    const world = areaReport({ ring, areaM2: 1e10, features: fs.slice(0, 3), answering: new Set<LayerId>(["plants"]), on: { plants: true } });
+    expect(world.sections.find((s) => s.title === "Counted inside")!.lines.find((l) => l.label.startsWith("operating nameplate"))!.formula).toContain("world view");
   });
 });
