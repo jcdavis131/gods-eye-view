@@ -11,6 +11,8 @@ interface Entry<T> {
 
 const store = new Map<string, Entry<unknown>>();
 const inflight = new Map<string, Promise<unknown>>();
+/** Keys whose producer recently timed out or failed: callers fail fast until `until`. */
+const cooling = new Map<string, { until: number; error: Error }>();
 
 export interface Cached<T> {
   value: T;
@@ -19,45 +21,96 @@ export interface Cached<T> {
   hit: boolean;
 }
 
+export interface CachedOptions {
+  /**
+   * Stop waiting after this long. The producer keeps running in the
+   * background and its value is stored when it lands; the caller gets the
+   * last stored value if there is one, otherwise a DeadlineError.
+   */
+  deadlineMs?: number;
+  /**
+   * After a timeout or a failure, callers with no stored value fail fast for
+   * this long instead of waiting on the same upstream again.
+   */
+  coolMs?: number;
+}
+
+export class DeadlineError extends Error {}
+
 /**
  * Get a value from the cache or produce it. Concurrent callers for the same
- * key share one producer call. On upstream failure a stale value is served
- * if one exists.
+ * key share one producer call, and the producer stores its own value, so a
+ * result that lands after every caller gave up is still kept. On upstream
+ * failure a stale value is served if one exists.
  */
 export async function cached<T>(
   key: string,
   ttlMs: number,
   produce: () => Promise<T>,
+  opts: CachedOptions = {},
 ): Promise<Cached<T>> {
   const now = Date.now();
   const hit = store.get(key) as Entry<T> | undefined;
   if (hit && hit.expires > now) {
     return { value: hit.value, age: now - hit.storedAt, hit: true };
   }
+  const stale = (): Cached<T> | null => (hit ? { value: hit.value, age: now - hit.storedAt, hit: true } : null);
+  // Only callers that opted in to cooling are turned away by it.
+  const cool = opts.coolMs ? cooling.get(key) : undefined;
+  if (cool && cool.until > now) {
+    const s = stale();
+    if (s) return s;
+    throw cool.error;
+  }
   let p = inflight.get(key) as Promise<T> | undefined;
   if (!p) {
-    p = produce().finally(() => inflight.delete(key));
+    p = produce()
+      .then((value) => {
+        store.set(key, { value, expires: Date.now() + ttlMs, storedAt: Date.now() });
+        cooling.delete(key);
+        return value;
+      })
+      .finally(() => inflight.delete(key));
     inflight.set(key, p);
+    if (opts.coolMs) {
+      const coolMs = opts.coolMs;
+      p.catch((err: unknown) => {
+        cooling.set(key, { until: Date.now() + coolMs, error: err instanceof Error ? err : new Error(String(err)) });
+      });
+    }
   }
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const value = await p;
-    store.set(key, { value, expires: Date.now() + ttlMs, storedAt: Date.now() });
+    const value = opts.deadlineMs
+      ? await Promise.race([
+          p,
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new DeadlineError(`${key}: no answer within ${Math.round(opts.deadlineMs! / 1000)} s`)), opts.deadlineMs);
+          }),
+        ])
+      : await p;
     return { value, age: 0, hit: false };
   } catch (err) {
-    if (hit) return { value: hit.value, age: now - hit.storedAt, hit: true };
+    if (err instanceof DeadlineError && opts.coolMs) cooling.set(key, { until: Date.now() + opts.coolMs, error: err });
+    const s = stale();
+    if (s) return s;
     throw err;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
 /**
  * Drop one entry. For producers that can succeed while returning nothing
  * useful — a degraded upstream set — so the next caller retries rather than
- * inheriting the outage for the rest of the TTL.
+ * inheriting the outage for the rest of the TTL. Clears the key's cool-down
+ * too, so that retry is not turned away.
  */
 export function cacheDelete(key: string): void {
   store.delete(key);
+  cooling.delete(key);
 }
 
 export function cacheStats() {
-  return { entries: store.size, inflight: inflight.size };
+  return { entries: store.size, inflight: inflight.size, cooling: cooling.size };
 }

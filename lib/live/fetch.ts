@@ -6,9 +6,9 @@
 import { cached } from "@/lib/server/cache";
 import { polite, upstreamJson } from "@/lib/server/upstream";
 import { geojsonRings, roundRings } from "@/lib/fabric/geo";
-import { alertRank, parseAlerts, parseQuakes, liveItems, thinRing, type AlertItem, type NwsAlertCollection, type LiveItem, type QuakeItem } from "./live";
+import { alertRank, LIVE_SEVERITIES, parseAlerts, parseQuakes, liveItems, thinRing, type AlertItem, type NwsAlertCollection, type LiveItem, type QuakeItem } from "./live";
 
-export const ALERTS_URL = "https://api.weather.gov/alerts/active?status=actual&severity=Extreme,Severe";
+export const ALERTS_URL = `https://api.weather.gov/alerts/active?status=actual&severity=${LIVE_SEVERITIES.join(",")}`;
 export const QUAKES_URL = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson";
 /** Most distinct zone outlines one refresh looks up (each is one small NWS call, cached a week). */
 const MAX_ZONES = 160;

@@ -18,7 +18,14 @@
 
 import { geojsonRings, ringCentroid, ringsArea, ringsBbox, type BBox } from "@/lib/fabric/geo";
 
-export type HazardFamily = "tornado" | "flood" | "storm" | "wind" | "fire" | "winter" | "heat" | "marine" | "coastal" | "other";
+/**
+ * The NWS severities the live feed asks for (lib/live/fetch.ts ALERTS_URL).
+ * The Hazard alerts layer leaves exactly these to Live warnings while that
+ * layer is on and draws every other NWS alert itself.
+ */
+export const LIVE_SEVERITIES = ["Extreme", "Severe"] as const;
+
+export type HazardFamily ="tornado" | "flood" | "storm" | "wind" | "fire" | "winter" | "heat" | "marine" | "coastal" | "other";
 
 export const FAMILIES: Record<HazardFamily, { label: string; color: string }> = {
   tornado: { label: "Tornado", color: "#F43F5E" },

@@ -15,7 +15,7 @@ import { ok, options } from "@/lib/server/respond";
 import { jsonError } from "@/lib/server/upstream";
 import { provenance } from "@/lib/provenance/types";
 import { source } from "@/lib/provenance/sources";
-import { fetchLive } from "@/lib/live/fetch";
+import { ALERTS_URL, fetchLive, QUAKES_URL } from "@/lib/live/fetch";
 
 export const maxDuration = 60;
 export const OPTIONS = options;
@@ -36,8 +36,8 @@ export async function GET() {
     if (p.unmapped) caveats.push(`${p.unmapped} alert${p.unmapped === 1 ? "" : "s"} could not be outlined and are not on the globe.`);
     return ok(p, {
       provenance: [
-        provenance(source("nws-api"), { kind: "snapshot", retrievedAt, upstreamUrl: "https://api.weather.gov/alerts/active?status=actual&severity=Extreme,Severe" }),
-        provenance(source("usgs-earthquakes"), { kind: "snapshot", retrievedAt, upstreamUrl: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson" }),
+        provenance(source("nws-api"), { kind: "snapshot", retrievedAt, upstreamUrl: ALERTS_URL }),
+        provenance(source("usgs-earthquakes"), { kind: "snapshot", retrievedAt, upstreamUrl: QUAKES_URL }),
       ],
       caveats,
       ttlS: p.failed.length ? 0 : TTL_S,
