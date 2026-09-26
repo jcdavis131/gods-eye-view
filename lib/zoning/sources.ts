@@ -3,7 +3,8 @@
 //   placeAt        the Census incorporated place under a point (TIGERweb layer 28),
 //                  which picks the city; cached 30 days per ~11 m cell
 //   zoningAt       the city's own district at a point (New York: DCP's district
-//                  plus the Zoning Tax Lot Database row of the lot under it);
+//                  plus the Zoning Tax Lot Database row of the lot under it, or
+//                  DCP's overlay layers at the point when the lot has none);
 //                  cached a day per ~1 m cell
 //   zoningOutlines district outlines in a box for the cities whose services can
 //                  simplify them on the server; cached a day per snapped box
@@ -24,13 +25,17 @@ import {
   hitFor,
   houstonRecord,
   notCoveredRecord,
+  NYC_LOT_GAP,
   NYC_PLUTO_FIELDS,
   NYC_PLUTO_LAYER,
+  nycOverlayRequests,
+  overlaysUnknown,
   parsePlace,
   plutoBbl,
   pointRequest,
   polygonRequest,
   requestUrl,
+  withPointOverlays,
   withZtldb,
   ztldbUrl,
   ZONING_CITIES,
@@ -64,34 +69,66 @@ export interface ZoningAnswer {
   age: number;
   /** Part of the answer did not arrive (New York's tax-lot lookup); not held, and briefly at the edge. */
   partial: boolean;
+  /** New York: neither the tax lot's ZTLDB row nor DCP's overlay layers answered, so the overlays are unknown. */
+  overlaysUnknown: boolean;
+  /** New York: why the overlays did not come from the lot's ZTLDB row. */
+  lotGap?: string;
 }
 
-/** Said in the dossier when New York's lot lookup failed: the overlays are unknown, not absent. */
-export const ZTLDB_MISSING = "did not answer this time; the tax lot's overlays, special districts and limited-height district are unknown, not absent";
+interface NycAnswer {
+  hit: ZoningHit | null;
+  bbl: string | null;
+  /** The lot lookup, when it answered with a lot. */
+  lotUrl?: string;
+  /** The ZTLDB row's URL, when the lot had one. */
+  ztlUrl?: string;
+  /** DCP's point layers, when they answered for the overlays. */
+  overlayUrl?: string;
+  /** Something did not answer: not held, asked again next time. */
+  partial: boolean;
+  /** Neither the ZTLDB nor DCP's point layers answered: the overlays are unknown, not absent. */
+  overlaysUnknown: boolean;
+  /** Why the lot's ZTLDB row could not give the overlays (NYC_LOT_GAP), when it could not. */
+  lotGap?: string;
+}
 
-async function nycHit(lon: number, lat: number): Promise<{ hit: ZoningHit | null; bbl: string | null; lotUrl?: string; ztlUrl?: string; partial: boolean }> {
+/**
+ * New York: the district at the point (DCP), then the tax lot under it
+ * (MapPLUTO, BBL only) and its Zoning Tax Lot Database row for the overlays,
+ * special districts and limited-height district. When the lot has no ZTLDB
+ * row (a condominium billing lot, 75xx), there is no lot (a street), or a
+ * lookup did not answer, DCP's own overlay layers are asked at the point, so
+ * a missing row never reads as "no overlays".
+ */
+async function nycHit(lon: number, lat: number): Promise<NycAnswer> {
   const zd = pointRequest("nyc", lon, lat)!;
   const lotReq = arcgisPoint(NYC_PLUTO_LAYER, lon, lat, NYC_PLUTO_FIELDS);
   const [zdRows, lotRows] = await Promise.all([runRows("nyc-dcp", zd), runRows("nyc-dcp", lotReq).catch(() => null)]);
-  let hit = hitFor("nyc", zdRows.features.map((f) => f.properties ?? {}));
+  const hit = hitFor("nyc", zdRows.features.map((f) => f.properties ?? {}));
   const bbl = lotRows ? plutoBbl(lotRows.features.map((f) => f.properties ?? {})) : null;
-  let ztlUrl: string | undefined;
-  let partial = false;
-  if (hit && !lotRows) {
-    // MapPLUTO did not answer: the district stands, the lot's overlays are unknown.
-    partial = true;
-    hit = { ...hit, published: { ...hit.published, "Zoning Tax Lot Database": ZTLDB_MISSING } };
-  } else if (hit && bbl) {
-    ztlUrl = ztldbUrl(bbl);
-    const z = await runRows("nyc-ztldb", { kind: "socrata", url: ztlUrl }).catch(() => null);
-    if (z) hit = withZtldb(hit, z.features.map((f) => f.properties ?? {}));
-    else {
-      ztlUrl = undefined;
-      partial = true;
-      hit = { ...hit, published: { ...hit.published, "Zoning Tax Lot Database": ZTLDB_MISSING } };
-    }
+  const lotUrl = lotRows && bbl ? requestUrl(lotReq) : undefined;
+  // No district polygon here (a street, water): the lot's overlays would not be asked about.
+  if (!hit) return { hit, bbl, lotUrl, partial: false, overlaysUnknown: false };
+
+  let why: string;
+  let partial = !lotRows;
+  if (!lotRows) why = NYC_LOT_GAP.lotDown;
+  else if (!bbl) why = NYC_LOT_GAP.noLot;
+  else {
+    const url = ztldbUrl(bbl);
+    const z = await runRows("nyc-ztldb", { kind: "socrata", url }).catch(() => null);
+    const rows = z?.features.map((f) => f.properties ?? {}) ?? null;
+    if (rows?.length) return { hit: withZtldb(hit, rows), bbl, lotUrl, ztlUrl: url, partial: false, overlaysUnknown: false };
+    if (!rows) partial = true;
+    why = rows ? NYC_LOT_GAP.condo : NYC_LOT_GAP.ztldbDown;
   }
-  return { hit, bbl, lotUrl: requestUrl(lotReq), ztlUrl, partial };
+
+  const o = nycOverlayRequests(lon, lat);
+  const layers = await Promise.all([o.sp, o.co, o.lh].map((req) => runRows("nyc-dcp", req).then((r) => r.features.map((f) => f.properties ?? {}))))
+    .then(([sp, co, lh]) => ({ sp, co, lh }))
+    .catch(() => null);
+  if (!layers) return { hit: overlaysUnknown(hit, why), bbl, lotUrl, partial: true, overlaysUnknown: true, lotGap: why };
+  return { hit: withPointOverlays(hit, layers.sp, layers.co, layers.lh, why), bbl, lotUrl, overlayUrl: requestUrl(o.sp), partial, overlaysUnknown: false, lotGap: why };
 }
 
 /** What the city says about one point. */
@@ -105,21 +142,21 @@ export async function zoningAt(lon: number, lat: number): Promise<ZoningAnswer> 
     notes: [place ? `${place.name} (GEOID ${place.geoid})` : "no incorporated place at this point"],
   });
   const city = cityByGeoid(place?.geoid);
-  if (!place || !city) return { record: notCoveredRecord(lon, lat, place), provenance: [placeProv], age: placeAge, partial: false };
-  if (city.id === "houston") return { record: houstonRecord(lon, lat, place), provenance: [placeProv], age: placeAge, partial: false };
+  if (!place || !city) return { record: notCoveredRecord(lon, lat, place), provenance: [placeProv], age: placeAge, partial: false, overlaysUnknown: false };
+  if (city.id === "houston") return { record: houstonRecord(lon, lat, place), provenance: [placeProv], age: placeAge, partial: false, overlaysUnknown: false };
 
   const x = Number(lon.toFixed(5));
   const y = Number(lat.toFixed(5));
   const id = city.id as Exclude<ZoningCityId, "houston">;
   const key = `zoning-point:${id}:${x},${y}`;
-  const r = await cached(key, DAY, async () => {
+  const r = await cached(key, DAY, async (): Promise<{ hit: ZoningHit | null; bbl: string | null; partial: boolean; overlaysUnknown: boolean; lotGap?: string; url: string; ztlUrl?: string; overlayUrl?: string }> => {
     if (id === "nyc") {
       const n = await nycHit(x, y);
-      return { hit: n.hit, bbl: n.bbl, partial: n.partial, urls: [requestUrl(pointRequest("nyc", x, y)!), ...(n.ztlUrl ? [n.lotUrl!, n.ztlUrl] : [])] };
+      return { hit: n.hit, bbl: n.bbl, partial: n.partial, overlaysUnknown: n.overlaysUnknown, lotGap: n.lotGap, url: requestUrl(pointRequest("nyc", x, y)!), ztlUrl: n.ztlUrl, overlayUrl: n.overlayUrl };
     }
     const req = pointRequest(id, x, y)!;
     const res = await runRows(`zoning-${id}`, req, id === "sanfrancisco" ? 25_000 : 20_000);
-    return { hit: hitFor(id, res.features.map((f) => f.properties ?? {})), bbl: null as string | null, partial: false, urls: [requestUrl(req)] };
+    return { hit: hitFor(id, res.features.map((f) => f.properties ?? {})), bbl: null, partial: false, overlaysUnknown: false, url: requestUrl(req) };
   });
   // A partial answer is not held: the next caller asks again.
   if (r.value.partial) cacheDelete(key);
@@ -130,23 +167,34 @@ export async function zoningAt(lon: number, lat: number): Promise<ZoningAnswer> 
     provenance(source(src), {
       kind: "published",
       seriesId: city.id === "nyc" ? "nyzd FeatureServer layer 0 (zoning districts)" : undefined,
-      upstreamUrl: r.value.urls[0],
+      upstreamUrl: r.value.url,
       retrievedAt: iso(r.age),
       notes: [`${city.name}: ${record.state}${record.code ? ` ${record.code}` : ""}`],
     }),
   );
-  if (r.value.urls.length > 2) {
+  if (r.value.ztlUrl) {
     prov.push(
       provenance(source("nyc-ztldb"), {
         kind: "published",
         seriesId: "fdkv-4t4z (Zoning Tax Lot Database), by the BBL MapPLUTO gives for the point",
-        upstreamUrl: r.value.urls[2],
+        upstreamUrl: r.value.ztlUrl,
         retrievedAt: iso(r.age),
         notes: [`BBL ${r.value.bbl}`],
       }),
     );
   }
-  return { record, provenance: prov, age: r.age, partial: r.value.partial };
+  if (r.value.overlayUrl) {
+    prov.push(
+      provenance(source("nyc-dcp-zoning"), {
+        kind: "published",
+        seriesId: "nysp, nyco and nylh FeatureServer layer 0 (special purpose districts, commercial overlays, limited-height districts) at the point",
+        upstreamUrl: r.value.overlayUrl,
+        retrievedAt: iso(r.age),
+        notes: [record.published["overlays from"] ?? "overlays at the point"],
+      }),
+    );
+  }
+  return { record, provenance: prov, age: r.age, partial: r.value.partial, overlaysUnknown: r.value.overlaysUnknown, lotGap: r.value.lotGap };
 }
 
 export interface OutlineSource {

@@ -2237,7 +2237,7 @@
     "/api/zoning": {
       "get": {
         "summary": "The zoning district at a point, district outlines in a box, or which cities are covered",
-        "description": "op=point: the district a city's own zoning GIS puts the point in, with the city's description and category words, overlays and special districts, ordinance, effective date, case number and code link where the city publishes them. `state` is one of district, right-of-way (San Antonio's UZROW), no-district (no polygon at the point: a street, water or a gap; never 'unzoned'), no-ordinance (Houston) or not-covered (no source wired for the Census place under the point). New York adds the Zoning Tax Lot Database row of the tax lot under the point (MapPLUTO is asked for the BBL only). op=districts: district outlines (code and colour family only) from every covered city the box meets, generalised on each city's server to about 3 m; boxes clamped to 0.04° and snapped to 0.0025°. op=coverage: the cities, what each answers and why. Zoning as each city's GIS publishes it; the adopted zoning map and code govern.",
+        "description": "op=point: the district a city's own zoning GIS puts the point in, with the city's description and category words, overlays and special districts, ordinance, effective date, case number and code link where the city publishes them. `state` is one of district, right-of-way (San Antonio's UZROW), no-district (no polygon at the point: a street, water or a gap; never 'unzoned'), no-ordinance (Houston) or not-covered (no source wired for the Census place under the point). New York adds the Zoning Tax Lot Database row of the tax lot under the point (MapPLUTO is asked for the BBL only), or DCP's overlay layers at the point where the lot has no row (condominium billing lots) or there is no lot; `overlaysUnknown` is true when neither answered. op=districts: district outlines (code and colour family only) from every covered city the box meets, generalised on each city's server to about 3 m; boxes clamped to 0.04° and snapped to 0.0025°. op=coverage: the cities, what each answers and why. Zoning as each city's GIS publishes it; the adopted zoning map and code govern.",
         "tags": [
           "zoning"
         ],
@@ -4847,6 +4847,14 @@
                   "not-covered"
                 ]
               },
+              "partial": {
+                "type": "boolean",
+                "description": "Part of the answer did not arrive this time (a New York lookup); it is not held, and the next request asks again."
+              },
+              "overlaysUnknown": {
+                "type": "boolean",
+                "description": "New York: neither the tax lot's Zoning Tax Lot Database row nor DCP's overlay layers answered, so `data.overlays` is unknown, not empty."
+              },
               "data": {
                 "type": "object",
                 "required": [
@@ -4939,7 +4947,8 @@
                     "type": "array",
                     "items": {
                       "type": "string"
-                    }
+                    },
+                    "description": "Overlays, special districts and combining districts as published. New York: from the tax lot's Zoning Tax Lot Database row, or, where the lot has no row (a condominium's billing lot, 75xx) or there is no lot, from DCP's special purpose district, commercial overlay and limited-height layers at the point; `published['overlays from']` says which, and `published.overlays` says when they are unknown."
                   },
                   "alsoHere": {
                     "type": "array",

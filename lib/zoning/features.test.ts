@@ -2,7 +2,10 @@
 // 2026-09-26, with the exact requests the route sends (lib/zoning/fixtures).
 // San Francisco's point is City Hall; its outlines are 13 of the 413 the
 // layer's box around Union Square answered (-122.4175,37.78,-122.3975,37.795),
-// up to three per general category. No network.
+// up to three per general category. New York's condo fixtures are One57
+// (-73.97905,40.76538), whose billing BBL 1010107506 has no ZTLDB row; the
+// overlay and limited-height fixtures are Montague Street, Brooklyn Heights
+// (-73.994,40.695). No network.
 import { describe, expect, it } from "vitest";
 import {
   arcgisPoint,
@@ -16,15 +19,19 @@ import {
   houstonRecord,
   isoDate,
   notCoveredRecord,
+  NYC_LOT_GAP,
   NYC_PLUTO_FIELDS,
   NYC_PLUTO_LAYER,
   nycFamily,
+  nycOverlayRequests,
+  overlaysUnknown,
   parsePlace,
   plutoBbl,
   pointRequest,
   polygonRequest,
   requestUrl,
   str,
+  withPointOverlays,
   withZtldb,
   ZONING_CITIES,
   ZONING_CITY_IDS,
@@ -36,6 +43,14 @@ import denverPoint from "./fixtures/denver-point.json";
 import nycPoint from "./fixtures/nyc-point.json";
 import nycPluto from "./fixtures/nyc-pluto.json";
 import nycZtldb from "./fixtures/nyc-ztldb.json";
+import condoPoint from "./fixtures/nyc-condo-point.json";
+import condoPluto from "./fixtures/nyc-condo-pluto.json";
+import condoZtldb from "./fixtures/nyc-condo-ztldb.json";
+import condoNysp from "./fixtures/nyc-condo-nysp.json";
+import condoNyco from "./fixtures/nyc-condo-nyco.json";
+import condoNylh from "./fixtures/nyc-condo-nylh.json";
+import heightsNyco from "./fixtures/nyc-heights-nyco.json";
+import heightsNylh from "./fixtures/nyc-heights-nylh.json";
 import chicagoPoint from "./fixtures/chicago-point.json";
 import dallasPoint from "./fixtures/dallas-point.json";
 import saPoint from "./fixtures/sanantonio-point.json";
@@ -130,6 +145,31 @@ describe("city adapters on captured payloads", () => {
     expect(full.overlays).toEqual(["special district MiD"]);
     expect(full.published["districts on this tax lot"]).toBe("C5-3, C6-4.5");
     expect(full.published["zoning map"]).toBe("8D");
+  });
+
+  it("New York: a condominium's billing lot has no ZTLDB row, so DCP's layers at the point give its special district", () => {
+    const h = hitFor("nyc", rows(condoPoint))!;
+    expect(plutoBbl(rows(condoPluto))).toBe("1010107506");
+    // The ZTLDB answers nothing for a 75xx lot; folding nothing in changes nothing, which the route must not report as "no overlays".
+    expect(withZtldb(h, rows(condoZtldb))).toEqual(h);
+    const full = withPointOverlays(h, rows(condoNysp), rows(condoNyco), rows(condoNylh), NYC_LOT_GAP.condo);
+    expect(full.overlays).toEqual(["special district MiD"]);
+    expect(full.published["special purpose district"]).toBe("Special Midtown District");
+    expect(full.published["overlays from"]).toContain(NYC_LOT_GAP.condo);
+  });
+
+  it("New York: commercial overlays and limited-height districts from DCP's layers, as published (Brooklyn Heights)", () => {
+    const h = { code: "R6", family: "residential" as const, overlays: [], published: {} };
+    const full = withPointOverlays(h, [], rows(heightsNyco), rows(heightsNylh), NYC_LOT_GAP.noLot);
+    expect(full.overlays).toEqual(["commercial overlay C1-3", "limited height LH-1"]);
+    expect(full.published["special purpose district"]).toBeUndefined();
+    const req = nycOverlayRequests(-73.994, 40.695);
+    expect([req.sp, req.co, req.lh].map((r) => r.params.outFields)).toEqual(["SDLBL,SDNAME", "OVERLAY", "LHLBL,LHNAME"]);
+  });
+
+  it("New York: when nothing answers for the overlays they are unknown, never an empty list read as none", () => {
+    const u = overlaysUnknown({ code: "C5-3", family: "commercial", overlays: [], published: {} }, NYC_LOT_GAP.lotDown);
+    expect(u.published.overlays).toMatch(/^unknown, not absent: MapPLUTO did not answer this time/);
   });
 
   it("New York: MapPLUTO is asked for the BBL only, never the owner", () => {

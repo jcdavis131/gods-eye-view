@@ -12,6 +12,12 @@ import chicagoPoint from "@/lib/zoning/fixtures/chicago-point.json";
 import nycPoint from "@/lib/zoning/fixtures/nyc-point.json";
 import nycPluto from "@/lib/zoning/fixtures/nyc-pluto.json";
 import nycZtldb from "@/lib/zoning/fixtures/nyc-ztldb.json";
+import condoPoint from "@/lib/zoning/fixtures/nyc-condo-point.json";
+import condoPluto from "@/lib/zoning/fixtures/nyc-condo-pluto.json";
+import condoZtldb from "@/lib/zoning/fixtures/nyc-condo-ztldb.json";
+import condoNysp from "@/lib/zoning/fixtures/nyc-condo-nysp.json";
+import condoNyco from "@/lib/zoning/fixtures/nyc-condo-nyco.json";
+import condoNylh from "@/lib/zoning/fixtures/nyc-condo-nylh.json";
 import seattleOutlines from "@/lib/zoning/fixtures/seattle-outlines.json";
 import sfOutlines from "@/lib/zoning/fixtures/sanfrancisco-outlines.json";
 
@@ -23,6 +29,9 @@ const place = (geoid: string, name: string): Fc => ({ features: [{ geometry: nul
 const calls: string[] = [];
 let placeAnswer: Fc = place("5363000", "Seattle city");
 let failZtldb = false;
+let failOverlays = false;
+/** One57 (157 W 57th St), a condominium: MapPLUTO answers its billing BBL, which has no ZTLDB row. */
+const ONE57 = "-73.97905,40.76538";
 
 vi.mock("@/lib/server/cache", () => ({
   cached: async <T,>(_k: string, _ttl: number, produce: () => Promise<T>) => ({ value: await produce(), age: 0, hit: false }),
@@ -38,11 +47,16 @@ vi.mock("@/lib/civic/request", () => ({
     if (url.includes("Current_Land_Use_Zoning_Detail_2")) return r(req.params?.returnGeometry === "true" ? asRows(seattleOutlines) : asRows(seattlePoint));
     if (url.includes("dj47-wfun")) return r(asRows(chicagoPoint));
     if (url.includes("3i4a-hu95.geojson")) return r(asRows(sfOutlines));
-    if (url.includes("/nyzd/")) return r(asRows(nycPoint));
-    if (url.includes("/MAPPLUTO/")) return r(asRows(nycPluto));
+    const atOne57 = req.params?.geometry === ONE57;
+    if (url.includes("/nyzd/")) return r(asRows(atOne57 ? condoPoint : nycPoint));
+    if (url.includes("/MAPPLUTO/")) return r(asRows(atOne57 ? condoPluto : nycPluto));
     if (url.includes("fdkv-4t4z")) {
       if (failZtldb) throw new Error("nyc-ztldb 503");
-      return r(asRows(nycZtldb));
+      return r(asRows(url.includes("1010107506") ? condoZtldb : nycZtldb));
+    }
+    if (/\/(nysp|nyco|nylh)\//.test(url)) {
+      if (failOverlays) throw new Error("nyc-dcp 503");
+      return r(asRows(url.includes("/nysp/") ? condoNysp : url.includes("/nyco/") ? condoNyco : condoNylh));
     }
     throw new Error(`unexpected request ${url}`);
   },
@@ -58,6 +72,7 @@ async function get(qs: string) {
 beforeEach(() => {
   calls.length = 0;
   failZtldb = false;
+  failOverlays = false;
 });
 
 describe("/api/zoning?op=point", () => {
@@ -93,17 +108,53 @@ describe("/api/zoning?op=point", () => {
     expect(body.provenance.map((p) => p.source.id)).toEqual(["census-tigerweb", "nyc-dcp-zoning", "nyc-ztldb"]);
   });
 
-  it("says New York's lot overlays are unknown when the ZTLDB does not answer, and holds that briefly", async () => {
+  it("says New York's overlays are unknown when neither the ZTLDB nor DCP's overlay layers answer, and holds that briefly", async () => {
     placeAnswer = place("3651000", "New York city");
     failZtldb = true;
+    failOverlays = true;
     const res = await GET(new NextRequest("http://localhost/api/zoning?op=point&lon=-73.9857&lat=40.7484"));
-    const body = (await res.json()) as { partial: boolean; data: { code: string; overlays: string[]; published: Record<string, string> }; caveats: string[] };
+    const body = (await res.json()) as { partial: boolean; overlaysUnknown: boolean; data: { code: string; overlays: string[]; published: Record<string, string> }; caveats: string[] };
     expect(body.partial).toBe(true);
+    expect(body.overlaysUnknown).toBe(true);
     expect(body.data.code).toBe("C6-4.5");
     expect(body.data.overlays).toEqual([]);
-    expect(body.data.published["Zoning Tax Lot Database"]).toMatch(/unknown, not absent/);
+    expect(body.data.published.overlays).toMatch(/^unknown, not absent: the Zoning Tax Lot Database did not answer this time/);
     expect(body.caveats.join(" ")).toMatch(/unknown \(not absent\)/);
     expect(res.headers.get("cache-control")).toContain("s-maxage=300");
+  });
+
+  it("gives a condominium lot (billing BBL 1010107506, no ZTLDB row) its special district from DCP's layers at the point", async () => {
+    placeAnswer = place("3651000", "New York city");
+    const res = await GET(new NextRequest("http://localhost/api/zoning?op=point&lon=-73.97905&lat=40.76538"));
+    const body = (await res.json()) as {
+      partial: boolean;
+      overlaysUnknown: boolean;
+      data: { code: string; overlays: string[]; lot?: { bbl: string }; published: Record<string, string> };
+      caveats: string[];
+      provenance: Array<{ source: { id: string }; seriesId?: string }>;
+    };
+    expect(body.data).toMatchObject({ code: "C5-3", lot: { bbl: "1010107506" }, overlays: ["special district MiD"] });
+    expect(body.data.published["special purpose district"]).toBe("Special Midtown District");
+    expect(body.data.published["overlays from"]).toMatch(/condominium billing lots are not in it/);
+    expect(body.partial).toBe(false);
+    expect(body.overlaysUnknown).toBe(false);
+    expect(body.caveats.join(" ")).toMatch(/here the Zoning Tax Lot Database has no row for this BBL/);
+    expect(body.provenance.map((p) => p.source.id)).toEqual(["census-tigerweb", "nyc-dcp-zoning", "nyc-dcp-zoning"]);
+    expect(body.provenance[2].seriesId).toMatch(/nysp, nyco and nylh/);
+    expect(res.headers.get("cache-control")).toContain("s-maxage=3600");
+  });
+
+  it("never reads a condominium lot's missing ZTLDB row as 'no special district' when DCP's layers fail too", async () => {
+    placeAnswer = place("3651000", "New York city");
+    failOverlays = true;
+    const body = (await (await GET(new NextRequest("http://localhost/api/zoning?op=point&lon=-73.97905&lat=40.76538"))).json()) as {
+      partial: boolean;
+      overlaysUnknown: boolean;
+      data: { overlays: string[]; published: Record<string, string> };
+    };
+    expect(body.data.overlays).toEqual([]);
+    expect(body.data.published.overlays).toMatch(/^unknown, not absent: the Zoning Tax Lot Database has no row for this BBL/);
+    expect(body).toMatchObject({ partial: true, overlaysUnknown: true });
   });
 
   it("carries the City of Chicago's disclaimer verbatim on a Chicago answer", async () => {

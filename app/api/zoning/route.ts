@@ -44,9 +44,15 @@ async function opPoint(lon: number, lat: number) {
   if (r.state === "no-district") caveats.push("No district polygon at the point is not a finding that the land is unzoned: streets, water and gaps in a city's layer have none.");
   if (r.state === "not-covered") caveats.push(`Only ${coveredCityNames()} and Houston (which has no zoning) are wired; everywhere else is not covered, which says nothing about whether zoning applies.`);
   if (r.city === "chicago") caveats.push(CHICAGO_DISCLAIMER);
-  if (a.partial) caveats.push("New York's Zoning Tax Lot Database did not answer this time, so the lot's overlays and special districts are unknown (not absent); ask again shortly.");
+  if (a.overlaysUnknown) {
+    caveats.push("New York's tax-lot lookup and DCP's overlay layers did not answer this time, so the overlays, special districts and limited-height district at this point are unknown (not absent); ask again shortly.");
+  } else if (a.lotGap) {
+    caveats.push(
+      `New York's overlays usually come from the Zoning Tax Lot Database row of the lot under the point; here ${a.lotGap}, so they come from DCP's special purpose district, commercial overlay and limited-height layers at the point.${a.partial ? " Ask again shortly for the lot." : ""}`,
+    );
+  }
   return ok(r, {
-    meta: { source: r.publisher ? `${r.publisher} zoning` : "Census TIGERweb (place only)", state: r.state, partial: a.partial, cacheAge: a.age },
+    meta: { source: r.publisher ? `${r.publisher} zoning` : "Census TIGERweb (place only)", state: r.state, partial: a.partial, overlaysUnknown: a.overlaysUnknown, cacheAge: a.age },
     provenance: a.provenance,
     caveats,
     ttlS: a.partial ? 300 : 3600,

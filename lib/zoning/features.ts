@@ -353,6 +353,57 @@ export const NYC_PLUTO_LAYER = `${NYC_DCP}/MAPPLUTO/FeatureServer/0`;
 export const NYC_PLUTO_FIELDS = ["BBL"] as const;
 export const NYC_ZTLDB = "https://data.cityofnewyork.us/resource/fdkv-4t4z";
 export const NYC_POLYGON_FIELDS = ["OBJECTID", "ZONEDIST"] as const;
+/**
+ * DCP's special purpose district, commercial overlay and limited-height
+ * district layers, asked at the point when the Zoning Tax Lot Database cannot
+ * answer for the lot: condominium billing lots (lot 75xx, which MapPLUTO
+ * returns for a condo building) have no ZTLDB row, and a street has no lot.
+ */
+export const NYC_SP_LAYER = `${NYC_DCP}/nysp/FeatureServer/0`;
+export const NYC_CO_LAYER = `${NYC_DCP}/nyco/FeatureServer/0`;
+export const NYC_LH_LAYER = `${NYC_DCP}/nylh/FeatureServer/0`;
+
+export function nycOverlayRequests(lon: number, lat: number): { sp: ArcgisRequest; co: ArcgisRequest; lh: ArcgisRequest } {
+  return {
+    sp: arcgisPoint(NYC_SP_LAYER, lon, lat, ["SDLBL", "SDNAME"]),
+    co: arcgisPoint(NYC_CO_LAYER, lon, lat, ["OVERLAY"]),
+    lh: arcgisPoint(NYC_LH_LAYER, lon, lat, ["LHLBL", "LHNAME"]),
+  };
+}
+
+/** Why the overlays at a New York point come from DCP's point layers, not the tax lot's ZTLDB row. */
+export const NYC_LOT_GAP = {
+  condo: "the Zoning Tax Lot Database has no row for this BBL (condominium billing lots are not in it)",
+  noLot: "MapPLUTO has no tax lot at this point",
+  lotDown: "MapPLUTO did not answer this time, so the tax lot is unknown",
+  ztldbDown: "the Zoning Tax Lot Database did not answer this time",
+} as const;
+
+/** The overlays, special districts and limited-height district DCP's point layers put at the point. */
+export function withPointOverlays(hit: ZoningHit, sp: Row[], co: Row[], lh: Row[], why: string): ZoningHit {
+  const distinct = (xs: Array<string | undefined>) => [...new Set(xs.filter((x): x is string => !!x))];
+  const overlays = [
+    ...distinct(co.map((r) => str(r.OVERLAY))).map((x) => `commercial overlay ${x}`),
+    ...distinct(sp.map((r) => str(r.SDLBL))).map((x) => `special district ${x}`),
+    ...distinct(lh.map((r) => str(r.LHLBL))).map((x) => `limited height ${x}`),
+  ];
+  const published: Record<string, string> = { ...hit.published };
+  const names = distinct(sp.map((r) => str(r.SDNAME)));
+  if (names.length) published["special purpose district"] = names.join(", ");
+  published["overlays from"] = `DCP's special purpose district, commercial overlay and limited-height layers at this point: ${why}`;
+  return { ...hit, overlays: [...hit.overlays, ...overlays], published };
+}
+
+/** Said when neither the ZTLDB nor DCP's point layers answered: unknown, not absent. */
+export function overlaysUnknown(hit: ZoningHit, why: string): ZoningHit {
+  return {
+    ...hit,
+    published: {
+      ...hit.published,
+      overlays: `unknown, not absent: ${why}, and DCP's overlay layers did not answer this time`,
+    },
+  };
+}
 
 export function nycDistrictHit(rows: Row[]): ZoningHit | null {
   const hits: ZoningHit[] = [];
@@ -598,7 +649,7 @@ export const ZONING_CITIES: Record<ZoningCityId, ZoningCity> = {
     publisher: "NYC Department of City Planning",
     bbox: [-74.26, 40.49, -73.7, 40.92],
     polygons: true,
-    note: "District at the point from DCP's zoning districts; overlays, special districts and limited-height districts from the Zoning Tax Lot Database row of the lot under it.",
+    note: "District at the point from DCP's zoning districts; overlays, special districts and limited-height districts from the Zoning Tax Lot Database row of the lot under it, or, where the lot has no row (condominium billing lots) or there is no lot, from DCP's overlay layers at the point.",
   },
   chicago: { id: "chicago", name: "Chicago", state: "IL", placeGeoid: "1714000", source: "chicago-zoning", publisher: "City of Chicago", bbox: [-87.95, 41.64, -87.52, 42.03], polygons: true },
   dallas: { id: "dallas", name: "Dallas", state: "TX", placeGeoid: "4819000", source: "dallas-zoning", publisher: "City of Dallas", bbox: [-97.0, 32.61, -96.46, 33.03], polygons: true },
