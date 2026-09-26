@@ -144,6 +144,18 @@ describe("/api/zoning?op=point", () => {
     expect(res.headers.get("cache-control")).toContain("s-maxage=3600");
   });
 
+  it("asks DCP's layers when the ZTLDB does not answer, and holds that answer only briefly", async () => {
+    placeAnswer = place("3651000", "New York city");
+    failZtldb = true;
+    const res = await GET(new NextRequest("http://localhost/api/zoning?op=point&lon=-73.97905&lat=40.76538"));
+    const body = (await res.json()) as { partial: boolean; overlaysUnknown: boolean; data: { overlays: string[]; published: Record<string, string> }; caveats: string[] };
+    expect(body.data.overlays).toEqual(["special district MiD"]);
+    expect(body.data.published["overlays from"]).toMatch(/the Zoning Tax Lot Database did not answer this time/);
+    expect(body).toMatchObject({ partial: true, overlaysUnknown: false });
+    expect(body.caveats.join(" ")).toMatch(/Ask again shortly for the lot/);
+    expect(res.headers.get("cache-control")).toContain("s-maxage=300");
+  });
+
   it("never reads a condominium lot's missing ZTLDB row as 'no special district' when DCP's layers fail too", async () => {
     placeAnswer = place("3651000", "New York city");
     failOverlays = true;

@@ -123,9 +123,9 @@ function withinBox(col: string, b: Bbox): string {
   return `within_box(${col},${n},${w},${s},${e})`;
 }
 
-function soql(base: string, select: readonly string[] | null, where: string, order: string, limit: number): PermitRequest {
+function soql(base: string, select: readonly string[], where: string, order: string, limit: number): PermitRequest {
   const q = new URLSearchParams();
-  if (select) q.set("$select", select.join(","));
+  q.set("$select", select.join(","));
   q.set("$where", where);
   q.set("$order", order);
   q.set("$limit", String(limit));
