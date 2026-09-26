@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { searchableDetail } from "@/lib/search/allowlist";
 import eiaJson from "./data/plants-eia860m.json";
 import wdJson from "./data/nuclear-wikidata.json";
-import { eiaPlants, fuelFamily, largestFirst, wikidataNuclear, type EiaSnapshot, type PlantExtra, type WikidataSnapshot } from "./plants";
+import { eiaPlants, fuelFamily, largestFirst, wikidataCapacity, wikidataNuclear, type EiaSnapshot, type PlantExtra, type WikidataCapacity, type WikidataSnapshot } from "./plants";
 
 const eia = eiaJson as unknown as EiaSnapshot;
 const wd = wdJson as unknown as WikidataSnapshot;
@@ -85,20 +85,63 @@ describe("largestFirst", () => {
 });
 
 describe("Wikidata nuclear plants", () => {
+  const one = (qid: string, lon: number, lat: number) => wikidataNuclear(wd, [lon - 0.01, lat - 0.01, lon + 0.01, lat + 0.01]).find((x) => x.properties.id === `wd:${qid}`)!;
+
   it("counts distinct coordinate locations, not query rows, and draws a fixed one", () => {
-    // Phenix (Q113368) has one coordinate and two capacity statements; the row product once made it "2".
-    const phenix = wd.plants.find((p) => p[0] === "Q113368")!;
-    expect(phenix[7]).toBe(1);
-    expect(phenix[6]).toEqual([233, 130]);
+    // Leningrad (Q3279825) has one coordinate and three capacity statements in Wikidata; the row product once made it "3".
+    const len = wd.plants.find((p) => p[0] === "Q3279825")!;
+    expect(len[7]).toBe(1);
     // Q123002687 has two coordinate statements in Wikidata; the westernmost is drawn.
     const two = wd.plants.find((p) => p[0] === "Q123002687")!;
     expect(two[7]).toBe(2);
     expect(two[2]).toBe(109.4825);
     const [f] = wikidataNuclear(wd, [109, 21, 110, 22]).filter((x) => x.properties.id === "wd:Q123002687");
     expect(f.properties.details?.["coordinate locations"]).toBe("2 in Wikidata (the westernmost is drawn)");
-    // Leningrad's three capacity statements stay three figures on one coordinate.
+  });
+
+  it("reads only best-rank capacity: a preferred statement wins over larger normal-rank ones", () => {
+    // Leningrad in Wikidata (checked 2026-09-26): 3,700 MW (normal, ended 2018-12-22), 2,775 MW
+    // (normal, 2018-12-23 to 2020-11-10) and 1,850 MW (preferred, since 2020-11-11). The query
+    // keeps best rank only, so this checks the pulled snapshot: the superseded 3,700 MW never
+    // sizes the plant or reaches its dossier.
     const len = wd.plants.find((p) => p[0] === "Q3279825")!;
-    expect([len[6].length, len[7]]).toEqual([3, 1]);
+    expect(len[6]).toEqual([[1850, null, "2020-11-11", null, null]]);
+    const f = one("Q3279825", len[2], len[3]);
+    expect((f.properties.extra as PlantExtra).mw).toBe(1850);
+    expect(f.properties.details?.["nameplate capacity"]).toBe("1,850 MW (since 2020-11-11)");
+    expect(f.properties.details?.["capacity drawn"]).toBeUndefined();
+    // Phénix: 233 MW (normal, 1973 to 1996) and 130 MW (preferred, 1997 to 2010); its end date stays.
+    const phenix = wd.plants.find((p) => p[0] === "Q113368")!;
+    expect(phenix[6]).toEqual([[130, null, "1997", "2010", null]]);
+    expect(one("Q113368", phenix[2], phenix[3]).properties.details?.["nameplate capacity"]).toBe("130 MW (1997 to 2010)");
+    // No superseded maximum is left anywhere: every plant with several figures has only best-rank ones.
+    expect(wd.plants.filter((p) => new Set(p[6].map((c) => c[0])).size > 1).map((p) => p[0])).toEqual(["Q1539046"]);
+  });
+
+  it("sizes a plant with several best-rank figures by the most recent one, and shows each with its date", () => {
+    // Oskarshamn: two normal-rank statements, 2,500 MW (point in time 2014) and 1,400 MW (2018), none preferred.
+    const osk = wd.plants.find((p) => p[0] === "Q1539046")!;
+    const f = one("Q1539046", osk[2], osk[3]);
+    expect((f.properties.extra as PlantExtra).mw).toBe(1400);
+    expect(f.properties.details?.["nameplate capacity"]).toBe("1,400 MW (2018) / 2,500 MW (2014)");
+    expect(f.properties.details?.["capacity drawn"]).toBe("1,400 MW, the most recent of Wikidata's figures");
+  });
+
+  it("leaves a plant unsized when Wikidata does not say which of its figures is current", () => {
+    const c = (mw: number, pit: string | null, start: string | null = null, method: string | null = null): WikidataCapacity => [mw, pit, start, null, method];
+    // Undated, the same date, or dates of different precision that overlap: no pick.
+    expect(wikidataCapacity([c(6710, null), c(6366, null)])).toEqual({ mw: undefined, text: "6,710 MW / 6,366 MW", figures: 2 });
+    expect(wikidataCapacity([c(1000, "2018"), c(900, "2018")]).mw).toBeUndefined();
+    expect(wikidataCapacity([c(1000, "2018"), c(900, "2018-06")]).mw).toBeUndefined();
+    expect(wikidataCapacity([c(1000, "1970s"), c(900, "1975")]).mw).toBeUndefined();
+    expect(wikidataCapacity([c(1000, "1970s"), c(900, "1985")]).mw).toBe(900);
+    // One undated figure among dated ones blocks the pick too.
+    expect(wikidataCapacity([c(1000, "2014"), c(900, "2018"), c(950, null)]).mw).toBeUndefined();
+    // Start time orders a figure when there is no point in time; the method is shown.
+    expect(wikidataCapacity([c(5080, null, "2015"), c(6240, null, "2021", "nameplate capacity")])).toEqual({ mw: 6240, text: "6,240 MW (since 2021; method: nameplate capacity) / 5,080 MW (since 2015)", figures: 2 });
+    // Two statements of one figure are one figure, whatever their dates.
+    expect(wikidataCapacity([c(985, null), c(985, "2021")]).mw).toBe(985);
+    expect(wikidataCapacity([])).toEqual({ figures: 0 });
   });
 
   it("leaves out plants in the United States, which EIA covers", () => {

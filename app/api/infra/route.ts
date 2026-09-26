@@ -434,7 +434,7 @@ async function opPlants(bbox: Bbox, minMw: number): Promise<OpResult> {
   const us = cap.features;
   const caveats = [
     `EIA-860M is EIA's preliminary monthly inventory (${eia.inventoryAsOf}); capacities are nameplate megawatts summed over each plant's generators of 1 MW or more, and a generator with no nameplate value is counted, not added as 0.`,
-    "Outside the United States, only nuclear plants are shown, from Wikidata (CC0); their status and capacity are Wikidata's and can be missing.",
+    "Outside the United States, only nuclear plants are shown, from Wikidata (CC0); their status and capacity are Wikidata's and can be missing. Capacity is Wikidata's best-rank nameplate statement (its preferred one when it marks one), with the dates Wikidata gives; where several figures remain, the most recent sizes the plant, and none does when Wikidata's figures are not dated well enough to tell which is current.",
     "The reporting entity is as EIA publishes it; it is not searchable here and nothing is joined across the two sources.",
   ];
   if (minMw > 0) caveats.push(`Only US plants of at least ${minMw} MW (operating or planned) are returned; ask with min=0 (and a box small enough to fit one response) for every plant.`);

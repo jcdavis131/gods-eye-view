@@ -8,7 +8,8 @@
 // ("n MW, plus k generators with no nameplate value"). The reporting entity
 // is shown as EIA publishes it, in the dossier only (never in the name, never
 // searchable). Wikidata's status and capacity are shown only where Wikidata
-// has them.
+// has them; its capacity is the best-rank statement, with its dates, and a
+// plant with several figures Wikidata does not order is drawn unsized.
 
 import type { LayerFeature } from "@/lib/layers/types";
 
@@ -46,11 +47,19 @@ export type EiaPlantRow = [
   number | null,
 ];
 
+/**
+ * One best-rank Wikidata nameplate capacity (P2109) statement: MW, then its point in
+ * time (P585), start (P580) and end (P582) at the precision Wikidata states them
+ * (YYYY-MM-DD, YYYY-MM, YYYY or YYY0s), and the label of its method (P459); null
+ * where the statement has none.
+ */
+export type WikidataCapacity = [mw: number, pointInTime: string | null, start: string | null, end: string | null, method: string | null];
+
 /** nuclear-wikidata.json as the script writes it. */
 export interface WikidataSnapshot {
   pulled: string;
-  /** [qid, name, lon, lat, country, status[], nameplateMW[], distinct coordinate locations] */
-  plants: Array<[string, string | null, number, number, string | null, string[], number[], number]>;
+  /** [qid, name, lon, lat, country, status[], capacities[], distinct coordinate locations] */
+  plants: Array<[string, string | null, number, number, string | null, string[], WikidataCapacity[], number]>;
 }
 
 /** The colour family of a plant, from the technology with the most nameplate MW. */
@@ -139,12 +148,72 @@ export function eiaPlants(s: EiaSnapshot, bbox: [number, number, number, number]
   return out;
 }
 
+/** When a capacity statement holds: "2018", "since 2021", "1997 to 2010", "until 2018-12-22". */
+function capacityWhen([, pit, start, end]: WikidataCapacity): string | undefined {
+  const span = start && end ? `${start} to ${end}` : start ? `since ${start}` : end ? `until ${end}` : undefined;
+  return [pit, span].filter(Boolean).join("; ") || undefined;
+}
+
+/**
+ * The date a capacity statement is ordered by: its point in time, else its start; none
+ * when absent or given more than once. A decade ("1970s") orders as its first three
+ * digits, so it overlaps every year in it rather than passing for 1970.
+ */
+function capacityKey([, pit, start]: WikidataCapacity): string | undefined {
+  const k = pit ?? start;
+  if (!k || k.includes(",")) return undefined;
+  return k.endsWith("0s") ? k.slice(0, -2) : k;
+}
+
+/** Plain code-unit order: ISO dates of any precision sort by time, a year before its months. */
+const byCode = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+
+export interface WikidataCapacityPick {
+  /** The figure that sizes the plant, or undefined when Wikidata does not say which of its figures is current. */
+  mw?: number;
+  /** Every figure with its date and method, most recent first; undefined when there is none. */
+  text?: string;
+  /** How many different figures the best-rank statements give. */
+  figures: number;
+}
+
+/**
+ * A plant's capacity from its best-rank P2109 statements (the query already dropped
+ * normal-rank statements that a preferred one supersedes, and deprecated ones).
+ * One figure: that figure. Several: the most recent by point in time (else start
+ * time), but only when every statement is dated and no other figure shares or
+ * overlaps that date ("2018" and "2018-06" cannot be ordered); otherwise none, and
+ * the plant is drawn unsized rather than by a figure Wikidata does not call current.
+ */
+export function wikidataCapacity(caps: WikidataCapacity[]): WikidataCapacityPick {
+  if (!caps.length) return { figures: 0 };
+  const figures = new Set(caps.map((c) => c[0])).size;
+  const keyed = caps.map((c) => ({ c, key: capacityKey(c) }));
+  // Most recent first, undated last, then the larger figure first.
+  keyed.sort((a, b) => byCode(b.key ?? "", a.key ?? "") || b.c[0] - a.c[0]);
+  let mw: number | undefined;
+  if (figures === 1) mw = caps[0][0];
+  else if (keyed.every((k) => k.key)) {
+    const top = keyed[0];
+    const clear = keyed.every((k) => k.c[0] === top.c[0] || (k.key! < top.key! && !top.key!.startsWith(k.key!)));
+    if (clear) mw = top.c[0];
+  }
+  const parts: string[] = [];
+  for (const { c } of keyed) {
+    const qual = [capacityWhen(c), c[4] ? `method: ${c[4]}` : undefined].filter(Boolean).join("; ");
+    const s = `${fmtMw(c[0])}${qual ? ` (${qual})` : ""}`;
+    if (!parts.includes(s)) parts.push(s);
+  }
+  return { mw, text: parts.join(" / "), figures };
+}
+
 /** Wikidata nuclear plants outside the US in a box. */
 export function wikidataNuclear(s: WikidataSnapshot, bbox: [number, number, number, number]): LayerFeature[] {
   const out: LayerFeature[] = [];
-  for (const [qid, name, lon, lat, country, status, mws, coords] of s.plants) {
+  for (const [qid, name, lon, lat, country, status, caps, coords] of s.plants) {
     if (!inBox(lon, lat, bbox)) continue;
-    const mw = mws.length ? mws[0] : undefined;
+    const cap = wikidataCapacity(caps);
+    const mw = cap.mw;
     out.push({
       type: "Feature",
       geometry: { type: "Point", coordinates: [lon, lat, 0] },
@@ -158,7 +227,14 @@ export function wikidataNuclear(s: WikidataSnapshot, bbox: [number, number, numb
           "Wikidata item": qid,
           type: "nuclear power plant",
           status: status.length ? status.join(", ") : "not recorded in Wikidata",
-          "nameplate capacity": mws.length ? mws.map(fmtMw).join(" / ") : "not recorded in Wikidata",
+          "nameplate capacity": cap.text ?? "not recorded in Wikidata",
+          // Several figures: say which one sizes the dot, or that none does.
+          "capacity drawn":
+            cap.figures > 1
+              ? mw != null
+                ? `${fmtMw(mw)}, the most recent of Wikidata's figures`
+                : "none: Wikidata's figures are not dated in a way that tells which is current"
+              : undefined,
           country: country ?? undefined,
           // Distinct best-rank coordinate locations (scripts/infra-data.mjs); the westernmost is drawn.
           "coordinate locations": coords > 1 ? `${coords} in Wikidata (the westernmost is drawn)` : undefined,

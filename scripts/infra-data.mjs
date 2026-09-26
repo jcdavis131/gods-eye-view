@@ -6,7 +6,8 @@
 //                                        state, and the EIA entity that reports it
 //   lib/infra/data/nuclear-wikidata.json Wikidata (CC0) nuclear power plants outside the
 //                                        United States: position, country, status labels,
-//                                        nameplate capacity where Wikidata has one
+//                                        and the best-rank nameplate capacity statements
+//                                        with their dates and method, where Wikidata has them
 //
 // Both change monthly at most, so they ride in the repo with the date they were
 // pulled and the file or query they came from; /api/infra?op=plants serves them by
@@ -326,22 +327,48 @@ async function buildPlants() {
 // ------------------------------------------------------------------ Wikidata nuclear plants
 
 // wdt: answers best-rank values only (a preferred statement hides the normal ones).
-// Capacity is read per statement (?capSt) so two units of the same size stay two
-// figures, and deprecated capacity statements are left out. The OPTIONAL joins
-// multiply the rows (coordinates x countries x statuses x capacities), so every
-// field is collected as a set of distinct values, never counted by rows.
+// Capacity statements are the same: several P2109 statements on a plant are
+// Wikidata's figures for the whole plant at different times (P585 point in time,
+// P580 start, P582 end) or by a named method (P459), not one per unit, and an
+// editor marks the current one preferred. So only best-rank statements are read
+// (wikibase:BestRank: the preferred ones when there are any, else the normal
+// ones; never deprecated), each with its date qualifiers at the precision
+// Wikidata states them (pqv: gives the precision; a year is returned as
+// YYYY-01-01) and its method. The OPTIONAL joins multiply the rows (coordinates x
+// countries x statuses x capacity statements x qualifiers), so every field is
+// collected as a set of distinct values, never counted by rows.
 const NUCLEAR_QUERY = `
-SELECT ?p ?pLabel ?c ?country ?countryLabel ?statusLabel ?capSt ?watts WHERE {
+SELECT ?p ?pLabel ?c ?country ?countryLabel ?statusLabel ?capSt ?watts ?pit ?pitP ?start ?startP ?end ?endP ?methodLabel WHERE {
   ?p wdt:P31/wdt:P279* wd:Q134447; wdt:P625 ?c.
   OPTIONAL { ?p wdt:P17 ?country }
   OPTIONAL { ?p wdt:P5817 ?status }
   OPTIONAL {
     ?p p:P2109 ?capSt.
-    ?capSt psn:P2109/wikibase:quantityAmount ?watts.
-    FILTER NOT EXISTS { ?capSt wikibase:rank wikibase:DeprecatedRank }
+    ?capSt a wikibase:BestRank; psn:P2109/wikibase:quantityAmount ?watts.
+    OPTIONAL { ?capSt pqv:P585 ?pitV. ?pitV wikibase:timeValue ?pit; wikibase:timePrecision ?pitP. }
+    OPTIONAL { ?capSt pqv:P580 ?startV. ?startV wikibase:timeValue ?start; wikibase:timePrecision ?startP. }
+    OPTIONAL { ?capSt pqv:P582 ?endV. ?endV wikibase:timeValue ?end; wikibase:timePrecision ?endP. }
+    OPTIONAL { ?capSt pq:P459 ?method }
   }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en,mul,fr,de,es,ja,zh,ru,uk,ko,pt,it,sv,cs,fi,nl". }
 }`;
+
+/**
+ * A Wikidata time at the precision Wikidata states it: day (11) YYYY-MM-DD, month
+ * (10) YYYY-MM, year (9) YYYY, decade (8) YYY0s. Coarser, or unparseable: null,
+ * and the caller counts it (a century is not a date to order capacities by).
+ */
+function wdTime(value, precision) {
+  const m = /^(-?\d{1,})-(\d\d)-(\d\d)T/.exec(value ?? "");
+  const p = Number(precision);
+  if (!m) return null;
+  const y = m[1].replace(/^(-?)0+(?=\d{4})/, "$1");
+  if (p >= 11) return `${y}-${m[2]}-${m[3]}`;
+  if (p === 10) return `${y}-${m[2]}`;
+  if (p === 9) return y;
+  if (p === 8) return `${y.slice(0, -1)}0s`;
+  return null;
+}
 
 /** Coordinates as distinct "lon lat" values, sorted west to east (then south to north), so the drawn one is fixed. */
 function distinctCoords(set) {
@@ -357,11 +384,12 @@ async function buildNuclear() {
   if (!res.ok) throw new Error(`Wikidata ${res.status}`);
   const j = await res.json();
   const byQ = new Map();
+  const coarseDates = new Set();
   for (const b of j.results.bindings) {
     const q = b.p.value.replace(/^.*\//, "");
     let e = byQ.get(q);
     if (!e) {
-      e = { q, name: undefined, coords: new Set(), countries: new Set(), countryQs: new Set(), status: new Set(), watts: new Map() };
+      e = { q, name: undefined, coords: new Set(), countries: new Set(), countryQs: new Set(), status: new Set(), caps: new Map() };
       byQ.set(q, e);
     }
     const label = b.pLabel?.value;
@@ -374,9 +402,22 @@ async function buildNuclear() {
       if (b.countryLabel?.value) e.countries.add(b.countryLabel.value);
     }
     if (b.statusLabel?.value) e.status.add(b.statusLabel.value);
-    // Keyed by statement: the row product repeats each one, and two statements can share a value.
-    if (b.capSt?.value && b.watts?.value != null && Number.isFinite(Number(b.watts.value))) e.watts.set(b.capSt.value, Number(b.watts.value));
+    // Keyed by statement: the row product repeats each one (once per qualifier combination).
+    if (b.capSt?.value && b.watts?.value != null && Number.isFinite(Number(b.watts.value))) {
+      let st = e.caps.get(b.capSt.value);
+      if (!st) e.caps.set(b.capSt.value, (st = { watts: Number(b.watts.value), pit: new Set(), start: new Set(), end: new Set(), method: new Set() }));
+      for (const [k, v, p] of [["pit", b.pit, b.pitP], ["start", b.start, b.startP], ["end", b.end, b.endP]]) {
+        if (!v?.value) continue;
+        const t = wdTime(v.value, p?.value);
+        if (t) st[k].add(t);
+        else coarseDates.add(`${q} ${k} ${v.value} precision ${p?.value}`);
+      }
+      // The label service answers the bare Q-id when no listed language has a label.
+      const method = b.methodLabel?.value;
+      if (method && !/^Q\d+$/.test(method)) st.method.add(method);
+    }
   }
+  if (coarseDates.size) console.warn(`  ${coarseDates.size} capacity date qualifiers coarser than a decade, left out: ${[...coarseDates].join("; ")}`);
   const rows = [];
   let us = 0;
   let noCountry = 0;
@@ -389,17 +430,22 @@ async function buildNuclear() {
     const coords = distinctCoords(e.coords);
     if (!coords.length) continue;
     const [lon, lat] = coords[0];
-    // Several capacity statements (a plant and its extension): keep them all rather than pick one.
-    const mw = [...e.watts.values()].map((w) => Math.round(w / 1e4) / 100).sort((a, b) => b - a);
-    rows.push([e.q, e.name ?? null, Number(lon.toFixed(5)), Number(lat.toFixed(5)), [...e.countries].sort().join(" / ") || null, [...e.status].sort(), mw, coords.length]);
+    // Every best-rank capacity statement, as [MW, point in time, start, end, method]: which
+    // one sizes the plant is decided where it is drawn (wikidataCapacity in lib/infra/plants.ts).
+    // A qualifier given more than once on one statement keeps every value ("a, b").
+    const one = (s) => (s.size ? [...s].sort().join(", ") : null);
+    const caps = [...e.caps.values()]
+      .map((st) => [Math.round(st.watts / 1e4) / 100, one(st.pit), one(st.start), one(st.end), one(st.method)])
+      .sort((a, b) => b[0] - a[0] || String(a.slice(1)).localeCompare(String(b.slice(1))));
+    rows.push([e.q, e.name ?? null, Number(lon.toFixed(5)), Number(lat.toFixed(5)), [...e.countries].sort().join(" / ") || null, [...e.status].sort(), caps, coords.length]);
   }
   const doc = {
     source: "Wikidata (CC0), items that are an instance of nuclear power plant (Q134447) or a subclass, with a coordinate location",
     query: NUCLEAR_QUERY.trim(),
     endpoint: WDQS,
     pulled: new Date().toISOString().slice(0, 10),
-    note: "Plants in the United States (country Q30) are left out: the layer shows them from EIA-860M. Status labels (P5817) and nameplate capacity (P2109, converted from Wikidata's normalised watts, one figure per non-deprecated statement) only where Wikidata has them; completeness is Wikidata's. coordinateCount is the number of distinct best-rank coordinate locations (P625); when there are several, lon/lat is the westernmost.",
-    columns: ["qid", "name", "lon", "lat", "country", "status[]", "nameplateMW[]", "coordinateCount"],
+    note: "Plants in the United States (country Q30) are left out: the layer shows them from EIA-860M. Status labels (P5817) and nameplate capacity (P2109) only where Wikidata has them; completeness is Wikidata's. capacities[] holds one [MW, pointInTime, start, end, method] per best-rank P2109 statement (the preferred ones when a plant has any, else the normal ones): MW from Wikidata's normalised watts, the dates from its P585, P580 and P582 qualifiers at the precision Wikidata states (YYYY-MM-DD, YYYY-MM, YYYY, or a decade as YYY0s), the method the label of its P459 qualifier, null where the statement has none. coordinateCount is the number of distinct best-rank coordinate locations (P625); when there are several, lon/lat is the westernmost.",
+    columns: ["qid", "name", "lon", "lat", "country", "status[]", "capacities[]", "coordinateCount"],
     leftOutInUS: us,
     withoutCountry: noCountry,
     plants: rows,
