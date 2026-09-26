@@ -78,7 +78,7 @@ async function opEnvironmental(b: Bbox) {
   const a = await environmental(b);
   const caveats = [
     "Facilities and actions as EPA ECHO and the Corps publish them. Compliance is ECHO's own words; where ECHO gives none it says 'not reported by ECHO', which is not 'no violation'.",
-    "The Corps' search answers at most 300 actions in no date order; its `total` is the national count and is not relayed.",
+    "The Corps' search answers at most 300 actions: every one in the box first, then actions from anywhere in the country up to 300. Only those inside the box are kept (sorted newest first here); its `total` is the national count and is not relayed.",
     BOX,
   ];
   if (a.coverage.some((c) => c.state === "partial")) caveats.push("A source's cap was hit for this box; ask for a smaller box for every record.");

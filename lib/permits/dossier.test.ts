@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { matchScore, searchableDetail } from "@/lib/search/allowlist";
 import { buildPermits } from "./features";
 import { buildLicences } from "./licences";
-import { buildNpdes, buildUsace, echoFacilities, ormFeatures } from "./environmental";
+import { buildNpdes, buildUsace, echoFacilities, ormFeatures, ormInBox } from "./environmental";
 import { envFeature, licenceFeature, permitFamily, permitFeature } from "./dossier";
 import { envFeatures, licenceFeatures, permitFeatures } from "./geojson";
 import { coverageNote } from "./notes";
@@ -64,7 +64,7 @@ describe("licence dossiers", () => {
 
 describe("environmental dossiers", () => {
   const npdes = envFeatures(buildNpdes(echoFacilities(cwaRows))).features.map(envFeature);
-  const corps = envFeatures(buildUsace(ormFeatures(orm))).features.map(envFeature);
+  const corps = envFeatures(buildUsace(ormInBox(ormFeatures(orm), [-95.2, 29.7, -95, 29.8]).features)).features.map(envFeature);
 
   it("names a facility by its permit id; the facility name is in the dossier and never searched", () => {
     expect(npdes[0].properties.name).toBe("NPDES TXR1509LI");
@@ -77,6 +77,13 @@ describe("environmental dossiers", () => {
     const a = corps.find((x) => x.properties.id === "usace:SWG-1993-01047")!;
     expect(a.properties.name).toBe("SWG-1993-01047 · Letter of Permission");
     expect(matchScore(a.properties, "maintenance dredging")).toBe(0);
+  });
+
+  it("says why a Corps project name is withheld, where the name would be", () => {
+    const [rec] = buildUsace([{ geometry: { type: "Point", coordinates: [-95.1, 29.75] }, properties: { daNumber: "SWG-2026-00001", projectName: "Public, Jane / Dock" } }]);
+    const d = envFeature(envFeatures([rec]).features[0]).properties.details!;
+    expect(d["project (as the Corps publishes it)"]).toMatch(/^withheld: the project name opens with a personal name/);
+    expect(JSON.stringify(d)).not.toContain("Jane");
   });
 
   it("draws 'not reported by ECHO' in the not-rated colour, never as calm", () => {

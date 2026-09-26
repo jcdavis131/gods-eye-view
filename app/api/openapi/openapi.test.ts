@@ -79,6 +79,9 @@ describe("public/openapi.json", () => {
     for (const k of new Set(buildLicences("losangeles", la).records.flatMap(keys))) expect(s.PermitsLicencesResponse["x-feature-properties"], k).toContain(k);
     const cwa = (await import("@/lib/permits/fixtures/echo-npdes-rows.json")).default;
     for (const k of new Set(buildNpdes(echoFacilities(cwa)).flatMap(keys))) expect(s.PermitsEnvironmentalResponse["x-feature-properties"], k).toContain(k);
+    const { buildUsace } = await import("@/lib/permits/environmental");
+    const corps = buildUsace([{ geometry: { type: "Point", coordinates: [-95.1, 29.75] }, properties: { daNumber: "SWG-2026-00001", projectName: "Public, Jane / Dock", vdate: "20260901" } }]);
+    for (const k of new Set(corps.flatMap(keys))) expect(s.PermitsEnvironmentalResponse["x-feature-properties"], k).toContain(k);
   });
   it("names the FIRMS row columns the fires op sends", async () => {
     const { FIRE_ROW_COLUMNS } = await import("@/lib/hazards/features");

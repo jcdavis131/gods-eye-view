@@ -117,7 +117,7 @@ export function envFeature(f: RecordFeature<EnvRecord>): LayerFeature {
   const d: Details = {
     "permit id": r.number,
     type: r.type,
-    [r.program === "usace" ? "project (as the Corps publishes it)" : "facility (as EPA publishes it)"]: r.facility,
+    [r.program === "usace" ? "project (as the Corps publishes it)" : "facility (as EPA publishes it)"]: r.facility ?? r.facilityNote,
     status: r.status,
     compliance: r.compliance,
   };

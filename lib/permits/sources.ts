@@ -6,7 +6,8 @@
 //   licences          licensed premises in a box from five registries; 1 h (LA 6 h)
 //   environmental     EPA ECHO NPDES and air facilities (two steps: a query id,
 //                     then its rows; the rows are cached, never the id) and the
-//                     Corps' ORM actions in a box; 6 h
+//                     Corps' ORM actions in a box (the search pads its answer
+//                     with actions from elsewhere; only the box's are kept); 6 h
 //
 // Every request goes through lib/civic/request.ts (a gate per host, ten
 // minutes off after a 429 or a 503). A city that fails is named in
@@ -40,6 +41,7 @@ import {
   echoQidUrl,
   echoQuery,
   ormFeatures,
+  ormInBox,
   ormUrl,
   ORM_MAX,
   type EnvProgram,
@@ -214,8 +216,19 @@ async function echo(program: "npdes" | "air", b: Bbox): Promise<{ records: EnvRe
   return { records: program === "npdes" ? buildNpdes(rows) : buildAir(rows), total: q.rows, urls: [first, second] };
 }
 
+interface EnvPart {
+  records: EnvRecord[];
+  /** ECHO: the rows its query counted. */
+  total: number;
+  urls: string[];
+  /** The Corps: every action the search answered was in the box, and it answered its maximum. */
+  capped?: boolean;
+  /** The Corps: actions from outside the box the search padded its answer with, dropped. */
+  outside?: number;
+}
+
 export async function environmental(b: Bbox): Promise<EnvAnswer> {
-  const parts: Array<{ id: EnvProgram; name: string; run: () => Promise<{ records: EnvRecord[]; total: number; urls: string[] }> }> = [
+  const parts: Array<{ id: EnvProgram; name: string; run: () => Promise<EnvPart> }> = [
     { id: "npdes", name: "EPA ECHO, Clean Water Act (NPDES)", run: () => echo("npdes", b) },
     { id: "air", name: "EPA ECHO, Clean Air Act", run: () => echo("air", b) },
     {
@@ -223,8 +236,10 @@ export async function environmental(b: Bbox): Promise<EnvAnswer> {
       name: "U.S. Army Corps of Engineers, ORM",
       run: async () => {
         const url = ormUrl(b);
-        const feats = ormFeatures(await civicJson<unknown>("usace-orm", url, 25_000));
-        return { records: buildUsace(feats), total: feats.length, urls: [url] };
+        // The search answers the box's actions first, then pads with actions from anywhere: keep the box's.
+        const box = ormInBox(ormFeatures(await civicJson<unknown>("usace-orm", url, 25_000)), b);
+        const records = buildUsace(box.features);
+        return { records, total: records.length, urls: [url], capped: box.partial, outside: box.outside };
       },
     },
   ];
@@ -250,13 +265,17 @@ export async function environmental(b: Bbox): Promise<EnvAnswer> {
     }
     records.push(...r.records);
     age = Math.max(age, r.age);
-    const partial = r.id === "usace" ? r.total >= ORM_MAX : r.records.length < r.total;
+    const partial = r.id === "usace" ? !!r.capped : r.records.length < r.total;
     coverage.push({
       id: r.id,
       name: r.name,
       state: partial ? "partial" : "covered",
       count: r.records.length,
-      reason: partial ? (r.id === "usace" ? `the ${ORM_MAX} actions the search returns at most, in no date order (sorted here)` : `${r.records.length} of ${r.total} ECHO rows (page one)`) : undefined,
+      reason: partial
+        ? r.id === "usace"
+          ? `the search's ${ORM_MAX}-action maximum, every one in the box; there may be more`
+          : `${r.records.length} of ${r.total} ECHO rows (page one)`
+        : undefined,
       cadence: r.id === "usace" ? "as the Corps enters actions" : "ECHO refreshes weekly",
     });
     prov.push(
@@ -265,7 +284,10 @@ export async function environmental(b: Bbox): Promise<EnvAnswer> {
         // The first step's URL: the second carries ECHO's query id, which expires.
         upstreamUrl: r.urls[0],
         retrievedAt: iso(r.age),
-        notes: [`${r.records.length} in the box`],
+        notes: [
+          `${r.records.length} in the box`,
+          ...(r.id === "usace" && r.outside ? [`${r.outside} more the search answered from outside the box, dropped`] : []),
+        ],
       }),
     );
   }

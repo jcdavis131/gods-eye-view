@@ -9,7 +9,12 @@
 // "<person>-<organisation>". So a feature's name is the permit or action
 // number and its type ("NPDES TXR1509LI", "SWG-1993-01047 · Letter of
 // Permission"); the facility or project name EPA and the Corps publish is in
-// the dossier only, never searched; the Corps applicant is never kept.
+// the dossier only, never searched; the Corps applicant is never kept. A
+// Corps project name is kept as published, except one that opens with a
+// "Surname, Given" name (how the Corps writes a private applicant's dock or
+// seawall), which is withheld. A project name can still carry a person's name
+// in another form ("Given Surname - Pier - ..."): it is shown as the Corps
+// publishes it, in the dossier only.
 // Compliance is ECHO's own words, and a facility ECHO gives no status for
 // says "not reported by ECHO", never "no violation".
 
@@ -29,6 +34,8 @@ export interface EnvRecord {
   type?: string;
   /** The facility or project name as EPA or the Corps publishes it (dossier only). */
   facility?: string;
+  /** Why a Corps project name is not shown. */
+  facilityNote?: string;
   status?: string;
   /** ECHO's compliance words; "not reported by ECHO" when it gives none. */
   compliance?: string;
@@ -166,10 +173,56 @@ export const ORM = "https://permits.ops.usace.army.mil/orm-public-api/permits/se
 /** The search answers at most this many actions; its `total` is the national count, not the box's. */
 export const ORM_MAX = 300;
 
+/**
+ * The search does not clip its answer to `bbox`: it answers every action in
+ * the box first, then pads the answer up to `max` with actions from anywhere
+ * in the country (300 for a Houston Ship Channel box on 2026-09-26: 172 in
+ * the box, then Charleston, Sacramento, New Orleans...). ormInBox keeps the
+ * ones in the box.
+ */
 export function ormUrl(b: Bbox): string {
   const [w, s, e, n] = b;
   return `${ORM}?da=true&max=${ORM_MAX}&bbox=${w},${s},${e},${n}`;
 }
+
+type OrmFeature = { geometry: GeoJSON.Geometry | null; properties: Row | null };
+
+/**
+ * The Point features inside the box (edges included), and whether the box's
+ * actions may be cut short. The in-box actions come first, so one action from
+ * outside the box means every in-box action came back; only an answer of
+ * ORM_MAX actions all inside the box may have left some out. A feature with
+ * no usable point is neither in nor out, and is dropped.
+ */
+export function ormInBox(features: OrmFeature[], b: Bbox): { features: OrmFeature[]; outside: number; partial: boolean } {
+  const [w, s, e, n] = b;
+  const inside: OrmFeature[] = [];
+  let outside = 0;
+  for (const f of features) {
+    const c = f.geometry?.type === "Point" ? f.geometry.coordinates : null;
+    const x = finite(c?.[0]);
+    const y = finite(c?.[1]);
+    if (x == null || y == null) continue;
+    if (x >= w && x <= e && y >= s && y <= n) inside.push(f);
+    else outside++;
+  }
+  return { features: inside, outside, partial: features.length >= ORM_MAX && outside === 0 };
+}
+
+/**
+ * A project name that opens "Surname, Given": one word, a comma, then a word
+ * that is not an entity form ("Cargill, Inc." and "Accutrans, Inc/..." are
+ * companies). The Corps writes a private applicant's project that way
+ * ("Surname, Given / Dock"). "Peru, Town of" is caught too, which errs on the
+ * side of showing less.
+ */
+const SURNAME_GIVEN = /^\s*[A-Za-z][A-Za-z'’-]*\s*,\s*(?!(?:L\.?L\.?C|INC|INCORPORATED|CORP|CORPORATION|CO|COMPANY|LTD|LIMITED|L\.?L\.?P|L\.?P|PLLC|P\.?C|PLC)\b)[A-Za-z]/i;
+
+export function opensWithPersonalName(name: string | undefined): boolean {
+  return !!name && SURNAME_GIVEN.test(name);
+}
+
+const PROJECT_WITHHELD = "withheld: the project name opens with a personal name (Surname, Given), as the Corps writes a private applicant's project";
 
 /** The ORM record kinds, in the Corps' own terms where they are its program names. */
 const VTYPE: Record<string, string> = {
@@ -209,15 +262,18 @@ function usace(f: { geometry: GeoJSON.Geometry | null; properties: Row | null })
   put(published, "submitted", ormDate(p.initialSubmissionDate));
   put(published, "description", clip(p.locationDesc));
   const date = ormDate(p.vdate);
+  // The applicant and a Section 408 request's requester are never kept: they embed personal
+  // names ("<person>-<organisation>"). locationName is the project's place, or its id.
+  const project = str(p.projectName) ?? (str(p.locationName) !== number ? str(p.locationName) : undefined);
+  const withheld = opensWithPersonalName(project);
   return {
     lon: ll[0],
     lat: ll[1],
     program: "usace",
     number,
     type: str(p.permitType) ?? (vtype ? (VTYPE[vtype] ?? vtype) : undefined),
-    // The applicant and a Section 408 request's requester are never kept: they embed personal
-    // names ("<person>-<organisation>"). locationName is the project's place, or its id.
-    facility: str(p.projectName) ?? (str(p.locationName) !== number ? str(p.locationName) : undefined),
+    facility: withheld ? undefined : project,
+    facilityNote: withheld ? PROJECT_WITHHELD : undefined,
     status: str(p.actionTaken) ?? str(p.status),
     date,
     dateLabel: date ? "action date" : undefined,
@@ -240,9 +296,10 @@ export function buildAir(rows: Row[]): EnvRecord[] {
   return withIds(rows.map(air));
 }
 
-export function buildUsace(features: Array<{ geometry: GeoJSON.Geometry | null; properties: Row | null }>): EnvRecord[] {
+/** Corps actions as records, newest first; clip the search's answer to the box with ormInBox first. */
+export function buildUsace(features: OrmFeature[]): EnvRecord[] {
   const recs = withIds(features.map(usace));
-  // Newest first: the service returns actions in no date order.
+  // Newest first: within the box the service answers in no date order.
   return recs.sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
 }
 
@@ -259,10 +316,10 @@ function withIds(recs: Array<Omit<EnvRecord, "id"> | null>): EnvRecord[] {
   return out;
 }
 
-/** The USACE search's FeatureCollection, or none. */
-export function ormFeatures(j: unknown): Array<{ geometry: GeoJSON.Geometry | null; properties: Row | null }> {
+/** The USACE search's FeatureCollection, or none (the box and the padding from elsewhere alike). */
+export function ormFeatures(j: unknown): OrmFeature[] {
   const f = (j as { results?: { features?: unknown } })?.results?.features;
-  return Array.isArray(f) ? (f as Array<{ geometry: GeoJSON.Geometry | null; properties: Row | null }>) : [];
+  return Array.isArray(f) ? (f as OrmFeature[]) : [];
 }
 
 export const ENV_LABEL: Record<EnvProgram, string> = {

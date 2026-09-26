@@ -119,15 +119,30 @@ describe("/api/permits?op=environmental", () => {
     const byName = Object.fromEntries(body.coverage.map((c) => [c.name, c]));
     expect(byName["EPA ECHO, Clean Water Act (NPDES)"]).toMatchObject({ state: "partial", count: 25 });
     expect(byName["EPA ECHO, Clean Air Act"]).toMatchObject({ state: "partial", count: 25 });
-    expect(byName["U.S. Army Corps of Engineers, ORM"]).toMatchObject({ state: "covered", count: 25 });
+    // The search answered its 300 maximum, 128 of them from elsewhere: the box's 172 are every one there.
+    expect(byName["U.S. Army Corps of Engineers, ORM"]).toMatchObject({ state: "covered", count: 172 });
     expect(JSON.stringify(body)).not.toContain("109678");
+  });
+
+  it("draws no Corps action outside the box it answers for", async () => {
+    const { body } = await get("op=environmental&bbox=-95.2,29.7,-95,29.8");
+    const [w, s, e, n] = body.bbox as number[];
+    const usace = (body.data.features as unknown as Array<{ geometry: { coordinates: [number, number] }; properties: { program: string } }>).filter((f) => f.properties.program === "usace");
+    expect(usace.length).toBe(172);
+    for (const f of usace) {
+      const [x, y] = f.geometry.coordinates;
+      expect(x >= w && x <= e && y >= s && y <= n, `${x},${y}`).toBe(true);
+    }
+    expect(JSON.stringify(body.data)).not.toContain("[cut from this fixture: a row from outside the box]");
+    const prov = (body.provenance as Array<{ source: { id: string }; notes?: string[] }>).find((p) => p.source.id === "usace-orm");
+    expect(prov?.notes).toEqual(["172 in the box", "127 more the search answered from outside the box, dropped"]);
   });
 
   it("keeps the other programs when ECHO fails", async () => {
     failHosts = ["echodata.epa.gov"];
     const { body } = await get("op=environmental&bbox=-95.2,29.7,-95,29.8");
     expect(body.coverage.filter((c) => c.state === "error").length).toBe(2);
-    expect(body.data.features.length).toBe(25);
+    expect(body.data.features.length).toBe(172);
   });
 
   it("rejects an unknown op", async () => {
