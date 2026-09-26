@@ -386,7 +386,8 @@ async function opDams(bbox: Bbox): Promise<OpResult> {
     "nid:" + bbox.join(","),
     DAY,
     async () => {
-      const f = await boxQuery(bbox, { name: "usace-nid", url: NID, gate: "usace-nid", outFields: NID_FIELDS.join(","), orderBy: "NID_STORAGE DESC" });
+      // No ordering: NID_STORAGE DESC puts the dams with no storage figure first (probed), so a capped answer would not be "largest first".
+      const f = await boxQuery(bbox, { name: "usace-nid", url: NID, gate: "usace-nid", outFields: NID_FIELDS.join(",") });
       return { features: buildDams(f.features as Row[]), truncated: truncated(f) };
     },
     INFRA_DEADLINE,
@@ -397,7 +398,7 @@ async function opDams(bbox: Bbox): Promise<OpResult> {
     "No owner or representative names are requested; the owner type is NID's.",
     BOX_CAVEAT,
   ];
-  if (r.value.truncated) caveats.push("NID's record limit was hit: the largest reservoirs are returned first; ask for a smaller box for the rest.");
+  if (r.value.truncated) caveats.push("NID's record limit was hit; ask for a smaller box for every dam.");
   return {
     data: fc(r.value.features),
     meta: { source: "USACE National Inventory of Dams", bbox, truncated: r.value.truncated, cacheAge: r.age },
@@ -472,6 +473,8 @@ async function opFaults(bbox: Bbox): Promise<OpResult> {
     gate: "usgs-qfaults",
     outFields: "fault_name,section_name,fault_id,section_id,age,slip_rate,slip_sense,mapped_scale,class,mapped_certainty,dip_direction,linetype,fault_url,last_review",
     offset: bbox[3] - bbox[1] > 0.6 ? 0.0015 : 0.0004,
+    // Longest traces first, so a capped answer keeps the major faults (probed: supportsOrderBy).
+    orderBy: "Shape_Length DESC",
     timeoutMs: 20_000,
     // The Qfaults host reset connections in probing; three tries.
     tries: 3,
@@ -482,7 +485,7 @@ async function opFaults(bbox: Bbox): Promise<OpResult> {
     "Positions are as mapped, at the scale in each record; an inferred trace is drawn dashed.",
     BOX_CAVEAT,
   ];
-  if (r.value.truncated) caveats.push("The record limit was hit; ask for a smaller box for every fault.");
+  if (r.value.truncated) caveats.push("The record limit was hit: the longest traces are returned first; ask for a smaller box for every fault.");
   return {
     data: fc(r.value.features),
     meta: boxMeta("USGS Quaternary Fault and Fold Database", bbox, r.value, r.age),

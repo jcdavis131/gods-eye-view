@@ -3,12 +3,13 @@
 // click. The drawn shape travels in share links (&shape=); the formulas are
 // printed under the readout.
 
-import { Link2, Mountain, Ruler, Spline, Square, Undo2, X } from "lucide-react";
+import { Link2, Mountain, Ruler, ScanSearch, Spline, Square, Undo2, X } from "lucide-react";
 import { useGlobe, type MeasureMode } from "@/lib/store/globe";
 import { fmtArea, fmtLength, measureOpen, measureShape, setMeasureMode } from "@/lib/globe/measure";
 import { copyShareLink } from "@/lib/globe/share";
 import { formatLatLon } from "@/lib/globe/geo";
 import ElevationProfile from "./ElevationProfile";
+import { useArea } from "@/lib/aoi/store";
 
 const MODES: Array<{ mode: Exclude<MeasureMode, "off">; label: string; icon: typeof Ruler; hint: string }> = [
   { mode: "distance", label: "Distance", icon: Spline, hint: "Click the globe to add points along a path; a path has an elevation profile." },
@@ -127,6 +128,16 @@ export default function MeasurePanel() {
               </button>
             )}
           </div>
+          {shape.kind === "area" && shape.points.length >= 3 && (
+            <button
+              type="button"
+              onClick={() => useArea.getState().setOpen(true)}
+              className="mt-1 flex items-center gap-1.5 border border-[#7DD3FC]/60 px-1.5 py-0.5 text-[9px] uppercase tracking-widest text-[#7DD3FC] hover:bg-[#7DD3FC]/10"
+              title="List what the loaded layers hold inside this area, watch it for arrivals and departures, export it, or build its land report"
+            >
+              <ScanSearch className="size-3" /> What&apos;s inside
+            </button>
+          )}
           {result && (
             <ul className="mt-1 space-y-0.5 text-[9px] leading-snug text-muted-foreground">
               {result.formula.map((f) => (

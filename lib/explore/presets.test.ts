@@ -21,6 +21,43 @@ describe("Explore presets", () => {
       "front-range-whp",
       "galveston-slr",
     ]);
+    expect(PRESET_GROUPS.find((g) => g.title === "Infrastructure, air & events")?.presets.map((p) => p.id)).toEqual([
+      "round-rock-grid",
+      "ship-channel-pipelines",
+      "texas-power",
+      "kansas-city-rail",
+      "okc-sections",
+      "bay-area-faults",
+      "seattle-landslides",
+      "highland-lakes-dams",
+      "texas-airports",
+      "pikes-peak-geology",
+      "la-freeway-cams",
+      "us-air-quality",
+      "world-events",
+    ]);
+  });
+
+  it("put each infrastructure preset below the height its first layer draws at", async () => {
+    const { LAYER_BY_ID } = await import("@/lib/layers");
+    const { tierFor, TRANSMISSION_TIERS, PIPELINE_TIERS, PLANT_TIERS, RAIL_TIERS, PLSS_TIERS, FAULT_TIERS, LANDSLIDE_TIERS, DAM_TIERS, AIRPORT_TIERS } = await import("@/lib/layers/infra");
+    const tiers: Record<string, Parameters<typeof tierFor>[0]> = {
+      transmission: TRANSMISSION_TIERS,
+      pipelines: PIPELINE_TIERS,
+      plants: PLANT_TIERS,
+      rail: RAIL_TIERS,
+      plss: PLSS_TIERS,
+      faults: FAULT_TIERS,
+      landslides: LANDSLIDE_TIERS,
+      dams: DAM_TIERS,
+      airports: AIRPORT_TIERS,
+    };
+    for (const p of PRESETS.filter((x) => x.group === "infrastructure")) {
+      const first = p.layers[0];
+      expect(LAYER_BY_ID[first], p.id).toBeDefined();
+      if (tiers[first]) expect(tierFor(tiers[first], p.height), `${p.id} at ${p.height} m`).not.toBeNull();
+    }
+    expect(presetShare(PRESETS.find((p) => p.id === "pikes-peak-geology")!).ground).toEqual({ lon: -104.95, lat: 38.85 });
   });
 
   it("carry a terrain preset's ground point, terrain and scenario into its link", () => {

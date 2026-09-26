@@ -143,3 +143,21 @@ describe("terrain, the sea level scenario and ground answers in the share link",
     for (const taken of ["parcel=", "zoning=", "pin=", "cmp=", "sel="]) expect(q).not.toContain(taken);
   });
 });
+
+describe("the Area panel and what's here in the share link", () => {
+  const area = { kind: "area" as const, points: [[-98.5, 29.4], [-98.49, 29.4], [-98.49, 29.41]] as Array<[number, number]> };
+  it("round-trips aoi=1 with its drawn area and a what's-here point", () => {
+    const s: ShareState = { shape: area, aoi: true, here: { lat: 29.4241, lon: -98.4936 } };
+    const q = shareQuery(s);
+    expect(q).toContain("aoi=1");
+    expect(q).toContain("here=29.42410%2C-98.49360");
+    // The shape still goes last, unescaped.
+    expect(q.endsWith("shape=a:-98.50000,29.40000;-98.49000,29.40000;-98.49000,29.41000")).toBe(true);
+    expect(parseShare(q)).toEqual(s);
+  });
+  it("writes aoi only with a drawn area to show", () => {
+    expect(shareQuery({ aoi: true })).not.toContain("aoi");
+    expect(shareQuery({ aoi: true, shape: { kind: "line", points: [[0, 0], [1, 1]] } })).not.toContain("aoi");
+    expect(parseShare("?here=91,0").here).toBeUndefined();
+  });
+});

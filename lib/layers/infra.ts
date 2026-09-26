@@ -216,7 +216,10 @@ export const pipelinesLayer = boxLayer({
   },
 });
 
-export const RAIL_TIERS: BoxTier[] = [{ maxHeight: 120_000, radiusM: 50_000 }];
+export const RAIL_TIERS: BoxTier[] = [
+  { maxHeight: 40_000, radiusM: 25_000 },
+  { maxHeight: 120_000, radiusM: 50_000 },
+];
 
 export const railLayer = boxLayer({
   id: "rail",
@@ -304,7 +307,10 @@ export const plantsLayer = boxLayer({
   },
 });
 
-export const FAULT_TIERS: BoxTier[] = [{ maxHeight: 400_000, radiusM: 80_000 }];
+export const FAULT_TIERS: BoxTier[] = [
+  { maxHeight: 150_000, radiusM: 40_000 },
+  { maxHeight: 400_000, radiusM: 80_000 },
+];
 
 export const faultsLayer = boxLayer({
   id: "faults",
@@ -324,7 +330,10 @@ export const faultsLayer = boxLayer({
   },
 });
 
-export const LANDSLIDE_TIERS: BoxTier[] = [{ maxHeight: 60_000, radiusM: 25_000 }];
+export const LANDSLIDE_TIERS: BoxTier[] = [
+  { maxHeight: 25_000, radiusM: 12_000 },
+  { maxHeight: 60_000, radiusM: 25_000 },
+];
 
 export const landslidesLayer = boxLayer({
   id: "landslides",
