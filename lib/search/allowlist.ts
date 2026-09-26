@@ -21,11 +21,17 @@ export const SEARCHABLE_DETAILS: ReadonlySet<string> = new Set([
   "call sign",
   "norad id",
   "intl designator",
+  "origin country",
+  "destination",
   // launches
   "vehicle",
   "mission",
   "pad",
   "site",
+  // sports: the feature name is the abbreviated score line ("DAL @ NYG"),
+  // so the full team names and the league are what a query finds a game by
+  "matchup",
+  "league",
   // hazards, land, water, economy
   "fire id",
   "cowardin code",
@@ -33,9 +39,11 @@ export const SEARCHABLE_DETAILS: ReadonlySet<string> = new Set([
   "port code",
   "locode",
   "local name",
-  // companies, banks, constructs: identifiers their publishers assign
+  // companies, banks, constructs: identifiers and categories their publishers assign
   "ticker",
   "cik",
+  "sector",
+  "sic",
   "fdic cert",
   "code",
   // places
@@ -45,6 +53,10 @@ export const SEARCHABLE_DETAILS: ReadonlySet<string> = new Set([
   "state",
   "country",
   "venue",
+  // Left off on purpose: a branch's "bank", a launch's "provider" and an
+  // aircraft's "operator" name who runs the thing, so searching them would go
+  // from that name to what it operates; a company's "HQ" is a street address,
+  // and companies are found by name, ticker, CIK, sector, SIC and county.
 ]);
 
 export function searchableDetail(key: string): boolean {
