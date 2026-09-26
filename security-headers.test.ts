@@ -3,7 +3,8 @@
 // before: Cesium instantiates WebAssembly to draw the globe, voice control
 // asks for the microphone, and `?embed=1` is meant to be put in an iframe.
 // A page that loads its chrome and never draws the map looks like a slow
-// network rather than a header, so these assert the policy directly.
+// network rather than a header, so these assert the policy directly. The ISS
+// dossier's embedded NASA stream is a fourth: without frame-src it is a blank box.
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
@@ -44,6 +45,14 @@ describe("security headers", () => {
       const scriptSrc = directive(get(r, "content-security-policy")!, "script-src");
       expect(scriptSrc).toContain("'wasm-unsafe-eval'");
       expect(scriptSrc.split(/\s+/)).not.toContain("'unsafe-eval'");
+    }
+  });
+
+  it("lets the ISS dossier frame YouTube's privacy-enhanced player, and no other host", async () => {
+    // Without a frame-src, default-src 'self' blocks the stream's iframe.
+    for (const r of await rules()) {
+      const frameSrc = directive(get(r, "content-security-policy")!, "frame-src");
+      expect(frameSrc).toBe("frame-src 'self' https://www.youtube-nocookie.com");
     }
   });
 

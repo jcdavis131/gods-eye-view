@@ -13,12 +13,17 @@
 //   &embed=1                     no HUD chrome (iframes)
 //   &pin=27.8000,-97.3960        the constructs stack anchored at this point (lat,lon)
 //   &cmp=27.8800,-97.3200        a second place compared with the pinned one (lat,lon)
+//   &space=1                     space-weather panel open
+//   &shape=a:-98.5,29.4;-98.49,29.4;-98.49,29.41   a drawn area (a:) or line (l:),
+//                                vertices as lon,lat to 5 decimals, at most 60;
+//                                written last and unescaped so it stays readable
 //
 // The URL is rewritten with replaceState about once a second while things
 // change; nothing here ever pushes history entries.
 
 import { LAYER_IDS, type LayerId } from "@/lib/layers/types";
-import { useGlobe, type Selection } from "@/lib/store/globe";
+import { useGlobe, type Selection, type Shape } from "@/lib/store/globe";
+import { MAX_POINTS } from "./measure";
 import { flyTo, flyToSelection } from "./camera";
 import { getRenderer } from "./registry";
 import { setMissionTime } from "./clock";
@@ -54,6 +59,42 @@ export interface ShareState {
   pin?: LonLat;
   /** The second place of a comparison ("B"). */
   cmp?: LonLat;
+  /** Space-weather panel open. */
+  space?: boolean;
+  /** A drawn line or area, shown with its measurement. */
+  shape?: Shape;
+}
+
+/** "a:lon,lat;lon,lat;…" or "l:…" -> Shape, or undefined when malformed. */
+export function parseShape(raw: string | null | undefined): Shape | undefined {
+  if (!raw) return undefined;
+  const m = raw.match(/^([al]):(.+)$/);
+  if (!m) return undefined;
+  const points: Array<[number, number]> = [];
+  for (const pair of m[2].split(";").slice(0, MAX_POINTS)) {
+    const parts = pair.split(",");
+    if (parts.length !== 2 || parts.some((x) => x.trim() === "")) return undefined;
+    const [lon, lat] = parts.map(Number);
+    if (!Number.isFinite(lon) || !Number.isFinite(lat) || Math.abs(lon) > 180 || Math.abs(lat) > 90) return undefined;
+    points.push([lon, lat]);
+  }
+  const kind: Shape["kind"] = m[1] === "a" ? "area" : "line";
+  if (points.length < (kind === "area" ? 3 : 2)) return undefined;
+  return { kind, points };
+}
+
+/** Shape -> "a:lon,lat;…" (lines "l:"), 5 decimals. Only digits, `.`, `-`, `,`, `;`, `:`, `a` and `l`. */
+export function shapeParam(s: Shape): string {
+  return `${s.kind === "area" ? "a" : "l"}:${s.points
+    .slice(0, MAX_POINTS)
+    .map(([lon, lat]) => `${lon.toFixed(5)},${lat.toFixed(5)}`)
+    .join(";")}`;
+}
+
+/** Only a shape that measures something travels in a link. */
+function completeShape(s: Shape | null | undefined): Shape | undefined {
+  if (!s) return undefined;
+  return s.points.length >= (s.kind === "area" ? 3 : 2) ? s : undefined;
 }
 
 /** "lat,lon" in degrees, both in range, else undefined. */
@@ -124,6 +165,9 @@ export function parseShare(search: string): ShareState {
   if (pin) out.pin = pin;
   const cmp = parseLatLon(q.get("cmp"));
   if (cmp) out.cmp = cmp;
+  if (q.get("space") === "1") out.space = true;
+  const shape = parseShape(q.get("shape"));
+  if (shape) out.shape = shape;
   return out;
 }
 
@@ -149,7 +193,13 @@ export function shareQuery(s: ShareState): string {
   if (s.embed) q.set("embed", "1");
   if (s.pin) q.set("pin", formatLatLonParam(s.pin));
   if (s.cmp) q.set("cmp", formatLatLonParam(s.cmp));
-  const str = q.toString();
+  if (s.space) q.set("space", "1");
+  let str = q.toString();
+  // The shape goes last and unescaped (URLSearchParams would write , ; : as
+  // %2C %3B %3A), so a link with a drawn area stays readable. Its characters
+  // are all legal in a query string; nothing else in the link is touched.
+  const shape = completeShape(s.shape);
+  if (shape) str += `${str ? "&" : ""}shape=${shapeParam(shape)}`;
   return str ? `?${str}` : "";
 }
 
@@ -174,6 +224,8 @@ export function currentShare(): ShareState {
     embed: st.embed || undefined,
     pin: strata.pin ?? undefined,
     cmp: strata.compare ?? undefined,
+    space: st.spaceWeatherOpen || undefined,
+    shape: completeShape(st.measure.shape),
   };
 }
 
@@ -209,7 +261,9 @@ export function startUrlSync(): () => void {
       s.clock.offsetMs !== prev.clock.offsetMs ||
       s.selected !== prev.selected ||
       s.waterReportOpen !== prev.waterReportOpen ||
-      s.marketReportOpen !== prev.marketReportOpen
+      s.marketReportOpen !== prev.marketReportOpen ||
+      s.spaceWeatherOpen !== prev.spaceWeatherOpen ||
+      s.measure.shape !== prev.measure.shape
     ) {
       schedule();
     }
@@ -259,6 +313,9 @@ export function applyShare(s: ShareState, opts: { fly?: boolean } = {}): void {
   }
   if (s.report) st.setWaterReportOpen(true);
   if (s.market) st.setMarketReportOpen(true);
+  if (s.space) st.setSpaceWeatherOpen(true);
+  // A shared shape is shown with its readout, not left in drawing mode.
+  if (s.shape) st.setMeasure({ mode: "off", shape: s.shape, elevation: null });
   if (opts.fly !== false && s.lat != null && s.lon != null) {
     flyTo(s.lon, s.lat, { height: s.h ?? 120_000, pitchDeg: s.p ?? -55, headingDeg: s.hd ?? 0, durationS: 4 });
   }
@@ -283,7 +340,7 @@ export async function copyShareLink(): Promise<string> {
   const url = shareUrl();
   try {
     await navigator.clipboard.writeText(url);
-    useGlobe.getState().pushLog({ level: "info", text: "Link copied. It carries the view, the layers, the clock, the vintage, the selection, open reports and any comparison." });
+    useGlobe.getState().pushLog({ level: "info", text: "Link copied. It carries the view, the layers, the clock, the vintage, the selection, open reports, any comparison and a drawn shape." });
   } catch {
     useGlobe.getState().pushLog({ level: "warn", text: `Clipboard blocked; the link is ${url}` });
   }

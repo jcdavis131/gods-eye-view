@@ -12,6 +12,7 @@ import { copyShareLink } from "@/lib/globe/share";
 import { useTeleport } from "@/lib/live/teleportStore";
 import type { PanelId } from "./registry";
 import { useStrata } from "@/lib/fabric/strataStore";
+import { measureOpen, setMeasureMode } from "@/lib/globe/measure";
 
 export function isPanelOpen(id: PanelId): boolean {
   const g = useGlobe.getState();
@@ -24,6 +25,10 @@ export function isPanelOpen(id: PanelId): boolean {
       return g.waterReportOpen;
     case "market":
       return g.marketReportOpen;
+    case "space":
+      return g.spaceWeatherOpen;
+    case "measure":
+      return measureOpen(g.measure);
     case "signals":
       return useIndicators.getState().open;
     case "screen":
@@ -65,6 +70,14 @@ export function setPanel(id: PanelId, on: boolean): void {
         g.setLayer("trade", true);
       }
       g.setMarketReportOpen(on);
+      return;
+    case "space":
+      g.setSpaceWeatherOpen(on);
+      return;
+    case "measure":
+      // On: the distance tool (clicks place points). Off: the tool, the shape and the reading all close.
+      if (on) setMeasureMode("distance");
+      else g.setMeasure({ mode: "off", shape: null, elevation: null });
       return;
     case "signals":
       useIndicators.getState().setOpen(on);

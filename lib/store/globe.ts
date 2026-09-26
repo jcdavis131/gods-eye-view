@@ -27,6 +27,32 @@ export interface LogEntry {
   layer?: LayerId;
 }
 
+/** Measure tools: what a click on the globe does while one is active. */
+export type MeasureMode = "off" | "distance" | "area" | "elevation";
+
+/** A drawn line or area, [lon, lat] vertices in click order. Travels in share links. */
+export interface Shape {
+  kind: "line" | "area";
+  points: Array<[number, number]>;
+}
+
+export interface ElevationPick {
+  lon: number;
+  lat: number;
+  loading: boolean;
+  metres?: number;
+  resolutionM?: number;
+  /** The service's own words when it answered without a value. */
+  note?: string;
+  error?: string;
+}
+
+export interface MeasureState {
+  mode: MeasureMode;
+  shape: Shape | null;
+  elevation: ElevationPick | null;
+}
+
 export interface ClockState {
   /** Offset of the mission clock from wall-clock time, ms. 0 = LIVE. */
   offsetMs: number;
@@ -75,6 +101,10 @@ interface GlobeState {
   setMarketReportOpen: (open: boolean) => void;
   exploreOpen: boolean;
   setExploreOpen: (open: boolean) => void;
+  spaceWeatherOpen: boolean;
+  setSpaceWeatherOpen: (open: boolean) => void;
+  measure: MeasureState;
+  setMeasure: (patch: Partial<MeasureState>) => void;
   /** ?embed=1: no HUD chrome, for iframes. */
   embed: boolean;
   setEmbed: (embed: boolean) => void;
@@ -147,6 +177,10 @@ export const useGlobe = create<GlobeState>()((set) => ({
   setMarketReportOpen: (marketReportOpen) => set({ marketReportOpen }),
   exploreOpen: false,
   setExploreOpen: (exploreOpen) => set({ exploreOpen }),
+  spaceWeatherOpen: false,
+  setSpaceWeatherOpen: (spaceWeatherOpen) => set({ spaceWeatherOpen }),
+  measure: { mode: "off", shape: null, elevation: null },
+  setMeasure: (patch) => set((s) => ({ measure: { ...s.measure, ...patch } })),
   embed: false,
   setEmbed: (embed) => set({ embed }),
   tour: { active: false, index: 0, startedAt: 0, paused: false },

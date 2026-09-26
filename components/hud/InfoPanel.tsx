@@ -2,7 +2,9 @@
 // Right-hand panel: selected object dossier, or the signal log when idle.
 
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Crosshair, LocateFixed, X } from "lucide-react";
+import type { IssStream as IssStreamInfo } from "@/lib/space/weather";
 import { useGlobe } from "@/lib/store/globe";
 import { LAYER_BY_ID } from "@/lib/layers";
 import { formatAltitude, formatLatLon, formatSpeed, timeAgo } from "@/lib/globe/geo";
@@ -110,7 +112,9 @@ export default function InfoPanel() {
   const details = Object.entries(p.details ?? {}).filter(([, v]) => v != null && v !== "" && v !== false);
   const isLiveLayer =
     !p.simulated &&
-    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "banks", "spending", "constructs", "field"].includes(p.layer);
+    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "banks", "spending", "constructs", "field", "flood", "wetlands", "publiclands"].includes(p.layer);
+  const banner = BANNER[p.layer];
+  const iss = p.layer === "satellites" && p.id === "25544";
   const construct = p.layer === "constructs" || p.layer === "field" || p.layer === "alerts";
   const gauge = p.layer === "water" && (p.kind === "gauge" || p.kind === "reservoir") && p.id.startsWith("usgs:") ? (p.extra as GaugeExtra) : null;
   const well = p.layer === "groundwater" && p.kind === "well" ? (p.extra as WellExtra) : null;
@@ -156,7 +160,12 @@ export default function InfoPanel() {
           </div>
         )}
 
+        {banner && (
+          <div className="border-b border-border/60 bg-primary/5 px-3 py-1 text-[9px] tracking-widest text-foreground/80">{banner}</div>
+        )}
+
         {p.imageUrl && <CameraStill key={p.imageUrl} url={p.imageUrl} name={p.name} />}
+        {iss && <IssStream />}
 
         {chip && (
           <div className="flex items-center gap-3 border-b border-border px-3 py-2">
@@ -244,6 +253,54 @@ export default function InfoPanel() {
         </div>
       </div>
     </aside>
+  );
+}
+
+/** One-line reminders of what a layer's features are and are not. */
+const BANNER: Partial<Record<string, string>> = {
+  flood: "REGULATORY FLOOD MAP · NOT A FORECAST",
+  wetlands: "HABITAT MAP FROM DATED IMAGERY · MAY HAVE CHANGED SINCE · NOT A JURISDICTIONAL DELINEATION",
+  fires: "SATELLITE HOTSPOT · NOT A CONFIRMED FIRE",
+};
+
+/**
+ * NASA's own live stream from the ISS, when YouTube's oEmbed confirms it is
+ * embeddable, on NASA's channel and titled as the Space Station stream. Any
+ * failure hides the block. The player is 200 px tall, YouTube's minimum
+ * embedded viewport (200 x 200), with nothing drawn over it and no autoplay.
+ * The page's CSP allows exactly this frame host (next.config.ts frame-src).
+ */
+function IssStream() {
+  const q = useQuery({
+    queryKey: ["iss-stream"],
+    queryFn: async () => {
+      const r = await fetch("/api/space?op=iss-stream");
+      const j = (await r.json()) as { data?: IssStreamInfo };
+      if (!r.ok || !j.data) throw new Error(`${r.status}`);
+      return j.data;
+    },
+    staleTime: 15 * 60_000,
+    retry: false,
+  });
+  const s = q.data;
+  if (!s?.available || !s.videoId) return null;
+  return (
+    <div className="border-b border-border bg-black/60">
+      <div className="relative h-[200px] w-full">
+        <iframe
+          src={`https://www.youtube-nocookie.com/embed/${s.videoId}?mute=1&playsinline=1`}
+          title={s.title ?? "NASA live stream from the ISS"}
+          className="absolute inset-0 h-full w-full border-0"
+          allow="encrypted-media; picture-in-picture"
+          referrerPolicy="strict-origin-when-cross-origin"
+          loading="lazy"
+          allowFullScreen
+        />
+      </div>
+      <div className="px-3 py-1 text-[9px] leading-snug text-muted-foreground">
+        {s.title ?? "NASA live stream"} · {s.author ?? "NASA"} on YouTube · checked {new Date(s.checkedAt).toISOString().slice(11, 16)}Z
+      </div>
+    </div>
   );
 }
 
