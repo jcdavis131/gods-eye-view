@@ -43,8 +43,9 @@ describe("buildWildfire", () => {
     expect(x.perimeterEditedAt).toBe(edited);
     expect(p.details?.["perimeter captured"]).toBe("not published by WFIGS");
     expect(p.details?.["perimeter record edited"]).toBe("2026-09-18 00:00Z");
-    // observedAt falls back to the incident's own modified time.
-    expect(p.observedAt).toBe(modified);
+    // No capture time, no "seen" time: the incident's modified time stays in its own row.
+    expect(p.observedAt).toBeUndefined();
+    expect(p.details?.["incident updated"]).toBe("2026-09-20 00:00Z");
   });
 
   it("dates a perimeter from its capture time when WFIGS publishes one", () => {

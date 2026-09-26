@@ -181,8 +181,10 @@ export function buildWildfire(
         layer: "wildfire",
         name,
         kind: fireKind(type),
-        // The capture time when WFIGS has one, else the incident record's own modified time.
-        observedAt: x.perimeterAt ?? x.updatedAt,
+        // The capture time, or nothing: the incident record's edit time says
+        // nothing about when this polygon was drawn (the dossier lists it as
+        // "incident updated").
+        observedAt: x.perimeterAt,
         source: "NIFC WFIGS",
         anchor: irwin ? incidentAt.get(irwin) : undefined,
         details: fireDetails(x, {
