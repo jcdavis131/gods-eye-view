@@ -110,6 +110,13 @@ describe("rail formatting and captions", () => {
     expect(countPhrase("water", 1)).toBe("1 gauge");
     expect(countPhrase("occupations", 3, "Jobs")).toBe("3 jobs");
   });
+  it("counts a binned fires cell as the detections it stands for in the rail", () => {
+    const cell = { properties: { layer: "fires", kind: "viirs", id: "cell", name: "x", source: "t", extra: { count: 57 } } } as unknown as LayerFeature;
+    const one = { properties: { layer: "fires", kind: "modis", id: "one", name: "y", source: "t", extra: { count: 1 } } } as unknown as LayerFeature;
+    const s = statsFromJoin(new Map<LayerId, LayerFeature[]>([["fires", [cell, one]]]), null, null);
+    expect(s.byLayer).toEqual({ fires: 58 });
+    expect(s.total).toBe(58);
+  });
   it("builds the Powers of Ten caption from computed values only", () => {
     const huc8 = STACK[3];
     expect(captionKind("huc8")).toBe("Subbasin");

@@ -138,6 +138,16 @@ describe("emergence", () => {
     expect(v.get("county:b")).toMatchObject({ value: 1, heat: 1, rank: 0 });
     expect(v.get("county:a")!.value).toBe(0);
   });
+  it("counts a binned fires cell as the detections it stands for, not as one", () => {
+    // Over 5,000 hotspots in view the fires layer draws one point per cell with extra.count.
+    const binned = pt("fires", "cell", 0.6, 0.6, { extra: { count: 120 } });
+    const single = pt("fires", "hot", 0.7, 0.7, { extra: { count: 1 } });
+    const v = computeVitals([a, b, c], [...features, binned, single], "fires", "count");
+    expect(v.get("county:a")).toMatchObject({ value: 121, byLayer: { water: 2, aircraft: 1, fires: 121 }, total: 124 });
+    // Only fires carries a count; the same field on another layer is not read.
+    const other = computeVitals([a], [pt("water", "odd", 0.5, 0.5, { extra: { count: 50 } })], "all", "count");
+    expect(other.get("county:a")?.total).toBe(1);
+  });
   it("fingerprints only what is drawn and ramps colour with heat", () => {
     const v = computeVitals([a, b, c], features, "all", "count");
     expect(vitalsKey(v)).toBe("county:a=3.00|county:b=3.00");

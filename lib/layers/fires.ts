@@ -5,7 +5,9 @@
 //                Aqua) near-real-time 24 h files, parsed on the server and
 //                cut to the view; when a view holds more than 5,000, they are
 //                binned and each cell shows its brightest detection (highest
-//                fire radiative power) with the count it stands for
+//                fire radiative power) with the count it stands for; the
+//                field, the strata rail and a construct's inside counts add
+//                that count, not one per cell (lib/fabric/join.ts standsFor)
 //
 // Confidence stays on each instrument's scale: VIIRS publishes low / nominal
 // / high, MODIS a 0–100 %. A hotspot is a hot pixel, not a confirmed
