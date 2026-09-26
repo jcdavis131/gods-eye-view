@@ -5246,6 +5246,10 @@
                 },
                 "description": "Services in the box that answer a click but draw no lot lines, and why (Wisconsin: box queries take 25-45 s)."
               },
+              "cutForSize": {
+                "type": "boolean",
+                "description": "Outlines past 3.5 MB were left out to stay under the platform's 4.5 MB response limit."
+              },
               "truncated": {
                 "type": "boolean"
               }

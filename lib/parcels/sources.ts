@@ -277,6 +277,14 @@ export interface OutlineSet {
   truncated: boolean;
 }
 
+/**
+ * How long a box waits for one parcel service. Past it the caller gets a
+ * partial answer naming the service that did not answer, the query finishes
+ * in the background and is cached for the next ask, and the route stays
+ * inside its 60 s (Columbus, Ohio took 23 s for one box in probing).
+ */
+export const OUTLINE_DEADLINE_MS = 30_000;
+
 /** One adapter's outlines in a box, cached for a week. Attributes other than id and use are dropped before caching. */
 export async function outlinesFor(a: ParcelAdapter, county: CountyRef, bbox: [number, number, number, number]): Promise<{ value: OutlineSet; age: number }> {
   const url = a.url(county);
@@ -308,7 +316,7 @@ export async function outlinesFor(a: ParcelAdapter, county: CountyRef, bbox: [nu
     );
     const features = buildOutlines(fc.features.map((f) => ({ geometry: f.geometry, properties: f.properties as Props })), a);
     return { adapter: a, county, features, truncated: truncated(fc) || fc.features.length >= a.maxRecords };
-  });
+  }, { deadlineMs: OUTLINE_DEADLINE_MS, coolMs: 60_000 });
   return { value: r.value, age: r.age };
 }
 

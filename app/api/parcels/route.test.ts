@@ -157,6 +157,25 @@ describe("/api/parcels outlines", () => {
     expect(body.bbox).toEqual([-95.372, 29.758, -95.366, 29.764]);
   });
 
+  it("keeps a box under the response budget, and says so (derived: the City Hall outline repeated 12,000 times under new ids)", async () => {
+    const many = Array.from({ length: 12_000 }, (_, i) => ({ geometry: hcad.rows[0].geometry, properties: { HCAD_NUM: String(i).padStart(13, "0"), state_class: "X1" } }));
+    vi.mocked(globalThis.fetch).mockImplementation(async (input) => {
+      const url = new URL(String(input));
+      const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+      if (url.host === "tigerweb.geo.census.gov") return json(countyFc(county));
+      return json(fc(many));
+    });
+    const res = await GET(new NextRequest("http://localhost/api/parcels?mode=outlines&bbox=-95.3715,29.7585,-95.3665,29.7625"));
+    const text = await res.text();
+    expect(res.status).toBe(200);
+    expect(text.length).toBeLessThan(4_500_000);
+    const body = JSON.parse(text) as { data: { features: unknown[] }; cutForSize: boolean; truncated: boolean; caveats: string[] };
+    expect(body.cutForSize).toBe(true);
+    expect(body.truncated).toBe(true);
+    expect(body.data.features.length).toBeLessThan(12_000);
+    expect(body.caveats.join(" ")).toMatch(/response limit/);
+  });
+
   it("clamps a wide box to 0.01 degrees", async () => {
     const { body } = await get("?mode=outlines&bbox=-95.5,29.6,-95.2,29.9");
     const [w, s, e, n] = body.bbox as number[];

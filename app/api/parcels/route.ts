@@ -56,6 +56,12 @@ const NAD_ADDRESSES_MS = 30_000;
 const PLSS_MS = 8_000;
 /** Adapters asked per outline box at most (a box on a four-county corner). */
 const MAX_OUTLINE_ADAPTERS = 4;
+/**
+ * Response budget for one outline box: Vercel refuses function bodies over
+ * 4.5 MB, and one downtown box was 1.5 MB from a single service (Minneapolis
+ * condominiums), so a box where several services meet is capped here.
+ */
+const OUTLINE_MAX_BYTES = 3_500_000;
 
 const fetchedAt = (ageMs: number) => new Date(Date.now() - ageMs).toISOString();
 
@@ -234,14 +240,27 @@ async function opOutlines(bbox: Bbox) {
     }
   });
   if (asked.length && !sources.length) throw settled.find((s) => s.status === "rejected")?.reason ?? new Error("every parcel source failed");
+  // Keep whole outlines, in source order, until the response budget is spent.
+  let bytes = 0;
+  let kept = features.length;
+  for (let i = 0; i < features.length; i++) {
+    bytes += JSON.stringify(features[i]).length + 1;
+    if (bytes > OUTLINE_MAX_BYTES) {
+      kept = i;
+      break;
+    }
+  }
+  const cutForSize = kept < features.length;
+  if (cutForSize) features.length = kept;
   const identifyOnly = [...clickOnly.entries()].map(([id, reason]) => ({ id, reason }));
-  const truncatedAny = sources.some((s) => s.truncated);
+  const truncatedAny = cutForSize || sources.some((s) => s.truncated);
   const caveats = [
     "Outlines carry the parcel id and use class only; click one (the identify mode) for the record its source publishes.",
     "A parcel outline is a tax map, not a survey.",
     "Only the returned `bbox` was loaded; outside it nothing is loaded, which is not the same as no parcel being there.",
   ];
-  if (truncatedAny) caveats.push("A source's record limit was hit; ask for a smaller box for every parcel.");
+  if (sources.some((s) => s.truncated)) caveats.push("A source's record limit was hit; ask for a smaller box for every parcel.");
+  if (cutForSize) caveats.push(`Outlines past ${(OUTLINE_MAX_BYTES / 1e6).toFixed(1)} MB were left out to stay under the platform's response limit; ask for a smaller box for every parcel.`);
   if (uncovered.length) caveats.push(`No keyless parcel service is wired for ${uncovered.join(", ")}.`);
   for (const c of identifyOnly) caveats.push(`${c.reason}; click the map there for a parcel's record.`);
   if (failed.length) caveats.push(`Did not answer this time: ${failed.map((f) => f.name).join(", ")}.`);
@@ -249,7 +268,7 @@ async function opOutlines(bbox: Bbox) {
   return ok(
     { type: "FeatureCollection", features },
     {
-      meta: { mode: "outlines", bbox, sources, failed, uncovered, identifyOnly, truncated: truncatedAny, cacheAge: oldest, maxAgeS: OUTLINE_TTL_MS / 1000 },
+      meta: { mode: "outlines", bbox, sources, failed, uncovered, identifyOnly, truncated: truncatedAny, cutForSize, cacheAge: oldest, maxAgeS: OUTLINE_TTL_MS / 1000 },
       provenance: provs,
       caveats,
       ttlS: failed.length ? 600 : 6 * 3600,
