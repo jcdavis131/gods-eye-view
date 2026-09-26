@@ -19,6 +19,7 @@ import { fieldStyle } from "./fieldStyles";
 import { alertsStyle } from "./alertStyles";
 import { firesStyle, hazardsStyle, wildfireStyle } from "./hazardStyles";
 import { floodStyle, publiclandsStyle, wetlandsStyle } from "./landStyles";
+import { contoursStyle, firehazardStyle, landcoverStyle, reliefStyle, sealevelStyle, slopeStyle, soilsStyle } from "./terrainStyles";
 
 /** Distinctive major-group colours for the occupations layer: one hue per SOC major group. */
 const OCCUPATION_COLORS: Record<string, string> = {
@@ -389,6 +390,13 @@ export const STYLES: Partial<Record<LayerId, LayerStyle>> = {
   flood: floodStyle,
   wetlands: wetlandsStyle,
   publiclands: publiclandsStyle,
+  relief: reliefStyle,
+  slope: slopeStyle,
+  contours: contoursStyle,
+  soils: soilsStyle,
+  firehazard: firehazardStyle,
+  landcover: landcoverStyle,
+  sealevel: sealevelStyle,
   sports: sportsStyle,
   constructs: constructsStyle,
   field: fieldStyle,
@@ -421,6 +429,14 @@ export const FOLLOW_RANGE: Record<LayerId, number> = {
   flood: 3_000,
   wetlands: 3_000,
   publiclands: 40_000,
+  // Picture layers have no features to follow; a "ground here" answer sits at its click.
+  relief: 5_000,
+  slope: 5_000,
+  contours: 2_000,
+  soils: 5_000,
+  firehazard: 20_000,
+  landcover: 10_000,
+  sealevel: 20_000,
   sports: 500_000,
   constructs: 150_000,
   field: 400_000,

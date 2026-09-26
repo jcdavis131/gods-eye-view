@@ -24,3 +24,18 @@ describe("voice words for the hazards and land layers", () => {
     expect(layerOf("show floods")).toMatchObject({ layer: "water" });
   });
 });
+
+describe("voice words for the terrain & soils layers", () => {
+  it("hears each picture layer by its plain names, before the fire and flood words they share", () => {
+    expect(layerOf("show wildfire hazard")).toMatchObject({ layer: "firehazard", on: true });
+    expect(layerOf("show fire hazard over colorado springs")).toMatchObject({ layer: "firehazard", place: "colorado springs" });
+    expect(layerOf("show wildfires")).toMatchObject({ layer: "wildfire" });
+    expect(layerOf("show sea level rise over galveston")).toMatchObject({ layer: "sealevel", place: "galveston" });
+    expect(layerOf("show hillshade")).toMatchObject({ layer: "relief" });
+    expect(layerOf("show contour lines")).toMatchObject({ layer: "contours" });
+    expect(layerOf("hide soils")).toMatchObject({ layer: "soils", on: false });
+    expect(layerOf("show land cover")).toMatchObject({ layer: "landcover" });
+    expect(layerOf("show slope")).toMatchObject({ layer: "slope" });
+    expect(resolveLayer("nlcd")).toBe("landcover");
+  });
+});

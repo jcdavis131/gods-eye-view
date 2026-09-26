@@ -27,6 +27,7 @@ const OPTION_KEYS: Partial<Record<LayerDefinition["id"], Array<keyof Prefs>>> = 
   aircraft: ["aircraftSource"],
   satellites: ["satelliteGroups"],
   field: ["fieldPov"],
+  sealevel: ["seaLevelFt"],
 };
 
 export default function LayerHost() {
@@ -98,6 +99,17 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
     const r = new LayerRenderer(viewer, def.id, style);
     r.show = useGlobe.getState().layers[def.id];
     r.setLabelsEnabled(useSettings.getState().prefs.labels);
+    r.setTileAlpha(useSettings.getState().prefs.tileAlpha?.[def.id] ?? null);
+    // Pictures (tiled imagery) report failing tiles through the same status line as a failed fetch.
+    r.onTileHealth = (h) => {
+      const g = useGlobe.getState();
+      if (h.failing) {
+        g.setStatus(def.id, { error: h.message });
+        g.pushLog({ level: "warn", text: `${def.label}: ${h.message}`, layer: def.id });
+      } else if (g.status[def.id]?.error?.startsWith("tiles failing")) {
+        g.setStatus(def.id, { error: undefined });
+      }
+    };
     registerRenderer(def.id, r);
     rendererRef.current = r;
     return () => {
@@ -105,7 +117,8 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
       r.destroy();
       rendererRef.current = null;
     };
-  }, [def.id]);
+    // A layer's id and label never change; listed so the tile-health callback reads the right label.
+  }, [def.id, def.label]);
 
   useEffect(() => {
     if (rendererRef.current) rendererRef.current.show = enabled;
@@ -116,6 +129,11 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
   useEffect(() => {
     rendererRef.current?.setLabelsEnabled(labels);
   }, [labels]);
+
+  const tileAlpha = prefs.tileAlpha?.[def.id];
+  useEffect(() => {
+    rendererRef.current?.setTileAlpha(tileAlpha ?? null);
+  }, [tileAlpha]);
 
   // The state of the layers this one's refine() reads: on/off, their last
   // answer and whether it failed (hazards steps aside for Earthquakes and Live
@@ -170,7 +188,7 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
 
   useEffect(() => {
     if (!data) return;
-    rendererRef.current?.update(data.collection);
+    rendererRef.current?.update(data.collection, data.meta);
     const live = data.collection.features.filter((f) => !f.properties.simulated).length;
     const metaCount = typeof data.meta?.count === "number" ? (data.meta.count as number) : undefined;
     setStatus(def.id, {
@@ -180,6 +198,7 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
       note: data.note,
       error: undefined,
       loading: false,
+      picture: data.meta?.picture === true,
     });
   }, [data, def.id, def.simulated, setStatus]);
 

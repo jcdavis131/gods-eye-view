@@ -10,6 +10,8 @@ export interface Intent {
 }
 
 const LAYER_WORDS =
+  // Terrain & soils first: "wildfire hazard" must be tried before "wildfire", "sea level rise" before "sea level".
+  "wildfire hazard potential|wildfire hazard|wildfire potential|fire hazard|sea level rise|sea-level rise|sea level|shaded relief|hillshade|relief|contour lines|topo lines|contours|contour|soil survey|soils|soil|farmland|steepness|slopes|slope|land cover|landcover|nlcd|" +
   "wildfires|wildfire|fire perimeters|active fires|hotspots|fires|fire|firms|weather alerts|hazard alerts|hazards|live warnings|warnings|alerts|disasters|volcanoes|flood zones|flood map|floodplain|fema|wetlands|wetland|marsh|public lands|public land|protected areas|national forests|parks|" +
   "aircraft|airplanes|planes|flights|flight|jets|ships|ship|vessels|boats|satellites|satellite|sats|earthquakes|quakes|seismic|cameras|webcams|cctv|traffic|cars|launches|rockets|rocket|water quality|satellite water|stream gauges|water|rivers|river|lakes|lake|reservoirs|reservoir|gauges|floods|flooding|hydrology|groundwater|aquifers|aquifer|wells|drought|turbidity|sediment|trade|ports|port|harbours|harbors|shipping|borders|border crossings|crossings|commerce|jobs|employment|wages|business|economy|real estate|housing|home values|homes|rents|property values|property|companies|public companies|listed companies|stocks|tickers|banks|bank branches|deposits|spending|federal spending|federal dollars|contracts|grants|constructs|place fabric|jurisdictions|districts|watersheds|boundaries|construct field|field|emergence";
 

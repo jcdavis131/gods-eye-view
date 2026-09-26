@@ -79,6 +79,22 @@ describe("security headers", () => {
     expect(get(e, "X-Frame-Options")).toBeUndefined();
   });
 
+  it("lets the browser fetch every tile host the terrain & soil pictures and the keyless terrain read directly", async () => {
+    // Cesium loads imagery as images (img-src) and terrain tiles with fetch (connect-src).
+    const { DIRECT_SOURCES } = await import("@/lib/terrain/products");
+    const allows = (directive: string, host: string) => {
+      const tokens = directive.split(/\s+/).slice(1);
+      return tokens.includes("https:") || tokens.some((t) => t === `https://${host}` || (t.startsWith("https://*.") && host.endsWith(t.slice(9))));
+    };
+    for (const r of await rules()) {
+      const csp = get(r, "content-security-policy")!;
+      for (const d of DIRECT_SOURCES) {
+        expect(allows(directive(csp, "img-src"), d.host), `img-src ${d.host}`).toBe(true);
+        expect(allows(directive(csp, "connect-src"), d.host), `connect-src ${d.host}`).toBe(true);
+      }
+    }
+  });
+
   it("keeps the rest of the policy strict on both rules", async () => {
     for (const r of await rules()) {
       const csp = get(r, "content-security-policy")!;

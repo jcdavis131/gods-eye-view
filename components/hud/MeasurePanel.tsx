@@ -8,9 +8,10 @@ import { useGlobe, type MeasureMode } from "@/lib/store/globe";
 import { fmtArea, fmtLength, measureOpen, measureShape, setMeasureMode } from "@/lib/globe/measure";
 import { copyShareLink } from "@/lib/globe/share";
 import { formatLatLon } from "@/lib/globe/geo";
+import ElevationProfile from "./ElevationProfile";
 
 const MODES: Array<{ mode: Exclude<MeasureMode, "off">; label: string; icon: typeof Ruler; hint: string }> = [
-  { mode: "distance", label: "Distance", icon: Spline, hint: "Click the globe to add points along a path." },
+  { mode: "distance", label: "Distance", icon: Spline, hint: "Click the globe to add points along a path; a path has an elevation profile." },
   { mode: "area", label: "Area", icon: Square, hint: "Click the globe to add corners; the shape closes itself." },
   { mode: "elevation", label: "Elevation", icon: Mountain, hint: "Click the ground for its elevation (USGS 3DEP, United States)." },
 ];
@@ -135,6 +136,8 @@ export default function MeasurePanel() {
           )}
         </div>
       )}
+
+      {shape && shape.kind === "line" && shape.points.length >= 2 && <ElevationProfile shape={shape} />}
 
       {m.elevation && (
         <div className="border-t border-border/60 px-3 py-2">

@@ -18,6 +18,8 @@ export interface LayerStatus {
   loading: boolean;
   error?: string;
   note?: string;
+  /** A picture layer (tiled imagery): it has no feature count, the panel says MAP. */
+  picture?: boolean;
 }
 
 export interface LogEntry {

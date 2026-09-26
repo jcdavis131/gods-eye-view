@@ -5,6 +5,7 @@
 // (as request headers) or to the vendor SDK they belong to (voice).
 
 import type { FieldPov } from "@/lib/fabric/fieldScale";
+import type { LayerId } from "@/lib/layers/types";
 import type { Measure, Normalise } from "@/lib/fabric/emergence";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
@@ -44,7 +45,7 @@ export const API_KEYS: ApiKeyMeta[] = [
     id: "CESIUM_ION_TOKEN",
     label: "Cesium ion token",
     group: "Globe",
-    unlocks: "Cesium World Terrain (real elevation). Free community tier.",
+    unlocks: "Cesium World Terrain instead of the keyless AWS Terrain Tiles when 3D terrain is on (lit relief, vertex normals). Free community tier.",
     url: "https://ion.cesium.com/tokens",
     secret: true,
   },
@@ -125,7 +126,14 @@ export interface Prefs {
   nightLights: boolean;
   atmosphere: boolean;
   googleTiles: boolean;
+  /** 3D terrain: keyless AWS Terrain Tiles, or Cesium World Terrain with an ion token. */
   terrain: boolean;
+  /** Vertical exaggeration of the terrain, 1 to 3 (Cesium Scene.verticalExaggeration). */
+  terrainExaggeration: number;
+  /** Sea level rise scenario the Sea level rise layer draws, whole feet above MHHW (1 to 10). */
+  seaLevelFt: number;
+  /** The viewer's opacity for each picture layer (0..1); absent = the layer's default. */
+  tileAlpha: Partial<Record<LayerId, number>>;
   /** CelesTrak GP groups to load. "active" is ~10k objects and opt-in. */
   satelliteGroups: string[];
   /** Observer location for satellite pass predictions; null = not set. */
@@ -148,6 +156,9 @@ export const DEFAULT_PREFS: Prefs = {
   atmosphere: true,
   googleTiles: false,
   terrain: false,
+  terrainExaggeration: 1,
+  seaLevelFt: 3,
+  tileAlpha: {},
   satelliteGroups: ["stations", "visual", "gps-ops", "military", "weather"],
   observer: null,
   aircraftSource: "auto",
