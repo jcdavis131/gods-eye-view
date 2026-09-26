@@ -33,6 +33,7 @@ export type LayerId =
   | "flood"
   | "wetlands"
   | "publiclands"
+  | "zoning"
   | "sports"
   | "constructs"
   | "field"
@@ -63,6 +64,7 @@ export const LAYER_IDS: LayerId[] = [
   "flood",
   "wetlands",
   "publiclands",
+  "zoning",
   "sports",
   "constructs",
   "field",

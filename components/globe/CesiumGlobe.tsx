@@ -21,6 +21,8 @@ import type { ViewState } from "@/lib/layers/types";
 import { GLOBE_ERROR_EVENT } from "@/components/hud/TitleCard";
 import { arbitrateLabels } from "@/lib/globe/labelArbiter";
 import { useStrata } from "@/lib/fabric/strataStore";
+import { identifyZoning, startZoningOverlay } from "@/lib/zoning/pick";
+import { ZONING_IDENTIFY_MAX_M } from "@/lib/layers/zoning";
 import { currentFabric } from "@/lib/fabric/strataClient";
 
 function isPickId(v: unknown): v is PickId {
@@ -232,6 +234,9 @@ export default function CesiumGlobe() {
       });
       cleanups.push(offPreUpdate);
 
+      // The point a zoning answer was asked for, marked while its dossier is open.
+      cleanups.push(startZoningOverlay(viewer));
+
       // Measure tools draw their own overlay from the store.
       cleanups.push(startMeasureOverlay(viewer));
 
@@ -342,6 +347,17 @@ export default function CesiumGlobe() {
         const picked = scene.pick(e.position) as { id?: unknown } | undefined;
         const id = picked?.id;
         const st = useGlobe.getState();
+        // Zoning: a click on the ground, or on a district outline (it carries only its code),
+        // asks for the zoning at that point. Any other object picked wins.
+        if ((!isPickId(id) || id.layer === "zoning") && st.layers.zoning && st.view.height <= ZONING_IDENTIFY_MAX_M) {
+          const ray = viewer!.camera.getPickRay(e.position);
+          const hit = (ray && scene.globe.pick(ray, scene)) || viewer!.camera.pickEllipsoid(e.position, ellipsoid);
+          if (hit) {
+            const c = C.Cartographic.fromCartesian(hit);
+            void identifyZoning(C.Math.toDegrees(c.longitude), C.Math.toDegrees(c.latitude));
+            return;
+          }
+        }
         if (isPickId(id)) {
           const feature = getRenderer(id.layer)?.getFeature(id.id) ?? null;
           st.select({ layer: id.layer, id: id.id }, feature);

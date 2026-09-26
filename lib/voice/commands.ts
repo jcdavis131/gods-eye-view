@@ -169,6 +169,10 @@ const LAYER_ALIASES: Record<string, LayerId> = {
   "protected areas": "publiclands",
   parks: "publiclands",
   "national forests": "publiclands",
+  zoning: "zoning",
+  "zoning districts": "zoning",
+  "zoning map": "zoning",
+  "land use": "zoning",
 };
 
 export function resolveLayer(word: string | undefined): LayerId | null {

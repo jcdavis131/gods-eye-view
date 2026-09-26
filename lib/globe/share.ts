@@ -11,6 +11,8 @@
 //   &v=2026-08-15                data vintage (pins the mission clock to that day;
 //                                history-aware layers will read that release later)
 //   &embed=1                     no HUD chrome (iframes)
+//   &zoning=47.60670,-122.33250  the zoning answer at this point (lat,lon, 5 decimals);
+//                                asked for once the camera is there, with the Zoning layer on
 //   &pin=27.8000,-97.3960        the constructs stack anchored at this point (lat,lon)
 //   &cmp=27.8800,-97.3200        a second place compared with the pinned one (lat,lon)
 //   &space=1                     space-weather panel open
@@ -31,6 +33,8 @@ import { getVintage, isValidVintage, useReleases, vintageClockMs } from "@/lib/r
 import { isPersonaId, type PersonaId } from "@/lib/personas/registry";
 import { applyPersona, useLens } from "@/lib/personas/store";
 import { useStrata, type LonLat } from "@/lib/fabric/strataStore";
+import { identifyZoning, useZoningPick } from "@/lib/zoning/pick";
+import { zoningPointId } from "@/lib/zoning/dossier";
 
 export interface ShareState {
   lat?: number;
@@ -55,6 +59,8 @@ export interface ShareState {
   /** Lens (who is looking): sets layers, the arrival panel and the camera unless the link carries its own. */
   lens?: PersonaId;
   embed?: boolean;
+  /** The point a zoning answer was asked for (a clicked point, not a feed feature). */
+  zoning?: LonLat;
   /** The point the constructs stack is anchored to (the "A" of a comparison). */
   pin?: LonLat;
   /** The second place of a comparison ("B"). */
@@ -161,6 +167,8 @@ export function parseShare(search: string): ShareState {
   const lens = q.get("lens");
   if (isPersonaId(lens)) out.lens = lens;
   if (q.get("embed") === "1") out.embed = true;
+  const zoning = parseLatLon(q.get("zoning"));
+  if (zoning) out.zoning = zoning;
   const pin = parseLatLon(q.get("pin"));
   if (pin) out.pin = pin;
   const cmp = parseLatLon(q.get("cmp"));
@@ -191,6 +199,7 @@ export function shareQuery(s: ShareState): string {
   if (s.vintage && isValidVintage(s.vintage)) q.set("v", s.vintage);
   if (s.lens) q.set("lens", s.lens);
   if (s.embed) q.set("embed", "1");
+  if (s.zoning) q.set("zoning", `${s.zoning.lat.toFixed(5)},${s.zoning.lon.toFixed(5)}`);
   if (s.pin) q.set("pin", formatLatLonParam(s.pin));
   if (s.cmp) q.set("cmp", formatLatLonParam(s.cmp));
   if (s.space) q.set("space", "1");
@@ -208,6 +217,9 @@ export function currentShare(): ShareState {
   const st = useGlobe.getState();
   const strata = useStrata.getState();
   const on = LAYER_IDS.filter((id) => st.layers[id]);
+  // A zoning answer travels as its point: its selection id cannot be looked up in a feed.
+  const zpick = useZoningPick.getState().pick;
+  const zoning = zpick && st.selected?.layer === "zoning" && st.selected.id === zoningPointId(zpick.lon, zpick.lat) ? zpick : undefined;
   return {
     lat: st.view.lat,
     lon: st.view.lon,
@@ -216,12 +228,13 @@ export function currentShare(): ShareState {
     p: st.view.pitch,
     layers: on,
     t: Math.abs(st.clock.offsetMs) >= 60_000 ? Date.now() + st.clock.offsetMs : undefined,
-    sel: st.selected ?? undefined,
+    sel: zoning ? undefined : (st.selected ?? undefined),
     report: st.waterReportOpen || undefined,
     market: st.marketReportOpen || undefined,
     vintage: getVintage() ?? undefined,
     lens: useLens.getState().personaId ?? undefined,
     embed: st.embed || undefined,
+    zoning: zoning ? { lat: zoning.lat, lon: zoning.lon } : undefined,
     pin: strata.pin ?? undefined,
     cmp: strata.compare ?? undefined,
     space: st.spaceWeatherOpen || undefined,
@@ -277,11 +290,15 @@ export function startUrlSync(): () => void {
   const unsubStrata = useStrata.subscribe((s, prev) => {
     if (s.pin !== prev.pin || s.compare !== prev.compare) schedule();
   });
+  const unsubZoning = useZoningPick.subscribe((s, prev) => {
+    if (s.pick !== prev.pick) schedule();
+  });
   return () => {
     unsub();
     unsubReleases();
     unsubLens();
     unsubStrata();
+    unsubZoning();
     if (timer) clearTimeout(timer);
   };
 }
@@ -310,6 +327,12 @@ export function applyShare(s: ShareState, opts: { fly?: boolean } = {}): void {
     else if (s.lat != null && s.lon != null) strata.setPin({ lat: s.lat, lon: s.lon });
     st.setLayer("constructs", true);
     if (s.cmp) void strata.setCompare(s.cmp);
+  }
+  // A shared zoning answer: the layer on, and the point asked about once the camera has arrived.
+  if (s.zoning) {
+    const z = s.zoning;
+    st.setLayer("zoning", true);
+    setTimeout(() => void identifyZoning(z.lon, z.lat), opts.fly !== false && s.lat != null ? 4200 : 300);
   }
   if (s.report) st.setWaterReportOpen(true);
   if (s.market) st.setMarketReportOpen(true);

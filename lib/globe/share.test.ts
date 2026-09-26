@@ -116,3 +116,17 @@ describe("space weather and drawn shapes in the share link", () => {
     expect(shapeParam(parseShare(q).shape!).split(";")).toHaveLength(60);
   });
 });
+
+describe("a zoning answer in the share link", () => {
+  it("round-trips the point at five decimals, apart from every other parameter", () => {
+    const s: ShareState = { lat: 47.6067, lon: -122.3325, h: 3000, layers: ["zoning"], zoning: { lat: 47.6067, lon: -122.3325 } };
+    const q = shareQuery(s);
+    expect(q).toContain("zoning=47.60670%2C-122.33250");
+    expect(q).not.toMatch(/[?&]sel=/);
+    expect(parseShare(q)).toEqual(s);
+  });
+  it("rejects a malformed point rather than guessing", () => {
+    expect(parseShare("?zoning=47.6").zoning).toBeUndefined();
+    expect(parseShare("?zoning=-122.33,47.60").zoning).toBeUndefined();
+  });
+});

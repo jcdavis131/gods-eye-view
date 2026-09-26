@@ -24,3 +24,12 @@ describe("voice words for the hazards and land layers", () => {
     expect(layerOf("show floods")).toMatchObject({ layer: "water" });
   });
 });
+
+describe("voice words for the civic layers", () => {
+  it("hears zoning, and zoning districts before the constructs' districts", () => {
+    expect(layerOf("show zoning")).toMatchObject({ layer: "zoning", on: true });
+    expect(layerOf("show zoning districts over Seattle")).toMatchObject({ layer: "zoning", place: "seattle" });
+    expect(layerOf("show the zoning map")).toMatchObject({ layer: "zoning" });
+    expect(layerOf("show districts")).toMatchObject({ layer: "constructs" });
+  });
+});

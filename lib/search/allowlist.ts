@@ -43,6 +43,9 @@ export const SEARCHABLE_DETAILS: ReadonlySet<string> = new Set([
   "port code",
   "locode",
   "local name",
+  // zoning: the district code a city publishes ("DOC1 U/450-U", "C6-4.5"); never the
+  // ordinance, the city's prose or a record link
+  "zoning",
   // companies, banks, constructs: identifiers and categories their publishers assign
   "ticker",
   "cik",

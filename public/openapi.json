@@ -49,6 +49,10 @@
       "description": "Flood zones, wetlands, public and protected lands, ground elevation: FEMA NFHL, USFWS NWI, USGS PAD-US, USGS 3DEP EPQS."
     },
     {
+      "name": "zoning",
+      "description": "Zoning districts as city zoning GIS services publish them: Seattle, Denver, New York City (DCP districts and the Zoning Tax Lot Database), Chicago, Dallas, San Antonio, Austin, Los Angeles, San Francisco; Houston answers that it has no zoning ordinance. The city is picked by the Census TIGERweb incorporated place under the point."
+    },
+    {
       "name": "space",
       "description": "Space weather (GFZ Kp, NASA DONKI) and NASA's ISS live stream, checked through YouTube oEmbed."
     },
@@ -2219,6 +2223,107 @@
         ],
         "summary": "CORS preflight",
         "operationId": "landOptions",
+        "responses": {
+          "204": {
+            "description": "No content."
+          }
+        }
+      }
+    },
+    "/api/zoning": {
+      "get": {
+        "summary": "The zoning district at a point, district outlines in a box, or which cities are covered",
+        "description": "op=point: the district a city's own zoning GIS puts the point in, with the city's description and category words, overlays and special districts, ordinance, effective date, case number and code link where the city publishes them. `state` is one of district, right-of-way (San Antonio's UZROW), no-district (no polygon at the point: a street, water or a gap; never 'unzoned'), no-ordinance (Houston) or not-covered (no source wired for the Census place under the point). New York adds the Zoning Tax Lot Database row of the tax lot under the point (MapPLUTO is asked for the BBL only). op=districts: district outlines (code and colour family only) from every covered city the box meets, generalised on each city's server to about 3 m; boxes clamped to 0.04° and snapped to 0.0025°; San Francisco answers points only. op=coverage: the cities, what each answers and why. Zoning as each city's GIS publishes it; the adopted zoning map and code govern.",
+        "tags": [
+          "zoning"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "point",
+                "districts",
+                "coverage"
+              ]
+            },
+            "description": "point: the district at lon, lat. districts: outlines in bbox. coverage: the wired cities."
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            },
+            "description": "op=point: longitude."
+          },
+          {
+            "name": "lat",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            },
+            "description": "op=point: latitude."
+          },
+          {
+            "name": "bbox",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Bbox"
+            },
+            "description": "op=districts: `w,s,e,n` degrees, clamped to 0.04° and snapped to 0.0025°. The snapped box comes back in `bbox`."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope for the op.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/Cors"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ZoningPointResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ZoningDistrictsResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ZoningCoverageResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/Upstream"
+          }
+        }
+      },
+      "options": {
+        "tags": [
+          "zoning"
+        ],
+        "summary": "CORS preflight",
+        "operationId": "zoningOptions",
         "responses": {
           "204": {
             "description": "No content."
@@ -4626,6 +4731,309 @@
           }
         ],
         "x-op": "alerts"
+      },
+      "ZoningPointResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": [
+                  "district",
+                  "right-of-way",
+                  "no-district",
+                  "no-ordinance",
+                  "not-covered"
+                ]
+              },
+              "data": {
+                "type": "object",
+                "required": [
+                  "state",
+                  "lon",
+                  "lat",
+                  "overlays",
+                  "published",
+                  "note"
+                ],
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "district",
+                      "right-of-way",
+                      "no-district",
+                      "no-ordinance",
+                      "not-covered"
+                    ]
+                  },
+                  "lon": {
+                    "type": "number"
+                  },
+                  "lat": {
+                    "type": "number"
+                  },
+                  "place": {
+                    "type": "object",
+                    "properties": {
+                      "geoid": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "description": "The Census incorporated place under the point (TIGERweb layer 28)."
+                  },
+                  "city": {
+                    "type": "string",
+                    "enum": [
+                      "seattle",
+                      "denver",
+                      "nyc",
+                      "chicago",
+                      "dallas",
+                      "sanantonio",
+                      "austin",
+                      "losangeles",
+                      "sanfrancisco",
+                      "houston"
+                    ]
+                  },
+                  "cityName": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string",
+                    "description": "The district string as published, e.g. DOC1 U/450-U, C6-4.5, [LF1-WH1-5][P2-FA][CPIO]."
+                  },
+                  "base": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string",
+                    "description": "The city's own description of the district."
+                  },
+                  "category": {
+                    "type": "string",
+                    "description": "The city's own category words, verbatim."
+                  },
+                  "family": {
+                    "type": "string",
+                    "enum": [
+                      "residential",
+                      "mixed",
+                      "commercial",
+                      "downtown",
+                      "industrial",
+                      "planned",
+                      "public",
+                      "right-of-way",
+                      "other",
+                      "coded"
+                    ],
+                    "description": "Colour family: from the city's category words, or New York and Chicago district letters; 'coded' where the city publishes neither."
+                  },
+                  "overlays": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "alsoHere": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Other districts the point touches."
+                  },
+                  "ordinance": {
+                    "type": "string"
+                  },
+                  "effective": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "caseNumber": {
+                    "type": "string"
+                  },
+                  "editedAt": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "codeUrl": {
+                    "type": "string"
+                  },
+                  "recordUrl": {
+                    "type": "string"
+                  },
+                  "lot": {
+                    "type": "object",
+                    "properties": {
+                      "bbl": {
+                        "type": "string"
+                      }
+                    },
+                    "description": "New York: the tax lot under the point."
+                  },
+                  "published": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "description": "Further fields as the city publishes them, label to value."
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "publisher": {
+                    "type": "string"
+                  },
+                  "note": {
+                    "type": "string",
+                    "description": "What the state means here, in plain words."
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "point"
+      },
+      "ZoningDistrictsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "sources": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "city": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              },
+              "failed": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "city": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "description": "Cities that did not answer: their districts are missing, not absent."
+              },
+              "pointOnly": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "city": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "truncated": {
+                "type": "boolean"
+              }
+            }
+          }
+        ],
+        "x-op": "districts"
+      },
+      "ZoningCoverageResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "placeGeoid": {
+                      "type": "string"
+                    },
+                    "point": {
+                      "type": "boolean"
+                    },
+                    "outlines": {
+                      "type": "boolean"
+                    },
+                    "zoning": {
+                      "type": "string"
+                    },
+                    "publisher": {
+                      "type": "string"
+                    },
+                    "note": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "coverage"
       },
       "LandFloodResponse": {
         "allOf": [
