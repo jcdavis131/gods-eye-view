@@ -299,7 +299,7 @@ export function buildAir(rows: Row[]): EnvRecord[] {
 /** Corps actions as records, newest first; clip the search's answer to the box with ormInBox first. */
 export function buildUsace(features: OrmFeature[]): EnvRecord[] {
   const recs = withIds(features.map(usace));
-  // Newest first: within the box the service answers in no date order.
+  // Newest first: the service's own order is mostly, not strictly, by date.
   return recs.sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
 }
 
