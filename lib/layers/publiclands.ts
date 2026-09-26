@@ -8,8 +8,8 @@
 //                     and IUCN category
 //
 // Ownership is shown as PAD-US publishes it, field by field; the ⌘K palette
-// never searches the owner, manager or holder fields (components/hud/
-// SearchCommand.tsx). Easements are outlined, not filled: the owner keeps the
+// never searches the owner, manager or holder fields (lib/search/
+// allowlist.ts). Easements are outlined, not filled: the owner keeps the
 // land and the holder has the rights the easement grants. Proclamation
 // boundaries are outlines only too: the land inside them is not all public.
 // Zoomed out (the wide box), the route keeps the largest 600 units, coarser.

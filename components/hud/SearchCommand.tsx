@@ -19,6 +19,7 @@ import { flyTo, flyToSelection, homeView } from "@/lib/globe/camera";
 import { goLive } from "@/lib/globe/clock";
 import { LAYERS, LAYER_BY_ID } from "@/lib/layers";
 import type { LayerFeature } from "@/lib/layers/types";
+import { matchScore } from "@/lib/search/allowlist";
 
 export interface GeocodeHit {
   name: string;
@@ -40,20 +41,8 @@ function searchFeatures(q: string, limit = 12): LayerFeature[] {
   if (needle.length < 2) return [];
   const hits: Array<[number, LayerFeature]> = [];
   for (const f of allFeatures()) {
-    const p = f.properties;
-    const name = p.name.toLowerCase();
-    let score = 0;
-    if (name === needle || p.id.toLowerCase() === needle) score = 3;
-    else if (name.startsWith(needle) || p.id.toLowerCase().startsWith(needle)) score = 2;
-    else if (name.includes(needle)) score = 1;
-    else {
-      for (const v of Object.values(p.details ?? {})) {
-        if (typeof v === "string" && v.toLowerCase().includes(needle)) {
-          score = 1;
-          break;
-        }
-      }
-    }
+    // Names, ids and allowlisted identifier and place fields only (lib/search/allowlist.ts).
+    const score = matchScore(f.properties, needle);
     if (score > 0) hits.push([score, f]);
   }
   hits.sort((a, b) => b[0] - a[0] || a[1].properties.name.localeCompare(b[1].properties.name));

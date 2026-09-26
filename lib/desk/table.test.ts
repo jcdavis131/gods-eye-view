@@ -186,3 +186,10 @@ describe("fmtCell", () => {
     expect(fmtCell("x", "string")).toBe("x");
   });
 });
+
+describe("featureRows and map furniture", () => {
+  it("leaves out the dashed outline of the box a land layer loaded", () => {
+    const box = { type: "Feature" as const, geometry: { type: "Polygon" as const, coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] }, properties: { id: "flood:loaded-box", layer: "flood" as const, name: "Loaded area", kind: "loaded-box", source: "this app" } };
+    expect(featureRows([areaFeature, box]).map((r) => r.key)).toEqual([`${areaFeature.properties.layer}:${areaFeature.properties.id}`]);
+  });
+});

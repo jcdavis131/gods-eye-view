@@ -22,7 +22,7 @@ import { speakReport } from "@/lib/water/report";
 import { reportFromGlobe } from "@/lib/water/reportClient";
 import { speakMarketReport } from "@/lib/economy/report";
 import { marketReportFromGlobe } from "@/lib/economy/reportClient";
-import { PRESETS, presetShare } from "@/lib/explore/presets";
+import { PRESETS, presetTarget } from "@/lib/explore/presets";
 import { applyShare } from "@/lib/globe/share";
 import { useIndicators } from "@/lib/indicators/store";
 import { useReleases, isValidVintage, vintageClockMs } from "@/lib/releases/store";
@@ -141,6 +141,34 @@ const LAYER_ALIASES: Record<string, LayerId> = {
   field: "field",
   "construct field": "field",
   emergence: "field",
+  // "alerts" is the Live warnings layer's own id; "warnings" goes there too.
+  warnings: "alerts",
+  "live warnings": "alerts",
+  wildfire: "wildfire",
+  wildfires: "wildfire",
+  "fire perimeters": "wildfire",
+  fires: "fires",
+  fire: "fires",
+  hotspots: "fires",
+  "active fires": "fires",
+  firms: "fires",
+  hazards: "hazards",
+  "hazard alerts": "hazards",
+  "weather alerts": "hazards",
+  disasters: "hazards",
+  volcanoes: "hazards",
+  "flood zones": "flood",
+  floodplain: "flood",
+  "flood map": "flood",
+  fema: "flood",
+  wetlands: "wetlands",
+  wetland: "wetlands",
+  marsh: "wetlands",
+  "public lands": "publiclands",
+  "public land": "publiclands",
+  "protected areas": "publiclands",
+  parks: "publiclands",
+  "national forests": "publiclands",
 };
 
 export function resolveLayer(word: string | undefined): LayerId | null {
@@ -229,6 +257,8 @@ export const COMMANDS: CommandDef[] = [
       let best: { score: number; layer: LayerId; id: string; name: string } | null = null;
       for (const f of allFeatures()) {
         const p = f.properties;
+        // The outline of a land layer's loaded box is not something to find.
+        if (p.kind === "loaded-box") continue;
         const name = p.name.toLowerCase().replace(/\s+/g, "");
         const id = p.id.toLowerCase();
         let score = 0;
@@ -401,7 +431,8 @@ export const COMMANDS: CommandDef[] = [
   },
   {
     name: "explore_preset",
-    description: "Jump to one of the curated explorations (a place with the right layers switched on: water, ports, housing markets), or start the guided tour.",
+    description:
+      "Jump to one of the curated explorations (a place with the right layers switched on: water, ports, housing markets, constructs, fires, flood zones, wetlands, public lands), or start the guided tour.",
     parameters: {
       type: "object",
       properties: {
@@ -418,7 +449,7 @@ export const COMMANDS: CommandDef[] = [
       const q = String(a.preset ?? "").toLowerCase();
       const p = PRESETS.find((x) => x.id === q) ?? PRESETS.find((x) => `${x.title} ${x.region}`.toLowerCase().includes(q));
       if (!p) return `No preset matches ${a.preset}. Try one of: ${PRESETS.map((x) => x.title).join(", ")}.`;
-      applyShare(presetShare(p));
+      applyShare(await presetTarget(p));
       return `${p.title}, ${p.region}. ${p.blurb}`;
     },
   },
