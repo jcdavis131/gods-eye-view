@@ -9,7 +9,7 @@
 
 import type * as CesiumNS from "cesium";
 import { getCesium } from "./cesium";
-import { createTerrariumTerrain } from "@/lib/terrain/terrarium";
+import { createTerrariumTerrain, RETRY_DELAYS_MS } from "@/lib/terrain/terrarium";
 
 export const ESRI_IMAGERY_URL =
   "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
@@ -87,12 +87,30 @@ export type TerrainResult =
   | { active: false; error?: string }
   | { active: true; kind: "ion" | "keyless"; error?: string };
 
+export type TerrainLogLine = { level: "info" | "warn"; text: string };
+
+/** Log line when keyless terrain gives up on its level-0 tile and the smooth globe comes back. */
+export function terrainLostText(err: unknown): TerrainLogLine {
+  const why = (err instanceof Error ? err.message : String(err)).slice(0, 80);
+  return {
+    level: "warn",
+    text: `Keyless terrain unreachable: AWS Terrain Tiles did not answer after ${RETRY_DELAYS_MS.length + 1} tries (${why}); showing the smooth globe. Turn 3D terrain off and on to try again.`,
+  };
+}
+
 /**
  * 3D terrain. Off: the smooth ellipsoid. On with a Cesium ion token: Cesium
  * World Terrain. On without one (or when ion fails): keyless AWS Terrain Tiles
- * (lib/terrain/terrarium.ts), no account needed.
+ * (lib/terrain/terrarium.ts), no account needed. If keyless terrain cannot
+ * fetch its level-0 tile after every retry, the smooth globe comes back and
+ * `onLost` hears why.
  */
-export async function setTerrain(viewer: CesiumNS.Viewer, ionToken: string | undefined, on: boolean): Promise<TerrainResult> {
+export async function setTerrain(
+  viewer: CesiumNS.Viewer,
+  ionToken: string | undefined,
+  on: boolean,
+  onLost?: (line: TerrainLogLine) => void,
+): Promise<TerrainResult> {
   const C = getCesium();
   if (!on) {
     if (!(viewer.terrainProvider instanceof C.EllipsoidTerrainProvider)) {
@@ -113,7 +131,15 @@ export async function setTerrain(viewer: CesiumNS.Viewer, ionToken: string | und
     }
   }
   try {
-    viewer.terrainProvider = createTerrariumTerrain();
+    const keyless: CesiumNS.TerrainProvider = createTerrariumTerrain({
+      onUnreachable: (err) => {
+        // Only if it is still this provider: terrain may have been switched off and on meanwhile.
+        if (viewer.isDestroyed() || viewer.terrainProvider !== keyless) return;
+        viewer.terrainProvider = new C.EllipsoidTerrainProvider();
+        onLost?.(terrainLostText(err));
+      },
+    });
+    viewer.terrainProvider = keyless;
     viewer.scene.globe.depthTestAgainstTerrain = false;
     return { active: true, kind: "keyless", error: ionError ? `Cesium World Terrain failed (${ionError}); using keyless terrain` : undefined };
   } catch (err) {
@@ -122,7 +148,7 @@ export async function setTerrain(viewer: CesiumNS.Viewer, ionToken: string | und
 }
 
 /** Log line for a terrain switch. */
-export function terrainLogText(r: TerrainResult): { level: "info" | "warn"; text: string } | null {
+export function terrainLogText(r: TerrainResult): TerrainLogLine | null {
   if (r.active && r.kind === "ion") return { level: "info", text: "Cesium World Terrain online" };
   if (r.active) {
     return {

@@ -112,7 +112,7 @@ export default function CesiumGlobe() {
         if (r.active) useGlobe.getState().pushLog({ level: "info", text: "Google Photorealistic 3D Tiles online" });
         else if (r.error) useGlobe.getState().pushLog({ level: "warn", text: `Google tiles: ${r.error}` });
       });
-      void setTerrain(viewer, keys.CESIUM_ION_TOKEN, prefs.terrain).then((r) => {
+      void setTerrain(viewer, keys.CESIUM_ION_TOKEN, prefs.terrain, (line) => useGlobe.getState().pushLog(line)).then((r) => {
         const line = terrainLogText(r);
         if (line) useGlobe.getState().pushLog(line);
       });
@@ -430,7 +430,7 @@ export default function CesiumGlobe() {
           });
         }
         if (p.terrain !== q.terrain || s.keys.CESIUM_ION_TOKEN !== prev.keys.CESIUM_ION_TOKEN) {
-          void setTerrain(viewer, s.keys.CESIUM_ION_TOKEN, p.terrain).then((r) => {
+          void setTerrain(viewer, s.keys.CESIUM_ION_TOKEN, p.terrain, (line) => useGlobe.getState().pushLog(line)).then((r) => {
             const line = terrainLogText(r);
             if (line) useGlobe.getState().pushLog(line);
           });

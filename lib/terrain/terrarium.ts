@@ -19,6 +19,18 @@
 // Tiles are fetched with at most MAX_ACTIVE requests in flight; past twice
 // that the terrain callback answers `undefined`, which tells Cesium to ask
 // again later (it is a throttle, never "no data").
+//
+// A failed fetch is taken as transient first. The failed attempt resolves
+// `undefined` (ask again later) and that tile waits 1, 2 and then 4 s before
+// its next try; a 429 or 503 makes every tile wait. A tile below level 0 that
+// still fails after the third retry is left to Cesium, which draws it from its
+// parent. A level-0 tile has no parent, and Cesium draws nothing of its half of
+// the globe (no imagery, no picture layer) until it is built; both halves are
+// sampled from the one terrarium tile 0/0/0. So a level-0 tile that still fails
+// is drawn flat, as the smooth globe with Terrain off would draw it, and the
+// provider reports it once (setTerrain then swaps back to the smooth globe and
+// logs a warning). The globe is therefore blank at most for the retries, about
+// 7 s plus four fetches, as it is on first load.
 
 import type * as CesiumNS from "cesium";
 import { getCesium } from "@/lib/globe/cesium";
@@ -89,7 +101,7 @@ export function terrariumTile(z: number, x: number, y: number): Promise<HeightTi
       try {
         const url = TERRARIUM.replace("{z}", String(z)).replace("{x}", String(x)).replace("{y}", String(y));
         const res = await fetch(url);
-        if (!res.ok) throw new Error(`terrain tile ${key}: HTTP ${res.status}`);
+        if (!res.ok) throw Object.assign(new Error(`terrain tile ${key}: HTTP ${res.status}`), { status: res.status });
         const rgba = await pixels(await res.blob());
         const t: HeightTile = { size: SIZE, heights: decodeTerrarium(rgba, SIZE, SIZE) };
         remember(key, t);
@@ -145,20 +157,133 @@ async function gridFor(west: number, south: number, east: number, north: number,
 export const TERRAIN_CREDIT =
   "Terrain: AWS Terrain Tiles (Mapzen/Tilezen terrarium): USGS 3DEP, SRTM, GMTED2010, ETOPO1 and other sources (see About)";
 
+// ---------------------------------------------------------------- retries
+
+/** How long a tile waits after each failed attempt: three retries, then it gives up. */
+export const RETRY_DELAYS_MS: readonly number[] = [1000, 2000, 4000];
+const RETRY_KEYS_MAX = 512;
+
+export interface RetryGate {
+  /** True while this tile, or every tile after a 429 or 503, is waiting to try again. */
+  waiting(key: string): boolean;
+  /** A failed attempt: "retry" after the next delay, or "give-up" once the retries are spent (the tile then starts afresh). */
+  fail(key: string, status?: number): "retry" | "give-up";
+  /** A success: the tile's failures are forgotten. */
+  ok(key: string): void;
+}
+
+/** Per-tile backoff on the wall clock (`now`), plus a pause for the whole host when it answers 429 or 503. */
+export function createRetryGate(now: () => number = Date.now, delays: readonly number[] = RETRY_DELAYS_MS): RetryGate {
+  const tiles = new Map<string, { fails: number; until: number }>();
+  let hostUntil = 0;
+  return {
+    waiting(key) {
+      const t = now();
+      if (t < hostUntil) return true;
+      const e = tiles.get(key);
+      return e != null && t < e.until;
+    },
+    fail(key, status) {
+      const fails = (tiles.get(key)?.fails ?? 0) + 1;
+      const until = now() + delays[Math.min(fails, delays.length) - 1];
+      // The host asked for less traffic: every tile waits, not only this one.
+      if (status === 429 || status === 503) hostUntil = Math.max(hostUntil, until);
+      tiles.delete(key);
+      if (fails > delays.length) return "give-up";
+      tiles.set(key, { fails, until });
+      while (tiles.size > RETRY_KEYS_MAX) tiles.delete(tiles.keys().next().value as string);
+      return "retry";
+    },
+    ok(key) {
+      tiles.delete(key);
+    },
+  };
+}
+
+/** The HTTP status a failed fetch carries, if it got that far. */
+function statusOf(err: unknown): number | undefined {
+  const s = (err as { status?: unknown } | null)?.status;
+  return typeof s === "number" ? s : undefined;
+}
+
+export type GridFn = (x: number, y: number, level: number) => Promise<Float32Array>;
+
+export interface TerrainCallbackOptions {
+  /** True while too many tiles are in flight: answer "ask again later" without fetching. */
+  busy?: () => boolean;
+  gate?: RetryGate;
+  /** Called once, when a level-0 tile still fails after every retry and is drawn flat. */
+  onRootLost?: (err: unknown) => void;
+}
+
+/**
+ * The provider's answer for one geographic tile:
+ *   undefined             ask again later (throttled, or waiting after a failure)
+ *   resolves undefined    this attempt failed; ask again later
+ *   resolves a grid       heights, GRID × GRID
+ *   rejects               a tile below level 0 still failing after every retry (Cesium draws it from its parent)
+ * A level-0 tile still failing after every retry resolves a grid of zeros, the smooth globe.
+ */
+export function terrainCallback(grid: GridFn, opts: TerrainCallbackOptions = {}) {
+  const gate = opts.gate ?? createRetryGate();
+  let lost = false;
+  return (x: number, y: number, level: number): Promise<Float32Array | undefined> | undefined => {
+    if (opts.busy?.()) return undefined;
+    const key = `${level}/${x}/${y}`;
+    if (gate.waiting(key)) return undefined;
+    return grid(x, y, level).then(
+      (g) => {
+        gate.ok(key);
+        return g;
+      },
+      (err: unknown) => {
+        if (gate.fail(key, statusOf(err)) === "retry") return undefined;
+        if (level > 0) throw err;
+        if (!lost) {
+          lost = true;
+          opts.onRootLost?.(err);
+        }
+        return new Float32Array(GRID * GRID);
+      },
+    );
+  };
+}
+
+export interface TerrariumTerrainOptions {
+  /** A level-0 tile could not be fetched after every retry (it is drawn flat); called once. */
+  onUnreachable?: (err: unknown) => void;
+}
+
+type RequestGeometry = (x: number, y: number, level: number, request?: CesiumNS.Request) => Promise<CesiumNS.TerrainData> | undefined;
+
 /** The keyless terrain provider. */
-export function createTerrariumTerrain(): CesiumNS.TerrainProvider {
+export function createTerrariumTerrain(opts: TerrariumTerrainOptions = {}): CesiumNS.TerrainProvider {
   const C = getCesium();
   const scheme = new C.GeographicTilingScheme();
-  return new C.CustomHeightmapTerrainProvider({
+  const d = C.Math.toDegrees;
+  const answer = terrainCallback(
+    (x, y, level) => {
+      const r = scheme.tileXYToRectangle(x, y, level);
+      return gridFor(d(r.west), d(r.south), d(r.east), d(r.north), level);
+    },
+    { busy: () => terrariumBusy() > MAX_ACTIVE * 2, onRootLost: opts.onUnreachable },
+  );
+  const provider = new C.CustomHeightmapTerrainProvider({
     width: GRID,
     height: GRID,
     tilingScheme: scheme,
     credit: new C.Credit(TERRAIN_CREDIT),
-    callback: (x: number, y: number, level: number) => {
-      if (terrariumBusy() > MAX_ACTIVE * 2) return undefined;
-      const r = scheme.tileXYToRectangle(x, y, level);
-      const d = C.Math.toDegrees;
-      return gridFor(d(r.west), d(r.south), d(r.east), d(r.north), level);
-    },
+    // Not called: requestTileGeometry is replaced below.
+    callback: () => undefined,
   });
+  // CustomHeightmapTerrainProvider wraps whatever its callback's promise resolves in
+  // HeightmapTerrainData, so the callback has no way to say "that attempt failed, ask again
+  // later". Cesium does: a requestTileGeometry promise that resolves undefined puts the tile
+  // back to UNLOADED and it is requested again (GlobeSurfaceTile requestTileGeometry, 1.145).
+  (provider as unknown as { requestTileGeometry: RequestGeometry }).requestTileGeometry = (x, y, level) => {
+    const p = answer(x, y, level);
+    if (!p) return undefined;
+    return p.then((g) => (g ? new C.HeightmapTerrainData({ buffer: g, width: GRID, height: GRID }) : undefined)) as Promise<CesiumNS.TerrainData>;
+  };
+  return provider;
 }
