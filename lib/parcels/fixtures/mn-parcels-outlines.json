@@ -49,13 +49,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2602924220352",
-     "use": "Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2602924220352",
-     "use": "Commercial"
+     "parcelId": "2602924220352"
     }
    }
   },
@@ -92,13 +90,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2302924330684",
-     "use": "Vacant Land - Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2302924330684",
-     "use": "Vacant Land - Commercial"
+     "parcelId": "2302924330684"
     }
    }
   },
@@ -155,13 +151,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2302924330006",
-     "use": "Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2302924330006",
-     "use": "Commercial"
+     "parcelId": "2302924330006"
     }
    }
   },
@@ -206,13 +200,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2302924330016",
-     "use": "Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2302924330016",
-     "use": "Commercial"
+     "parcelId": "2302924330016"
     }
    }
   },
@@ -253,13 +245,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2202924440101",
-     "use": "Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2202924440101",
-     "use": "Commercial"
+     "parcelId": "2202924440101"
     }
    }
   },
@@ -304,13 +294,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2302924330035",
-     "use": "Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2302924330035",
-     "use": "Commercial"
+     "parcelId": "2302924330035"
     }
    }
   },
@@ -363,13 +351,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2702924110127",
-     "use": "Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2702924110127",
-     "use": "Commercial"
+     "parcelId": "2702924110127"
     }
    }
   },
@@ -414,13 +400,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2702924110084",
-     "use": "Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2702924110084",
-     "use": "Commercial"
+     "parcelId": "2702924110084"
     }
    }
   },
@@ -461,13 +445,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2302924330015",
-     "use": "Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2302924330015",
-     "use": "Commercial"
+     "parcelId": "2302924330015"
     }
    }
   },
@@ -508,13 +490,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2302924330904",
-     "use": "Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2302924330904",
-     "use": "Commercial"
+     "parcelId": "2302924330904"
     }
    }
   },
@@ -555,13 +535,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2302924330905",
-     "use": "Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2302924330905",
-     "use": "Commercial"
+     "parcelId": "2302924330905"
     }
    }
   },
@@ -606,13 +584,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2302924330775",
-     "use": "Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2302924330775",
-     "use": "Commercial"
+     "parcelId": "2302924330775"
     }
    }
   },
@@ -657,13 +633,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2602924220026",
-     "use": "Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2602924220026",
-     "use": "Commercial"
+     "parcelId": "2602924220026"
     }
    }
   },
@@ -770,13 +744,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2602924220080",
-     "use": "Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2602924220080",
-     "use": "Commercial"
+     "parcelId": "2602924220080"
     }
    }
   },
@@ -829,13 +801,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2302924330876",
-     "use": "Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2302924330876",
-     "use": "Commercial"
+     "parcelId": "2302924330876"
     }
    }
   },
@@ -876,13 +846,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2302924330903",
-     "use": "Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2302924330903",
-     "use": "Commercial"
+     "parcelId": "2302924330903"
     }
    }
   },
@@ -923,13 +891,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2302924330012",
-     "use": "Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2302924330012",
-     "use": "Commercial"
+     "parcelId": "2302924330012"
     }
    }
   },
@@ -974,13 +940,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2202924440030",
-     "use": "Apartment",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2202924440030",
-     "use": "Apartment"
+     "parcelId": "2202924440030"
     }
    }
   },
@@ -1021,13 +985,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2302924330879",
-     "use": "Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2302924330879",
-     "use": "Commercial"
+     "parcelId": "2302924330879"
     }
    }
   },
@@ -1092,13 +1054,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2302924330051",
-     "use": "Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2302924330051",
-     "use": "Commercial"
+     "parcelId": "2302924330051"
     }
    }
   },
@@ -1139,13 +1099,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2302924330027",
-     "use": "Apartment",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2302924330027",
-     "use": "Apartment"
+     "parcelId": "2302924330027"
     }
    }
   },
@@ -1190,13 +1148,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2302924330010",
-     "use": "Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2302924330010",
-     "use": "Commercial"
+     "parcelId": "2302924330010"
     }
    }
   },
@@ -1237,13 +1193,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2202924440029",
-     "use": "Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2202924440029",
-     "use": "Commercial"
+     "parcelId": "2202924440029"
     }
    }
   },
@@ -1288,13 +1242,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2302924330044",
-     "use": "Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2302924330044",
-     "use": "Commercial"
+     "parcelId": "2302924330044"
     }
    }
   },
@@ -1335,13 +1287,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2302924330008",
-     "use": "Vacant Land - Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2302924330008",
-     "use": "Vacant Land - Commercial"
+     "parcelId": "2302924330008"
     }
    }
   },
@@ -1382,13 +1332,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2302924330906",
-     "use": "Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2302924330906",
-     "use": "Commercial"
+     "parcelId": "2302924330906"
     }
    }
   },
@@ -1441,13 +1389,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2302924330028",
-     "use": "Vacant Land - Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2302924330028",
-     "use": "Vacant Land - Commercial"
+     "parcelId": "2302924330028"
     }
    }
   },
@@ -1492,13 +1438,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2302924330043",
-     "use": "Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2302924330043",
-     "use": "Commercial"
+     "parcelId": "2302924330043"
     }
    }
   },
@@ -1543,13 +1487,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2602924220353",
-     "use": "Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2602924220353",
-     "use": "Commercial"
+     "parcelId": "2602924220353"
     }
    }
   },
@@ -1594,13 +1536,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2302924330037",
-     "use": "Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2302924330037",
-     "use": "Commercial"
+     "parcelId": "2302924330037"
     }
    }
   },
@@ -1645,13 +1585,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2202924440028",
-     "use": "Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2202924440028",
-     "use": "Commercial"
+     "parcelId": "2202924440028"
     }
    }
   },
@@ -1718,13 +1656,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2302924330685",
-     "use": "Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2302924330685",
-     "use": "Commercial"
+     "parcelId": "2302924330685"
     }
    }
   },
@@ -1765,13 +1701,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2302924330025",
-     "use": "Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2302924330025",
-     "use": "Commercial"
+     "parcelId": "2302924330025"
     }
    }
   },
@@ -1816,13 +1750,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2302924330009",
-     "use": "Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2302924330009",
-     "use": "Commercial"
+     "parcelId": "2302924330009"
     }
    }
   },
@@ -1863,13 +1795,11 @@
     "source": "Minnesota Parcels, Open Data",
     "details": {
      "parcel id": "2202924440027",
-     "use": "Commercial",
      "what this is": "a parcel outline; click inside it for the record its source publishes"
     },
     "extra": {
      "adapter": "mn-parcels",
-     "parcelId": "2202924440027",
-     "use": "Commercial"
+     "parcelId": "2202924440027"
     }
    }
   }

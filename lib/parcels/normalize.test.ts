@@ -7,9 +7,11 @@ import {
   epochDate,
   finalize,
   isOwnerMask,
+  isOwnerPlaceholder,
   join,
   MASK_REASON,
   ownerNames,
+  PLACEHOLDER_REASON,
   publishedOwner,
   sale,
   text,
@@ -98,8 +100,23 @@ describe("owners", () => {
   });
 
   it("placeholder tokens mean withheld", () => {
-    for (const s of ["CURRENT OWNER", "Current Owner", "current  co-owner", "CONFIDENTIAL", "REDACTED"]) expect(isOwnerMask(s)).toBe(true);
-    for (const s of ["STATE OF TEXAS", "CURRENT OWNERSHIP LLC", undefined]) expect(isOwnerMask(s)).toBe(false);
+    for (const s of ["CURRENT OWNER", "Current Owner", "current  co-owner", "Current CoOwner", "CONFIDENTIAL", "REDACTED"]) expect(isOwnerMask(s)).toBe(true);
+    for (const s of ["STATE OF TEXAS", "CURRENT OWNERSHIP LLC", "UNKNOWN OWNER", undefined]) expect(isOwnerMask(s)).toBe(false);
+  });
+
+  it("a withholding word anywhere in the owner field means withheld, not only an exact placeholder", () => {
+    // Two Connecticut records (Tolland) publish "SUPPRESSED OWNER"; NY publishes "Name Withheld".
+    // The name before "(REDACTED)" is made up here: the marker is what is tested.
+    for (const s of ["SUPPRESSED OWNER", "Name Withheld", "JANE Q SAMPLE (REDACTED)", "*CONFIDENTIAL*", "Owner: confidential", "OWNER-WITHHELD", "CONFIDENTIAL OWNER TRUST LLC"]) {
+      expect(isOwnerMask(s), s).toBe(true);
+    }
+    // Whole words only: a name that merely contains the letters is a name.
+    for (const s of ["REDACTEDSON FARMS", "CONFIDENTIALITY PARTNERS", "WITHHELDT"]) expect(isOwnerMask(s), s).toBe(false);
+  });
+
+  it("placeholders that are not withholding markers are recognised, and only whole", () => {
+    for (const s of ["UNKNOWN OWNER", "Owner Unknown", "NAME NOT AVAILABLE", "unknown"]) expect(isOwnerPlaceholder(s), s).toBe(true);
+    for (const s of ["UNKNOWN OWNER LLC", "STATE OF CONN", undefined]) expect(isOwnerPlaceholder(s), s ?? "undefined").toBe(false);
   });
 
   const base: ParcelRecord = {
@@ -130,6 +147,47 @@ describe("owners", () => {
     expect(r.owner).toEqual({ status: "withheld", reason: CONFIDENTIAL_REASON });
     expect(JSON.stringify(r)).not.toContain("SOMEONE");
     expect(r.mailing).toBeUndefined();
+  });
+
+  it("finalize: \"SUPPRESSED OWNER\" with a mailing address is withheld, the mailing address with it", () => {
+    const r = finalize({ ...base, owner: { status: "published", names: ["SUPPRESSED OWNER"], role: "owner" } });
+    expect(r.owner).toEqual({ status: "withheld", reason: MASK_REASON });
+    expect(r.mailing).toBeUndefined();
+    expect(JSON.stringify(r)).not.toContain("1 MAIN ST");
+    expect(JSON.stringify(r)).not.toContain("SUPPRESSED OWNER");
+  });
+
+  it("finalize: a name followed by \"(REDACTED)\" is withheld, the name and the mailing address with it", () => {
+    const r = finalize({ ...base, owner: { status: "published", names: ["JANE Q SAMPLE (REDACTED)"], role: "owner" } });
+    expect(r.owner).toEqual({ status: "withheld", reason: MASK_REASON });
+    expect(JSON.stringify(r)).not.toContain("SAMPLE");
+    expect(r.mailing).toBeUndefined();
+    expect(r.ownerAddress).toBeUndefined();
+  });
+
+  it("finalize: a withholding marker in a co-owner, care-of or taxpayer name withholds the owner too", () => {
+    const owner = { status: "published" as const, names: ["SOMEONE"], role: "owner" as const };
+    for (const r of [
+      finalize({ ...base, owner: { ...owner, names: ["SOMEONE", "Current Co-Owner"] } }),
+      finalize({ ...base, owner: { ...owner, careOf: "CONFIDENTIAL" } }),
+      finalize({ ...base, owner, taxpayer: { name: "NAME WITHHELD", address: "3 MAIN ST" } }),
+    ]) {
+      expect(r.owner).toEqual({ status: "withheld", reason: MASK_REASON });
+      expect(JSON.stringify(r)).not.toContain("SOMEONE");
+      expect(r.mailing).toBeUndefined();
+      expect(r.taxpayer).toBeUndefined();
+    }
+  });
+
+  it("finalize: \"UNKNOWN OWNER\" is not a name: the owner is not published, the rest stays as published", () => {
+    const r = finalize({ ...base, owner: { status: "published", names: ["UNKNOWN OWNER"], role: "owner" } });
+    expect(r.owner).toEqual({ status: "not-published", reason: PLACEHOLDER_REASON });
+    // Not a withholding marker: nothing else is withheld on its account.
+    expect(r.mailing).toBe("1 MAIN ST");
+    expect(r.situs).toBe("9 ELM ST");
+    // Beside a real name, the placeholder alone is dropped.
+    const two = finalize({ ...base, owner: { status: "published", names: ["TOWN OF X", "Owner Unknown"], role: "owner" } });
+    expect(two.owner).toEqual({ status: "published", names: ["TOWN OF X"], role: "owner" });
   });
 
   it("finalize: a published owner passes through untouched, undefined keys are dropped", () => {

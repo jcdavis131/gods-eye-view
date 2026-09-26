@@ -86,8 +86,14 @@ describe("every adapter against its captured payload", () => {
   });
 
   it("never asks a service for owner-occupancy flags", () => {
-    const flags = /homestead|hsdecl|^ooi$|jv_hmstd|primary_res|pct_pre_claimed|homeownersexemp/i;
-    for (const a of ADAPTERS) for (const f of a.outFields) expect(f, `${a.id}.${f}`).not.toMatch(flags);
+    // useclass1-4: MnGeo's use class, the homestead classification in many Minnesota counties.
+    // LC_CUR: Maricopa's legal class (3.1 primary residence, 4.2 rental).
+    const flags = /homestead|hsdecl|^ooi$|jv_hmstd|primary_res|pct_pre_claimed|homeownersexemp|^useclass\d$|^lc_cur$/i;
+    for (const a of ADAPTERS) {
+      for (const f of a.outFields) expect(f, `${a.id}.${f}`).not.toMatch(flags);
+      // An outline's use field is sent for every lot in a box: it must not be one either.
+      if (a.useField) expect(a.useField, `${a.id} useField`).not.toMatch(flags);
+    }
   });
 });
 
@@ -110,6 +116,21 @@ describe("Texas", () => {
     expect((r.owner as { careOf?: string }).careOf).toBeUndefined();
     // LEGAL_AREA "0" is not an area; the GIS area is used, and says so.
     expect(r.area?.basis).toMatch(/^GIS/);
+  });
+
+  it("StratMap: an area whose unit is blank or not recognised is not shown, never read as acres (derived: the Alamo payload with its units changed)", () => {
+    const fx = load("tx-stratmap-bexar.json");
+    const a = ADAPTER_BY_ID.get("tx-stratmap")!;
+    const row = { ...fx.rows[0].properties, LEGAL_AREA: "43560" };
+    // Both units blank: no area at all.
+    expect(a.normalize({ ...row, LGL_AREA_UNIT: " ", GIS_AREA_UNIT: " " }).area).toBeUndefined();
+    // "SF" is not a unit this adapter reads: the legal area is not shown; the GIS area, in its own stated unit, is.
+    const sf = a.normalize({ ...row, LGL_AREA_UNIT: "SF" }).area;
+    expect(sf?.basis).toMatch(/^GIS/);
+    expect(sf?.unit).toBe("acres");
+    expect(a.normalize({ ...row, LGL_AREA_UNIT: "SF", GIS_AREA_UNIT: "SF" }).area).toBeUndefined();
+    // A stated unit is still read.
+    expect(a.normalize({ ...row, LGL_AREA_UNIT: "Square Feet" }).area).toEqual({ value: 43_560, unit: "sq ft", basis: "legal (as recorded)" });
   });
 
   it("StratMap (Travis, the Capitol): 0 land and improvements kept as published beside the market value", () => {
@@ -159,6 +180,9 @@ describe("county services", () => {
     // INCAREOF is "" in the payload: no care-of line.
     expect((r.owner as { careOf?: string }).careOf).toBeUndefined();
     expect(r.link?.url).toBe("https://mcassessor.maricopa.gov/mcs/?q=11221086&mod=pd");
+    // The property use code only: the legal class (owner-occupancy) is not asked for.
+    expect(r.use).toBe("property use code 9726");
+    expect(ADAPTER_BY_ID.get("az-maricopa")!.outFields).not.toContain("LC_CUR");
   });
 
   it("LA County: no owner published, and null roll values stay missing rather than 0", () => {
@@ -237,6 +261,11 @@ describe("statewide services", () => {
     expect(r.situs).toBe("315 4th Street South, Minneapolis 55415");
     // The taxpayer is the owner here: only its address is added.
     expect(r.taxpayer).toEqual({ address: "300 S 6th Street Mc228, Minneapolis, MN 55487" });
+    // No use class: MnGeo's useclass1 is the homestead classification in many counties, so it is neither asked for nor on an outline.
+    expect(r.use).toBeUndefined();
+    const mn = ADAPTER_BY_ID.get("mn-parcels")!;
+    expect(mn.outFields).not.toContain("useclass1");
+    expect(mn.useField).toBeUndefined();
   });
 
   it("Florida: just, assessed and taxable value apart; a sale year of 0 is no sale", () => {
@@ -305,6 +334,13 @@ describe("statewide services", () => {
     expect(r.owner).toEqual({ status: "withheld", reason: MASK_REASON });
     expect(r.mailing).toBeUndefined();
     expect(valueOf(r, "total assessed value")).toBe(52_253_390);
+    // Tolland publishes "SUPPRESSED OWNER" with the mailing address still filled in: withheld all the same.
+    const tolland = ADAPTER_BY_ID.get("ct-cama")!.normalize({ ...fx.rows[0].properties, Owner: "SUPPRESSED OWNER", Co_Owner: " " });
+    expect(tolland.owner).toEqual({ status: "withheld", reason: MASK_REASON });
+    expect(tolland.mailing).toBeUndefined();
+    expect(norm("ct-cama.json").mailing).toBeDefined();
+    // "UNKNOWN OWNER" is not a name and not a withholding marker.
+    expect(ADAPTER_BY_ID.get("ct-cama")!.normalize({ ...fx.rows[0].properties, Owner: "UNKNOWN OWNER", Co_Owner: " " }).owner.status).toBe("not-published");
   });
 
   it("Maryland: polygons with SDAT data, the owner on SDAT's page (linked), mailing as published", () => {

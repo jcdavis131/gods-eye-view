@@ -5,8 +5,7 @@
 // "Parcels & ownership": how to ask). A listed parcel's record is not
 // returned by /api/parcels and its dossier says only that a record here is
 // withheld on request; its outline stays, since the outline carries no name.
-// Requests are honoured within 10 business days. Entries hold ids only:
-// never a name, an address or the reason given.
+// Entries hold ids only: never a name, an address or the reason given.
 
 export interface Suppression {
   adapter: string;

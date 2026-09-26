@@ -20,7 +20,7 @@ import { polite, UpstreamError, upstreamJson } from "@/lib/server/upstream";
 import { retrying } from "@/lib/server/net";
 import type { SourceId } from "@/lib/provenance/sources";
 import type { LayerFeature } from "@/lib/layers/types";
-import { adapterFor, COOK_ADDRESS_COLUMNS, STRATMAP_FIELDS, TCAD_URL, TRAVIS_GEOID, type ParcelAdapter } from "./adapters";
+import { adapterFor, COOK_ADDRESS_COLUMNS, ownsRow, STRATMAP_FIELDS, TCAD_URL, TRAVIS_GEOID, type ParcelAdapter } from "./adapters";
 import { geometryBbox, pointInGeometry, ringsToGeometry } from "./esri";
 import { buildOutlines } from "./features";
 import { epochDate, join, text } from "./normalize";
@@ -285,7 +285,13 @@ export interface OutlineSet {
  */
 export const OUTLINE_DEADLINE_MS = 30_000;
 
-/** One adapter's outlines in a box, cached for a week. Attributes other than id and use are dropped before caching. */
+/**
+ * One adapter's outlines in a box, cached for a week. Attributes other than id
+ * and use are dropped before caching. Rows of a county another adapter answers
+ * for (StratMap's Harris rows) are dropped too, by `ownsRow`: that rule reads
+ * only the row, never the counties TIGERweb found for the box, so the cached
+ * set is the same whichever request filled it.
+ */
 export async function outlinesFor(a: ParcelAdapter, county: CountyRef, bbox: [number, number, number, number]): Promise<{ value: OutlineSet; age: number }> {
   const url = a.url(county);
   const r = await cached(`parcel-outlines:${a.id}:${url}:${bbox.join(",")}`, OUTLINE_TTL_MS, async () => {
@@ -294,9 +300,10 @@ export async function outlinesFor(a: ParcelAdapter, county: CountyRef, bbox: [nu
       const [w, s, e, n] = bbox;
       const rows = await stratmapIdentify(a, JSON.stringify({ xmin: w, ymin: s, xmax: e, ymax: n }), "esriGeometryEnvelope", bbox, true, 0.00001);
       const features = buildOutlines(
-        rows.map((row) => ({ geometry: row.geometry, properties: pick(row.properties, fields) })),
+        rows.filter((row) => ownsRow(a, row.properties)).map((row) => ({ geometry: row.geometry, properties: pick(row.properties, fields) })),
         a,
       );
+      // The record limit is about what the service sent, before any row was left to another adapter.
       return { adapter: a, county, features, truncated: rows.length >= a.maxRecords };
     }
     const fc = await arcgisQuery(
@@ -305,7 +312,7 @@ export async function outlinesFor(a: ParcelAdapter, county: CountyRef, bbox: [nu
       {
         where: "1=1",
         ...envelope(bbox),
-        outFields: fields.join(","),
+        outFields: [...fields, ...(a.countyField ? [a.countyField] : [])].join(","),
         returnGeometry: "true",
         // About a metre: enough to draw lot lines at street scale.
         maxAllowableOffset: "0.00001",
@@ -314,7 +321,12 @@ export async function outlinesFor(a: ParcelAdapter, county: CountyRef, bbox: [nu
       },
       { gate: a.host, timeoutMs: 25_000, tries: 2, ...GATE },
     );
-    const features = buildOutlines(fc.features.map((f) => ({ geometry: f.geometry, properties: f.properties as Props })), a);
+    const features = buildOutlines(
+      fc.features
+        .filter((f) => ownsRow(a, (f.properties ?? {}) as Props))
+        .map((f) => ({ geometry: f.geometry, properties: pick((f.properties ?? {}) as Props, fields) })),
+      a,
+    );
     return { adapter: a, county, features, truncated: truncated(fc) || fc.features.length >= a.maxRecords };
   }, { deadlineMs: OUTLINE_DEADLINE_MS, coolMs: 60_000 });
   return { value: r.value, age: r.age };

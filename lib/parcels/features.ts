@@ -83,7 +83,8 @@ export function ownerText(r: ParcelRecord): string {
     const who = o.names.join("; ");
     return `${who}${o.dba ? ` (doing business as ${o.dba})` : ""}${o.careOf ? `, care of ${o.careOf}` : ""}`;
   }
-  return o.status === "withheld" ? `withheld: ${o.reason.replace(/^withheld by the source: /, "the source ")}` : `not published: ${o.reason}`;
+  if (o.status === "withheld") return /^withheld\b/.test(o.reason) ? o.reason : `withheld: ${o.reason}`;
+  return `not published: ${o.reason}`;
 }
 
 /** The dossier's key/value lines for one record, in reading order. */

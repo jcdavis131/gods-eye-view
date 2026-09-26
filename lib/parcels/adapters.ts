@@ -6,7 +6,8 @@
 // Every adapter asks for an explicit outFields list, never "*": some services
 // time out on "*" and answer the same point in a second with a list, and a
 // list is also the audit of what this app reads. Owner-occupancy flags
-// (homestead, owner-occupied, principal-residence share) are never asked for.
+// (homestead, owner-occupied, principal-residence share) are never asked for,
+// nor a class field that encodes one (Maricopa's LC_CUR, MnGeo's useclass1).
 // Nothing here searches by name: every query is a point or a box.
 
 import type { SourceId } from "@/lib/provenance/sources";
@@ -61,6 +62,13 @@ export interface ParcelAdapter {
   /** The parcel key and use-class fields: the only attributes an outline carries. */
   idField: string;
   useField?: string;
+  /**
+   * The field naming each row's county as a five-digit GEOID, for a statewide
+   * service that also carries counties another adapter answers for (StratMap
+   * carries Harris, which HCAD answers for). Outline rows of those counties
+   * are left to that adapter (`ownsRow`), so no lot is drawn twice.
+   */
+  countyField?: string;
   /** The layer's maxRecordCount, or less: the cap for one outline box. */
   maxRecords: number;
   /**
@@ -117,7 +125,8 @@ const txStratmap: ParcelAdapter = {
   name: "TxGIO StratMap Land Parcels",
   publisher: "Texas Geographic Information Office, from each county's appraisal district",
   sourceId: "txgio-stratmap",
-  coverage: "Texas counties whose appraisal district contributes to StratMap (Harris County comes from HCAD instead)",
+  coverage:
+    "Texas counties whose appraisal district contributes to StratMap, except Harris County: StratMap carries the Harris roll too, but this app reads HCAD's own service there",
   ownerPublished: true,
   host: "feature.geographic.texas.gov",
   kind: "identify",
@@ -125,12 +134,15 @@ const txStratmap: ParcelAdapter = {
   outFields: STRATMAP_FIELDS,
   idField: "PROP_ID",
   useField: "STAT_LAND_USE",
+  countyField: "FIPS",
   maxRecords: 2000,
   caveat:
     "StratMap is TxGIO's statewide composite of appraisal-district rolls, collected once a year; the appraisal district's own records are the authority and may be newer.",
   normalize(p) {
-    const legalUnit = unitOf(p.LGL_AREA_UNIT) ?? "acres";
-    const gisUnit = unitOf(p.GIS_AREA_UNIT) ?? "acres";
+    // An area is read only in a unit the record states: a blank or unrecognised
+    // unit ("SF") leaves that area out rather than reading square feet as acres.
+    const legalUnit = unitOf(p.LGL_AREA_UNIT);
+    const gisUnit = unitOf(p.GIS_AREA_UNIT);
     const district = text(p.SOURCE);
     const taxYear = year(p.TAX_YEAR);
     const use = join([text(p.STAT_LAND_USE) && `state class ${text(p.STAT_LAND_USE)}`, text(p.LOC_LAND_USE) && `local use ${text(p.LOC_LAND_USE)}`], " · ");
@@ -153,7 +165,9 @@ const txStratmap: ParcelAdapter = {
         const y = text(p.YEAR_BUILT);
         return y && y !== "0" ? y : undefined;
       })(),
-      area: area(p.LEGAL_AREA, legalUnit, "legal (as recorded)") ?? area(p.GIS_AREA, gisUnit, "GIS (computed from the outline)"),
+      area:
+        (legalUnit ? area(p.LEGAL_AREA, legalUnit, "legal (as recorded)") : undefined) ??
+        (gisUnit ? area(p.GIS_AREA, gisUnit, "GIS (computed from the outline)") : undefined),
       legal: text(p.LEGAL_DESC),
       asOf: ymd(p.DATE_ACQ),
       notes: district ? [`roll from ${district}`] : undefined,
@@ -275,8 +289,9 @@ const azMaricopa: ParcelAdapter = {
     "FCV_CUR",
     "LPV_CUR",
     "TAX_YR_CUR",
+    // PUC is the property use code. LC_CUR (the legal class) is not asked for:
+    // its classes 3.1-3.3 and 4.1-4.2 say whether the owner lives there.
     "PUC",
-    "LC_CUR",
     "CITY_ZONING",
     "JURISDICTION",
     "STR",
@@ -297,7 +312,7 @@ const azMaricopa: ParcelAdapter = {
       owner: publishedOwner(ownerNames(p.OWNER_NAME), { careOf: p.INCAREOF }),
       mailing: text(p.MAIL_ADDRESS),
       values: values(taxYear ? `tax year ${taxYear}` : undefined, [value("full cash value", p.FCV_CUR), value("limited property value", p.LPV_CUR)]),
-      use: join([text(p.PUC) && `property use code ${text(p.PUC)}`, text(p.LC_CUR) && `legal class ${text(p.LC_CUR)}`], " · "),
+      use: text(p.PUC) ? `property use code ${text(p.PUC)}` : undefined,
       // The layer holds this placeholder where it has no zoning; it is not a zone.
       zoning: text(p.CITY_ZONING, ["CONTACT LOCAL JURISDICTION"]),
       yearBuilt: year(p.CONST_YEAR),
@@ -794,7 +809,9 @@ const mnParcels: ParcelAdapter = {
     "emv_total",
     "tax_year",
     "mkt_year",
-    "useclass1",
+    // useclass1 is not asked for: in many opt-in counties it is the homestead
+    // classification itself ("1A-Residential Homestead"). So Minnesota records
+    // show no use class, and its lot lines carry the parcel id only.
     "tax_exempt",
     "year_built",
     "sale_date",
@@ -802,7 +819,6 @@ const mnParcels: ParcelAdapter = {
     "abb_legal",
   ],
   idField: "county_pin",
-  useField: "useclass1",
   maxRecords: 2000,
   normalize(p) {
     const taxYear = year(p.tax_year);
@@ -832,7 +848,6 @@ const mnParcels: ParcelAdapter = {
         exempt ? "published for a tax-exempt parcel" : undefined,
       ),
       exempt: exempt ? "tax-exempt" : undefined,
-      use: text(p.useclass1),
       yearBuilt: year(p.year_built),
       area: area(p.acres_deed, "acres", "deeded acres") ?? area(p.acres_poly, "acres", "acres of the outline"),
       lastSale: sale(epochDate(p.sale_date), amount(p.sale_value) ? p.sale_value : undefined),
@@ -1321,7 +1336,7 @@ const ctCama: ParcelAdapter = {
       parcelId: text(p.Parcel_ID) ?? "",
       municipality: text(p.Town_Name),
       situs: join([text(p.Location_1) ?? text(p.Location), join([p.Property_City, p.Property_Zip])], ", "),
-      // Towns that suppress ownership publish "Current Owner" / "Current Co-Owner"; finalize() withholds those.
+      // Towns that suppress ownership publish "Current Owner" / "Current Co-Owner", "SUPPRESSED OWNER" or a "(REDACTED)" marker; finalize() withholds those.
       owner: publishedOwner(ownerNames(p.Owner, p.Co_Owner)),
       mailing: join([p.Mailing_Address, join([p.Mailing_City, p.Mailing_State, p.Mailing_Zip])], ", "),
       values: values(vy ? `valuation year ${vy}` : undefined, [
@@ -1436,7 +1451,11 @@ export const ADAPTER_BY_ID: ReadonlyMap<string, ParcelAdapter> = new Map(ADAPTER
 
 /** County GEOIDs whose own service takes precedence over the state's. */
 export const COUNTY_ADAPTERS: Readonly<Record<string, string>> = {
-  "48201": "tx-hcad", // Harris County, TX: StratMap has no Harris roll
+  // Harris County, TX: StratMap carries the Harris roll too, but HCAD's own
+  // service is newer (tax year 2026 against StratMap's 2025) and carries
+  // HCAD's confidentiality flag. StratMap's Harris rows are left out of its
+  // lot lines (countyField), so a box on the county line draws each lot once.
+  "48201": "tx-hcad",
   "04013": "az-maricopa",
   "06037": "ca-la",
   "17031": "il-cook",
@@ -1473,4 +1492,18 @@ export function adapterFor(county: CountyRef | null | undefined): ParcelAdapter 
   if (!id) return null;
   if (id === "ut-lir" && !utahService(county)) return null;
   return ADAPTER_BY_ID.get(id) ?? null;
+}
+
+/**
+ * Whether an outline row is this adapter's to draw: true unless the row names
+ * its county (`countyField`) and that county belongs to a different adapter.
+ * A row with no readable county is kept. The rule depends only on the row, not
+ * on which counties a box touches, so it can run before a box is cached.
+ */
+export function ownsRow(a: Pick<ParcelAdapter, "id" | "countyField">, p: Props): boolean {
+  if (!a.countyField) return true;
+  const geoid = text(p[a.countyField]);
+  if (!geoid || !/^\d{5}$/.test(geoid)) return true;
+  const owner = adapterFor({ geoid, name: geoid, basename: geoid, state: geoid.slice(0, 2) });
+  return !owner || owner.id === a.id;
 }

@@ -9,10 +9,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { ADAPTER_BY_ID } from "@/lib/parcels/adapters";
 
-vi.mock("@/lib/server/cache", () => ({
-  // No memo in tests: every GET asks its upstreams again.
-  cached: async <T,>(_k: string, _ttl: number, produce: () => Promise<T>) => ({ value: await produce(), age: 0, hit: false }),
-}));
+/** Set by the one test that needs the real cache (deadlines, in-flight sharing, cool-downs). */
+const cacheMode = vi.hoisted(() => ({ real: false }));
+
+vi.mock("@/lib/server/cache", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/server/cache")>();
+  return {
+    ...actual,
+    // No memo in tests: every GET asks its upstreams again, unless a test switches the real cache on.
+    cached: async <T,>(k: string, ttl: number, produce: () => Promise<T>, opts?: import("@/lib/server/cache").CachedOptions) =>
+      cacheMode.real ? actual.cached(k, ttl, produce, opts) : { value: await produce(), age: 0, hit: false },
+  };
+});
 
 vi.mock("@/lib/server/upstream", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/server/upstream")>()),
@@ -42,6 +50,7 @@ const asked: URL[] = [];
 beforeEach(() => {
   county = hcad.county;
   asked.length = 0;
+  cacheMode.real = false;
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const url = new URL(String(input));
     asked.push(url);
@@ -139,6 +148,36 @@ describe("/api/parcels through TxGIO's identify, and the addresses mode", () => 
     expect(data.addresses.map((a) => a.address)).toContain("300 ALAMO PLAZA, SAN ANTONIO, TX");
     expect(body.provenance.map((p) => p.source.id)).toEqual(["usdot-nad"]);
   });
+
+  it(
+    "when NAD is slower than identify waits, mode=addresses straight after waits on the same query and answers (real cache)",
+    async () => {
+      cacheMode.real = true;
+      county = alamo.county;
+      const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+      vi.mocked(globalThis.fetch).mockImplementation(async (input) => {
+        const url = new URL(String(input));
+        asked.push(url);
+        if (url.host === "tigerweb.geo.census.gov") return json(countyFc(county));
+        if (url.host === "feature.geographic.texas.gov") return json(identifyJson(alamo.rows));
+        // NAD answers after identify's 2.5 s wait has run out.
+        if (url.host === "services.arcgis.com") return new Promise<Response>((r) => setTimeout(() => r(json(fc(nad.rows))), 2_900));
+        return new Response("unexpected upstream in test", { status: 500 });
+      });
+      // A point no other test uses, so nothing in the real cache is shared with them.
+      const first = await get("?lon=-98.48611&lat=29.42601");
+      expect(first.status).toBe(200);
+      expect((first.body.data as unknown as { addresses: unknown }).addresses).toBeNull();
+      expect(first.body.caveats?.join(" ")).toMatch(/did not answer within 2\.5 s; mode=addresses asks again/);
+      // The dossier's follow-up, at once: it waits on the query still running rather than failing on the cool-down.
+      const second = await get("?mode=addresses&lon=-98.48611&lat=29.42601");
+      expect(second.status).toBe(200);
+      expect((second.body.data as unknown as { addresses: Array<{ address: string }> }).addresses.map((a) => a.address)).toContain("300 ALAMO PLAZA, SAN ANTONIO, TX");
+      // One NAD query served both.
+      expect(asked.filter((u) => u.host === "services.arcgis.com").length).toBe(1);
+    },
+    15_000,
+  );
 });
 
 describe("/api/parcels outlines", () => {
@@ -174,6 +213,34 @@ describe("/api/parcels outlines", () => {
     expect(body.truncated).toBe(true);
     expect(body.data.features.length).toBeLessThan(12_000);
     expect(body.caveats.join(" ")).toMatch(/response limit/);
+  });
+
+  it("draws a lot once where two adapters meet: StratMap's Harris rows are left to HCAD (derived: the Alamo row copied under Houston City Hall's id and Harris's FIPS)", async () => {
+    const harrisInStratmap = { ...alamo.rows[0], properties: { ...alamo.rows[0].properties, PROP_ID: "0011490000001", FIPS: "48201", COUNTY: "HARRIS" } };
+    const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    vi.mocked(globalThis.fetch).mockImplementation(async (input) => {
+      const url = new URL(String(input));
+      asked.push(url);
+      if (url.host === "tigerweb.geo.census.gov") {
+        // The box touches Harris and a StratMap county.
+        return json(fc([...countyFc(hcad.county).features, ...countyFc(alamo.county).features].map((f) => ({ geometry: null, properties: f.properties }))));
+      }
+      if (url.host === "www.gis.hctx.net") return json(fc(hcad.rows));
+      if (url.host === "feature.geographic.texas.gov") return json(identifyJson([alamo.rows[0], harrisInStratmap]));
+      return new Response("unexpected upstream in test", { status: 500 });
+    });
+    const { status, body } = await get("?mode=outlines&bbox=-95.3715,29.7585,-95.3665,29.7625");
+    expect(status).toBe(200);
+    const ids = (body.data as unknown as { features: Array<{ properties: { extra: { adapter: string; parcelId: string } } }> }).features.map((f) => f.properties.extra);
+    // Both services were asked, and every parcel id comes from one adapter only.
+    expect(new Set(ids.map((x) => x.adapter))).toEqual(new Set(["tx-hcad", "tx-stratmap"]));
+    const byId = new Map<string, Set<string>>();
+    for (const x of ids) byId.set(x.parcelId, new Set([...(byId.get(x.parcelId) ?? []), x.adapter]));
+    for (const [id, adapters] of byId) expect(adapters.size, `parcel ${id}`).toBe(1);
+    expect(byId.get("0011490000001")).toEqual(new Set(["tx-hcad"]));
+    const sources = body.sources as Array<{ id: string; count: number }>;
+    expect(sources.find((s) => s.id === "tx-stratmap")?.count).toBe(1);
+    expect(sources.find((s) => s.id === "tx-hcad")?.count).toBe(1);
   });
 
   it("clamps a wide box to 0.01 degrees", async () => {

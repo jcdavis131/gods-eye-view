@@ -8,26 +8,39 @@
 //  - A year of 0 and an area of 0 are "not recorded", not a year or an area.
 //    A value of 0 is kept and shown as published (it is often an exempt
 //    parcel), with the exemption beside it when the source carries one.
-//  - An owner field that holds a placeholder instead of a name ("CURRENT
-//    OWNER", "CONFIDENTIAL") means the source is withholding the owner. The
-//    owner is shown as withheld and the mailing address is dropped with it,
-//    since a withheld owner's mailing address is the thing being protected.
+//  - An owner field that marks the name as withheld means the source is
+//    withholding the owner. The test is by word, not by exact string, since
+//    each town and appraisal district writes its own marker ("CURRENT OWNER",
+//    "SUPPRESSED OWNER", "Name Withheld", a name followed by "(REDACTED)"):
+//    any owner, care-of, doing-business-as or taxpayer name with the word
+//    CONFIDENTIAL, REDACTED, SUPPRESSED or WITHHELD in it, or that is exactly
+//    "CURRENT OWNER" or "CURRENT CO-OWNER". The owner is shown as withheld
+//    and the mailing address is dropped with it, since a withheld owner's
+//    mailing address is the thing being protected. An entity whose name
+//    contains one of those words is withheld too; that errs on the safe side.
 //  - A record the source flags confidential is treated the same way.
+//  - An owner field that holds a placeholder that is not a withholding
+//    marker ("UNKNOWN OWNER", "NAME NOT AVAILABLE") is not a name: the owner
+//    is shown as not published, and the rest of the record stays as published.
 
 import type { ParcelOwner, ParcelRecord, ParcelValue } from "./types";
 
-/** Owner-field placeholders that mean "withheld", compared upper-case with spaces collapsed. */
-export const OWNER_MASKS: ReadonlySet<string> = new Set([
-  "CURRENT OWNER",
-  "CURRENT CO-OWNER",
-  "CURRENT COOWNER",
-  "CONFIDENTIAL",
-  "CONFIDENTIAL OWNER",
-  "REDACTED",
-  "OWNER WITHHELD",
-  "NAME WITHHELD",
-  "WITHHELD",
-]);
+/** Words that mark an owner field as withheld wherever they appear in it, as whole words. */
+export const OWNER_MASK_WORDS: ReadonlySet<string> = new Set(["CONFIDENTIAL", "REDACTED", "SUPPRESSED", "WITHHELD"]);
+
+/** Whole owner fields that mean "withheld" (upper-case, punctuation read as a space). */
+export const OWNER_MASKS: ReadonlySet<string> = new Set(["CURRENT OWNER", "CURRENT CO OWNER", "CURRENT COOWNER"]);
+
+/** Whole owner fields that hold no name and are not a withholding marker. */
+export const OWNER_PLACEHOLDERS: ReadonlySet<string> = new Set(["UNKNOWN", "UNKNOWN OWNER", "OWNER UNKNOWN", "NAME NOT AVAILABLE"]);
+
+/** An owner string upper-cased, every run of punctuation and space read as one space. */
+function ownerKey(name: string): string {
+  return name
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, " ")
+    .trim();
+}
 
 /** Values that stand for "nothing here" in these services. */
 const BLANKS: ReadonlySet<string> = new Set(["NULL", "<NULL>", "NONE"]);
@@ -108,10 +121,18 @@ export function addressLine(v: unknown): string | undefined {
   return parts.length ? parts.join(", ") : undefined;
 }
 
-/** Whether an owner string is a placeholder that means the name is withheld. */
+/** Whether an owner string marks the name as withheld (see the rules at the top of this file). */
 export function isOwnerMask(name: string | undefined): boolean {
   if (!name) return false;
-  return OWNER_MASKS.has(name.replace(/\s+/g, " ").trim().toUpperCase());
+  const key = ownerKey(name);
+  if (OWNER_MASKS.has(key)) return true;
+  return key.split(" ").some((w) => OWNER_MASK_WORDS.has(w));
+}
+
+/** Whether an owner string is a placeholder that holds no name ("UNKNOWN OWNER"), and is not a withholding marker. */
+export function isOwnerPlaceholder(name: string | undefined): boolean {
+  if (!name) return false;
+  return OWNER_PLACEHOLDERS.has(ownerKey(name));
 }
 
 /** A value line, or nothing when the source sent no number. */
@@ -154,8 +175,17 @@ export function publishedOwner(
   };
 }
 
-export const MASK_REASON = "withheld by the source: its owner field holds a placeholder instead of a name";
+export const MASK_REASON = "withheld by the source: its owner field marks the name as withheld instead of giving it";
 export const CONFIDENTIAL_REASON = "withheld by the source: it flags this record confidential";
+export const PLACEHOLDER_REASON = "the source's owner field holds a placeholder, not a name, for this parcel";
+
+/** Every name-bearing field of a record: owners, care-of, doing-business-as and a separate taxpayer. */
+function namesIn(r: ParcelRecord): string[] {
+  const o = r.owner;
+  const out = o.status === "published" ? [...o.names, ...(o.careOf ? [o.careOf] : []), ...(o.dba ? [o.dba] : [])] : [];
+  if (r.taxpayer?.name) out.push(r.taxpayer.name);
+  return out;
+}
 
 /**
  * The shared privacy pass every adapter's record goes through last.
@@ -163,7 +193,13 @@ export const CONFIDENTIAL_REASON = "withheld by the source: it flags this record
  */
 export function finalize(r: ParcelRecord, opts: { confidential?: boolean } = {}): ParcelRecord {
   const out: ParcelRecord = { ...r };
-  const masked = out.owner.status === "published" && out.owner.names.some(isOwnerMask);
+  const masked = namesIn(out).some(isOwnerMask);
+  if (!opts.confidential && !masked && out.owner.status === "published") {
+    // A placeholder that is not a withholding marker is not a name: dropped, and the owner is not published when nothing is left.
+    const names = out.owner.names.filter((n) => !isOwnerPlaceholder(n));
+    if (!names.length) out.owner = { status: "not-published", reason: PLACEHOLDER_REASON };
+    else if (names.length < out.owner.names.length) out.owner = { ...out.owner, names };
+  }
   if (opts.confidential || masked) {
     out.owner = { status: "withheld", reason: opts.confidential ? CONFIDENTIAL_REASON : MASK_REASON };
     if (out.mailing || out.ownerAddress || out.taxpayer) {
