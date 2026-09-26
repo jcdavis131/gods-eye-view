@@ -81,21 +81,30 @@ function answer(cams: unknown[], id: SourceId, label: string, upstreamUrl: strin
   });
 }
 
-/** Every Caltrans district, one polite request each; a district that fails is named, the rest still answer. */
-async function caltrans(): Promise<{ cams: AgencyCam[]; failed: number[] }> {
+/**
+ * Every Caltrans district, one polite request each, each cached on its own for an hour:
+ * a district that fails is named and not stored, so the next caller re-asks only it
+ * while the rest still answer from the cache.
+ */
+async function caltrans(): Promise<{ cams: AgencyCam[]; failed: number[]; age: number }> {
   const parts = await Promise.all(
     CALTRANS_DISTRICTS.map(async (d) => {
       try {
-        const j = await retrying(() => polite("caltrans-cwwp2", 150, 30_000, () => upstreamJson<Parameters<typeof parseCaltrans>[0]>("caltrans-cwwp2", caltransUrl(d), { timeoutMs: 25_000 })), 2);
-        return { d, cams: parseCaltrans(j) };
+        const r = await cached(
+          `cams:caltrans:d${d}`,
+          60 * 60_000,
+          async () => parseCaltrans(await retrying(() => polite("caltrans-cwwp2", 150, 30_000, () => upstreamJson<Parameters<typeof parseCaltrans>[0]>("caltrans-cwwp2", caltransUrl(d), { timeoutMs: 25_000 })), 2)),
+          { deadlineMs: 45_000 },
+        );
+        return { d, cams: r.value, age: r.age };
       } catch {
-        return { d, cams: null };
+        return { d, cams: null, age: 0 };
       }
     }),
   );
   const failed = parts.filter((p) => !p.cams).map((p) => p.d);
   if (failed.length === parts.length) throw new Error("Caltrans CWWP2: no district file answered");
-  return { cams: parts.flatMap((p) => p.cams ?? []), failed };
+  return { cams: parts.flatMap((p) => p.cams ?? []), failed, age: Math.max(...parts.filter((p) => p.cams).map((p) => p.age)) };
 }
 
 export async function GET(req: NextRequest) {
@@ -122,16 +131,16 @@ export async function GET(req: NextRequest) {
         return answer(r.value, "nyc-dot-cameras", "nyc", "https://webcams.nyctmc.org/api/cameras", r.age, 300);
       }
       case "caltrans": {
-        const r = await cached("cams:caltrans", 60 * 60_000, caltrans, { deadlineMs: 45_000 });
+        const r = await caltrans();
         return answer(
-          r.value.cams,
+          r.cams,
           "caltrans-cwwp2",
           "caltrans",
           "https://cwwp2.dot.ca.gov/documentation/cctv/cctv.htm",
           r.age,
-          r.value.failed.length ? 600 : 1800,
+          r.failed.length ? 600 : 1800,
           { seriesId: "cctvStatusD01.json to cctvStatusD12.json", notes: ["12 district files, e.g. https://cwwp2.dot.ca.gov/data/d7/cctv/cctvStatusD07.json"] },
-          r.value.failed.length ? [`Caltrans district file${r.value.failed.length === 1 ? "" : "s"} ${r.value.failed.join(", ")} did not answer; those cameras are missing, not absent.`] : [],
+          r.failed.length ? [`Caltrans district file${r.failed.length === 1 ? "" : "s"} ${r.failed.join(", ")} did not answer; those cameras are missing, not absent.`] : [],
         );
       }
       case "drivebc": {

@@ -221,33 +221,27 @@ async function opTransmission(bbox: Bbox): Promise<OpResult> {
 async function opPipelines(bbox: Bbox): Promise<OpResult> {
   const wide = bbox[3] - bbox[1] > 2;
   const kinds = Object.keys(PIPELINES) as PipelineKind[];
-  const r = await cached(
-    "pipe:" + bbox.join(","),
-    DAY,
-    async () => {
-      const parts = await Promise.all(
-        kinds.map(async (kind) => {
-          const q: BoxQuery = {
-            name: "eia-pipelines",
-            url: PIPELINES[kind],
-            gate: "esri-federal",
-            outFields: kind === "natgas" ? "FID,TYPEPIPE,Operator,Status" : "FID,Opername,Pipename",
-            offset: wide ? 0.004 : 0.001,
-          };
-          try {
-            const out = await lineBox(bbox, q, (rows) => buildPipelines(kind, rows));
-            return { kind, ...out, error: undefined as string | undefined };
-          } catch (err) {
-            return { kind, features: [] as LayerFeature[], truncated: false, coarsened: false, offset: q.offset, error: err instanceof Error ? err.message : String(err) };
-          }
-        }),
-      );
-      if (parts.every((p) => p.error)) throw new Error(`EIA pipelines: ${parts[0].error}`);
-      return parts;
-    },
-    INFRA_DEADLINE,
+  // Each commodity is cached on its own: a service that fails is not stored, so the
+  // next caller re-asks only that one instead of inheriting a partial answer for a day.
+  const parts = await Promise.all(
+    kinds.map(async (kind) => {
+      const q: BoxQuery = {
+        name: "eia-pipelines",
+        url: PIPELINES[kind],
+        gate: "esri-federal",
+        outFields: kind === "natgas" ? "FID,TYPEPIPE,Operator,Status" : "FID,Opername,Pipename",
+        offset: wide ? 0.004 : 0.001,
+      };
+      try {
+        const r = await cached(`pipe:${kind}:${bbox.join(",")}`, DAY, () => lineBox(bbox, q, (rows) => buildPipelines(kind, rows)), INFRA_DEADLINE);
+        return { kind, ...r.value, age: r.age, error: undefined as string | undefined };
+      } catch (err) {
+        return { kind, features: [] as LayerFeature[], truncated: false, coarsened: false, offset: q.offset, age: 0, error: err instanceof Error ? err.message : String(err) };
+      }
+    }),
   );
-  const parts = r.value;
+  if (parts.every((p) => p.error)) throw new Error(`EIA pipelines: ${parts[0].error}`);
+  const age = Math.max(...parts.filter((p) => !p.error).map((p) => p.age));
   const features = parts.flatMap((p) => p.features);
   const counts = Object.fromEntries(parts.map((p) => [p.kind, p.error ? null : p.features.length]));
   const caveats = [
@@ -261,7 +255,7 @@ async function opPipelines(bbox: Bbox): Promise<OpResult> {
   }
   return {
     data: fc(features),
-    meta: { source: "EIA pipelines (Esri federal caches)", bbox, counts, truncated: parts.some((p) => p.truncated), cacheAge: r.age },
+    meta: { source: "EIA pipelines (Esri federal caches)", bbox, counts, truncated: parts.some((p) => p.truncated), cacheAge: age },
     ttlS: parts.some((p) => p.error) ? 600 : 6 * 3600,
     provenance: parts
       .filter((p) => !p.error)
@@ -270,7 +264,7 @@ async function opPipelines(bbox: Bbox): Promise<OpResult> {
           kind: "published",
           seriesId: `${PIPELINE_LABEL[p.kind]} pipelines`,
           upstreamUrl: PIPELINES[p.kind],
-          retrievedAt: fetchedAt(r.age),
+          retrievedAt: fetchedAt(p.age),
           notes: [`bbox ${bbox.join(",")}`, `${p.features.length} segments`],
         }),
       ),
