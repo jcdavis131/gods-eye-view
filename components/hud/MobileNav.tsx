@@ -4,7 +4,7 @@
 // target; the active ones light up. The strip snaps so a flick lands on
 // whole chips.
 
-import { Activity, Aperture, Bell, CalendarDays, Compass, Droplets, Landmark, Layers, Layers3, Link2, Table2, Zap } from "lucide-react";
+import { Activity, Aperture, Bell, CalendarDays, Compass, Droplets, Landmark, Layers, Layers3, Link2, Ruler, Sun, Table2, Zap } from "lucide-react";
 import type { ComponentType } from "react";
 import { useGlobe } from "@/lib/store/globe";
 import { useIndicators } from "@/lib/indicators/store";
@@ -17,6 +17,7 @@ import { PERSONA_BY_ID, type PanelId } from "@/lib/personas/registry";
 import { togglePanel } from "@/lib/personas/actions";
 import { useTeleport } from "@/lib/live/teleportStore";
 import { useStrata } from "@/lib/fabric/strataStore";
+import { measureOpen } from "@/lib/globe/measure";
 
 interface Chip {
   id: PanelId;
@@ -29,6 +30,8 @@ const CHIPS: Chip[] = [
   { id: "strata", label: "Strata", icon: Layers3 },
   { id: "water", label: "Water", icon: Droplets },
   { id: "market", label: "Market", icon: Landmark },
+  { id: "space", label: "Space", icon: Sun },
+  { id: "measure", label: "Measure", icon: Ruler },
   { id: "signals", label: "Signals", icon: Activity },
   { id: "screen", label: "Screen", icon: Table2 },
   { id: "releases", label: "Releases", icon: CalendarDays },
@@ -57,6 +60,8 @@ export default function MobileNav() {
   const railOpen = useStrata((s) => s.railOpen);
   const waterOpen = useGlobe((s) => s.waterReportOpen);
   const marketOpen = useGlobe((s) => s.marketReportOpen);
+  const spaceOpen = useGlobe((s) => s.spaceWeatherOpen);
+  const measuring = useGlobe((s) => measureOpen(s.measure));
   const indOpen = useIndicators((s) => s.open);
   const screenOpen = useScreener((s) => s.open);
   const relOpen = useReleases((s) => s.releasesOpen);
@@ -70,6 +75,8 @@ export default function MobileNav() {
     strata: constructsOn && railOpen,
     water: waterOpen,
     market: marketOpen,
+    space: spaceOpen,
+    measure: measuring,
     signals: indOpen,
     screen: screenOpen,
     releases: relOpen,

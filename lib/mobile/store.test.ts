@@ -17,21 +17,26 @@ describe("mobile panel bookkeeping", () => {
   it("lists every open panel across the stores", () => {
     useMobile.getState().setLayersOpen(true);
     useGlobe.getState().setMarketReportOpen(true);
+    useGlobe.getState().setSpaceWeatherOpen(true);
+    useGlobe.getState().setMeasure({ mode: "distance" });
     useIndicators.getState().setOpen(true);
     useReleases.getState().setReleasesOpen(true);
     useWatchlists.getState().setOpen(true);
     useScreener.getState().setOpen(true);
     useGlobe.getState().select({ layer: "water", id: "x" });
-    expect(openPanels()).toEqual(["layers", "market", "indicators", "releases", "watch", "screener", "info"]);
+    expect(openPanels()).toEqual(["layers", "market", "space", "measure", "indicators", "releases", "watch", "screener", "info"]);
   });
 
   it("closeAllPanels clears all of them and the selection", () => {
     useMobile.getState().setLayersOpen(true);
     useGlobe.getState().setWaterReportOpen(true);
+    // A kept shape holds the measure panel open even with no tool on.
+    useGlobe.getState().setMeasure({ mode: "off", shape: { kind: "line", points: [[0, 0], [1, 1]] } });
     useGlobe.getState().select({ layer: "water", id: "x" });
     closeAllPanels();
     expect(openPanels()).toEqual([]);
     expect(useGlobe.getState().selected).toBeNull();
+    expect(useGlobe.getState().measure).toEqual({ mode: "off", shape: null, elevation: null });
   });
 
   it("toggles the sheet height", () => {

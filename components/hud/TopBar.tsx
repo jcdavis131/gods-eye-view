@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, Settings2, Crosshair, Home, Droplets, Compass, Link2, Landmark, Menu, Activity, CalendarDays, Bell, Table2, Aperture, Zap } from "lucide-react";
+import { Search, Settings2, Crosshair, Home, Droplets, Compass, Link2, Landmark, Menu, Activity, CalendarDays, Bell, Table2, Aperture, Zap, Sun, Ruler } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { useIndicators } from "@/lib/indicators/store";
@@ -11,6 +11,7 @@ import DeskToggle from "./DeskToggle";
 import { useLens } from "@/lib/personas/store";
 import { PERSONA_BY_ID } from "@/lib/personas/registry";
 import { copyShareLink } from "@/lib/globe/share";
+import { setMeasureMode } from "@/lib/globe/measure";
 import { useNow } from "@/lib/hooks/useNow";
 import { useGlobe } from "@/lib/store/globe";
 import { formatDistance, formatLatLon } from "@/lib/globe/geo";
@@ -61,6 +62,8 @@ export default function TopBar() {
   const setSettingsOpen = useGlobe((s) => s.setSettingsOpen);
   const waterOpen = useGlobe((s) => s.waterReportOpen);
   const marketOpen = useGlobe((s) => s.marketReportOpen);
+  const spaceOpen = useGlobe((s) => s.spaceWeatherOpen);
+  const measuring = useGlobe((s) => s.measure.mode !== "off");
   const setExploreOpen = useGlobe((s) => s.setExploreOpen);
   const indOpen = useIndicators((s) => s.open);
   const toggleInd = useIndicators((s) => s.toggle);
@@ -97,6 +100,9 @@ export default function TopBar() {
     }
     st.setMarketReportOpen(!marketOpen);
   };
+  const toggleSpace = () => useGlobe.getState().setSpaceWeatherOpen(!spaceOpen);
+  // Off leaves the tool and keeps the shape (the panel stays with its readout); its close button clears it.
+  const toggleMeasure = () => setMeasureMode(measuring ? "off" : "distance");
   const closeMenu = (fn: () => void) => () => {
     setMenuOpen(false);
     fn();
@@ -197,6 +203,14 @@ export default function TopBar() {
           <Landmark className="size-3.5" />
           <span className="sr-only">Market</span>
         </button>
+        <button type="button" onClick={toggleSpace} aria-pressed={spaceOpen} className={`${btn} hidden md:inline-flex`} title="Space weather: Kp index, solar flares, notifications">
+          <Sun className="size-3.5" />
+          <span className="sr-only">Space weather</span>
+        </button>
+        <button type="button" onClick={toggleMeasure} aria-pressed={measuring} className={`${btn} hidden md:inline-flex`} title="Measure distance and area, or read the ground elevation at a click (Esc leaves the tool)">
+          <Ruler className="size-3.5" />
+          <span className="sr-only">Measure</span>
+        </button>
         <button type="button" onClick={toggleInd} aria-pressed={indOpen} className={btn} title="Named indicators with thresholds: river stages, freight, housing, energy, labour, trade">
           <Activity className="size-3.5" />
           <span className="sr-only">Signals</span>
@@ -244,6 +258,8 @@ export default function TopBar() {
               <MenuItem icon={Search} label="Search" onClick={closeMenu(() => setSearchOpen(true))} />
               <MenuItem icon={Droplets} label="Water report" onClick={closeMenu(toggleWater)} active={waterOpen} />
               <MenuItem icon={Landmark} label="Market report" onClick={closeMenu(toggleMarket)} active={marketOpen} />
+              <MenuItem icon={Sun} label="Space weather" onClick={closeMenu(toggleSpace)} active={spaceOpen} />
+              <MenuItem icon={Ruler} label="Measure" onClick={closeMenu(toggleMeasure)} active={measuring} />
               <MenuItem icon={Link2} label="Copy share link" onClick={closeMenu(() => void copyShareLink())} />
               <MenuItem icon={Home} label="Home view" onClick={closeMenu(() => homeView())} />
               <MenuItem icon={Crosshair} label="Clear selection" onClick={closeMenu(() => useGlobe.getState().select(null))} />

@@ -47,6 +47,10 @@ const nextConfig: NextConfig = {
         "connect-src 'self' https: wss:",
         "media-src 'self' blob: https:",
         "worker-src 'self' blob:",
+        // The one frame the app embeds: NASA's ISS stream in YouTube's
+        // privacy-enhanced player (components/hud/InfoPanel.tsx), shown only
+        // after /api/space checks it through oEmbed.
+        "frame-src 'self' https://www.youtube-nocookie.com",
         "object-src 'none'",
         "base-uri 'self'",
         "form-action 'self'",

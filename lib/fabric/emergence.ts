@@ -11,11 +11,13 @@
 // Rules kept: simulated features (the traffic layer) are never counted; only
 // features with a point position are placed (polygon layers are constructs of
 // their own, not things inside one); counts are of what is loaded in the
-// browser now, and every place that shows them says so.
+// browser now, and every place that shows them says so. A binned fires cell
+// counts as the detections it stands for (join.ts standsFor), not as one.
 
 import type { LayerFeature, LayerId } from "@/lib/layers/types";
 import { departure, flowClass, FLOW_CLASSES, median, ordinal, type FlowClass } from "./condition";
 import { bboxContains, ringsBbox, ringsContain, type BBox } from "./geo";
+import { standsFor } from "./join";
 import type { ConstructNode } from "./types";
 
 /**
@@ -66,11 +68,13 @@ export interface Vitals {
 
 /**
  * Layers whose points are not things on the ground: the constructs themselves
- * (the stack, the field, live warnings),
- * metro-level statistics drawn at a centroid, and a sampling grid. Area layers
- * (counties, countries) drop out on their own because only points count.
+ * (the stack, the field, live warnings), disaster alerts placed at an
+ * event's reported point (GDACS, EONET), metro-level statistics drawn at a
+ * centroid, and a sampling grid. Area layers (counties, countries) drop out
+ * on their own because only points count. Fire hotspots and wildfire
+ * incident points are observations on the ground, like earthquakes, and count.
  */
-const NOT_PHYSICAL = new Set<LayerId>(["constructs", "field", "alerts", "occupations", "weather"]);
+const NOT_PHYSICAL = new Set<LayerId>(["constructs", "field", "alerts", "hazards", "occupations", "weather"]);
 
 export function isPhysical(f: LayerFeature): boolean {
   return !NOT_PHYSICAL.has(f.properties.layer) && !f.properties.simulated && f.geometry?.type === "Point";
@@ -104,10 +108,11 @@ export function computeVitals(
     const lon = c[0];
     const lat = c[1];
     const cond = wantCondition ? conditionOf!(f) : null;
+    const w = standsFor(f);
     for (const { node, box } of idx) {
       if (!bboxContains(box, lon, lat) || !ringsContain(node.rings!, lon, lat)) continue;
       const m = byNode.get(node.id) ?? {};
-      m[f.properties.layer] = (m[f.properties.layer] ?? 0) + 1;
+      m[f.properties.layer] = (m[f.properties.layer] ?? 0) + w;
       byNode.set(node.id, m);
       if (cond) conds.set(node.id, [...(conds.get(node.id) ?? []), cond]);
     }

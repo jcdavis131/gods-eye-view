@@ -10,6 +10,25 @@ export function pointOf(f: LayerFeature): [number, number] | null {
   return f.properties.anchor ?? null;
 }
 
+/**
+ * How many observations a feature stands for. A zoomed-out view of the
+ * fires layer is binned (more than 5,000 hotspots in view): each point is
+ * one cell carrying the detections it stands for in `extra.count`, and a
+ * count must add those, not the cells. Every other feature is one.
+ */
+export function standsFor(f: LayerFeature): number {
+  if (f.properties.layer !== "fires") return 1;
+  const n = (f.properties.extra as { count?: unknown } | undefined)?.count;
+  return typeof n === "number" && Number.isFinite(n) && n >= 1 ? n : 1;
+}
+
+/** The observations a list of features stands for (see standsFor). */
+export function countOf(list: readonly LayerFeature[]): number {
+  let n = 0;
+  for (const f of list) n += standsFor(f);
+  return n;
+}
+
 const CONSTRUCT_LAYERS = new Set<LayerId>(["constructs", "field", "alerts"]);
 
 /** Features inside `rings`, grouped by layer; constructs (the stack, the field, live warnings) and simulated features are skipped. */

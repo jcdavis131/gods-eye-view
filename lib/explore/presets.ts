@@ -4,10 +4,13 @@
 //
 // Every preset below was probed against the USGS Water Data API on
 // 2026-09-10 (gauges and wells inside a one-degree box) before it was
-// listed, so none of them lands on an empty map.
+// listed, so none of them lands on an empty map. The hazards & land presets
+// were probed on 2026-09-25 with the exact box each layer requests. Fires
+// move, so the wildfire preset has no fixed place: it resolves when clicked.
 
-import type { LayerId } from "@/lib/layers/types";
+import type { LayerFeature, LayerId } from "@/lib/layers/types";
 import type { ShareState } from "@/lib/globe/share";
+import type { FireExtra } from "@/lib/hazards/features";
 
 export interface Preset {
   id: string;
@@ -25,7 +28,42 @@ export interface Preset {
   /** Open the market report on arrival. */
   market?: boolean;
   /** Gallery section; water presets carry no group. */
-  group?: "markets" | "constructs";
+  group?: "markets" | "constructs" | "hazards";
+  /**
+   * For places that move (the largest fire): where to go right now, asked
+   * when the preset is used. The lat/lon above are the fallback.
+   */
+  resolve?: () => Promise<Partial<ShareState> | null>;
+}
+
+/** The current WFIGS perimeter with the most acres: its anchor, a height that frames it, and a selection. */
+async function largestFire(): Promise<Partial<ShareState> | null> {
+  const res = await fetch("/api/hazards?op=wildfire");
+  if (!res.ok) return null;
+  const j = (await res.json()) as { data?: { features?: LayerFeature[] } };
+  let best: LayerFeature | null = null;
+  for (const f of j.data?.features ?? []) {
+    const x = f.properties.extra as FireExtra;
+    if (!x.hasPerimeter || x.type !== "WF") continue;
+    if (!best || (x.acres ?? 0) > ((best.properties.extra as FireExtra).acres ?? 0)) best = f;
+  }
+  if (!best) return null;
+  const g = best.geometry;
+  const rings = g.type === "Polygon" ? [g.coordinates[0]] : g.type === "MultiPolygon" ? g.coordinates.map((p) => p[0]) : [];
+  let w = Infinity;
+  let s = Infinity;
+  let e = -Infinity;
+  let n = -Infinity;
+  for (const r of rings) for (const [lon, lat] of r) {
+    w = Math.min(w, lon);
+    e = Math.max(e, lon);
+    s = Math.min(s, lat);
+    n = Math.max(n, lat);
+  }
+  if (!Number.isFinite(w)) return null;
+  const [lon, lat] = best.properties.anchor ?? [(w + e) / 2, (s + n) / 2];
+  const spanKm = Math.max(e - w, n - s) * 111;
+  return { lon, lat, h: Math.min(400_000, Math.max(40_000, spanKm * 2_200)), sel: { layer: "wildfire", id: best.properties.id } };
 }
 
 export const PRESETS: Preset[] = [
@@ -279,6 +317,68 @@ export const PRESETS: Preset[] = [
     layers: ["constructs", "water", "groundwater"],
     dwellS: 30,
   },
+  // ---- Hazards & land (probed on 2026-09-25 with each layer's own request box)
+  {
+    id: "largest-fire",
+    title: "The largest fire burning now",
+    region: "United States · chosen when you click",
+    group: "hazards",
+    blurb: "Resolves on arrival: the current WFIGS perimeter with the most acres, selected, with its percent contained and how old the perimeter is, and the satellite hotspots of the last 24 hours around it.",
+    lon: -113,
+    lat: 42,
+    height: 3_500_000,
+    layers: ["wildfire", "fires", "hazards"],
+    dwellS: 35,
+    resolve: largestFire,
+  },
+  {
+    id: "hazards-world",
+    title: "Hazards worldwide",
+    region: "whole Earth",
+    group: "hazards",
+    blurb: "Every event GDACS marks current, cyclones, floods, droughts, volcanoes, wildfires and quakes, with GDACS's own Green / Orange / Red level and the Orange and Red ones labelled; NASA EONET volcanoes; every FIRMS hotspot of the last 24 hours binned from orbit. Green GDACS quakes that USGS also has are left to the Earthquakes layer. Descend over the United States for NWS warnings.",
+    lon: 10,
+    lat: 15,
+    height: 16_000_000,
+    layers: ["hazards", "fires", "earthquakes"],
+    dwellS: 25,
+  },
+  {
+    id: "sa-floodplain",
+    title: "San Antonio River floodplain",
+    region: "Downtown San Antonio, Texas",
+    group: "hazards",
+    blurb: "FEMA's regulatory flood map at street scale: about a hundred zones, AE and A along the river and its creeks, one with a published base flood elevation of 634.5 ft (NAVD88) at the target. A map of the 1 % annual-chance floodplain, not a forecast.",
+    lon: -98.4883,
+    lat: 29.4232,
+    height: 3_000,
+    layers: ["flood", "water"],
+    dwellS: 30,
+  },
+  {
+    id: "mitchell-lake",
+    title: "Mitchell Lake wetlands",
+    region: "South San Antonio, Texas",
+    group: "hazards",
+    blurb: "About four hundred National Wetlands Inventory polygons around a shallow lake and the Medina and San Antonio river corridors: freshwater ponds, riverine channels, emergent marsh, each with its Cowardin code and acres. NWI mapped them from March 1983 colour-infrared photographs, so the shoreline and marsh may have moved since.",
+    lon: -98.43,
+    lat: 29.28,
+    height: 7_000,
+    layers: ["wetlands", "water"],
+    dwellS: 30,
+  },
+  {
+    id: "government-canyon",
+    title: "Government Canyon",
+    region: "Bexar County, Texas",
+    group: "hazards",
+    blurb: "A 12,344-acre state natural area PAD-US lists as open access, GAP status 2, among some 1,400 public and protected areas around San Antonio, from Joint Base San Antonio to Corps of Engineers lake lands: fee lands filled by whether the public may enter, easements outlined with who holds them, and the owner and manager of every unit as PAD-US publishes them.",
+    lon: -98.7556,
+    lat: 29.5737,
+    height: 40_000,
+    layers: ["publiclands", "water"],
+    dwellS: 30,
+  },
 ];
 
 export const PRESET_BY_ID = new Map(PRESETS.map((p) => [p.id, p]));
@@ -287,9 +387,22 @@ export function presetShare(p: Preset): ShareState {
   return { lat: p.lat, lon: p.lon, h: p.height, layers: p.layers, report: p.report || undefined, market: p.market || undefined };
 }
 
+/** presetShare, with a moving preset resolved to where it is now (falls back to the fixed place). */
+export async function presetTarget(p: Preset): Promise<ShareState> {
+  const base = presetShare(p);
+  if (!p.resolve) return base;
+  try {
+    const r = await p.resolve();
+    return r ? { ...base, ...r } : base;
+  } catch {
+    return base;
+  }
+}
+
 /** Presets in gallery order, grouped. */
 export const PRESET_GROUPS: Array<{ title: string; presets: Preset[] }> = [
   { title: "Water", presets: PRESETS.filter((p) => !p.group) },
   { title: "Trade & markets", presets: PRESETS.filter((p) => p.group === "markets") },
   { title: "Constructs", presets: PRESETS.filter((p) => p.group === "constructs") },
+  { title: "Hazards & land", presets: PRESETS.filter((p) => p.group === "hazards") },
 ];

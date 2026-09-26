@@ -10,6 +10,7 @@
 import type { LayerFeature, LayerId } from "@/lib/layers/types";
 import { KINDS } from "./catalog";
 import { ringsBbox, type BBox } from "./geo";
+import { countOf } from "./join";
 import type { ConstructKind, ConstructNode, Fabric } from "./types";
 
 const KIND_ORDER = Object.keys(KINDS) as ConstructKind[];
@@ -188,8 +189,9 @@ export function statsFromJoin(joined: Map<LayerId, LayerFeature[]> | null, warni
   let total = 0;
   for (const [layer, list] of joined ?? []) {
     // Surface water carries rivers and lakes as well as gauges; only the
-    // instruments are "gauges" in a count.
-    const n = layer === "water" ? list.filter((f) => /gauge/.test(f.properties.kind ?? "")).length : list.length;
+    // instruments are "gauges" in a count. A binned fires cell counts as the
+    // detections it stands for.
+    const n = layer === "water" ? list.filter((f) => /gauge/.test(f.properties.kind ?? "")).length : countOf(list);
     if (!n) continue;
     byLayer[layer] = n;
     total += n;

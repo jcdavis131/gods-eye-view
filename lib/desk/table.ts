@@ -178,10 +178,10 @@ export function featureRow(f: LayerFeature): Row {
   return { key: `${p.layer}:${p.id}`, layer: p.layer, id: p.id, cells };
 }
 
-/** Rows for a list of features, in order. */
+/** Rows for a list of features, in order. The outline of the box a land layer loaded is map furniture, not a row. */
 export function featureRows(features: Iterable<LayerFeature>): Row[] {
   const out: Row[] = [];
-  for (const f of features) out.push(featureRow(f));
+  for (const f of features) if (f.properties.kind !== "loaded-box") out.push(featureRow(f));
   return out;
 }
 

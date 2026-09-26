@@ -27,6 +27,12 @@ export type LayerId =
   | "spending"
   | "occupations"
   | "weather"
+  | "wildfire"
+  | "fires"
+  | "hazards"
+  | "flood"
+  | "wetlands"
+  | "publiclands"
   | "sports"
   | "constructs"
   | "field"
@@ -51,6 +57,12 @@ export const LAYER_IDS: LayerId[] = [
   "spending",
   "occupations",
   "weather",
+  "wildfire",
+  "fires",
+  "hazards",
+  "flood",
+  "wetlands",
+  "publiclands",
   "sports",
   "constructs",
   "field",
@@ -115,6 +127,16 @@ export interface FetchContext {
   options: Record<string, unknown>;
 }
 
+/** What a definition's `refine` may read about the layers named in its `dependsOn`. */
+export interface RefineContext {
+  /** Whether each is switched on. */
+  layersOn: Partial<Record<LayerId, boolean>>;
+  /** Whether each has an answer on the globe: its last fetch did not fail, and it is not still waiting on its first. */
+  answering: Partial<Record<LayerId, boolean>>;
+  /** Whether that layer holds the feature with this id right now (drawn while it is on). */
+  holds: (layer: LayerId, id: string) => boolean;
+}
+
 export interface FetchResult {
   collection: LayerCollection;
   /** Which upstream actually answered (a layer may have several). */
@@ -142,6 +164,17 @@ export interface LayerDefinition {
   simulated?: boolean;
   /** Re-fetch when the mission clock moves to another day (satellite scenes). */
   timeDependent?: boolean;
+  /**
+   * Other layers `refine` reads. Toggling one, or a new answer or a failure
+   * from one, re-runs refine on the data already fetched (no network call).
+   */
+  dependsOn?: LayerId[];
+  /**
+   * What of a fetched result to draw, given the layers in `dependsOn` (hazard
+   * alerts step aside for events Earthquakes and Live warnings are drawing).
+   * Runs on each fetched result and again whenever one of those layers changes.
+   */
+  refine?: (result: FetchResult, ctx: RefineContext) => FetchResult;
   /** Short caption for estimate layers: what the numbers are and are not. */
   estimate?: string;
   attribution: string;

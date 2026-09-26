@@ -19,7 +19,7 @@ import { allRenderers, getRenderer } from "@/lib/globe/registry";
 import { flyTo, flyToSelection } from "@/lib/globe/camera";
 import { DOMAIN_ORDER, DOMAINS, KINDS } from "@/lib/fabric/catalog";
 import { ringsContain } from "@/lib/fabric/geo";
-import { joinInside, pointOf } from "@/lib/fabric/join";
+import { countOf, joinInside, pointOf } from "@/lib/fabric/join";
 import type { ConstructExtra, ConstructNode, Fabric } from "@/lib/fabric/types";
 import { conditionVitals, heatColor, type UnitCondition, type Vitals } from "@/lib/fabric/emergence";
 import { FLOW_CLASS_ORDER, FLOW_CLASSES, flowClass, ordinal } from "@/lib/fabric/condition";
@@ -218,14 +218,14 @@ function One({ node, field = false, ground }: { node: ConstructNode; field?: boo
         {joined && joined.size > 0 && (
           <ul className="space-y-1">
             {[...joined.entries()]
-              .sort((a, b) => b[1].length - a[1].length)
+              .sort((a, b) => countOf(b[1]) - countOf(a[1]))
               .map(([layer, list]) => {
                 const def = LAYER_BY_ID[layer];
                 return (
                   <li key={layer} className="text-[10px] leading-snug">
                     <div className="flex items-baseline justify-between gap-2">
                       <span style={{ color: def?.color }}>{def?.label ?? layer}</span>
-                      <span className="tabular-nums text-muted-foreground">{list.length.toLocaleString("en-US")}</span>
+                      <span className="tabular-nums text-muted-foreground">{countOf(list).toLocaleString("en-US")}</span>
                     </div>
                     <div className="flex flex-wrap gap-x-2">
                       {list.slice(0, 4).map((f) => (
@@ -270,7 +270,7 @@ function TraceSection({ lon, lat, bare = false }: { lon: number; lat: number; ba
           seen.add(k);
           out.set(layer, [...(out.get(layer) ?? []), f]);
         }
-    return [...out.entries()].sort((a, b) => b[1].length - a[1].length);
+    return [...out.entries()].sort((a, b) => countOf(b[1]) - countOf(a[1]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mine, nOutlines, tick]);
   const walking = mine && t.status === "loading";
@@ -335,7 +335,7 @@ function TraceSection({ lon, lat, bare = false }: { lon: number; lat: number; ba
               {along.map(([layer, list]) => (
                 <div key={layer}>
                   <span style={{ color: LAYER_BY_ID[layer]?.color }}>{LAYER_BY_ID[layer]?.label ?? layer}</span>{" "}
-                  <span className="tabular-nums text-muted-foreground">{list.length}</span>
+                  <span className="tabular-nums text-muted-foreground">{countOf(list).toLocaleString("en-US")}</span>
                   <div className="flex flex-wrap gap-x-2">
                     {list.slice(0, 4).map((f) => (
                       <button key={f.properties.id} type="button" className="truncate text-left text-foreground/80 hover:text-primary" onClick={() => selectFeature(f, true)}>

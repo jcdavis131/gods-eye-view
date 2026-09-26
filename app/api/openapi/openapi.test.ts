@@ -1,6 +1,6 @@
-// public/openapi.json must agree with the two routes it documents: every op
-// in the `op` enum has a `case "<op>"` in the route, and every case in the
-// route is documented. Also checks that the reserved placeholders exist and
+// public/openapi.json must agree with the routes whose ops it enumerates
+// (economy, water, hazards, land, space): every op in the `op` enum has a
+// `case "<op>"` in the route, and every case in the route is documented. Also checks that the reserved placeholders exist and
 // that every route handler under app/api has a documented path and that every
 // $ref resolves.
 import { readFileSync, readdirSync } from "node:fs";
@@ -48,11 +48,25 @@ describe("public/openapi.json", () => {
     expect(new Set(opsDocumented("/api/water"))).toEqual(new Set(opsInRoute("app/api/water/route.ts")));
     expect(opsDocumented("/api/water")).toContain("history");
   });
+  it.each([
+    ["/api/hazards", "app/api/hazards/route.ts", "fires"],
+    ["/api/land", "app/api/land/route.ts", "elevation"],
+    ["/api/space", "app/api/space/route.ts", "iss-stream"],
+  ])("documents exactly the ops %s dispatches", (route, file, one) => {
+    expect(new Set(opsDocumented(route))).toEqual(new Set(opsInRoute(file)));
+    expect(opsDocumented(route)).toContain(one);
+  });
   it("has a response schema tagged x-op for every documented op", () => {
     const schemas = spec.components.schemas as Record<string, { "x-op"?: string }>;
     const tagged = Object.values(schemas).map((s) => s["x-op"]).filter((x): x is string => !!x);
-    for (const op of opsDocumented("/api/economy")) expect(tagged).toContain(op);
-    for (const op of opsDocumented("/api/water")) expect(tagged).toContain(op);
+    for (const route of ["/api/economy", "/api/water", "/api/hazards", "/api/land", "/api/space"]) {
+      for (const op of opsDocumented(route)) expect(tagged, `${route} op=${op}`).toContain(op);
+    }
+  });
+  it("names the FIRMS row columns the fires op sends", async () => {
+    const { FIRE_ROW_COLUMNS } = await import("@/lib/hazards/features");
+    const s = spec.components.schemas.HazardsFiresResponse as { allOf: Array<{ properties?: { columns?: { example?: string[] } } }> };
+    expect(s.allOf[1].properties?.columns?.example).toEqual([...FIRE_ROW_COLUMNS]);
   });
   it("lists the CSV columns the flatteners produce", async () => {
     const eco = await import("@/lib/economy/flatten");

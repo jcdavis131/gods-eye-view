@@ -12,6 +12,7 @@ import type { PickId } from "@/lib/globe/renderer";
 import { cinematicTick, followTick } from "@/lib/globe/camera";
 import { isMobileViewport } from "@/lib/hooks/useIsMobile";
 import { satWorker } from "@/lib/globe/satWorker";
+import { measureClick, startMeasureOverlay } from "@/lib/globe/measure";
 import { parseShare } from "@/lib/globe/share";
 import { flyTo } from "@/lib/globe/camera";
 import { useGlobe } from "@/lib/store/globe";
@@ -231,6 +232,9 @@ export default function CesiumGlobe() {
       });
       cleanups.push(offPreUpdate);
 
+      // Measure tools draw their own overlay from the store.
+      cleanups.push(startMeasureOverlay(viewer));
+
       // Compare: a second pin (B) for the constructs stack. Dropped by the
       // rail's Compare button (next tap), a long-press on a phone, or a
       // shift-click on a desktop, while the constructs layer is on.
@@ -240,8 +244,11 @@ export default function CesiumGlobe() {
         const c = C.Cartographic.fromCartesian(hit);
         return { lon: C.Math.toDegrees(c.longitude), lat: C.Math.toDegrees(c.latitude) };
       };
-      const dropPinB = (x: number, y: number): boolean => {
-        if (!useGlobe.getState().layers.constructs) return false;
+      const dropPinB = (x: number, y: number, asked = false): boolean => {
+        const g = useGlobe.getState();
+        // While a measure tool is on, a shift-click or a long-press is still a
+        // measure click; only the rail's Compare button (`asked`) drops B then.
+        if (!g.layers.constructs || (!asked && g.measure.mode !== "off")) return false;
         const p = groundAt(x, y);
         if (!p) return false;
         const strata = useStrata.getState();
@@ -315,8 +322,21 @@ export default function CesiumGlobe() {
           pressFired = false;
           return;
         }
+        // The rail's Compare button waits for this tap. Turning a measure tool on
+        // ends that wait (setMeasureMode), so a wait still open is the newer intent.
         if (useStrata.getState().picking) {
-          dropPinB(e.position.x, e.position.y);
+          dropPinB(e.position.x, e.position.y, true);
+          return;
+        }
+        // While a measure tool is active a click places a vertex (or asks for
+        // the elevation) on the ground under the cursor instead of picking.
+        if (useGlobe.getState().measure.mode !== "off") {
+          const ray = viewer!.camera.getPickRay(e.position);
+          const hit = (ray && scene.globe.pick(ray, scene)) || viewer!.camera.pickEllipsoid(e.position, ellipsoid);
+          if (hit) {
+            const c = C.Cartographic.fromCartesian(hit);
+            measureClick(C.Math.toDegrees(c.longitude), C.Math.toDegrees(c.latitude));
+          }
           return;
         }
         const picked = scene.pick(e.position) as { id?: unknown } | undefined;
@@ -334,17 +354,23 @@ export default function CesiumGlobe() {
         const now = performance.now();
         if (now - lastHoverPick < 70) return;
         lastHoverPick = now;
+        const st = useGlobe.getState();
+        // A measure tool owns the cursor: clicks place points, they do not select.
+        if (st.measure.mode !== "off") {
+          if (st.hover) st.setHover(null);
+          canvas.style.cursor = "crosshair";
+          return;
+        }
         const picked = scene.pick(e.endPosition) as { id?: unknown } | undefined;
         const id = picked?.id;
-        const st = useGlobe.getState();
         if (isPickId(id)) {
           if (!st.hover || st.hover.id !== id.id || st.hover.layer !== id.layer) {
             st.setHover({ layer: id.layer, id: id.id });
           }
           canvas.style.cursor = "pointer";
-        } else if (st.hover) {
-          st.setHover(null);
-          canvas.style.cursor = "";
+        } else {
+          if (st.hover) st.setHover(null);
+          if (canvas.style.cursor) canvas.style.cursor = "";
         }
       }, C.ScreenSpaceEventType.MOUSE_MOVE);
       cleanups.push(() => handler.destroy());

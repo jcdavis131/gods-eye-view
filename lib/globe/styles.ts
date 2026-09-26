@@ -17,6 +17,8 @@ import { bankStyle, spendingStyle } from "./financeStyles";
 import { constructsStyle } from "./constructStyles";
 import { fieldStyle } from "./fieldStyles";
 import { alertsStyle } from "./alertStyles";
+import { firesStyle, hazardsStyle, wildfireStyle } from "./hazardStyles";
+import { floodStyle, publiclandsStyle, wetlandsStyle } from "./landStyles";
 
 /** Distinctive major-group colours for the occupations layer: one hue per SOC major group. */
 const OCCUPATION_COLORS: Record<string, string> = {
@@ -381,6 +383,12 @@ export const STYLES: Partial<Record<LayerId, LayerStyle>> = {
   spending: spendingStyle,
   occupations: occupationsStyle,
   weather: weatherStyle,
+  wildfire: wildfireStyle,
+  fires: firesStyle,
+  hazards: hazardsStyle,
+  flood: floodStyle,
+  wetlands: wetlandsStyle,
+  publiclands: publiclandsStyle,
   sports: sportsStyle,
   constructs: constructsStyle,
   field: fieldStyle,
@@ -407,6 +415,12 @@ export const FOLLOW_RANGE: Record<LayerId, number> = {
   spending: 150_000,
   occupations: 400_000,
   weather: 500_000,
+  wildfire: 60_000,
+  fires: 20_000,
+  hazards: 250_000,
+  flood: 3_000,
+  wetlands: 3_000,
+  publiclands: 40_000,
   sports: 500_000,
   constructs: 150_000,
   field: 400_000,

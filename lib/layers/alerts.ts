@@ -15,7 +15,7 @@ import type { FetchContext, FetchResult, LayerDefinition, LayerFeature } from ".
 import { proxy } from "./aircraft";
 import { ringCentroid, ringsArea } from "@/lib/fabric/geo";
 import type { ConstructExtra, ConstructNode } from "@/lib/fabric/types";
-import { FAMILIES, type AlertItem, type HazardFamily } from "@/lib/live/live";
+import { FAMILIES, liveAlertId, type AlertItem, type HazardFamily } from "@/lib/live/live";
 import type { LiveFeed } from "@/lib/live/fetch";
 
 export interface AlertExtra extends ConstructExtra {
@@ -38,7 +38,7 @@ export function alertFeature(a: AlertItem): LayerFeature<Point> | null {
   if (!c) return null;
   const areaKm2 = Math.round(ringsArea(a.rings));
   const node: ConstructNode = {
-    id: `nws-alert:${a.id}`,
+    id: liveAlertId(a.id),
     kind: "nws-alert",
     domain: "hazard",
     name: a.event,
@@ -106,7 +106,10 @@ async function fetchAlerts(ctx: FetchContext): Promise<FetchResult> {
     collection: { type: "FeatureCollection", features },
     source: "NWS active alerts",
     fetchedAt: Date.now(),
-    note: `${features.length} Severe/Extreme alerts on the map · ${warnings} warnings${env.data.unmapped ? ` · ${env.data.unmapped} without an outline` : ""}`,
+    note:
+      `${features.length} Severe/Extreme alerts on the map · ${warnings} warnings${env.data.unmapped ? ` · ${env.data.unmapped} without an outline` : ""}` +
+      // A failed NWS request answers with no alerts: say so, so none is read as calm.
+      (env.data.failed?.some((f) => f.source === "nws-api") ? " · NWS did not answer: alerts missing, not absent" : ""),
   };
 }
 

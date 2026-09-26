@@ -10,6 +10,8 @@ import LayerPanel from "./LayerPanel";
 import InfoPanel from "./InfoPanel";
 import WaterReportPanel from "./WaterReportPanel";
 import MarketReportPanel from "./MarketReportPanel";
+import SpaceWeatherPanel from "./SpaceWeatherPanel";
+import MeasurePanel from "./MeasurePanel";
 import IndicatorsPanel from "./IndicatorsPanel";
 import ReleasesPanel from "./ReleasesPanel";
 import WatchlistPanel from "./WatchlistPanel";
@@ -74,7 +76,7 @@ export default function Cockpit({ initialMobile = false }: { initialMobile?: boo
     applyShare(share, { fly: false });
     // First visit with a bare URL: ask who is looking. A shared link (layers,
     // selection, lens, embed) is never interrupted.
-    const bare = !share.lens && !share.layers && !share.sel && !share.report && !share.market && !share.embed;
+    const bare = !share.lens && !share.layers && !share.sel && !share.report && !share.market && !share.space && !share.shape && !share.embed;
     // Let the title card clear the frame before the question is asked.
     const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     const ask = window.setTimeout(
@@ -137,7 +139,7 @@ export default function Cockpit({ initialMobile = false }: { initialMobile?: boo
     };
   }, []);
 
-  // Keyboard: ⌘K / Ctrl+K search, comma settings, Escape deselect.
+  // Keyboard: ⌘K / Ctrl+K search, comma settings, Escape leaves a measure tool, then deselects.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -148,7 +150,10 @@ export default function Cockpit({ initialMobile = false }: { initialMobile?: boo
       } else if (!typing && e.key === ",") {
         setSettingsOpen(true);
       } else if (e.key === "Escape") {
-        useGlobe.getState().select(null);
+        const st = useGlobe.getState();
+        // First Escape leaves a measure tool (the shape stays); the next one deselects.
+        if (st.measure.mode !== "off") st.setMeasure({ mode: "off" });
+        else st.select(null);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -183,8 +188,10 @@ export default function Cockpit({ initialMobile = false }: { initialMobile?: boo
             <MobileSheet>
               {layersOpen && <LayerPanel embedded />}
               <StrataRail />
+              <MeasurePanel />
               <WaterReportPanel />
               <MarketReportPanel />
+              <SpaceWeatherPanel />
               <IndicatorsPanel />
               <ReleasesPanel />
               <WatchlistPanel />
@@ -215,8 +222,10 @@ export default function Cockpit({ initialMobile = false }: { initialMobile?: boo
           >
             <StrataRail />
             <StartHere />
+            <MeasurePanel />
             <WaterReportPanel />
             <MarketReportPanel />
+            <SpaceWeatherPanel />
             <IndicatorsPanel />
             <ReleasesPanel />
             <WatchlistPanel />

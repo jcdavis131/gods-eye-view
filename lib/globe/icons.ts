@@ -19,7 +19,10 @@ export type IconKind =
   | "chip"
   | "port"
   | "crossing"
-  | "jobs";
+  | "jobs"
+  | "fire"
+  | "hazard"
+  | "volcano";
 
 const cache = new Map<string, HTMLCanvasElement>();
 
@@ -225,6 +228,43 @@ function draw(kind: IconKind, color: string, size: number): HTMLCanvasElement {
       path.rect(-11, 1, 5.5, 10);
       path.rect(-2.75, -5, 5.5, 16);
       path.rect(5.5, -11, 5.5, 22);
+      break;
+    }
+    case "fire": {
+      // wildfire incident: a flame
+      path.moveTo(0, -13);
+      path.bezierCurveTo(4, -6, 10, -2, 9, 5);
+      path.bezierCurveTo(8, 10, 4, 13, 0, 13);
+      path.bezierCurveTo(-4, 13, -8, 10, -9, 5);
+      path.bezierCurveTo(-10, 0, -6, -3, -4, -8);
+      path.bezierCurveTo(-3, -4, -1, -3, 0, -13);
+      path.closePath();
+      break;
+    }
+    case "hazard": {
+      // hazard alert: a warning triangle with a notch
+      path.moveTo(0, -12);
+      path.lineTo(12, 10);
+      path.lineTo(-12, 10);
+      path.closePath();
+      ctx.stroke(path);
+      ctx.fill(path);
+      ctx.fillStyle = "rgba(0,0,0,0.85)";
+      ctx.fillRect(-1.5, -4, 3, 8);
+      ctx.fillRect(-1.5, 6, 3, 2.5);
+      return canvas;
+    }
+    case "volcano": {
+      // volcano: a cone with a vent plume
+      path.moveTo(-13, 11);
+      path.lineTo(-4, -5);
+      path.lineTo(4, -5);
+      path.lineTo(13, 11);
+      path.closePath();
+      path.moveTo(-2, -8);
+      path.arc(-3, -10, 2.5, 0, Math.PI * 2);
+      path.moveTo(4.5, -12);
+      path.arc(2, -12, 2.5, 0, Math.PI * 2);
       break;
     }
     case "dot":

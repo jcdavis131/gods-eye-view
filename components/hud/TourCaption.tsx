@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from "react";
 import { Pause, Play, SkipForward, Square } from "lucide-react";
-import { PRESETS, presetShare } from "@/lib/explore/presets";
+import { PRESETS, presetTarget } from "@/lib/explore/presets";
 import { applyShare } from "@/lib/globe/share";
 import { useGlobe } from "@/lib/store/globe";
 import { useTeleport } from "@/lib/live/teleportStore";
@@ -22,8 +22,15 @@ export default function TourCaption() {
     if (!tour.active) return;
     // One thing drives the camera at a time.
     if (useTeleport.getState().active) useTeleport.getState().stop();
-    applyShare(presetShare(preset));
+    let stale = false;
+    // Moving presets (the largest fire) resolve first; a step skipped meanwhile is not applied.
+    void presetTarget(preset).then((s) => {
+      if (!stale) applyShare(s);
+    });
     useGlobe.getState().pushLog({ level: "info", text: `Tour ${tour.index + 1}/${PRESETS.length}: ${preset.title}` });
+    return () => {
+      stale = true;
+    };
   }, [tour.active, tour.index, preset]);
 
   // Countdown + advance.

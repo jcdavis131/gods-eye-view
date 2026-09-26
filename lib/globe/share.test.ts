@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseLatLon, parseShare, shareQuery, type ShareState } from "./share";
+import { parseLatLon, parseShape, parseShare, shapeParam, shareQuery, type ShareState } from "./share";
 import { getVintage, isValidVintage, useReleases, vintageClockMs } from "@/lib/releases/store";
 
 describe("parseShare / shareQuery", () => {
@@ -73,5 +73,46 @@ describe("pin and compare in the share link", () => {
   });
   it("writes nothing for a stack that follows the view", () => {
     expect(shareQuery({ lat: 1, lon: 2 })).not.toMatch(/pin=|cmp=/);
+  });
+});
+
+describe("space weather and drawn shapes in the share link", () => {
+  const area: ShareState["shape"] = { kind: "area", points: [[-98.5, 29.4], [-98.49, 29.4], [-98.49, 29.41]] };
+
+  it("round-trips the panel and a shape, the shape readable while t and pin stay encoded", () => {
+    const s: ShareState = { lat: 29.4, lon: -98.5, t: Date.UTC(2026, 8, 2, 18, 0, 0), pin: { lat: 27.8, lon: -97.396 }, space: true, shape: area };
+    const q = shareQuery(s);
+    expect(q).toContain("&space=1");
+    expect(q.endsWith("&shape=a:-98.50000,29.40000;-98.49000,29.40000;-98.49000,29.41000")).toBe(true);
+    expect(q).toContain("t=2026-09-02T18%3A00%3A00Z");
+    expect(q).toContain("pin=27.8000%2C-97.3960");
+    expect(parseShare(q)).toEqual(s);
+  });
+
+  it("writes only a shape that measures something", () => {
+    expect(shareQuery({ shape: { kind: "area", points: [[0, 0], [1, 1]] } })).toBe("");
+    expect(shareQuery({ shape: { kind: "line", points: [[0, 0], [1, 1]] } })).toBe("?shape=l:0.00000,0.00000;1.00000,1.00000");
+  });
+
+  it("drops a malformed shape rather than guessing a vertex", () => {
+    expect(parseShape("a:1,2;3,4")).toBeUndefined();
+    expect(parseShape("l:1,2")).toBeUndefined();
+    expect(parseShape("x:1,2;3,4")).toBeUndefined();
+    expect(parseShape("l:1,2;3,")).toBeUndefined();
+    expect(parseShape("l:1,2;,4")).toBeUndefined();
+    expect(parseShape("l:1,2;3,4,5")).toBeUndefined();
+    expect(parseShape("l:1,2;181,4")).toBeUndefined();
+    expect(parseShape("l:1,2;3,91")).toBeUndefined();
+    expect(parseShape(null)).toBeUndefined();
+    expect(parseShape("l:1.5,2;-3,4")).toEqual({ kind: "line", points: [[1.5, 2], [-3, 4]] });
+    // A browser that re-escapes the link still reads it.
+    expect(parseShare("?shape=l%3A1%2C2%3B3%2C4").shape).toEqual({ kind: "line", points: [[1, 2], [3, 4]] });
+  });
+
+  it("keeps at most 60 vertices", () => {
+    const many = Array.from({ length: 75 }, (_, i) => `${i / 10},${i / 20}`).join(";");
+    expect(parseShape(`l:${many}`)?.points).toHaveLength(60);
+    const q = shareQuery({ shape: { kind: "line", points: Array.from({ length: 75 }, (_, i): [number, number] => [i / 10, 0]) } });
+    expect(shapeParam(parseShare(q).shape!).split(";")).toHaveLength(60);
   });
 });

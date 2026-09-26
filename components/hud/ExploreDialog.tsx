@@ -7,7 +7,7 @@ import { useState } from "react";
 import { Compass, Copy, Download, Link2, Play } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { LAYER_BY_ID } from "@/lib/layers";
-import { PRESETS, PRESET_GROUPS, presetShare, type Preset } from "@/lib/explore/presets";
+import { PRESETS, PRESET_GROUPS, presetShare, presetTarget, type Preset } from "@/lib/explore/presets";
 import { exportAreas, exportChips, exportGauges, exportTrade } from "@/lib/explore/export";
 import { applyShare, copyShareLink, shareQuery, shareUrl } from "@/lib/globe/share";
 import { useGlobe } from "@/lib/store/globe";
@@ -24,7 +24,7 @@ export default function ExploreDialog() {
   const lensPresets = persona ? persona.presets.map((id) => PRESETS.find((p) => p.id === id)).filter((p): p is Preset => !!p) : [];
 
   const go = (p: Preset) => {
-    applyShare(presetShare(p));
+    void presetTarget(p).then((s) => applyShare(s));
     useGlobe.getState().pushLog({ level: "info", text: `Explore → ${p.title}, ${p.region}` });
     setOpen(false);
   };
