@@ -16,6 +16,7 @@
 //   firehazard  USFS Wildfire Hazard Potential 2023, classes 1–7
 //   landcover   NLCD 2021 land cover, rendered through /api/terrain
 //   sealevel    NOAA sea level rise inundation, 1 to 10 ft above MHHW
+//   geology     Macrostrat's geologic map; the click answer is the map unit (/api/infra)
 
 import type { FetchContext, FetchResult, LayerDefinition, LayerId, ViewState } from "./types";
 import { SLR_CAVEAT, SLR_DEFAULT_FT, SOIL_CAVEAT, WHP_CAVEAT, isSlrFeet } from "@/lib/terrain/products";
@@ -176,7 +177,19 @@ export const sealevelLayer = picture({
     `${m.seaLevelFt} ft above MHHW · blue: water depth at that level (darker deeper), green: NOAA's low-lying areas · a screening scenario, not a forecast`,
 });
 
-export const TERRAIN_LAYERS: LayerDefinition[] = [reliefLayer, slopeLayer, contoursLayer, soilsLayer, firehazardLayer, landcoverLayer, sealevelLayer];
+/** Macrostrat's geologic map; a click on the ground asks /api/infra?op=geology for the unit there. */
+export const geologyLayer = picture({
+  id: "geology",
+  label: "Geology (Macrostrat)",
+  description:
+    "Macrostrat's geologic map worldwide, compiled from published maps at several scales and coloured by age. Click the ground for the map unit there: its name, lithology, age and the map it comes from.",
+  color: "#C084FC",
+  attribution: "Macrostrat (CC BY 4.0) and the geologic maps it compiles",
+  source: "Macrostrat",
+  note: "Macrostrat geologic map, coloured by age; the map scale changes with zoom · click the ground for the unit, its age and the map it comes from",
+});
+
+export const TERRAIN_LAYERS: LayerDefinition[] = [reliefLayer, slopeLayer, contoursLayer, soilsLayer, firehazardLayer, landcoverLayer, sealevelLayer, geologyLayer];
 
 /** Layers whose click on the ground opens the "ground here" dossier. */
-export const GROUND_LAYERS: LayerId[] = ["soils", "firehazard", "landcover", "slope", "contours", "relief"];
+export const GROUND_LAYERS: LayerId[] = ["soils", "firehazard", "landcover", "slope", "contours", "relief", "geology"];

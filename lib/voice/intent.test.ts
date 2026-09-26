@@ -39,3 +39,29 @@ describe("voice words for the terrain & soils layers", () => {
     expect(resolveLayer("nlcd")).toBe("landcover");
   });
 });
+
+describe("voice words for the infrastructure and geohazard layers", () => {
+  it("hears each layer by its plain names", () => {
+    expect(layerOf("show transmission lines")).toMatchObject({ layer: "transmission", on: true });
+    expect(layerOf("show power lines over austin")).toMatchObject({ layer: "transmission", place: "austin" });
+    expect(layerOf("show pipelines")).toMatchObject({ layer: "pipelines" });
+    expect(layerOf("show power plants")).toMatchObject({ layer: "plants" });
+    expect(layerOf("show nuclear plants")).toMatchObject({ layer: "plants" });
+    expect(layerOf("show railroads")).toMatchObject({ layer: "rail" });
+    expect(layerOf("show airports")).toMatchObject({ layer: "airports" });
+    expect(layerOf("hide dams")).toMatchObject({ layer: "dams", on: false });
+    expect(layerOf("show fault lines")).toMatchObject({ layer: "faults" });
+    expect(layerOf("show landslides")).toMatchObject({ layer: "landslides" });
+    expect(layerOf("show geology")).toMatchObject({ layer: "geology" });
+    expect(layerOf("show townships")).toMatchObject({ layer: "plss" });
+    expect(layerOf("show air quality over denver")).toMatchObject({ layer: "airquality", place: "denver" });
+    expect(layerOf("show news events")).toMatchObject({ layer: "events" });
+  });
+
+  it("does not take words other layers own", () => {
+    expect(layerOf("show planes")).toMatchObject({ layer: "aircraft" });
+    expect(layerOf("show reservoirs")).toMatchObject({ layer: "water" });
+    expect(layerOf("show wildfires")).toMatchObject({ layer: "wildfire" });
+    expect(resolveLayer("dams")).toBe("dams");
+  });
+});

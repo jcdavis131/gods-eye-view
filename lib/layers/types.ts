@@ -40,6 +40,18 @@ export type LayerId =
   | "firehazard"
   | "landcover"
   | "sealevel"
+  | "transmission"
+  | "pipelines"
+  | "plants"
+  | "rail"
+  | "airports"
+  | "dams"
+  | "faults"
+  | "landslides"
+  | "geology"
+  | "plss"
+  | "airquality"
+  | "events"
   | "sports"
   | "constructs"
   | "field"
@@ -77,6 +89,18 @@ export const LAYER_IDS: LayerId[] = [
   "firehazard",
   "landcover",
   "sealevel",
+  "transmission",
+  "pipelines",
+  "plants",
+  "rail",
+  "airports",
+  "dams",
+  "faults",
+  "landslides",
+  "geology",
+  "plss",
+  "airquality",
+  "events",
   "sports",
   "constructs",
   "field",

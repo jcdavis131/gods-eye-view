@@ -43,6 +43,23 @@ export const SEARCHABLE_DETAILS: ReadonlySet<string> = new Set([
   "port code",
   "locode",
   "local name",
+  // infrastructure and geohazards: the registries' own identifiers and survey
+  // numbers. Never a line's owner, a pipeline's operator, a railroad's
+  // reporting marks or trackage rights, or a plant's reporting entity.
+  "nid id",
+  "faa location id",
+  "icao code",
+  "eia plant id",
+  "wikidata item",
+  "hifld id",
+  "fra arc id",
+  "usgs id",
+  "fault number",
+  "plss id",
+  "first division id",
+  "township",
+  "range",
+  "section",
   // companies, banks, constructs: identifiers and categories their publishers assign
   "ticker",
   "cik",

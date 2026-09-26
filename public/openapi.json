@@ -57,6 +57,18 @@
       "description": "Space weather (GFZ Kp, NASA DONKI) and NASA's ISS live stream, checked through YouTube oEmbed."
     },
     {
+      "name": "infra",
+      "description": "Infrastructure and geohazards: HIFLD transmission lines (archive), EIA pipelines, FRA/BTS rail, FAA public-use airports, USACE dams, EIA-860M power plants and Wikidata nuclear plants, USGS Quaternary faults and landslides, BLM PLSS with T-R-S search, Macrostrat geology."
+    },
+    {
+      "name": "air",
+      "description": "Air quality: EPA AirNow hourly monitor observations, preliminary, credited to each reporting agency."
+    },
+    {
+      "name": "events",
+      "description": "News events: GDELT 2.0 conflict events folded into the cities they were coded at; no actors, no article links."
+    },
+    {
       "name": "meta",
       "description": "This description."
     },
@@ -2527,6 +2539,319 @@
         ],
         "summary": "CORS preflight",
         "operationId": "spaceOptions",
+        "responses": {
+          "204": {
+            "description": "No content."
+          }
+        }
+      }
+    },
+    "/api/infra": {
+      "get": {
+        "summary": "Transmission lines, pipelines, rail, airports, dams, power plants, Quaternary faults, landslides and the PLSS grid in a box; T-R-S search; the geologic unit at a point",
+        "description": "op=transmission: HIFLD U.S. Electric Power Transmission Lines, the archived snapshot Esri hosts (last data update 2024-09-30): voltage (HIFLD's -999999 sentinel dropped), class, type, status, owner and end substations as HIFLD published them, highest voltage first. op=pipelines: EIA natural gas (interstate, intrastate, gathering), crude oil trunk, petroleum product and HGL pipelines with the operator EIA published; generalized routes with no diameter or pressure, not for locating a line. `counts` gives segments per commodity, null for a service that did not answer. op=rail: FRA/BTS North American Rail Network lines with FRA's network, passenger and STRACNET codes decoded from the service's domains and the owning railroads' reporting marks; physically removed track and rail-trails are left out; longest segments first. op=airports: FAA ADDS public-use airports, heliports and seaplane bases only (PRIVATEUSE = 0). op=dams: USACE National Inventory of Dams (public service): hazard potential (consequence of a failure, not condition), condition assessment and its date, height, storage, purposes; no owner, designer or representative names are requested; largest storage first. op=plants: EIA-860M plants from a bundled monthly snapshot (nameplate MW by technology, operating and planned, the reporting entity as EIA publishes it) plus Wikidata (CC0) nuclear plants outside the US; `min` sets a US MW floor. op=faults: USGS Quaternary faults with USGS's age class, slip rate and sense, line type and mapping certainty. op=landslides: USGS US Landslide Inventory v3 points (type, date range, fatalities, confidence, source inventory); most confident first. op=plss: BLM CadNSDI townships or sections. op=plss-search: the townships (or sections) a T-R-S description names under every principal meridian, with boxes and centres; it reads survey numbers only. op=geology: Macrostrat's geologic map units at a point, most detailed map first, each with the map it comes from. Owners and operators are never searchable anywhere in this app.",
+        "tags": [
+          "infra"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "transmission",
+                "pipelines",
+                "rail",
+                "airports",
+                "dams",
+                "plants",
+                "faults",
+                "landslides",
+                "plss",
+                "plss-search",
+                "geology"
+              ]
+            },
+            "description": "transmission: HIFLD lines. pipelines: EIA pipelines. rail: FRA/BTS rail. airports: FAA public-use. dams: USACE NID. plants: EIA-860M + Wikidata nuclear. faults: USGS Qfaults. landslides: USGS inventory. plss: BLM townships or sections. plss-search: T-R-S lookup. geology: Macrostrat units at lon, lat."
+          },
+          {
+            "name": "bbox",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Bbox"
+            },
+            "description": "`w,s,e,n` degrees, required for every op except plss-search and geology. Clamped and snapped per op: transmission 2° (0.25° grid), pipelines 4° (0.5°), rail 1° (0.1°), airports 8° (1°), dams 1.5° (0.25°), faults 1.5° (0.25°), landslides 0.5° (0.1°), plss townships 2° (0.25°) or sections 0.4° (0.05°), plants any size (1°). The snapped box comes back in `bbox`."
+          },
+          {
+            "name": "min",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 5000
+            },
+            "description": "op=plants: only US plants with at least this much operating or planned nameplate MW (default 0)."
+          },
+          {
+            "name": "level",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "section",
+                "township"
+              ]
+            },
+            "description": "op=plss: sections (default) or townships."
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "op=plss-search: a township, range and optional section, optionally followed by a PLSS state: `T12N R3W S33`, `T12N R3W S33 OK`, `12N 3W 33`."
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            },
+            "description": "op=geology: longitude of the point."
+          },
+          {
+            "name": "lat",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            },
+            "description": "op=geology: latitude of the point."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope for the op.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/Cors"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/InfraTransmissionResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InfraPipelinesResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InfraRailResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InfraAirportsResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InfraDamsResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InfraPlantsResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InfraFaultsResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InfraLandslidesResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InfraPlssResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InfraPlssSearchResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InfraGeologyResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/Upstream"
+          }
+        }
+      },
+      "options": {
+        "tags": [
+          "infra"
+        ],
+        "summary": "CORS preflight",
+        "operationId": "infraOptions",
+        "responses": {
+          "204": {
+            "description": "No content."
+          }
+        }
+      }
+    },
+    "/api/air": {
+      "get": {
+        "summary": "AirNow hourly air quality monitors in a box (preliminary)",
+        "description": "op=sites: the active monitoring sites in `bbox` from AirNow's newest HourlyAQObs file (US, Canada, Mexico, US embassy monitors), as rows named by `columns`: the ozone, PM2.5, PM10 and NO2 AQI and the concentrations each reporting agency sent, the agency, the observation hour (UTC) and the reporting area. PRELIMINARY: not fully verified or validated and subject to change (AirNow Data Exchange Guidelines); credit the reporting agency, then the EPA AirNow program. Inactive sites and sites at 0,0 are left out and counted.",
+        "tags": [
+          "air"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "sites"
+              ]
+            },
+            "description": "sites: monitoring sites with their AQI values and concentrations."
+          },
+          {
+            "name": "bbox",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Bbox"
+            },
+            "description": "`w,s,e,n` degrees; `-180,-90,180,90` for every site."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope for the op.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/Cors"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/AirSitesResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/Upstream"
+          }
+        }
+      },
+      "options": {
+        "tags": [
+          "air"
+        ],
+        "summary": "CORS preflight",
+        "operationId": "airOptions",
+        "responses": {
+          "204": {
+            "description": "No content."
+          }
+        }
+      }
+    },
+    "/api/events": {
+      "get": {
+        "summary": "GDELT conflict events of the last hours, folded into the cities they were coded at",
+        "description": "op=conflict: the last `hours` (1 to 6) of GDELT 2.0's 15-minute event export files, keeping city-level locations (ActionGeo_Type 3 and 4) and conflict classes (QuadClass 3 and 4) only, folded into one feature per place with counts by CAMEO root class, the published Goldstein range, articles and mentions, coded event dates and the publishing sites' domains. No actor names and no article links are relayed. `leftOff` counts the rows left off and why. Machine-coded from news reports, not verified incidents. Cite the GDELT Project and link https://www.gdeltproject.org/.",
+        "tags": [
+          "events"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "conflict"
+              ]
+            },
+            "description": "conflict: conflict events per city."
+          },
+          {
+            "name": "hours",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 6,
+              "default": 1
+            },
+            "description": "How many hours of 15-minute files to fold."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope for the op.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/Cors"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/EventsConflictResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/Upstream"
+          }
+        }
+      },
+      "options": {
+        "tags": [
+          "events"
+        ],
+        "summary": "CORS preflight",
+        "operationId": "eventsOptions",
         "responses": {
           "204": {
             "description": "No content."
@@ -5455,6 +5780,594 @@
           }
         ],
         "x-op": "iss-stream"
+      },
+      "InfraTransmissionResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "description": "The snapped box that was loaded."
+              },
+              "truncated": {
+                "type": "boolean",
+                "description": "true when the service's record limit was hit (the note says which features come first)."
+              },
+              "lastDataUpdate": {
+                "type": "string",
+                "description": "HIFLD's last data update for the archived layer."
+              },
+              "coarsenedForSize": {
+                "type": "boolean"
+              },
+              "generalisationDeg": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            }
+          }
+        ],
+        "x-op": "transmission"
+      },
+      "InfraPipelinesResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "description": "The snapped box that was loaded."
+              },
+              "truncated": {
+                "type": "boolean",
+                "description": "true when the service's record limit was hit (the note says which features come first)."
+              },
+              "counts": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "description": "Segments per commodity (natgas, crude, products, hgl); null where that service did not answer."
+              }
+            }
+          }
+        ],
+        "x-op": "pipelines"
+      },
+      "InfraRailResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "description": "The snapped box that was loaded."
+              },
+              "truncated": {
+                "type": "boolean",
+                "description": "true when the service's record limit was hit (the note says which features come first)."
+              },
+              "coarsenedForSize": {
+                "type": "boolean"
+              },
+              "generalisationDeg": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            }
+          }
+        ],
+        "x-op": "rail"
+      },
+      "InfraAirportsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "description": "The snapped box that was loaded."
+              },
+              "truncated": {
+                "type": "boolean",
+                "description": "true when the service's record limit was hit (the note says which features come first)."
+              }
+            }
+          }
+        ],
+        "x-op": "airports"
+      },
+      "InfraDamsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "description": "The snapped box that was loaded."
+              },
+              "truncated": {
+                "type": "boolean",
+                "description": "true when the service's record limit was hit (the note says which features come first)."
+              }
+            }
+          }
+        ],
+        "x-op": "dams"
+      },
+      "InfraPlantsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "description": "The snapped box that was loaded."
+              },
+              "truncated": {
+                "type": "boolean",
+                "description": "true when the service's record limit was hit (the note says which features come first)."
+              },
+              "minMW": {
+                "type": "number"
+              },
+              "counts": {
+                "type": "object",
+                "properties": {
+                  "eia": {
+                    "type": "integer"
+                  },
+                  "wikidata": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "inventoryAsOf": {
+                "type": "string",
+                "description": "The EIA-860M month, e.g. \"August 2026\"."
+              },
+              "snapshotsPulled": {
+                "type": "object",
+                "properties": {
+                  "eia": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "wikidata": {
+                    "type": "string",
+                    "format": "date"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "plants"
+      },
+      "InfraFaultsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "description": "The snapped box that was loaded."
+              },
+              "truncated": {
+                "type": "boolean",
+                "description": "true when the service's record limit was hit (the note says which features come first)."
+              },
+              "coarsenedForSize": {
+                "type": "boolean"
+              },
+              "generalisationDeg": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            }
+          }
+        ],
+        "x-op": "faults"
+      },
+      "InfraLandslidesResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "description": "The snapped box that was loaded."
+              },
+              "truncated": {
+                "type": "boolean",
+                "description": "true when the service's record limit was hit (the note says which features come first)."
+              }
+            }
+          }
+        ],
+        "x-op": "landslides"
+      },
+      "InfraPlssResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "description": "The snapped box that was loaded."
+              },
+              "truncated": {
+                "type": "boolean",
+                "description": "true when the service's record limit was hit (the note says which features come first)."
+              },
+              "level": {
+                "type": "string",
+                "enum": [
+                  "section",
+                  "township"
+                ]
+              }
+            }
+          }
+        ],
+        "x-op": "plss"
+      },
+      "InfraPlssSearchResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "label",
+                    "plssId",
+                    "bbox",
+                    "lon",
+                    "lat"
+                  ],
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "example": "T12N R3W S33, Indian Meridian (OK)"
+                    },
+                    "plssId": {
+                      "type": "string",
+                      "example": "OK170120N0030W0"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "meridian": {
+                      "type": "string"
+                    },
+                    "townshipLabel": {
+                      "type": "string",
+                      "description": "BLM's label as published (\"12N 3W\", \"12.5N 3W\", \"T12N R03W\")."
+                    },
+                    "section": {
+                      "type": "integer"
+                    },
+                    "firstDivisionId": {
+                      "type": "string"
+                    },
+                    "bbox": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 4,
+                      "maxItems": 4
+                    },
+                    "lon": {
+                      "type": "number"
+                    },
+                    "lat": {
+                      "type": "number"
+                    }
+                  }
+                }
+              },
+              "query": {
+                "type": "string"
+              },
+              "parsed": {
+                "type": "object"
+              },
+              "count": {
+                "type": "integer"
+              }
+            }
+          }
+        ],
+        "x-op": "plss-search"
+      },
+      "InfraGeologyResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "lon": {
+                    "type": "number"
+                  },
+                  "lat": {
+                    "type": "number"
+                  },
+                  "license": {
+                    "type": "string"
+                  },
+                  "units": {
+                    "type": "array",
+                    "description": "Most detailed map first.",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "mapId": {
+                          "type": "integer"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "stratName": {
+                          "type": "string"
+                        },
+                        "lith": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "age": {
+                          "type": "string"
+                        },
+                        "topMa": {
+                          "type": "number"
+                        },
+                        "bottomMa": {
+                          "type": "number"
+                        },
+                        "color": {
+                          "type": "string"
+                        },
+                        "source": {
+                          "type": "string",
+                          "description": "The map the unit comes from, as Macrostrat cites it."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "geology"
+      },
+      "AirSitesResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "type": "array"
+                },
+                "description": "One row per site, in the order of `columns`."
+              },
+              "columns": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "example": [
+                  "aqsid",
+                  "name",
+                  "lat",
+                  "lon",
+                  "agency",
+                  "validAt",
+                  "ozoneAqi",
+                  "pm25Aqi",
+                  "pm10Aqi",
+                  "no2Aqi",
+                  "concentrations",
+                  "reportingArea",
+                  "country",
+                  "state"
+                ]
+              },
+              "hourUtc": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "count": {
+                "type": "integer"
+              },
+              "sitesInFile": {
+                "type": "integer"
+              },
+              "inactiveLeftOut": {
+                "type": "integer"
+              },
+              "withoutPositionLeftOut": {
+                "type": "integer"
+              },
+              "preliminary": {
+                "type": "boolean",
+                "const": true
+              }
+            }
+          }
+        ],
+        "x-op": "sites"
+      },
+      "EventsConflictResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "window": {
+                "type": "object",
+                "properties": {
+                  "from": {
+                    "type": "string"
+                  },
+                  "to": {
+                    "type": "string"
+                  },
+                  "files": {
+                    "type": "integer"
+                  },
+                  "asked": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "places": {
+                "type": "integer"
+              },
+              "events": {
+                "type": "integer"
+              },
+              "leftOff": {
+                "type": "object",
+                "properties": {
+                  "rowsRead": {
+                    "type": "integer"
+                  },
+                  "notConflict": {
+                    "type": "integer"
+                  },
+                  "notCityLevel": {
+                    "type": "integer"
+                  },
+                  "noPosition": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "conflict"
       }
     }
   }
