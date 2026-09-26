@@ -125,8 +125,16 @@ export interface FetchContext {
   signal?: AbortSignal;
   /** Free-form layer options coming from the settings store (e.g. satellite groups). */
   options: Record<string, unknown>;
-  /** On/off state of the layers named in the definition's `dependsOn`. */
-  layersOn?: Partial<Record<LayerId, boolean>>;
+}
+
+/** What a definition's `refine` may read about the layers named in its `dependsOn`. */
+export interface RefineContext {
+  /** Whether each is switched on. */
+  layersOn: Partial<Record<LayerId, boolean>>;
+  /** Whether each has an answer on the globe: its last fetch did not fail, and it is not still waiting on its first. */
+  answering: Partial<Record<LayerId, boolean>>;
+  /** Whether that layer holds the feature with this id right now (drawn while it is on). */
+  holds: (layer: LayerId, id: string) => boolean;
 }
 
 export interface FetchResult {
@@ -156,8 +164,17 @@ export interface LayerDefinition {
   simulated?: boolean;
   /** Re-fetch when the mission clock moves to another day (satellite scenes). */
   timeDependent?: boolean;
-  /** Other layers whose on/off state fetch() reads (ctx.layersOn); toggling one re-runs it. */
+  /**
+   * Other layers `refine` reads. Toggling one, or a new answer or a failure
+   * from one, re-runs refine on the data already fetched (no network call).
+   */
   dependsOn?: LayerId[];
+  /**
+   * What of a fetched result to draw, given the layers in `dependsOn` (hazard
+   * alerts step aside for events Earthquakes and Live warnings are drawing).
+   * Runs on each fetched result and again whenever one of those layers changes.
+   */
+  refine?: (result: FetchResult, ctx: RefineContext) => FetchResult;
   /** Short caption for estimate layers: what the numbers are and are not. */
   estimate?: string;
   attribution: string;

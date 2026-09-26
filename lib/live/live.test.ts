@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { alertRank, hazardFamily, liveItems, parseAlerts, parseQuakes, quakeRank, thinRing, type AlertItem } from "./live";
+import { alertRank, hazardFamily, liveAlertId, liveDrawnIds, liveDraws, liveItems, parseAlerts, parseQuakes, quakeRank, thinRing, type AlertItem } from "./live";
 import { alertFeature } from "@/lib/layers/alerts";
 import { lifeLeft } from "@/lib/globe/alertStyles";
 import { frameHeight } from "./teleportStore";
@@ -70,6 +70,21 @@ describe("NWS alerts as live constructs", () => {
     const joined = joinInside(box, [gauge, f]);
     expect([...joined.keys()]).toEqual(["water"]);
     expect(alertFeature({ ...a, rings: null })).toBeNull();
+  });
+
+  it("says which alerts the layer draws with the same test alertFeature makes", () => {
+    const [a] = parseAlerts({ features: [alert("a1", {})] });
+    const cases: AlertItem[] = [a, { ...a, rings: null }, { ...a, rings: [] }, { ...a, rings: [[]] }];
+    for (const c of cases) expect(liveDraws(c), JSON.stringify(c.rings)).toBe(!!alertFeature(c));
+    expect(alertFeature(a)!.properties.id).toBe(liveAlertId(a.id));
+  });
+
+  it("lists the ids a feed answer draws, and none known when its NWS request failed", () => {
+    const [drawn, zoneOnly] = parseAlerts({ features: [alert("a1", {}), alert("a2", {}, null)] });
+    expect(liveDrawnIds({ alerts: [drawn, zoneOnly], failed: [] })).toEqual(new Set(["a1"]));
+    // Only the quakes failed: the alerts are still known.
+    expect(liveDrawnIds({ alerts: [drawn], failed: [{ source: "usgs-earthquakes" }] })).toEqual(new Set(["a1"]));
+    expect(liveDrawnIds({ alerts: [], failed: [{ source: "nws-api" }] })).toBeNull();
   });
 
   it("fades as it runs out", () => {

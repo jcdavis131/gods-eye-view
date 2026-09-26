@@ -2032,7 +2032,7 @@
     "/api/hazards": {
       "get": {
         "summary": "Current wildfires, the last 24 hours of satellite fire detections, and hazard alerts",
-        "description": "op=wildfire: every current US wildland fire from NIFC WFIGS, as perimeters (acres, percent contained, discovery date, the perimeter's capture time; `perimeter captured` says \"not published by WFIGS\" where it has none rather than borrowing the record's edit time) and incident points for fires with no perimeter yet. op=fires: NASA FIRMS hotspots of the last 24 hours (VIIRS S-NPP, VIIRS NOAA-20, MODIS) inside `bbox` as rows (see `columns`); over `max` they are binned to a square grid and each cell keeps its brightest detection (max FRP) with the count it stands for. Confidence stays on each instrument's scale (VIIRS low / nominal / high, MODIS 0-100 %). op=alerts: every active NWS alert (the polygon NWS published, or else the counties its SAME codes list, dashed on the globe), every GDACS event marked current (RSS, EVENTS4APP and a SEARCH for current Orange and Red events, merged), and NASA EONET open volcano events; severities as each publisher gives them, unrated as \"not rated by source\". GDACS quakes the USGS 24 h feed also has carry `alsoInUsgs`; none is dropped. Each alerts source gets 20 s; one that does not answer is named in `failed` and in `caveats`. Not a warning service.",
+        "description": "op=wildfire: every current US wildland fire from NIFC WFIGS, as perimeters (acres, percent contained, discovery date, the perimeter's capture time; `perimeter captured` says \"not published by WFIGS\" where it has none rather than borrowing the record's edit time) and incident points for fires with no perimeter yet. op=fires: NASA FIRMS hotspots of the last 24 hours (VIIRS S-NPP, VIIRS NOAA-20, MODIS) inside `bbox` as rows (see `columns`); over `max` they are binned to a square grid and each cell keeps its brightest detection (max FRP) with the count it stands for. Confidence stays on each instrument's scale (VIIRS low / nominal / high, MODIS 0-100 %). op=alerts: every active NWS alert (the polygon NWS published, or else the counties its SAME codes list, dashed on the globe), every GDACS event marked current (RSS, EVENTS4APP and a SEARCH for current Orange and Red events, merged), and NASA EONET open volcano events; severities as each publisher gives them, unrated as \"not rated by source\". GDACS quakes the USGS 24 h feed also has carry `alsoInUsgs`, and NWS alerts the live feed behind /api/live outlined carry `liveOutlined` (read from the same five-minute cache entry, within the same 20 s budget; when that feed failed or was late none is marked and `counts.nws.liveChecked` is false); none is dropped. Each alerts source gets 20 s; one that does not answer is named in `failed` and in `caveats`. Not a warning service.",
         "tags": [
           "hazards"
         ],
@@ -4606,7 +4606,7 @@
               },
               "counts": {
                 "type": "object",
-                "description": "Per source: nws { alerts, drawnAsPolygon, drawnAsCounties, notDrawn }, gdacs { events, quakesAlsoInUsgs, usgsChecked, via, failed, lists, truncated }, eonet { volcanoes }; each with its cacheAge."
+                "description": "Per source: nws { alerts, drawnAsPolygon, drawnAsCounties, notDrawn, liveChecked, liveOutlined, liveCacheAge }, gdacs { events, quakesAlsoInUsgs, usgsChecked, via, failed, lists, truncated }, eonet { volcanoes }; each with its cacheAge."
               },
               "failed": {
                 "type": "array",

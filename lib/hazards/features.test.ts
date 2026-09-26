@@ -8,6 +8,7 @@ import {
   flagQuakesInUsgs,
   hideableQuake,
   leftToLiveWarnings,
+  markLiveOutlined,
   mergeGdacs,
   modisClass,
   NWS_SEVERITIES,
@@ -179,7 +180,7 @@ describe("NWS alerts", () => {
 });
 
 describe("leaving Severe and Extreme NWS alerts to Live warnings", () => {
-  const nws = (severity?: string): HazardAlertExtra => ({ source: "NWS", severity, event: "x", drawnAs: "polygon" });
+  const nws = (severity?: string, marked = true): HazardAlertExtra => ({ source: "NWS", severity, event: "x", drawnAs: "polygon", nwsId: "a", liveOutlined: marked ? true : undefined });
 
   it("partitions the NWS severities (and unrated) exactly along the live feed's own query", () => {
     for (const s of LIVE_SEVERITIES) expect(NWS_SEVERITIES).toContain(s);
@@ -189,6 +190,29 @@ describe("leaving Severe and Extreme NWS alerts to Live warnings", () => {
     expect(kept).toEqual(["Moderate", "Minor"]);
     expect(leftToLiveWarnings(nws(undefined))).toBe(false);
     expect(ALERTS_URL).toContain(`severity=${LIVE_SEVERITIES.join(",")}`);
+  });
+
+  it("never leaves an alert the live feed did not outline (unmapped, or the feed failed)", () => {
+    for (const s of LIVE_SEVERITIES) expect(leftToLiveWarnings(nws(s, false))).toBe(false);
+  });
+
+  it("marks, on copies, only the alerts the live feed outlined, and nothing when that feed is unknown", () => {
+    const a = trimNwsAlert(nwsFeature({ id: "urn:t1", severity: "Extreme" }, square))!;
+    const b = trimNwsAlert(nwsFeature({ id: "urn:t2", severity: "Severe" }, square))!;
+    const built = buildNwsAlerts([a, b], new Map()).features;
+    expect((built[0].properties.extra as HazardAlertExtra).nwsId).toBe("urn:t1");
+    const r = markLiveOutlined(built, new Set(["urn:t1"]));
+    expect(r.marked).toBe(1);
+    expect((r.features[0].properties.extra as HazardAlertExtra).liveOutlined).toBe(true);
+    expect(r.features[0].properties.details?.["also on Live warnings"]).toMatch(/^yes/);
+    expect((r.features[1].properties.extra as HazardAlertExtra).liveOutlined).toBeUndefined();
+    // The cached features are not mutated.
+    expect((built[0].properties.extra as HazardAlertExtra).liveOutlined).toBeUndefined();
+    expect(built[0].properties.details?.["also on Live warnings"]).toBeUndefined();
+    expect(markLiveOutlined(built, null)).toEqual({ features: built, marked: 0 });
+    // A GDACS event is never marked, whatever its id.
+    const g = buildGdacs([{ eventtype: "FL", eventid: "urn:t1", lon: 0, lat: 0 }]);
+    expect(markLiveOutlined(g, new Set(["urn:t1"])).marked).toBe(0);
   });
 
   it("never leaves a GDACS or EONET event", () => {

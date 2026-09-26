@@ -14,7 +14,9 @@
 //                                         alert lists), current GDACS events (quakes the
 //                                         USGS 24 h feed also has carry alsoInUsgs; none
 //                                         is dropped) and NASA EONET open volcano events.
-//                                         Severities as published.
+//                                         Severities as published. NWS alerts the live
+//                                         feed behind Live warnings outlined carry
+//                                         liveOutlined (none is dropped either).
 //
 // FIRMS confidence stays on each instrument's own scale: VIIRS low / nominal /
 // high, MODIS 0–100 %. Nothing here merges or rescales them.
@@ -36,8 +38,11 @@ import {
   buildWildfire,
   flagQuakesInUsgs,
   FIRE_ROW_COLUMNS,
+  markLiveOutlined,
   selectFires,
 } from "@/lib/hazards/features";
+import { ALERTS_URL as LIVE_ALERTS_URL, liveFeed } from "@/lib/live/fetch";
+import { liveDrawnIds } from "@/lib/live/live";
 import {
   countiesByGeoid,
   EONET_VOLCANOES_URL,
@@ -168,12 +173,29 @@ async function opFires(bbox: Bbox, max: number): Promise<OpResult> {
 }
 
 interface AlertsCounts {
-  nws?: { alerts: number; drawnAsPolygon: number; drawnAsCounties: number; notDrawn: number; cacheAge: number };
+  nws?: {
+    alerts: number;
+    drawnAsPolygon: number;
+    drawnAsCounties: number;
+    notDrawn: number;
+    cacheAge: number;
+    /** Whether the live feed Live warnings draws answered with its NWS alerts in time to mark them. */
+    liveChecked?: boolean;
+    /** Alerts marked liveOutlined. */
+    liveOutlined?: number;
+    /** Age of the live feed answer used for the marks, ms; null when it was not checked. */
+    liveCacheAge?: number | null;
+  };
   gdacs?: { events: number; quakesAlsoInUsgs: number; usgsChecked: boolean; via: string[]; failed: string[]; lists: Record<string, number | undefined>; truncated: boolean; cacheAge: number };
   eonet?: { volcanoes: number; cacheAge: number };
 }
 
 async function opAlerts(): Promise<OpResult> {
+  // The feed Live warnings draws (/api/live), through the same cache entry and
+  // TTL, read alongside the sources: it marks which NWS alerts that layer
+  // outlines. Bounded like a source; late or failed, nothing is marked, so the
+  // layer leaves nothing to Live warnings.
+  const liveP = liveFeed({ deadlineMs: SOURCE_DEADLINE_MS }).catch(() => null);
   const r = await cached("hazards:alerts", 2 * 60_000, async () => {
     // Each source answers within SOURCE_DEADLINE_MS or is reported in `failed` (see lib/hazards/sources.ts).
     const [nws, gd, eo, usgs] = await Promise.allSettled([nwsAlerts(), gdacs(), eonetVolcanoes(), usgsDay()]);
@@ -220,6 +242,13 @@ async function opAlerts(): Promise<OpResult> {
     return { features, counts, failed, truncated, usgsAge };
   });
   const v = r.value;
+  const live = await liveP;
+  const outlined = live ? liveDrawnIds(live.value) : null;
+  // Marked per request on copies: the cached features are never mutated, and the marks follow the live feed's own refreshes.
+  const marked = markLiveOutlined(v.features, outlined);
+  const counts: AlertsCounts = v.counts.nws
+    ? { ...v.counts, nws: { ...v.counts.nws, liveChecked: outlined != null, liveOutlined: marked.marked, liveCacheAge: outlined != null && live ? live.age : null } }
+    : v.counts;
   // Each source's own age when the answer was assembled, plus the answer's age now.
   const now = Date.now();
   const at = (sourceAge: number) => fetchedAt(r.age + sourceAge, now);
@@ -244,6 +273,16 @@ async function opAlerts(): Promise<OpResult> {
     prov.push(provenance(source("gdacs"), { kind: "snapshot", upstreamUrl: g.via.includes("RSS") ? GDACS_RSS_URL : undefined, retrievedAt: at(g.cacheAge), notes: [`lists that answered: ${g.via.join(", ")}`] }));
   }
   if (v.counts.eonet) prov.push(provenance(source("nasa-eonet"), { kind: "snapshot", upstreamUrl: EONET_VOLCANOES_URL, retrievedAt: at(v.counts.eonet.cacheAge) }));
+  if (v.counts.nws && outlined != null && live) {
+    prov.push(
+      provenance(source("nws-api"), {
+        kind: "snapshot",
+        upstreamUrl: LIVE_ALERTS_URL,
+        retrievedAt: fetchedAt(live.age, now),
+        notes: ["the Severe and Extreme feed Live warnings draws (/api/live); used only to mark the alerts that layer outlines (liveOutlined)"],
+      }),
+    );
+  }
   if (v.usgsAge != null) {
     prov.push(provenance(source("usgs-earthquakes"), { kind: "snapshot", upstreamUrl: USGS_DAY_URL, retrievedAt: at(v.usgsAge), notes: ["used only to mark GDACS quakes the Earthquakes layer also draws"] }));
   }
@@ -252,13 +291,20 @@ async function opAlerts(): Promise<OpResult> {
     "An NWS alert drawn as counties covers every county it lists; NWS issued it for forecast zones inside them. Alerts with neither a polygon nor a known county are counted in counts.nws.notDrawn, not drawn.",
     NOT_A_WARNING_SERVICE,
   ];
+  if (v.counts.nws) {
+    caveats.push(
+      outlined != null
+        ? "liveOutlined marks an NWS alert the Live warnings feed (/api/live) outlined; the Hazard alerts layer leaves only those to Live warnings, and only while that layer is on and drawing them. Nothing is dropped here."
+        : "The Live warnings feed did not answer in time or its NWS request failed, so no alert is marked liveOutlined and the Hazard alerts layer leaves none to it.",
+    );
+  }
   for (const f of v.failed) caveats.push(`${f} did not answer within ${SOURCE_DEADLINE_MS / 1000} s; its events are missing, not absent.`);
   if (v.truncated) caveats.push("GDACS's lists may be incomplete this time (the RSS feed, the only uncapped list, did not answer, or a capped list came back full).");
   return {
-    data: { type: "FeatureCollection", features: v.features },
+    data: { type: "FeatureCollection", features: marked.features },
     meta: {
       source: "NWS alerts/active + GDACS (RSS, EVENTS4APP, SEARCH) + NASA EONET (volcanoes)",
-      counts: v.counts,
+      counts,
       failed: v.failed,
       truncated: v.truncated,
       deadlineS: SOURCE_DEADLINE_MS / 1000,

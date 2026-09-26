@@ -441,6 +441,14 @@ export interface HazardAlertExtra {
    * a quake within 100 km and 30 min of this one.
    */
   alsoInUsgs?: boolean;
+  /** NWS alerts only: the alert's own NWS id (Live warnings draws it as liveAlertId(nwsId)). */
+  nwsId?: string;
+  /**
+   * NWS alerts only: the live feed Live warnings draws (/api/live) outlined
+   * this alert when the answer was made. Set by markLiveOutlined; absent when
+   * it did not, or when that feed failed or was not checked.
+   */
+  liveOutlined?: boolean;
 }
 
 /** NWS alert trimmed to what the layer shows (the raw feed is ~2.8 MB, mostly prose). */
@@ -501,14 +509,42 @@ export function trimNwsAlert(f: { id?: string; geometry: GeoJSON.Geometry | null
 export const NWS_SEVERITIES = ["Extreme", "Severe", "Moderate", "Minor"];
 
 /**
- * Whether an NWS alert on this layer is one the Live warnings layer carries:
- * its feed asks NWS for exactly LIVE_SEVERITIES (lib/live/fetch.ts). While
- * that layer is on these are left to it, so one warning is not drawn twice;
- * every other NWS alert (Moderate, Minor, unrated) stays here. GDACS and
- * EONET events are never left.
+ * Whether an NWS alert on this layer may be left to Live warnings: rated one
+ * of the severities that layer's feed asks NWS for (LIVE_SEVERITIES), and
+ * marked as outlined by that feed (markLiveOutlined). An alert Live warnings
+ * could not outline (its zone budget ran out, a zone had no geometry) or a
+ * feed that failed marks nothing, so those stay here. The layer also checks
+ * that Live warnings holds the alert right now (lib/layers/hazards.ts
+ * stepAside). Moderate, Minor and unrated NWS alerts, GDACS and EONET events
+ * are never left.
  */
 export function leftToLiveWarnings(x: HazardAlertExtra | undefined): boolean {
-  return x?.source === "NWS" && x.severity != null && (LIVE_SEVERITIES as readonly string[]).includes(x.severity);
+  return x?.source === "NWS" && x.liveOutlined === true && x.severity != null && (LIVE_SEVERITIES as readonly string[]).includes(x.severity);
+}
+
+/**
+ * Mark the NWS alerts the live feed outlined (`outlined`: their NWS ids, from
+ * liveDrawnIds), on copies: the features come out of a shared cache and are
+ * never mutated. `outlined` null means that feed failed or was not checked:
+ * nothing is marked, so nothing is left to Live warnings.
+ */
+export function markLiveOutlined(features: LayerFeature[], outlined: ReadonlySet<string> | null): { features: LayerFeature[]; marked: number } {
+  if (!outlined?.size) return { features, marked: 0 };
+  let marked = 0;
+  const out = features.map((f) => {
+    const x = f.properties.extra as HazardAlertExtra | undefined;
+    if (x?.source !== "NWS" || !x.nwsId || !outlined.has(x.nwsId)) return f;
+    marked++;
+    return {
+      ...f,
+      properties: {
+        ...f.properties,
+        details: { ...f.properties.details, "also on Live warnings": "yes: its feed outlines this alert; drawn there instead while that layer is on and drawing it" },
+        extra: { ...x, liveOutlined: true },
+      },
+    };
+  });
+  return { features: out, marked };
 }
 
 export function buildNwsAlerts(
@@ -552,6 +588,7 @@ export function buildNwsAlerts(
       drawnAs,
       expires: expires ? Date.parse(expires) : undefined,
       start: a.onset ? Date.parse(a.onset) : a.effective ? Date.parse(a.effective) : undefined,
+      nwsId: a.id,
     };
     countyNames = [...new Set(countyNames)];
     out.push({

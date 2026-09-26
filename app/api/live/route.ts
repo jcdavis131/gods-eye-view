@@ -8,25 +8,22 @@
 //                  USGS publishes them).
 //
 // The alerts layer draws the warnings as short-lived constructs; Teleport flies
-// through the items. Cached five minutes; a failing feed leaves the other.
+// through the items. Cached five minutes (lib/live/fetch.ts liveFeed, the
+// entry /api/hazards also reads); a failing feed leaves the other.
 
-import { cached, cacheDelete } from "@/lib/server/cache";
 import { ok, options } from "@/lib/server/respond";
 import { jsonError } from "@/lib/server/upstream";
 import { provenance } from "@/lib/provenance/types";
 import { source } from "@/lib/provenance/sources";
-import { ALERTS_URL, fetchLive, QUAKES_URL } from "@/lib/live/fetch";
+import { ALERTS_URL, LIVE_TTL_S, liveFeed, QUAKES_URL } from "@/lib/live/fetch";
 
 export const maxDuration = 60;
 export const OPTIONS = options;
 
-const TTL_S = 300;
-
 export async function GET() {
   try {
-    const r = await cached("live", TTL_S * 1000, fetchLive);
+    const r = await liveFeed();
     const p = r.value;
-    if (p.failed.length) cacheDelete("live");
     const retrievedAt = new Date(Date.now() - r.age).toISOString();
     const caveats = [
       "Alerts are the NWS's own Severe and Extreme ratings; the tour order uses only the fields NWS and USGS publish and is not a risk score.",
@@ -40,7 +37,7 @@ export async function GET() {
         provenance(source("usgs-earthquakes"), { kind: "snapshot", retrievedAt, upstreamUrl: QUAKES_URL }),
       ],
       caveats,
-      ttlS: p.failed.length ? 0 : TTL_S,
+      ttlS: p.failed.length ? 0 : LIVE_TTL_S,
       meta: { source: "nws-api, usgs-earthquakes", alerts: p.alerts.length, quakes: p.quakes.length, cacheAge: r.age },
     });
   } catch (err) {

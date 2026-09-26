@@ -25,6 +25,28 @@ import { geojsonRings, ringCentroid, ringsArea, ringsBbox, type BBox } from "@/l
  */
 export const LIVE_SEVERITIES = ["Extreme", "Severe"] as const;
 
+/** The id the Live warnings layer gives an NWS alert (lib/layers/alerts.ts alertFeature). */
+export function liveAlertId(nwsId: string): string {
+  return `nws-alert:${nwsId}`;
+}
+
+/**
+ * Whether the Live warnings layer draws this alert: it needs an outline with
+ * a centre to stand on (the same test alertFeature makes before it builds one).
+ */
+export function liveDraws(a: Pick<AlertItem, "rings">): boolean {
+  return !!a.rings && ringCentroid(a.rings) != null;
+}
+
+/**
+ * The NWS ids of the alerts one live feed answer draws, or null when its NWS
+ * request failed: then which alerts it would draw is unknown, not none.
+ */
+export function liveDrawnIds(feed: { alerts: Array<Pick<AlertItem, "id" | "rings">>; failed: Array<{ source: string }> }): Set<string> | null {
+  if (feed.failed.some((f) => f.source === "nws-api")) return null;
+  return new Set(feed.alerts.filter(liveDraws).map((a) => a.id));
+}
+
 export type HazardFamily ="tornado" | "flood" | "storm" | "wind" | "fire" | "winter" | "heat" | "marine" | "coastal" | "other";
 
 export const FAMILIES: Record<HazardFamily, { label: string; color: string }> = {

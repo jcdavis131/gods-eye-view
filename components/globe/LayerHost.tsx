@@ -10,7 +10,7 @@ import { LAYERS } from "@/lib/layers";
 import { viewKey, type LayerDefinition } from "@/lib/layers/types";
 import { getViewer } from "@/lib/globe/cesium";
 import { LayerRenderer } from "@/lib/globe/renderer";
-import { registerRenderer, unregisterRenderer } from "@/lib/globe/registry";
+import { getRenderer, registerRenderer, unregisterRenderer } from "@/lib/globe/registry";
 import { STYLES } from "@/lib/globe/styles";
 import { satWorker } from "@/lib/globe/satWorker";
 import { useGlobe } from "@/lib/store/globe";
@@ -117,8 +117,11 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
     rendererRef.current?.setLabelsEnabled(labels);
   }, [labels]);
 
-  // On/off state of the layers this one reads (hazards steps aside for Earthquakes and Live warnings while they are on).
-  const depsKey = useGlobe((s) => (def.dependsOn ?? []).map((id) => (s.layers[id] ? "1" : "0")).join(""));
+  // The state of the layers this one's refine() reads: on/off, their last
+  // answer and whether it failed (hazards steps aside for Earthquakes and Live
+  // warnings only while they are drawing the same events). A change re-runs
+  // refine on the data in hand; it is not a refetch.
+  const depsKey = useGlobe((s) => (def.dependsOn ?? []).map((id) => `${s.layers[id] ? 1 : 0}:${s.status[id]?.fetchedAt ?? 0}:${s.status[id]?.error ? 1 : 0}`).join("|"));
 
   const vk = def.viewDependent ? (def.viewKey?.(view) ?? viewKey(view)) : "static";
   const optionsKey = useMemo(() => {
@@ -129,7 +132,7 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
   // TanStack re-reads queryFn on every render, so the closure always carries
   // the latest settled view, keys and prefs without touching refs in render.
   const query = useQuery({
-    queryKey: ["layer", def.id, vk, optionsKey, missionDay, depsKey],
+    queryKey: ["layer", def.id, vk, optionsKey, missionDay],
     queryFn: ({ signal }) =>
       def.fetch({
         keys,
@@ -138,7 +141,6 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
         missionTime: Date.now() + useGlobe.getState().clock.offsetMs,
         signal,
         options: { ...prefs } as unknown as Record<string, unknown>,
-        layersOn: def.dependsOn ? Object.fromEntries(def.dependsOn.map((id) => [id, useGlobe.getState().layers[id]])) : undefined,
       }),
     enabled,
     refetchInterval: def.updateIntervalMs,
@@ -146,7 +148,25 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
     placeholderData: keepPreviousData,
   });
 
-  const { data, error, isFetching } = query;
+  const { data: fetched, error, isFetching } = query;
+
+  // What is drawn: the fetched result, refined by the layers it depends on.
+  // The renderer is updated before the status below, so a layer refining on
+  // this one's status finds these features in the renderer when it re-runs.
+  const data = useMemo(() => {
+    if (!fetched || !def.refine) return fetched;
+    const deps = def.dependsOn ?? [];
+    const s = useGlobe.getState();
+    return def.refine(fetched, {
+      layersOn: Object.fromEntries(deps.map((id) => [id, !!s.layers[id]])),
+      answering: Object.fromEntries(deps.map((id) => [id, s.status[id]?.fetchedAt != null && !s.status[id]?.error])),
+      // What the layer's renderer holds; whether it is shown is layersOn (the
+      // store flips before the renderer's own effect catches up).
+      holds: (layer, id) => deps.includes(layer) && !!getRenderer(layer)?.getFeature(id),
+    });
+    // depsKey is what the store reads above: re-run when it changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetched, def, depsKey]);
 
   useEffect(() => {
     if (!data) return;

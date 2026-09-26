@@ -3,13 +3,16 @@
 // and the past day's M4.5+ earthquakes. Either feed failing leaves the other
 // standing; the route lists what failed.
 
-import { cached } from "@/lib/server/cache";
+import { cacheDelete, cached, type Cached, type CachedOptions } from "@/lib/server/cache";
 import { polite, upstreamJson } from "@/lib/server/upstream";
 import { geojsonRings, roundRings } from "@/lib/fabric/geo";
 import { alertRank, LIVE_SEVERITIES, parseAlerts, parseQuakes, liveItems, thinRing, type AlertItem, type NwsAlertCollection, type LiveItem, type QuakeItem } from "./live";
 
 export const ALERTS_URL = `https://api.weather.gov/alerts/active?status=actual&severity=${LIVE_SEVERITIES.join(",")}`;
 export const QUAKES_URL = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson";
+/** How long one answer of the live feed is kept, seconds. */
+export const LIVE_TTL_S = 300;
+const LIVE_KEY = "live";
 /** Most distinct zone outlines one refresh looks up (each is one small NWS call, cached a week). */
 const MAX_ZONES = 160;
 const ZONE_TTL_MS = 7 * 24 * 3600_000;
@@ -73,4 +76,17 @@ export async function fetchLive(): Promise<LiveFeed> {
   }
   for (const a of alerts) if (a.rings && a.outline === "polygon") a.rings = roundRings(a.rings.map((r) => thinRing(r, 0.002)), 3);
   return { alerts, quakes, items: liveItems(alerts, quakes), failed, unmapped: alerts.filter((a) => !a.rings).length };
+}
+
+/**
+ * The live feed through the one shared cache entry that /api/live serves and
+ * /api/hazards reads (to mark the alerts Live warnings outlines). Every caller
+ * goes through here: whichever starts the fetch sets the stored TTL, so they
+ * all pass the same one. A degraded answer (a feed failed) is dropped once
+ * read, so the next caller retries rather than inheriting the outage.
+ */
+export async function liveFeed(opts: CachedOptions = {}): Promise<Cached<LiveFeed>> {
+  const r = await cached(LIVE_KEY, LIVE_TTL_S * 1000, fetchLive, opts);
+  if (r.value.failed.length) cacheDelete(LIVE_KEY);
+  return r;
 }
