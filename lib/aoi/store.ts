@@ -73,6 +73,9 @@ export interface WatchLayerInfo {
  *         baseline is retaken silently when the area is back and the layer has settled)
  *   step  settled, keyed by the view its answer was fetched for (LayerStatus.viewKey), so
  *         an answer for another view sets a new baseline instead of being compared
+ * Known gap: in the frame between a partner switching off and Hazard alerts re-running its
+ * refine, a step could baseline without the events it takes back; they would then read as
+ * arrivals. The window is one render, against a 5 s step.
  */
 export function watchModes(
   on: Partial<Record<LayerId, boolean>>,

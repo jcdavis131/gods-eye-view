@@ -437,7 +437,7 @@ async function opPlants(bbox: Bbox, minMw: number): Promise<OpResult> {
     "Outside the United States, only nuclear plants are shown, from Wikidata (CC0); their status and capacity are Wikidata's and can be missing.",
     "The reporting entity is as EIA publishes it; it is not searchable here and nothing is joined across the two sources.",
   ];
-  if (minMw > 0) caveats.push(`Only US plants of at least ${minMw} MW (operating or planned) are returned; ask with min=0 for every plant.`);
+  if (minMw > 0) caveats.push(`Only US plants of at least ${minMw} MW (operating or planned) are returned; ask with min=0 (and a box small enough to fit one response) for every plant.`);
   if (cap.truncated)
     caveats.push(
       `This box holds ${matched.length.toLocaleString("en-US")} US plants, more than one response carries: the ${us.length.toLocaleString("en-US")} largest are returned (by the larger of operating and planned nameplate MW, down to ${cap.floorMw ?? 0} MW). Ask with a higher min or a smaller box for the rest.`,

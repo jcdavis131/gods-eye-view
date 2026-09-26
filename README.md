@@ -463,7 +463,7 @@ For ElevenLabs and Vapi, configure tools on the vendor side with these names and
 ```json
 [
   { "name": "fly_to_place",    "parameters": { "place": "string", "altitude_km": "number?" } },
-  { "name": "show_layer",      "parameters": { "layer": "aircraft|ships|satellites|earthquakes|cameras|traffic|launches|water|groundwater|turbidity|trade|commerce|realestate|companies|banks|spending|occupations|weather|wildfire|fires|hazards|flood|wetlands|publiclands|relief|slope|contours|soils|firehazard|landcover|sealevel|transmission|pipelines|plants|rail|airports|dams|faults|landslides|geology|plss|airquality|events|sports|constructs|field|alerts", "on": "boolean", "place": "string?" } },
+  { "name": "show_layer",      "parameters": { "layer": "aircraft|ships|satellites|earthquakes|cameras|traffic|launches|water|groundwater|turbidity|trade|commerce|realestate|companies|banks|spending|occupations|weather|wildfire|fires|hazards|flood|wetlands|publiclands|relief|slope|contours|soils|firehazard|landcover|sealevel|transmission|pipelines|plants|rail|airports|dams|faults|landslides|geology|plss|events|sports|constructs|field|alerts", "on": "boolean", "place": "string?" } },
   { "name": "find_object",     "parameters": { "query": "string", "follow": "boolean?" } },
   { "name": "follow_selected", "parameters": { "on": "boolean" } },
   { "name": "set_time",        "parameters": { "offset_minutes": "number?", "live": "boolean?" } },
