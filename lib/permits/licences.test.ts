@@ -98,8 +98,12 @@ describe("registries on captured payloads", () => {
     expect(new URL(url).searchParams.get("$where")).toContain("license_type='Premises'");
   });
 
-  it("asks every registry for named columns except San Francisco, whose portal refuses $select", () => {
-    for (const src of ["nysla", "chicago", "losangeles", "nycdcwp"] as const) expect(licenceRequestUrl(src, [-1, 1, 0, 2], "2026-09-26")).toContain("%24select=");
-    expect(licenceRequestUrl("sanfrancisco", [-1, 1, 0, 2], "2026-09-26")).not.toContain("%24select=");
+  it("asks every registry for named columns, San Francisco included, and never a mailing address or phone", () => {
+    for (const src of ["nysla", "chicago", "sanfrancisco", "losangeles", "nycdcwp"] as const) {
+      const url = new URL(licenceRequestUrl(src, [-1, 1, 0, 2], "2026-09-26"));
+      expect(url.searchParams.get("$select"), src).toBeTruthy();
+      expect(url.searchParams.get("$select"), src).not.toMatch(/mail|phone/);
+    }
+    expect(new URL(licenceRequestUrl("sanfrancisco", [-1, 1, 0, 2], "2026-09-26")).host).toBe("data.sf.gov");
   });
 });

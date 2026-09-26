@@ -13,6 +13,7 @@ import nycPoint from "@/lib/zoning/fixtures/nyc-point.json";
 import nycPluto from "@/lib/zoning/fixtures/nyc-pluto.json";
 import nycZtldb from "@/lib/zoning/fixtures/nyc-ztldb.json";
 import seattleOutlines from "@/lib/zoning/fixtures/seattle-outlines.json";
+import sfOutlines from "@/lib/zoning/fixtures/sanfrancisco-outlines.json";
 
 type Fc = { features: Array<{ id?: number | string; geometry: GeoJSON.Geometry | null; properties: Record<string, unknown> | null }> };
 const asRows = (j: unknown): Fc => (Array.isArray(j) ? { features: j.map((r) => ({ geometry: null, properties: r as Record<string, unknown> })) } : (j as Fc));
@@ -36,6 +37,7 @@ vi.mock("@/lib/civic/request", () => ({
     if (url.includes("tigerWMS_Current/MapServer/28")) return r(placeAnswer);
     if (url.includes("Current_Land_Use_Zoning_Detail_2")) return r(req.params?.returnGeometry === "true" ? asRows(seattleOutlines) : asRows(seattlePoint));
     if (url.includes("dj47-wfun")) return r(asRows(chicagoPoint));
+    if (url.includes("3i4a-hu95.geojson")) return r(asRows(sfOutlines));
     if (url.includes("/nyzd/")) return r(asRows(nycPoint));
     if (url.includes("/MAPPLUTO/")) return r(asRows(nycPluto));
     if (url.includes("fdkv-4t4z")) {
@@ -129,10 +131,19 @@ describe("/api/zoning?op=districts and coverage", () => {
     expect(body.failed).toEqual([]);
   });
 
-  it("names San Francisco as point-only and asks it nothing", async () => {
-    const { body } = await get("op=districts&bbox=-122.42,37.77,-122.40,37.79");
+  it("draws San Francisco's outlines from data.sf.gov", async () => {
+    const { body } = await get("op=districts&bbox=-122.4175,37.78,-122.3975,37.795");
+    expect((body.data.features as unknown[]).length).toBe(13);
+    expect(body.sources).toEqual([expect.objectContaining({ city: "sanfrancisco", count: 13 })]);
+    expect(body.pointOnly).toEqual([]);
+    expect(calls.length).toBe(1);
+    expect(new URL(calls[0]).host).toBe("data.sf.gov");
+  });
+
+  it("names Houston as having no zoning ordinance and asks it nothing", async () => {
+    const { body } = await get("op=districts&bbox=-95.38,29.75,-95.36,29.77");
     expect((body.data.features as unknown[]).length).toBe(0);
-    expect(body.pointOnly).toEqual([expect.objectContaining({ city: "sanfrancisco" })]);
+    expect(body.pointOnly).toEqual([expect.objectContaining({ city: "houston" })]);
     expect(calls).toEqual([]);
   });
 
@@ -141,7 +152,7 @@ describe("/api/zoning?op=districts and coverage", () => {
     const cities = body.data as unknown as Array<{ id: string; point: boolean; outlines: boolean; zoning: string }>;
     expect(cities.map((c) => c.id)).toContain("seattle");
     expect(cities.find((c) => c.id === "houston")).toMatchObject({ point: false, outlines: false, zoning: "no zoning ordinance" });
-    expect(cities.find((c) => c.id === "sanfrancisco")).toMatchObject({ point: true, outlines: false });
+    expect(cities.find((c) => c.id === "sanfrancisco")).toMatchObject({ point: true, outlines: true });
   });
 
   it("rejects an unknown op and a malformed box", async () => {

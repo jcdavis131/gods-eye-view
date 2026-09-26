@@ -1,7 +1,8 @@
 // Zoning adapters on payloads captured from each city's own service on
 // 2026-09-26, with the exact requests the route sends (lib/zoning/fixtures).
-// The San Francisco fixture had each district's outline removed, as the route
-// drops it too. No network.
+// San Francisco's point is City Hall; its outlines are 13 of the 413 the
+// layer's box around Union Square answered (-122.4175,37.78,-122.3975,37.795),
+// up to three per general category. No network.
 import { describe, expect, it } from "vitest";
 import {
   arcgisPoint,
@@ -49,6 +50,7 @@ import tigerBrooklyn from "./fixtures/tiger-brooklyn.json";
 import tigerNone from "./fixtures/tiger-unincorporated.json";
 import seattleOutlines from "./fixtures/seattle-outlines.json";
 import chicagoOutlines from "./fixtures/chicago-outlines.json";
+import sfOutlines from "./fixtures/sanfrancisco-outlines.json";
 
 type Row = Record<string, unknown>;
 type Fc = Parameters<typeof buildOutlines>[1];
@@ -249,15 +251,17 @@ describe("requests", () => {
     }
   });
 
-  it("asks for explicit fields everywhere except San Francisco, whose portal refuses $select", () => {
+  it("asks every city for explicit fields, San Francisco included (on data.sf.gov, without its outline)", () => {
     for (const id of ZONING_CITY_IDS) {
       const req = pointRequest(id, -100, 30);
       if (!req) continue;
       const url = requestUrl(req);
-      if (id === "sanfrancisco") expect(url).not.toContain("%24select");
-      else expect(url.includes("outFields=") || url.includes("%24select="), id).toBe(true);
+      expect(url.includes("outFields=") || url.includes("%24select="), id).toBe(true);
       expect(url).not.toContain("outFields=*");
     }
+    const sf = new URL(requestUrl(pointRequest("sanfrancisco", -122.4193, 37.7793)!));
+    expect(sf.host).toBe("data.sf.gov");
+    expect(sf.searchParams.get("$select")).not.toContain("the_geom");
   });
 
   it("draws outlines only where the service simplifies them on the server", () => {
@@ -292,6 +296,17 @@ describe("outlines", () => {
     expect(a.map((f) => f.id)).toEqual(b.map((f) => f.id));
     expect(a[0].id).toMatch(/^chicago:/);
     expect(a.every((f) => ["downtown", "planned", "commercial", "industrial", "residential", "public", "other"].includes(f.properties.family))).toBe(true);
+  });
+
+  it("San Francisco's Socrata outlines: code and family from the city's general category", () => {
+    const out = buildOutlines("sanfrancisco", fcOf(sfOutlines));
+    expect(out.length).toBe(13);
+    expect(out[0].id).toMatch(/^sanfrancisco:/);
+    expect(new Set(out.map((f) => f.properties.family))).toEqual(new Set(["commercial", "mixed", "public", "residential", "industrial"]));
+    expect(out.find((f) => f.properties.code === "CMUO")?.properties.category).toBe("Mixed Use");
+    const url = decodeURIComponent(requestUrl(polygonRequest("sanfrancisco", [-122.4175, 37.78, -122.3975, 37.795])!));
+    expect(url).toMatch(/^https:\/\/data\.sf\.gov\/resource\/3i4a-hu95\.geojson\?/);
+    expect(url).toContain("simplify_preserve_topology(the_geom,0.00003)");
   });
 
   it("drops rows with no geometry or no code", () => {

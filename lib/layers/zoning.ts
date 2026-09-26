@@ -4,12 +4,13 @@
 //   /api/zoning?op=districts  below ZONING_OUTLINE_MAX_M: district outlines (code and
 //                             colour family) in a box of about 1.7 km around the view,
 //                             inside a dashed "loaded" box, from Seattle, Denver, New
-//                             York, Chicago, Dallas, San Antonio, Austin and Los Angeles
+//                             York, Chicago, Dallas, San Antonio, Austin, Los Angeles
+//                             and San Francisco
 //   /api/zoning?op=point      below ZONING_IDENTIFY_MAX_M: a click on the ground asks for
 //                             the district at that point (lib/zoning/pick.ts): overlays,
 //                             ordinance, effective date and the code link as the city
-//                             publishes them. San Francisco answers points only; Houston
-//                             answers that it has no zoning ordinance.
+//                             publishes them. Houston answers that it has no zoning
+//                             ordinance.
 //
 // Outside the covered cities the note says so; an empty map there is "not
 // covered", never "unzoned".
@@ -130,7 +131,7 @@ export const zoningLayer: LayerDefinition = {
   id: "zoning",
   label: "Zoning",
   description:
-    "Zoning districts as ten city zoning services publish them: outlines below 4 km in Seattle, Denver, New York, Chicago, Dallas, San Antonio, Austin and Los Angeles, and a click on the ground below 15 km for the district at that point with its overlays, ordinance and code link (San Francisco too; Houston answers that it has no zoning ordinance).",
+    "Zoning districts as ten city zoning services publish them: outlines below 4 km in Seattle, Denver, New York, Chicago, Dallas, San Antonio, Austin, Los Angeles and San Francisco, and a click on the ground below 15 km for the district at that point with its overlays, ordinance and code link (Houston answers that it has no zoning ordinance).",
   color: "#F0ABFC",
   updateIntervalMs: 6 * 60 * 60_000,
   defaultEnabled: false,

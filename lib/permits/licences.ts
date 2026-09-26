@@ -16,8 +16,8 @@
 //      UNIT, a bare #) is withheld altogether: a heuristic for a business run
 //      from a home, counted and labelled as a heuristic. A # after SUITE,
 //      STE, FL, RM, STORE, SPACE, BLDG and the like is a commercial unit and stays.
-//   3. Mailing addresses and phone numbers are never requested (San
-//      Francisco, whose portal refuses $select, has them dropped here).
+//   3. Mailing addresses and phone numbers are never requested: every
+//      registry is asked for named columns ($select).
 //
 // Nothing here is searchable by name through anything but the feature name
 // (the trade name): no licensee, registrant or address field is on the search
@@ -133,8 +133,16 @@ export const CHICAGO_LICENCE_SELECT = [
   "license_id", "license_number", "doing_business_as_name", "address", "zip_code", "ward", "community_area_name", "license_description",
   "business_activity", "application_type", "license_start_date", "expiration_date", "date_issued", "license_status", "latitude", "longitude",
 ] as const;
-/** No $select (the portal refuses it); ownership_name and the mailing address are dropped in sanFrancisco(). */
-export const SF_LICENCES = "https://data.sfgov.org/resource/g8m3-pdis";
+/**
+ * data.sf.gov, not data.sfgov.org: the old host 301-redirects every request
+ * there, and its redirector answers any $select with a 403 (probed
+ * 2026-09-26). The mailing address is never requested.
+ */
+export const SF_LICENCES = "https://data.sf.gov/resource/g8m3-pdis";
+export const SF_LICENCE_SELECT = [
+  "certificate_number", "uniqueid", "dba_name", "full_business_address", "business_zip", "location_start_date", "dba_start_date", "self_reported_naics_code",
+  "lic_code_description", "neighborhoods_analysis_boundaries", "supervisor_district", "business_corridor", "location",
+] as const;
 export const LA_LICENCES = "https://data.lacity.org/resource/6rrh-rzua";
 export const LA_LICENCE_SELECT = [
   "location_account", "business_name", "dba_name", "street_address", "zip_code", "location_description", "naics", "primary_naics_description",
@@ -160,6 +168,7 @@ export function licenceRequestUrl(src: LicenceSourceId, b: Bbox, todayIso: strin
       q.set("$where", `${withinBox("location", b)} AND expiration_date > '${todayIso.slice(0, 10)}T00:00:00'`);
       break;
     case "sanfrancisco":
+      q.set("$select", SF_LICENCE_SELECT.join(","));
       q.set("$where", `${withinBox("location", b)} AND location_end_date IS NULL`);
       break;
     case "losangeles":

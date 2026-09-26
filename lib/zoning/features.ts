@@ -156,10 +156,10 @@ export function arcgisBox(layer: string, b: Bbox, outFields: readonly string[], 
   };
 }
 
-/** SoQL `intersects` with a WKT point; `select` omitted where the portal refuses $select (San Francisco). */
-export function socrataPoint(base: string, lon: number, lat: number, select?: readonly string[]): SocrataRequest {
+/** SoQL `intersects` with a WKT point, asking for the named columns. */
+export function socrataPoint(base: string, lon: number, lat: number, select: readonly string[]): SocrataRequest {
   const q = new URLSearchParams();
-  if (select) q.set("$select", select.join(","));
+  q.set("$select", select.join(","));
   q.set("$where", `intersects(the_geom,'POINT (${lon} ${lat})')`);
   q.set("$limit", "10");
   return { kind: "socrata", url: `${base}.json?${q.toString()}` };
@@ -537,8 +537,15 @@ export function losAngelesHit(rows: Row[]): ZoningHit | null {
 
 // ------------------------------------------------------------------ San Francisco
 
-/** No $select: data.sfgov.org answered every $select request with a 403 in probing. */
-export const SF_ZONING = "https://data.sfgov.org/resource/3i4a-hu95";
+/**
+ * data.sf.gov, not data.sfgov.org: the old host 301-redirects every request
+ * there, and its redirector answers any $select with a 403 (probed
+ * 2026-09-26). Without the_geom a point answer is a few hundred bytes (197 at
+ * City Hall), not the district's whole outline.
+ */
+export const SF_ZONING = "https://data.sf.gov/resource/3i4a-hu95";
+export const SF_POINT_SELECT = ["zoning", "zoning_sim", "districtna", "gen", "url", "codesectio"] as const;
+export const SF_POLYGON_SELECT = ["zoning", "zoning_sim", "gen"] as const;
 
 export function sanFranciscoHit(rows: Row[]): ZoningHit | null {
   const hits: ZoningHit[] = [];
@@ -616,8 +623,7 @@ export const ZONING_CITIES: Record<ZoningCityId, ZoningCity> = {
     source: "sf-zoning",
     publisher: "San Francisco Planning Department",
     bbox: [-122.52, 37.7, -122.35, 37.84],
-    polygons: false,
-    note: "Point answers only: the portal refuses the $select that would trim the district outlines, and unsimplified they ran to 2.1 MB for 3.5 km of downtown.",
+    polygons: true,
   },
   houston: {
     id: "houston",
@@ -659,7 +665,7 @@ export function pointRequest(id: ZoningCityId, lon: number, lat: number): Zoning
     case "losangeles":
       return arcgisPoint(LA_LAYER, lon, lat, LA_POINT_FIELDS);
     case "sanfrancisco":
-      return socrataPoint(SF_ZONING, lon, lat);
+      return socrataPoint(SF_ZONING, lon, lat, SF_POINT_SELECT);
     case "houston":
       return null;
   }
@@ -714,6 +720,7 @@ export function polygonRequest(id: ZoningCityId, b: Bbox): ZoningRequest | null 
     case "losangeles":
       return arcgisBox(LA_LAYER, b, LA_POLYGON_FIELDS, POLYGON_OFFSET);
     case "sanfrancisco":
+      return socrataBox(SF_ZONING, b, SF_POLYGON_SELECT, POLYGON_OFFSET, POLYGON_LIMIT);
     case "houston":
       return null;
   }
@@ -756,7 +763,10 @@ export function polygonCode(id: ZoningCityId, p: Row): { code: string; family: Z
       const code = str(p.ZONE_CMPLT);
       return code ? { code, family: familyFromWords(str(p.ZONING_DESCRIPTION)), category: str(p.ZONING_DESCRIPTION) } : null;
     }
-    case "sanfrancisco":
+    case "sanfrancisco": {
+      const code = str(p.zoning) ?? str(p.zoning_sim);
+      return code ? { code, family: familyFromWords(str(p.gen)), category: str(p.gen) } : null;
+    }
     case "houston":
       return null;
   }

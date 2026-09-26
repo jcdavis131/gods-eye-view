@@ -3,14 +3,14 @@
 // React), shared by /api/permits and the permits layer, tested on payloads
 // captured from each portal (lib/permits/fixtures).
 //
-// What is asked for and what is dropped. Every Socrata request names its
-// columns ($select), so a person's name never reaches this server: Chicago's
-// fifteen contact_N_name columns, New York's applicant, filing representative
-// and owner columns, Austin's contractor_full_name and applicant columns are
-// simply not requested. San Francisco's portal refuses $select, so its rows
-// arrive whole and are cut to the fields below here (they carried no person
-// in probing). Contractor companies are kept as the cities publish them, in
-// the dossier only; nothing searches them (lib/search/allowlist.ts).
+// What is asked for and what is dropped. Every request names its columns
+// ($select, or outFields for Denver's ArcGIS layer), so an applicant, owner or
+// contact name never reaches this server: Chicago's fifteen contact_N_name
+// columns, New York's applicant, filing representative and owner columns,
+// Austin's contractor_full_name and applicant columns are simply not
+// requested. The contractor company Austin, Seattle and Denver publish is
+// requested and kept as published, in the dossier only; it can be a sole
+// trader's own name. Nothing searches it (lib/search/allowlist.ts).
 //
 // Numbers the portals send as text ("50000.0000", "") go through finite():
 // blank and missing are undefined, never 0. Each valuation keeps the name of
@@ -166,8 +166,12 @@ export const LA_PERMIT_SELECT = [
   "cofo_date", "du_changed", "adu_changed", "square_footage", "status_desc", "valuation", "construction", "height", "work_desc", "lat", "lon",
 ] as const;
 
-/** No $select: data.sfgov.org answered every $select with a 403 in probing; rows are cut to SF_KEEP here. */
-export const SF_PERMITS = "https://data.sfgov.org/resource/i98e-djp9";
+/**
+ * data.sf.gov, not data.sfgov.org: the old host 301-redirects every request
+ * there, and its redirector answers any $select with a 403 (probed
+ * 2026-09-26). Asked for SF_KEEP.
+ */
+export const SF_PERMITS = "https://data.sf.gov/resource/i98e-djp9";
 
 export const DENVER_PERMITS = "https://services1.arcgis.com/zdB7qR0BtYrg0Xpl/arcgis/rest/services/ODC_DEV_RESIDENTIALCONSTPERMIT_P/FeatureServer/316";
 export const DENVER_PERMIT_FIELDS = [
@@ -196,7 +200,7 @@ export function permitRequest(city: PermitCityId, b: Bbox, sinceIso: string): Pe
     case "losangeles":
       return soql(LA_PERMITS, LA_PERMIT_SELECT, `${withinBox("geolocation", b)} AND issue_date > '${since}'`, "issue_date DESC", PERMIT_LIMIT);
     case "sanfrancisco":
-      return soql(SF_PERMITS, null, `${withinBox("location", b)} AND issued_date > '${since}'`, "issued_date DESC", PERMIT_LIMIT);
+      return soql(SF_PERMITS, SF_KEEP, `${withinBox("location", b)} AND issued_date > '${since}'`, "issued_date DESC", PERMIT_LIMIT);
     case "denver": {
       const [w, s, e, n] = b;
       return {
@@ -395,7 +399,7 @@ function losAngeles(r: Row): Omit<PermitRecord, "id" | "city"> | null {
   };
 }
 
-/** The San Francisco fields kept; everything else in the row is dropped here. */
+/** The San Francisco fields asked for ($select). */
 export const SF_KEEP = [
   "permit_number", "permit_type_definition", "description", "status", "filed_date", "issued_date", "completed_date", "estimated_cost", "revised_cost",
   "existing_use", "proposed_use", "existing_units", "proposed_units", "number_of_existing_stories", "number_of_proposed_stories", "street_number",

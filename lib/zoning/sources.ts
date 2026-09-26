@@ -160,7 +160,7 @@ export interface OutlinesAnswer {
   features: Array<{ type: "Feature"; id: string; geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon; properties: ZoningOutlineExtra }>;
   sources: OutlineSource[];
   failed: Array<{ city: ZoningCityId; name: string; error: string }>;
-  /** Cities in the box that answer points only (San Francisco) or have no zoning (Houston). */
+  /** Cities in the box with no outlines to draw (today only Houston, which has no zoning). */
   pointOnly: Array<{ city: ZoningCityId; name: string; reason: string }>;
   provenance: Provenance[];
   age: number;

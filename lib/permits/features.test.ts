@@ -106,17 +106,16 @@ describe("city adapters on captured payloads", () => {
     expect(p.every((r) => r.valuationLabel === "valuation")).toBe(true);
   });
 
-  it("San Francisco: whole rows arrive (no $select) and only SF_KEEP fields are read; block/lot parcel", () => {
+  it("San Francisco: asks data.sf.gov for SF_KEEP by name; block/lot parcel", () => {
     const p = buildPermits("sanfrancisco", rows(sf));
     expect(p.length).toBe(20);
     expect(p.some((r) => r.parcel?.scheme === "blocklot")).toBe(true);
-    expect(permitRequestUrl(permitRequest("sanfrancisco", [-122.405, 37.785, -122.395, 37.795], "2026-08-27"))).not.toContain("%24select");
-    // Nothing outside the kept list reaches a record.
+    const url = new URL(permitRequestUrl(permitRequest("sanfrancisco", [-122.405, 37.785, -122.395, 37.795], "2026-08-27")));
+    expect(url.host).toBe("data.sf.gov");
+    expect(url.searchParams.get("$select")).toBe(SF_KEEP.join(","));
+    // The captured rows carry only the columns asked for.
     const kept = new Set<string>(SF_KEEP);
-    const extra = Object.keys((sf as Array<Record<string, unknown>>)[0]).filter((k) => !kept.has(k));
-    expect(extra.length).toBeGreaterThan(0);
-    const json = JSON.stringify(p);
-    for (const k of ["data_as_of", "record_id", "point_source", "plansets"]) expect(json).not.toContain(k);
+    expect((sf as Array<Record<string, unknown>>).flatMap((r) => Object.keys(r)).filter((k) => !kept.has(k))).toEqual([]);
   });
 });
 
