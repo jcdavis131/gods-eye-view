@@ -24,3 +24,14 @@ describe("voice words for the hazards and land layers", () => {
     expect(layerOf("show floods")).toMatchObject({ layer: "water" });
   });
 });
+
+describe("voice words for parcels", () => {
+  it("hears parcels by their plain names without taking 'property' from home values", () => {
+    expect(layerOf("show parcels")).toMatchObject({ layer: "parcels", on: true });
+    expect(layerOf("show property lines over Austin")).toMatchObject({ layer: "parcels", place: "austin" });
+    expect(layerOf("show lot lines")).toMatchObject({ layer: "parcels" });
+    expect(layerOf("hide tax parcels")).toMatchObject({ layer: "parcels", on: false });
+    expect(layerOf("show property values")).toMatchObject({ layer: "realestate" });
+    expect(layerOf("show property")).toMatchObject({ layer: "realestate" });
+  });
+});

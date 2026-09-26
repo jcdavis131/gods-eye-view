@@ -14,6 +14,9 @@
 //   &pin=27.8000,-97.3960        the constructs stack anchored at this point (lat,lon)
 //   &cmp=27.8800,-97.3200        a second place compared with the pinned one (lat,lon)
 //   &space=1                     space-weather panel open
+//   &parcel=29.42600,-98.48610   the parcel identified at this point (lat,lon, 5 decimals:
+//                                a lot can be narrower than 4 decimals' 11 m); its dossier
+//                                opens once the camera is there
 //   &shape=a:-98.5,29.4;-98.49,29.4;-98.49,29.41   a drawn area (a:) or line (l:),
 //                                vertices as lon,lat to 5 decimals, at most 60;
 //                                written last and unescaped so it stays readable
@@ -31,6 +34,7 @@ import { getVintage, isValidVintage, useReleases, vintageClockMs } from "@/lib/r
 import { isPersonaId, type PersonaId } from "@/lib/personas/registry";
 import { applyPersona, useLens } from "@/lib/personas/store";
 import { useStrata, type LonLat } from "@/lib/fabric/strataStore";
+import { identifyParcel, useParcelPick } from "@/lib/parcels/pick";
 
 export interface ShareState {
   lat?: number;
@@ -63,6 +67,8 @@ export interface ShareState {
   space?: boolean;
   /** A drawn line or area, shown with its measurement. */
   shape?: Shape;
+  /** The point a parcel was identified at (the parcels layer's dossier). */
+  parcel?: LonLat;
 }
 
 /** "a:lon,lat;lon,lat;…" or "l:…" -> Shape, or undefined when malformed. */
@@ -110,6 +116,11 @@ export function parseLatLon(v: string | null | undefined): LonLat | undefined {
 
 export function formatLatLonParam(p: LonLat): string {
   return `${p.lat.toFixed(4)},${p.lon.toFixed(4)}`;
+}
+
+/** A parcel point keeps 5 decimals (about 1 m): a narrow lot is smaller than 4 decimals' 11 m. */
+export function formatParcelParam(p: LonLat): string {
+  return `${p.lat.toFixed(5)},${p.lon.toFixed(5)}`;
 }
 
 const LAYER_SET = new Set<string>(LAYER_IDS);
@@ -168,6 +179,8 @@ export function parseShare(search: string): ShareState {
   if (q.get("space") === "1") out.space = true;
   const shape = parseShape(q.get("shape"));
   if (shape) out.shape = shape;
+  const parcel = parseLatLon(q.get("parcel"));
+  if (parcel) out.parcel = parcel;
   return out;
 }
 
@@ -185,7 +198,8 @@ export function shareQuery(s: ShareState): string {
   if (s.p != null) q.set("p", s.p.toFixed(0));
   if (s.layers) q.set("layers", s.layers.join(","));
   if (s.t != null) q.set("t", new Date(s.t).toISOString().slice(0, 19) + "Z");
-  if (s.sel) q.set("sel", `${s.sel.layer}:${s.sel.id}`);
+  // An identified parcel travels as its point; its selection id cannot be looked up in a feed.
+  if (s.sel && !(s.parcel && s.sel.layer === "parcels")) q.set("sel", `${s.sel.layer}:${s.sel.id}`);
   if (s.report) q.set("report", "1");
   if (s.market) q.set("market", "1");
   if (s.vintage && isValidVintage(s.vintage)) q.set("v", s.vintage);
@@ -194,6 +208,7 @@ export function shareQuery(s: ShareState): string {
   if (s.pin) q.set("pin", formatLatLonParam(s.pin));
   if (s.cmp) q.set("cmp", formatLatLonParam(s.cmp));
   if (s.space) q.set("space", "1");
+  if (s.parcel) q.set("parcel", formatParcelParam(s.parcel));
   let str = q.toString();
   // The shape goes last and unescaped (URLSearchParams would write , ; : as
   // %2C %3B %3A), so a link with a drawn area stays readable. Its characters
@@ -208,6 +223,8 @@ export function currentShare(): ShareState {
   const st = useGlobe.getState();
   const strata = useStrata.getState();
   const on = LAYER_IDS.filter((id) => st.layers[id]);
+  const pick = useParcelPick.getState().pick;
+  const parcel = st.selected?.layer === "parcels" && pick ? { lat: pick.lat, lon: pick.lon } : undefined;
   return {
     lat: st.view.lat,
     lon: st.view.lon,
@@ -226,6 +243,7 @@ export function currentShare(): ShareState {
     cmp: strata.compare ?? undefined,
     space: st.spaceWeatherOpen || undefined,
     shape: completeShape(st.measure.shape),
+    parcel,
   };
 }
 
@@ -277,11 +295,15 @@ export function startUrlSync(): () => void {
   const unsubStrata = useStrata.subscribe((s, prev) => {
     if (s.pin !== prev.pin || s.compare !== prev.compare) schedule();
   });
+  const unsubParcel = useParcelPick.subscribe((s, prev) => {
+    if (s.pick?.lon !== prev.pick?.lon || s.pick?.lat !== prev.pick?.lat) schedule();
+  });
   return () => {
     unsub();
     unsubReleases();
     unsubLens();
     unsubStrata();
+    unsubParcel();
     if (timer) clearTimeout(timer);
   };
 }
@@ -319,7 +341,13 @@ export function applyShare(s: ShareState, opts: { fly?: boolean } = {}): void {
   if (opts.fly !== false && s.lat != null && s.lon != null) {
     flyTo(s.lon, s.lat, { height: s.h ?? 120_000, pitchDeg: s.p ?? -55, headingDeg: s.hd ?? 0, durationS: 4 });
   }
-  if (s.sel) {
+  // A shared parcel: the layer on, and its dossier asked for once the camera has arrived.
+  if (s.parcel) {
+    const pt = s.parcel;
+    st.setLayer("parcels", true);
+    setTimeout(() => void identifyParcel(pt.lon, pt.lat), opts.fly !== false && s.lat != null ? 4200 : 300);
+  }
+  if (s.sel && !(s.parcel && s.sel.layer === "parcels")) {
     const sel = s.sel;
     const started = Date.now();
     const tryPick = () => {
@@ -340,7 +368,7 @@ export async function copyShareLink(): Promise<string> {
   const url = shareUrl();
   try {
     await navigator.clipboard.writeText(url);
-    useGlobe.getState().pushLog({ level: "info", text: "Link copied. It carries the view, the layers, the clock, the vintage, the selection, open reports, any comparison and a drawn shape." });
+    useGlobe.getState().pushLog({ level: "info", text: "Link copied. It carries the view, the layers, the clock, the vintage, the selection (an identified parcel as its point), open reports, any comparison and a drawn shape." });
   } catch {
     useGlobe.getState().pushLog({ level: "warn", text: `Clipboard blocked; the link is ${url}` });
   }

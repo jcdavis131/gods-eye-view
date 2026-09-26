@@ -49,7 +49,8 @@ export async function upstream(
 
 /**
  * Per-upstream politeness gate: at most one request every `minIntervalMs`,
- * callers queue behind each other. After a 429 the gate closes for
+ * callers queue behind each other. After a 429 (or any status in
+ * `backoffOn`, e.g. a 503 from a county server) the gate closes for
  * `backoffMs` and callers fail fast with the last error instead of piling on.
  */
 const gates = new Map<string, { next: number; blockedUntil: number; lastError?: Error }>();
@@ -59,6 +60,7 @@ export async function polite<T>(
   minIntervalMs: number,
   backoffMs: number,
   fn: () => Promise<T>,
+  backoffOn: readonly number[] = [429],
 ): Promise<T> {
   let g = gates.get(upstreamName);
   if (!g) {
@@ -76,7 +78,7 @@ export async function polite<T>(
   try {
     return await fn();
   } catch (err) {
-    if (err instanceof UpstreamError && err.status === 429) {
+    if (err instanceof UpstreamError && backoffOn.includes(err.status)) {
       g.blockedUntil = Date.now() + backoffMs;
       g.lastError = err;
     }

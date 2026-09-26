@@ -132,6 +132,7 @@ export const LAYER_LABEL_PRIORITY: Record<string, number> = {
   companies: 30,
   wetlands: 30,
   publiclands: 30,
+  parcels: 10,
   banks: 28,
   spending: 26,
   realestate: 26,

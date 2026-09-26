@@ -38,6 +38,10 @@ Then drive the production build in a real browser (`npx next start -p 3100`, ope
 
 `node scripts/economy-data.mjs` re-downloads the NGA World Port Index and the Natural Earth countries, re-matches the BTS port authorities to harbours (World Port Index entry within 150 km of the geocoded harbour city, otherwise the city point, otherwise left off) and rewrites `lib/economy/data/`. Every file carries the date it was pulled. Do not hand-edit coordinates in those files; fix the crosswalk in the script instead.
 
+## Adding a parcel source
+
+One adapter in `lib/parcels/adapters.ts`: the service URL, the county GEOIDs or state it answers for (`COUNTY_ADAPTERS`, `STATE_ADAPTERS`), an explicit `outFields` list (never `*`, and never a homestead or owner-occupancy flag), the parcel id and use fields an outline carries, and a `normalize()` that ends in `finalize()` so the shared privacy rules apply. Probe the service live first (a point query at a publicly owned parcel), capture that answer through `rowsAt()` into `lib/parcels/fixtures/`, and test the adapter on it; add its source id to `lib/provenance/sources.ts` and a row to the README's coverage table. A service that withholds owners with a flag or a placeholder keeps them withheld here, mailing address included; nothing it suppresses is looked up anywhere else. If its box queries are too slow for lot lines, give it `noOutlines` with the reason.
+
 ## Adding an Explore preset
 
 `lib/explore/presets.ts`. A preset is a place, a height and which layers to switch on. Probe the place first (the USGS Water Data API is enough for the water layers; for flood zones, wetlands and public lands, query the upstream with the exact box the layer requests at the preset's height (flood and wetlands: a 4.5 km radius around the 0.04 degree view-key cell)) so the preset never lands on an empty map, and write the blurb about what the layers will show there, not about the water body itself. A place that moves (the largest fire) gets a `resolve()` that finds it when the preset is used, with a fixed fallback; use it through `presetTarget()`.

@@ -43,6 +43,9 @@ export const SEARCHABLE_DETAILS: ReadonlySet<string> = new Set([
   "port code",
   "locode",
   "local name",
+  // parcels: the parcel id the county or state publishes. Never "owner",
+  // "taxpayer", "mailing" or "owner address": no search from a name to land.
+  "parcel id",
   // companies, banks, constructs: identifiers and categories their publishers assign
   "ticker",
   "cik",

@@ -15,6 +15,15 @@ describe("Explore presets", () => {
       "mitchell-lake",
       "government-canyon",
     ]);
+    expect(PRESET_GROUPS.find((g) => g.title === "Parcels & ownership")?.presets.map((p) => p.id)).toEqual(["alamo-parcel", "houston-city-hall", "helena-capitol"]);
+  });
+
+  it("open a parcel's dossier at the target, below the height lot lines draw at", () => {
+    for (const p of PRESETS.filter((x) => x.parcel)) {
+      expect(p.layers).toContain("parcels");
+      expect(p.height).toBeLessThanOrEqual(2_000);
+      expect(presetShare(p).parcel).toEqual({ lat: p.lat, lon: p.lon });
+    }
   });
 });
 

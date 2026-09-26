@@ -13,6 +13,8 @@ import { cinematicTick, followTick } from "@/lib/globe/camera";
 import { isMobileViewport } from "@/lib/hooks/useIsMobile";
 import { satWorker } from "@/lib/globe/satWorker";
 import { measureClick, startMeasureOverlay } from "@/lib/globe/measure";
+import { identifyParcel, startParcelOverlay } from "@/lib/parcels/pick";
+import { PARCEL_IDENTIFY_MAX_M } from "@/lib/layers/parcels";
 import { parseShare } from "@/lib/globe/share";
 import { flyTo } from "@/lib/globe/camera";
 import { useGlobe } from "@/lib/store/globe";
@@ -234,6 +236,8 @@ export default function CesiumGlobe() {
 
       // Measure tools draw their own overlay from the store.
       cleanups.push(startMeasureOverlay(viewer));
+      // The parcel a click identified: its outline, while its dossier is open.
+      cleanups.push(startParcelOverlay(viewer));
 
       // Compare: a second pin (B) for the constructs stack. Dropped by the
       // rail's Compare button (next tap), a long-press on a phone, or a
@@ -342,7 +346,18 @@ export default function CesiumGlobe() {
         const picked = scene.pick(e.position) as { id?: unknown } | undefined;
         const id = picked?.id;
         const st = useGlobe.getState();
-        if (isPickId(id)) {
+        // Parcels: a click on the ground, or on a lot line (outlines carry no record),
+        // asks for the parcel at that point. Any other object picked wins.
+        if ((!isPickId(id) || id.layer === "parcels") && st.layers.parcels && st.view.height <= PARCEL_IDENTIFY_MAX_M) {
+          const ray = viewer!.camera.getPickRay(e.position);
+          const hit = (ray && scene.globe.pick(ray, scene)) || viewer!.camera.pickEllipsoid(e.position, ellipsoid);
+          if (hit) {
+            const c = C.Cartographic.fromCartesian(hit);
+            void identifyParcel(C.Math.toDegrees(c.longitude), C.Math.toDegrees(c.latitude));
+            return;
+          }
+        }
+        if (isPickId(id) && id.layer !== "parcels") {
           const feature = getRenderer(id.layer)?.getFeature(id.id) ?? null;
           st.select({ layer: id.layer, id: id.id }, feature);
         } else {

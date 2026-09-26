@@ -7,6 +7,9 @@
 // listed, so none of them lands on an empty map. The hazards & land presets
 // were probed on 2026-09-25 with the exact box each layer requests. Fires
 // move, so the wildfire preset has no fixed place: it resolves when clicked.
+// The parcel presets were probed on 2026-09-26 through /api/parcels with the
+// outline box the layer asks for at their height and an identify at the
+// target; each opens the record of a publicly owned parcel.
 
 import type { LayerFeature, LayerId } from "@/lib/layers/types";
 import type { ShareState } from "@/lib/globe/share";
@@ -28,7 +31,9 @@ export interface Preset {
   /** Open the market report on arrival. */
   market?: boolean;
   /** Gallery section; water presets carry no group. */
-  group?: "markets" | "constructs" | "hazards";
+  group?: "markets" | "constructs" | "hazards" | "parcels";
+  /** Open the parcel dossier at the target on arrival (parcels layer). */
+  parcel?: boolean;
   /**
    * For places that move (the largest fire): where to go right now, asked
    * when the preset is used. The lat/lon above are the fallback.
@@ -379,12 +384,59 @@ export const PRESETS: Preset[] = [
     layers: ["publiclands", "water"],
     dwellS: 30,
   },
+  {
+    id: "alamo-parcel",
+    title: "The Alamo's parcel",
+    region: "Downtown San Antonio, Texas",
+    group: "parcels",
+    blurb: "About 500 lot lines from TxGIO's StratMap copy of the Bexar Appraisal District roll, with the Alamo's own record open: owner State of Texas, a 2025 market value of $200,000,000 as the district publishes it, its legal description and the date of the roll. Click any other lot for its record; owners appear only for the one parcel you click, and nothing searches them.",
+    lon: -98.4861,
+    lat: 29.426,
+    height: 1_500,
+    layers: ["parcels"],
+    parcel: true,
+    dwellS: 30,
+  },
+  {
+    id: "houston-city-hall",
+    title: "Houston City Hall",
+    region: "Downtown Houston, Texas",
+    group: "parcels",
+    blurb: "Some 750 lot lines from the Harris Central Appraisal District around City Hall, whose record opens with the City of Houston as owner, the 2026 appraised and market value of $19,625,000 and HCAD's new-owner date (1988), as HCAD publishes them. Where HCAD flags a record confidential it shows no owner name, and this app shows that owner as withheld and leaves out the mailing address too.",
+    lon: -95.3693,
+    lat: 29.7604,
+    height: 1_500,
+    layers: ["parcels"],
+    parcel: true,
+    dwellS: 30,
+  },
+  {
+    id: "helena-capitol",
+    title: "Montana State Capitol",
+    region: "Helena, Montana",
+    group: "parcels",
+    blurb: "About 750 lot lines from the Montana Cadastral Framework, and the Capitol grounds' record from the Department of Revenue: owner, 2026 values and legal description, the NAD address points on the parcel, and the BLM Public Land Survey section it lies in (T10N R3W, section 32, Montana Meridian).",
+    lon: -112.0181,
+    lat: 46.5857,
+    height: 1_500,
+    layers: ["parcels"],
+    parcel: true,
+    dwellS: 30,
+  },
 ];
 
 export const PRESET_BY_ID = new Map(PRESETS.map((p) => [p.id, p]));
 
 export function presetShare(p: Preset): ShareState {
-  return { lat: p.lat, lon: p.lon, h: p.height, layers: p.layers, report: p.report || undefined, market: p.market || undefined };
+  return {
+    lat: p.lat,
+    lon: p.lon,
+    h: p.height,
+    layers: p.layers,
+    report: p.report || undefined,
+    market: p.market || undefined,
+    parcel: p.parcel ? { lat: p.lat, lon: p.lon } : undefined,
+  };
 }
 
 /** presetShare, with a moving preset resolved to where it is now (falls back to the fixed place). */
@@ -405,4 +457,5 @@ export const PRESET_GROUPS: Array<{ title: string; presets: Preset[] }> = [
   { title: "Trade & markets", presets: PRESETS.filter((p) => p.group === "markets") },
   { title: "Constructs", presets: PRESETS.filter((p) => p.group === "constructs") },
   { title: "Hazards & land", presets: PRESETS.filter((p) => p.group === "hazards") },
+  { title: "Parcels & ownership", presets: PRESETS.filter((p) => p.group === "parcels") },
 ];

@@ -49,6 +49,10 @@
       "description": "Flood zones, wetlands, public and protected lands, ground elevation: FEMA NFHL, USFWS NWI, USGS PAD-US, USGS 3DEP EPQS."
     },
     {
+      "name": "parcels",
+      "description": "Parcels and ownership as each county or state service publishes them, NAD address points and BLM PLSS; found only by a point or a box, never by a name."
+    },
+    {
       "name": "space",
       "description": "Space weather (GFZ Kp, NASA DONKI) and NASA's ISS live stream, checked through YouTube oEmbed."
     },
@@ -2219,6 +2223,108 @@
         ],
         "summary": "CORS preflight",
         "operationId": "landOptions",
+        "responses": {
+          "204": {
+            "description": "No content."
+          }
+        }
+      }
+    },
+    "/api/parcels": {
+      "get": {
+        "summary": "The parcel at a point as its county or state publishes it, or parcel outlines in a small box",
+        "description": "mode=identify (the default): the county at lon, lat (Census TIGERweb), the keyless parcel service wired for it, and the parcel record(s) there as that service publishes them: parcel id, site address, owner names (or `withheld` with the reason: the source's confidentiality flag, a placeholder such as \"Current Owner\", or New Jersey's Daniel's Law; or `not-published` where the service carries no owner field), mailing address, values each with the source's own label and year, exemption, use, zoning, year built, area with its basis, last sale, legal description, and the source's own record link. Also USDOT NAD address points on the parcel (`addresses`, null when NAD did not answer within 2.5 s) and, in the 30 PLSS states, the BLM township and section (`plss`). mode=outlines: parcel outlines in a box of at most 0.01° snapped to 0.002°, carrying the parcel id and use class only, never an owner. mode=addresses: NAD address points on the parcel at the point, waiting up to 30 s. There is no name parameter: `owner`, `name`, `q`, `where`, `search` and `query` are refused with 400.",
+        "tags": [
+          "parcels"
+        ],
+        "parameters": [
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "identify",
+                "outlines",
+                "addresses"
+              ],
+              "default": "identify"
+            },
+            "description": "identify: the parcel record(s) at lon, lat. outlines: lot lines in bbox (id and use class only). addresses: NAD address points at lon, lat."
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            },
+            "description": "mode=identify and addresses: longitude of the point (rounded to 5 decimals)."
+          },
+          {
+            "name": "lat",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            },
+            "description": "mode=identify and addresses: latitude of the point (rounded to 5 decimals)."
+          },
+          {
+            "name": "bbox",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Bbox"
+            },
+            "description": "`w,s,e,n` degrees. Required for mode=outlines; clamped to 0.01° and snapped to 0.002°. The snapped box comes back in `bbox`."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope for the mode.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/Cors"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ParcelsIdentifyResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ParcelsOutlinesResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ParcelsAddressesResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/Upstream"
+          }
+        }
+      },
+      "options": {
+        "tags": [
+          "parcels"
+        ],
+        "summary": "CORS preflight",
+        "operationId": "parcelsOptions",
         "responses": {
           "204": {
             "description": "No content."
@@ -4626,6 +4732,595 @@
           }
         ],
         "x-op": "alerts"
+      },
+      "ParcelRecord": {
+        "type": "object",
+        "required": [
+          "adapter",
+          "parcelId",
+          "owner"
+        ],
+        "description": "One parcel as its source publishes it. A field the source does not publish is absent, never filled in.",
+        "properties": {
+          "adapter": {
+            "type": "string",
+            "description": "Which service answered (tx-stratmap, tx-hcad, az-maricopa, ca-la, il-cook, wa-king, mi-detroit, wi-statewide, nc-statewide, mt-statewide, mn-parcels, fl-dor, ma-massgis, vt-vcgi, ut-lir, oh-statewide, nj-modiv, ny-its, ct-cama, md-sdat)."
+          },
+          "parcelId": {
+            "type": "string"
+          },
+          "otherIds": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "county": {
+            "type": "string"
+          },
+          "municipality": {
+            "type": "string"
+          },
+          "situs": {
+            "type": "string",
+            "description": "Site address as published."
+          },
+          "propertyName": {
+            "type": "string",
+            "description": "A name the source gives the property (a building), never an owner's."
+          },
+          "owner": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": [
+                  "status",
+                  "names",
+                  "role"
+                ],
+                "properties": {
+                  "status": {
+                    "const": "published"
+                  },
+                  "names": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "role": {
+                    "enum": [
+                      "owner",
+                      "taxpayer"
+                    ]
+                  },
+                  "careOf": {
+                    "type": "string"
+                  },
+                  "dba": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "status",
+                  "reason"
+                ],
+                "properties": {
+                  "status": {
+                    "const": "withheld"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "status",
+                  "reason"
+                ],
+                "properties": {
+                  "status": {
+                    "const": "not-published"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              }
+            ]
+          },
+          "mailing": {
+            "type": "string"
+          },
+          "mailingNote": {
+            "type": "string",
+            "description": "Why a mailing address the source has is not shown."
+          },
+          "ownerAddress": {
+            "type": "string"
+          },
+          "taxpayer": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "address": {
+                "type": "string"
+              }
+            }
+          },
+          "ownedSince": {
+            "type": "string",
+            "format": "date"
+          },
+          "values": {
+            "type": "object",
+            "required": [
+              "items"
+            ],
+            "properties": {
+              "year": {
+                "type": "string",
+                "description": "The source's own year label: \"tax year 2025\", \"fiscal year 2023\", \"grand list 2025\"."
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "label",
+                    "amount"
+                  ],
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "description": "The source's own term: market value, full cash value, just value, estimated fair market value…"
+                    },
+                    "amount": {
+                      "type": "number"
+                    }
+                  }
+                }
+              },
+              "note": {
+                "type": "string"
+              }
+            }
+          },
+          "exempt": {
+            "type": "string"
+          },
+          "use": {
+            "type": "string"
+          },
+          "zoning": {
+            "type": "string"
+          },
+          "yearBuilt": {
+            "type": "string"
+          },
+          "area": {
+            "type": "object",
+            "required": [
+              "value",
+              "unit",
+              "basis"
+            ],
+            "properties": {
+              "value": {
+                "type": "number"
+              },
+              "unit": {
+                "enum": [
+                  "acres",
+                  "sq ft"
+                ]
+              },
+              "basis": {
+                "type": "string"
+              }
+            }
+          },
+          "lastSale": {
+            "type": "object",
+            "properties": {
+              "date": {
+                "type": "string"
+              },
+              "price": {
+                "type": "number"
+              },
+              "reference": {
+                "type": "string"
+              }
+            }
+          },
+          "legal": {
+            "type": "string"
+          },
+          "subdivision": {
+            "type": "string"
+          },
+          "plssText": {
+            "type": "string"
+          },
+          "asOf": {
+            "type": "string"
+          },
+          "link": {
+            "type": "object",
+            "required": [
+              "url",
+              "label"
+            ],
+            "properties": {
+              "url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "label": {
+                "type": "string"
+              }
+            }
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ParcelsIdentifyResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "point",
+                  "county",
+                  "adapter",
+                  "parcels",
+                  "addresses",
+                  "notes"
+                ],
+                "properties": {
+                  "point": {
+                    "type": "object",
+                    "properties": {
+                      "lon": {
+                        "type": "number"
+                      },
+                      "lat": {
+                        "type": "number"
+                      }
+                    }
+                  },
+                  "county": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "geoid": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "basename": {
+                        "type": "string"
+                      },
+                      "state": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "adapter": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "publisher": {
+                        "type": "string"
+                      },
+                      "coverage": {
+                        "type": "string"
+                      },
+                      "ownerPublished": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "parcels": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "record",
+                        "geometry"
+                      ],
+                      "properties": {
+                        "record": {
+                          "$ref": "#/components/schemas/ParcelRecord"
+                        },
+                        "geometry": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "description": "GeoJSON Polygon or MultiPolygon."
+                        }
+                      }
+                    }
+                  },
+                  "addresses": {
+                    "type": [
+                      "array",
+                      "null"
+                    ],
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "address",
+                        "lon",
+                        "lat",
+                        "onParcel"
+                      ],
+                      "properties": {
+                        "address": {
+                          "type": "string"
+                        },
+                        "lon": {
+                          "type": "number"
+                        },
+                        "lat": {
+                          "type": "number"
+                        },
+                        "onParcel": {
+                          "type": "boolean",
+                          "description": "Inside the identified parcel's outline; false: within 40 m of the point instead."
+                        },
+                        "source": {
+                          "type": "string",
+                          "description": "NAD contributor, e.g. \"State of Texas\"."
+                        },
+                        "updated": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "type": {
+                          "type": "string"
+                        },
+                        "parcelId": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "description": "null when NAD did not answer within 2.5 s (mode=addresses asks again)."
+                  },
+                  "plss": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "state": {
+                        "type": "string"
+                      },
+                      "meridian": {
+                        "type": "string"
+                      },
+                      "township": {
+                        "type": "string"
+                      },
+                      "section": {
+                        "type": "string"
+                      },
+                      "sectionType": {
+                        "type": "string"
+                      },
+                      "plssId": {
+                        "type": "string"
+                      },
+                      "firstDivisionId": {
+                        "type": "string"
+                      }
+                    },
+                    "description": "Absent outside the 30 PLSS states; null when BLM did not answer."
+                  },
+                  "notes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "mode": {
+                "const": "identify"
+              },
+              "stale": {
+                "type": "boolean",
+                "description": "The source did not answer; this is its last answer, older than a day."
+              }
+            }
+          }
+        ],
+        "x-op": "identify"
+      },
+      "ParcelsOutlinesResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "mode": {
+                "const": "outlines"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "sources": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              },
+              "failed": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "uncovered": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Counties in the box with no keyless parcel service wired."
+              },
+              "identifyOnly": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "description": "Services in the box that answer a click but draw no lot lines, and why (Wisconsin: box queries take 25-45 s)."
+              },
+              "truncated": {
+                "type": "boolean"
+              }
+            }
+          }
+        ],
+        "x-op": "outlines"
+      },
+      "ParcelsAddressesResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "point": {
+                    "type": "object"
+                  },
+                  "parcelOutline": {
+                    "type": "boolean"
+                  },
+                  "addresses": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "address",
+                        "lon",
+                        "lat",
+                        "onParcel"
+                      ],
+                      "properties": {
+                        "address": {
+                          "type": "string"
+                        },
+                        "lon": {
+                          "type": "number"
+                        },
+                        "lat": {
+                          "type": "number"
+                        },
+                        "onParcel": {
+                          "type": "boolean",
+                          "description": "Inside the identified parcel's outline; false: within 40 m of the point instead."
+                        },
+                        "source": {
+                          "type": "string",
+                          "description": "NAD contributor, e.g. \"State of Texas\"."
+                        },
+                        "updated": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "type": {
+                          "type": "string"
+                        },
+                        "parcelId": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "mode": {
+                "const": "addresses"
+              }
+            }
+          }
+        ],
+        "x-op": "addresses"
       },
       "LandFloodResponse": {
         "allOf": [

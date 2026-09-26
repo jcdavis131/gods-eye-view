@@ -17,7 +17,7 @@
 
 import type { FeatureCollection } from "geojson";
 import { bboxAround } from "@/lib/globe/geo";
-import type { FetchContext, FetchResult, LayerDefinition, LayerFeature, ViewState } from "./types";
+import type { FetchContext, FetchResult, LayerDefinition, LayerFeature, LayerId, ViewState } from "./types";
 import { proxy } from "./aircraft";
 import { FeatureMemo } from "./featureMemo";
 
@@ -38,7 +38,7 @@ export function nearViewKey(max: number, grid = LAND_KEY_GRID) {
 const memos: Record<"flood" | "wetlands", FeatureMemo> = { flood: new FeatureMemo(), wetlands: new FeatureMemo() };
 
 /** The box a land layer loaded, as a dashed outline feature (kind "loaded-box"; never counted or searched). */
-export function loadedBoxFeature(layer: "flood" | "wetlands", b: [number, number, number, number], what: string): LayerFeature {
+export function loadedBoxFeature(layer: LayerId, b: [number, number, number, number], what: string): LayerFeature {
   const [w, s, e, n] = b;
   return {
     type: "Feature",

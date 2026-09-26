@@ -145,13 +145,15 @@ TTLs follow upstream cadence:
 | Hazard alerts (NWS, GDACS, EONET) | 2 min (1 min while a source is down) | 2 min (NWS), 10 min (GDACS), 30 min (EONET) |
 | Flood zones, wetlands, public lands | 1 h (wetlands 10 min while NWI's imagery layer is missing) | 1 day per snapped box |
 | Elevation (EPQS) | 1 day (10 min for a "no value" answer) | 1 day per point |
+| Parcel at a point (`/api/parcels`) | 1 h (10 min when no parcel was found) | 1 day per point to 5 decimals; the county lookup 30 days; NAD 7 days; PLSS 30 days |
+| Parcel outlines (`mode=outlines`) | 6 h (10 min when a source failed) | 7 days per snapped box |
 | Space weather, ISS stream | 15 min (2 min while a source is down) | 15 min, 30 min |
 
-Bounding boxes are snapped outward (water: 0.5° grid, 4° max span; economy: 1° grid, 18° max span; fire hotspots: 1° grid, up to the whole globe; flood zones and wetlands: 0.02° grid, 0.08° max span; public lands: 0.25° grid, 2° max span), so two callers a few kilometres apart share one entry. The snapped box comes back in `bbox`.
+Bounding boxes are snapped outward (water: 0.5° grid, 4° max span; economy: 1° grid, 18° max span; fire hotspots: 1° grid, up to the whole globe; flood zones and wetlands: 0.02° grid, 0.08° max span; public lands: 0.25° grid, 2° max span; parcel outlines: 0.002° grid, 0.01° max span), so two callers a few kilometres apart share one entry. The snapped box comes back in `bbox`.
 
 ## Rate limits and courtesy
 
-There is no key and no quota on this API. Behind it, the server rate-gates each upstream (one request per 150–400 ms per upstream, backing off for 30–60 s after a 429) and answers from cache whenever it can, so a burst from you becomes at most one upstream call per table. Please still:
+There is no key and no quota on this API. Behind it, the server rate-gates each upstream (one request per 150–400 ms per upstream, backing off for 30–60 s after a 429; county and state parcel servers one request per second per host, five minutes off after a 429 or a 503) and answers from cache whenever it can, so a burst from you becomes at most one upstream call per table. Please still:
 
 - send a `User-Agent` that identifies your project;
 - fetch tables once and keep them (the CSV is a file; save it);
@@ -199,6 +201,8 @@ A number you fetch today may not be the number the same query returns next month
 **USGS EPQS** (`usgs-epqs`). The 3DEP DEM that covers the point answers; `resolutionM` says which resolution it was, and 3DEP replaces DEMs as new lidar arrives. Outside 3DEP coverage there is no value, never a guessed one.
 
 **GFZ Kp and NASA DONKI** (`gfz-kp`, `nasa-donki`). GFZ marks recent Kp values preliminary (`status: "pre"`) and replaces them with definitive ones later; the provenance `revision` says `preliminary` while any value in the answer is. DONKI calls itself experimental research information and points to NOAA SWPC as the official source.
+
+**Parcels** (`txgio-stratmap`, `hcad-parcels`, `maricopa-assessor`, `lacounty-assessor`, `cook-parcels`, `king-parcels`, `detroit-parcels`, `wi-parcels`, `nc-parcels`, `mt-cadastral`, `mn-parcels`, `fl-dor-cadastral`, `massgis-parcels`, `vcgi-parcels`, `ugrc-lir`, `ohio-parcels`, `njogis-parcels`, `nys-tax-parcels`, `ct-parcels`, `md-parcels`, with `usdot-nad` and `blm-plss`). Each record is the county's or state's tax roll as its service holds it on the day it is read: values carry the source's own year label (`values.year`: tax, roll, fiscal or grand-list year), and a statewide composite (TxGIO StratMap, Florida DOR, Ohio OGRIP) can be a year or more behind the county's own record, which `link` points to where the source publishes one. Owners change hands and flags change at the source; a record here follows within about a day. `/api/parcels` takes a point (`lon`, `lat`) or a box (`bbox`) and refuses any name or search parameter; see the README's "Parcels & ownership" for what is withheld and why.
 
 **Estimates** (`kind: "estimate"`). Deterministic given their inputs; the inputs are the records next to them. Re-running with revised inputs gives a different estimate, and `method` shows exactly which numbers went in.
 

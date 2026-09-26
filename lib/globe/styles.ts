@@ -19,6 +19,7 @@ import { fieldStyle } from "./fieldStyles";
 import { alertsStyle } from "./alertStyles";
 import { firesStyle, hazardsStyle, wildfireStyle } from "./hazardStyles";
 import { floodStyle, publiclandsStyle, wetlandsStyle } from "./landStyles";
+import { parcelsStyle } from "./parcelStyles";
 
 /** Distinctive major-group colours for the occupations layer: one hue per SOC major group. */
 const OCCUPATION_COLORS: Record<string, string> = {
@@ -389,6 +390,7 @@ export const STYLES: Partial<Record<LayerId, LayerStyle>> = {
   flood: floodStyle,
   wetlands: wetlandsStyle,
   publiclands: publiclandsStyle,
+  parcels: parcelsStyle,
   sports: sportsStyle,
   constructs: constructsStyle,
   field: fieldStyle,
@@ -421,6 +423,7 @@ export const FOLLOW_RANGE: Record<LayerId, number> = {
   flood: 3_000,
   wetlands: 3_000,
   publiclands: 40_000,
+  parcels: 800,
   sports: 500_000,
   constructs: 150_000,
   field: 400_000,

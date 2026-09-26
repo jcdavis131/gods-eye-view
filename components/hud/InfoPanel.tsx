@@ -24,6 +24,8 @@ import EconomyAside from "./EconomyAsides";
 import CompanyAside from "./CompanyAside";
 import FinanceAside from "./FinanceAsides";
 import ConstructAside, { ConstructContext } from "./ConstructAside";
+import ParcelAside from "./ParcelAside";
+import { flyTo } from "@/lib/globe/camera";
 
 function useRefresh(ms: number) {
   const [, set] = useState(0);
@@ -109,10 +111,13 @@ export default function InfoPanel() {
   // A construct floats above the point it was asked about; report that point, not the stratum.
   const ground = p.layer === "constructs" || p.layer === "field" ? (p.extra as { ground?: [number, number] } | undefined)?.ground : undefined;
   if (ground) lonlat = [ground[0], ground[1], 0];
+  // An identified parcel: the point that was clicked.
+  const parcel = p.layer === "parcels";
+  if (parcel && p.anchor) lonlat = [p.anchor[0], p.anchor[1], 0];
   const details = Object.entries(p.details ?? {}).filter(([, v]) => v != null && v !== "" && v !== false);
   const isLiveLayer =
     !p.simulated &&
-    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "banks", "spending", "constructs", "field", "flood", "wetlands", "publiclands"].includes(p.layer);
+    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "banks", "spending", "constructs", "field", "flood", "wetlands", "publiclands", "parcels"].includes(p.layer);
   const banner = BANNER[p.layer];
   const iss = p.layer === "satellites" && p.id === "25544";
   const construct = p.layer === "constructs" || p.layer === "field" || p.layer === "alerts";
@@ -218,6 +223,7 @@ export default function InfoPanel() {
         {economy && <EconomyAside key={p.id} feature={feature} />}
         {p.layer === "companies" && <CompanyAside key={p.id} feature={feature} />}
         {(p.layer === "banks" || p.layer === "spending") && <FinanceAside key={p.id} feature={feature} />}
+        {parcel && <ParcelAside key={p.id} feature={feature} />}
         {construct ? <ConstructAside key={p.id} feature={feature} /> : <ConstructContext key={`ctx:${p.layer}:${p.id}`} feature={feature} />}
         {well && (
           <GaugeHistory
@@ -230,26 +236,39 @@ export default function InfoPanel() {
         )}
 
         <div className="flex gap-1 border-t border-border p-2">
-          <button
-            type="button"
-            onClick={() => (following ? stopFollowing() : startFollowing())}
-            className={`flex flex-1 items-center justify-center gap-2 border px-2 py-1.5 text-[10px] uppercase tracking-widest ${
-              following
-                ? "border-signal/60 bg-signal/10 text-signal"
-                : "border-border text-foreground/80 hover:bg-accent hover:text-primary"
-            }`}
-          >
-            <LocateFixed className="size-3.5" />
-            {following ? "Following" : "Follow"}
-          </button>
-          <button
-            type="button"
-            onClick={() => flyToSelection(selected)}
-            className="flex flex-1 items-center justify-center gap-2 border border-border px-2 py-1.5 text-[10px] uppercase tracking-widest text-foreground/80 hover:bg-accent hover:text-primary"
-          >
-            <Crosshair className="size-3.5" />
-            Fly to
-          </button>
+          {parcel ? (
+            <button
+              type="button"
+              onClick={() => lonlat && flyTo(lonlat[0], lonlat[1], { height: 900, pitchDeg: -60 })}
+              className="flex flex-1 items-center justify-center gap-2 border border-border px-2 py-1.5 text-[10px] uppercase tracking-widest text-foreground/80 hover:bg-accent hover:text-primary"
+            >
+              <Crosshair className="size-3.5" />
+              Fly to
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => (following ? stopFollowing() : startFollowing())}
+                className={`flex flex-1 items-center justify-center gap-2 border px-2 py-1.5 text-[10px] uppercase tracking-widest ${
+                  following
+                    ? "border-signal/60 bg-signal/10 text-signal"
+                    : "border-border text-foreground/80 hover:bg-accent hover:text-primary"
+                }`}
+              >
+                <LocateFixed className="size-3.5" />
+                {following ? "Following" : "Follow"}
+              </button>
+              <button
+                type="button"
+                onClick={() => flyToSelection(selected)}
+                className="flex flex-1 items-center justify-center gap-2 border border-border px-2 py-1.5 text-[10px] uppercase tracking-widest text-foreground/80 hover:bg-accent hover:text-primary"
+              >
+                <Crosshair className="size-3.5" />
+                Fly to
+              </button>
+            </>
+          )}
         </div>
       </div>
     </aside>
@@ -259,6 +278,7 @@ export default function InfoPanel() {
 /** One-line reminders of what a layer's features are and are not. */
 const BANNER: Partial<Record<string, string>> = {
   flood: "REGULATORY FLOOD MAP · NOT A FORECAST",
+  parcels: "PUBLIC RECORD AS ITS SOURCE PUBLISHES IT · A TAX MAP, NOT A SURVEY",
   wetlands: "HABITAT MAP FROM DATED IMAGERY · MAY HAVE CHANGED SINCE · NOT A JURISDICTIONAL DELINEATION",
   fires: "SATELLITE HOTSPOT · NOT A CONFIRMED FIRE",
 };

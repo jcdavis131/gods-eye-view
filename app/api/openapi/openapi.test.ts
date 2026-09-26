@@ -1,5 +1,5 @@
 // public/openapi.json must agree with the routes whose ops it enumerates
-// (economy, water, hazards, land, space): every op in the `op` enum has a
+// (economy, water, hazards, land, space, and parcels' `mode`): every op in the `op` enum has a
 // `case "<op>"` in the route, and every case in the route is documented. Also checks that the reserved placeholders exist and
 // that every route handler under app/api has a documented path and that every
 // $ref resolves.
@@ -14,8 +14,8 @@ const spec = JSON.parse(readFileSync(path.join(root, "public/openapi.json"), "ut
   components: { schemas: Record<string, unknown>; parameters: Record<string, unknown>; responses: Record<string, unknown>; headers: Record<string, unknown> };
 };
 
-function opsDocumented(route: string): string[] {
-  const p = spec.paths[route].get.parameters!.find((x) => x.name === "op");
+function opsDocumented(route: string, param = "op"): string[] {
+  const p = spec.paths[route].get.parameters!.find((x) => x.name === param);
   return p?.schema?.enum ?? [];
 }
 
@@ -56,12 +56,20 @@ describe("public/openapi.json", () => {
     expect(new Set(opsDocumented(route))).toEqual(new Set(opsInRoute(file)));
     expect(opsDocumented(route)).toContain(one);
   });
+  it("documents exactly the modes /api/parcels dispatches (its switch is on `mode`, not `op`)", () => {
+    expect(new Set(opsDocumented("/api/parcels", "mode"))).toEqual(new Set(opsInRoute("app/api/parcels/route.ts")));
+    expect(opsDocumented("/api/parcels", "mode")).toContain("identify");
+    // No name, owner or free-text parameter is documented, because none is accepted.
+    const names = spec.paths["/api/parcels"].get.parameters!.map((x) => x.name);
+    expect(names.sort()).toEqual(["bbox", "lat", "lon", "mode"]);
+  });
   it("has a response schema tagged x-op for every documented op", () => {
     const schemas = spec.components.schemas as Record<string, { "x-op"?: string }>;
     const tagged = Object.values(schemas).map((s) => s["x-op"]).filter((x): x is string => !!x);
     for (const route of ["/api/economy", "/api/water", "/api/hazards", "/api/land", "/api/space"]) {
       for (const op of opsDocumented(route)) expect(tagged, `${route} op=${op}`).toContain(op);
     }
+    for (const mode of opsDocumented("/api/parcels", "mode")) expect(tagged, `/api/parcels mode=${mode}`).toContain(mode);
   });
   it("names the FIRMS row columns the fires op sends", async () => {
     const { FIRE_ROW_COLUMNS } = await import("@/lib/hazards/features");

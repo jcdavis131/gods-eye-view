@@ -116,3 +116,26 @@ describe("space weather and drawn shapes in the share link", () => {
     expect(shapeParam(parseShare(q).shape!).split(";")).toHaveLength(60);
   });
 });
+
+describe("an identified parcel in the share link", () => {
+  it("travels as its point with 5 decimals, not as a selection id no feed holds", () => {
+    const q = shareQuery({ layers: ["parcels"], parcel: { lat: 29.426, lon: -98.4861 }, sel: { layer: "parcels", id: "parcel:tx-stratmap:101328" } });
+    expect(q).toContain("parcel=29.42600%2C-98.48610");
+    expect(q).not.toContain("sel=");
+    expect(parseShare(q)).toEqual({ layers: ["parcels"], parcel: { lat: 29.426, lon: -98.4861 } });
+  });
+
+  it("does not collide with the other point parameters, and drops an impossible point", () => {
+    const back = parseShare("?pin=30.2672,-97.7431&cmp=29.4241,-98.4936&parcel=29.42600,-98.48610");
+    expect(back.pin).toEqual({ lat: 30.2672, lon: -97.7431 });
+    expect(back.cmp).toEqual({ lat: 29.4241, lon: -98.4936 });
+    expect(back.parcel).toEqual({ lat: 29.426, lon: -98.4861 });
+    expect(parseShare("?parcel=95,10").parcel).toBeUndefined();
+    expect(parseShare("?parcel=SMITH").parcel).toBeUndefined();
+  });
+
+  it("keeps another layer's selection beside it", () => {
+    const q = shareQuery({ parcel: { lat: 1, lon: 2 }, sel: { layer: "water", id: "usgs:1" } });
+    expect(q).toContain("sel=water%3Ausgs%3A1");
+  });
+});
