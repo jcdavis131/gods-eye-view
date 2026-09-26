@@ -1,6 +1,6 @@
 # Embedding Atlas data API
 
-Keyless, CORS-open JSON and CSV over the same public sources the globe draws: USGS, NOAA, TWDB and the Drought Monitor for water; BLS QCEW, Zillow, BTS, the World Port Index, the World Bank and FRED for jobs, homes and trade; NIFC, NASA FIRMS, NWS, GDACS and EONET for hazards (`/api/hazards`); FEMA, USFWS, USGS PAD-US and 3DEP for land (`/api/land`); GFZ and NASA DONKI for space weather (`/api/space`). Every number carries provenance. This guide is for people calling it from a notebook, a script or their own page.
+Keyless, CORS-open JSON and CSV over the same public sources the globe draws: USGS, NOAA, TWDB and the Drought Monitor for water; BLS QCEW, Zillow, BTS, the World Port Index, the World Bank and FRED for jobs, homes and trade; NIFC, NASA FIRMS, NWS, GDACS and EONET for hazards (`/api/hazards`); FEMA, USFWS, USGS PAD-US and 3DEP for land (`/api/land`); GFZ and NASA DONKI for space weather (`/api/space`); ten city zoning services for zoning (`/api/zoning`); seven city permit portals, five licence registries, EPA ECHO and the Corps of Engineers for permits (`/api/permits`). Every number carries provenance. This guide is for people calling it from a notebook, a script or their own page.
 
 Machine-readable description: [`/api/openapi`](https://eye.jcamd.com/api/openapi) (also `public/openapi.json` in the repo).
 
@@ -146,8 +146,12 @@ TTLs follow upstream cadence:
 | Flood zones, wetlands, public lands | 1 h (wetlands 10 min while NWI's imagery layer is missing) | 1 day per snapped box |
 | Elevation (EPQS) | 1 day (10 min for a "no value" answer) | 1 day per point |
 | Space weather, ISS stream | 15 min (2 min while a source is down) | 15 min, 30 min |
+| Zoning (point, districts) | 1 h (5 min for a New York answer whose tax-lot lookup failed) | 1 day per point or snapped box; the Census place 30 days |
+| Building permits | 15 min (2 min while a city is down) | 30 min per city and box (Los Angeles 6 h) |
+| Business licences | 30 min (2 min while a registry is down) | 1 h per registry and box (Los Angeles 6 h) |
+| Environmental permits (ECHO, ORM) | 1 h (2 min while a source is down) | 6 h per program and box |
 
-Bounding boxes are snapped outward (water: 0.5° grid, 4° max span; economy: 1° grid, 18° max span; fire hotspots: 1° grid, up to the whole globe; flood zones and wetlands: 0.02° grid, 0.08° max span; public lands: 0.25° grid, 2° max span), so two callers a few kilometres apart share one entry. The snapped box comes back in `bbox`.
+Bounding boxes are snapped outward (water: 0.5° grid, 4° max span; economy: 1° grid, 18° max span; fire hotspots: 1° grid, up to the whole globe; flood zones and wetlands: 0.02° grid, 0.08° max span; public lands: 0.25° grid, 2° max span; zoning outlines: 0.0025° grid, 0.04° max span; building permits and licences: 0.0025° grid, 0.03° and 0.02° max span; environmental permits: 0.05° grid, 0.2° max span), so two callers a few kilometres apart share one entry. The snapped box comes back in `bbox`.
 
 ## Rate limits and courtesy
 
@@ -197,6 +201,14 @@ A number you fetch today may not be the number the same query returns next month
 **USGS PAD-US** (`usgs-padus`). Version 4.1 (doi:10.5066/P96WBCHS), relayed as published, owners and easement holders included; a later version replaces it. Public-access codes are PAD-US's, not permission to enter.
 
 **USGS EPQS** (`usgs-epqs`). The 3DEP DEM that covers the point answers; `resolutionM` says which resolution it was, and 3DEP replaces DEMs as new lidar arrives. Outside 3DEP coverage there is no value, never a guessed one.
+
+**City zoning** (`seattle-zoning`, `denver-zoning`, `nyc-dcp-zoning`, `nyc-ztldb`, `chicago-zoning`, `dallas-zoning`, `sanantonio-zoning`, `austin-zoning`, `la-zoning`, `sf-zoning`). Each city edits its layer as ordinances pass, a few times a month; the ZTLDB is monthly. `state` says what the answer is (district, right-of-way, no-district, no-ordinance for Houston, not-covered), `place` is the Census place that picked the city, and `published` carries the city's further fields label by label. The adopted zoning map and code govern; this is not a zoning verification.
+
+**Building permits** (`chicago-permits`, `austin-permits`, `seattle-permits`, `denver-permits`, `nyc-dob-permits`, `la-permits`, `sf-permits`). Live records: a permit's status, dates and valuation change as the city processes it, and the same query later answers differently. `coverage[]` names every city the box meets and its state; `partial` means the newest 500 came back and there are more. Valuations keep the name of the column they came from (`valuationLabel`), because the cities do not measure the same thing.
+
+**Licences** (`ny-sla-licences`, `chicago-licences`, `sf-business-locations`, `la-active-businesses`, `nyc-dcwp-licences`). Trade names only; `withheld` counts licences at apartment or unit addresses (a home-business heuristic). Los Angeles refreshes monthly, New York City's premises licences last updated 2026-08-20.
+
+**Environmental permits** (`epa-echo-cwa`, `epa-echo-air`, `usace-orm`). ECHO refreshes weekly; compliance is ECHO's words, and `not reported by ECHO` is not "no violation". The Corps' search is an undocumented public API: it returns at most 300 actions in no date order (sorted newest first here) and its `total` is national, so it is not relayed.
 
 **GFZ Kp and NASA DONKI** (`gfz-kp`, `nasa-donki`). GFZ marks recent Kp values preliminary (`status: "pre"`) and replaces them with definitive ones later; the provenance `revision` says `preliminary` while any value in the answer is. DONKI calls itself experimental research information and points to NOAA SWPC as the official source.
 
