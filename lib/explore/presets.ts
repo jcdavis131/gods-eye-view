@@ -433,7 +433,7 @@ export const PRESETS: Preset[] = [
     title: "Midtown Manhattan licences",
     region: "Midtown, New York City",
     group: "civic",
-    blurb: "About 1,400 licensed premises within a kilometre of the Empire State Building from the State Liquor Authority and the city's consumer protection department (restaurants, bars, home improvement contractors), trade names only; 30 at apartment or unit addresses are withheld as likely homes. The building's own lot is C5-3 and C6-4.5 in the Midtown special district.",
+    blurb: "About 1,400 licensed premises within a kilometre of the Empire State Building from the State Liquor Authority and the city's consumer protection department (restaurants, bars, home improvement contractors), trade names only; 31 at apartment or unit addresses are withheld as likely homes. The building's own lot is C5-3 and C6-4.5 in the Midtown special district.",
     lon: -73.9857,
     lat: 40.7484,
     height: 2_000,

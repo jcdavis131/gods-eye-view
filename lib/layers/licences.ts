@@ -19,7 +19,8 @@ import type { Bbox } from "@/lib/zoning/features";
 
 export const LICENCES_MAX_M = 3_000;
 const HALF_LAT = 0.005;
-const KEY_GRID = 0.0025;
+/** A new box every ~500 m of pan; the target stays at least 250 m inside the 1.1 km box. */
+const KEY_GRID = 0.005;
 
 export function licencesBox(v: Pick<ViewState, "lon" | "lat">): Bbox {
   return gridBox(v.lon, v.lat, HALF_LAT, KEY_GRID, 0.0025);
