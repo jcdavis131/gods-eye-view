@@ -27,6 +27,12 @@ export type LayerId =
   | "spending"
   | "occupations"
   | "weather"
+  | "wildfire"
+  | "fires"
+  | "hazards"
+  | "flood"
+  | "wetlands"
+  | "publiclands"
   | "sports"
   | "constructs"
   | "field"
@@ -51,6 +57,12 @@ export const LAYER_IDS: LayerId[] = [
   "spending",
   "occupations",
   "weather",
+  "wildfire",
+  "fires",
+  "hazards",
+  "flood",
+  "wetlands",
+  "publiclands",
   "sports",
   "constructs",
   "field",
@@ -113,6 +125,8 @@ export interface FetchContext {
   signal?: AbortSignal;
   /** Free-form layer options coming from the settings store (e.g. satellite groups). */
   options: Record<string, unknown>;
+  /** On/off state of the layers named in the definition's `dependsOn`. */
+  layersOn?: Partial<Record<LayerId, boolean>>;
 }
 
 export interface FetchResult {
@@ -142,6 +156,8 @@ export interface LayerDefinition {
   simulated?: boolean;
   /** Re-fetch when the mission clock moves to another day (satellite scenes). */
   timeDependent?: boolean;
+  /** Other layers whose on/off state fetch() reads (ctx.layersOn); toggling one re-runs it. */
+  dependsOn?: LayerId[];
   /** Short caption for estimate layers: what the numbers are and are not. */
   estimate?: string;
   attribution: string;

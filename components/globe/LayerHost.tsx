@@ -117,6 +117,9 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
     rendererRef.current?.setLabelsEnabled(labels);
   }, [labels]);
 
+  // On/off state of the layers this one reads (hazards steps aside for Earthquakes and Live warnings while they are on).
+  const depsKey = useGlobe((s) => (def.dependsOn ?? []).map((id) => (s.layers[id] ? "1" : "0")).join(""));
+
   const vk = def.viewDependent ? (def.viewKey?.(view) ?? viewKey(view)) : "static";
   const optionsKey = useMemo(() => {
     const ks = OPTION_KEYS[def.id] ?? [];
@@ -126,7 +129,7 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
   // TanStack re-reads queryFn on every render, so the closure always carries
   // the latest settled view, keys and prefs without touching refs in render.
   const query = useQuery({
-    queryKey: ["layer", def.id, vk, optionsKey, missionDay],
+    queryKey: ["layer", def.id, vk, optionsKey, missionDay, depsKey],
     queryFn: ({ signal }) =>
       def.fetch({
         keys,
@@ -135,6 +138,7 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
         missionTime: Date.now() + useGlobe.getState().clock.offsetMs,
         signal,
         options: { ...prefs } as unknown as Record<string, unknown>,
+        layersOn: def.dependsOn ? Object.fromEntries(def.dependsOn.map((id) => [id, useGlobe.getState().layers[id]])) : undefined,
       }),
     enabled,
     refetchInterval: def.updateIntervalMs,

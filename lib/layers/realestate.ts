@@ -8,8 +8,7 @@
 //
 // Labelled ESTIMATE: ZHVI and ZORI are Zillow's models of a typical home and
 // rental, not sale prices or leases; the affordability lines print their
-// arithmetic. Only county and state aggregates are ever shown: no parcels,
-// no addresses, no owners.
+// arithmetic. This layer is aggregates: counties and states.
 
 import type { FetchContext, FetchResult, LayerDefinition } from "./types";
 import { fetchAreas } from "./areas";

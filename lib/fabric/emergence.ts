@@ -66,11 +66,13 @@ export interface Vitals {
 
 /**
  * Layers whose points are not things on the ground: the constructs themselves
- * (the stack, the field, live warnings),
- * metro-level statistics drawn at a centroid, and a sampling grid. Area layers
- * (counties, countries) drop out on their own because only points count.
+ * (the stack, the field, live warnings), disaster alerts placed at an
+ * event's reported point (GDACS, EONET), metro-level statistics drawn at a
+ * centroid, and a sampling grid. Area layers (counties, countries) drop out
+ * on their own because only points count. Fire hotspots and wildfire
+ * incident points are observations on the ground, like earthquakes, and count.
  */
-const NOT_PHYSICAL = new Set<LayerId>(["constructs", "field", "alerts", "occupations", "weather"]);
+const NOT_PHYSICAL = new Set<LayerId>(["constructs", "field", "alerts", "hazards", "occupations", "weather"]);
 
 export function isPhysical(f: LayerFeature): boolean {
   return !NOT_PHYSICAL.has(f.properties.layer) && !f.properties.simulated && f.geometry?.type === "Point";
