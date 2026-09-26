@@ -27,6 +27,7 @@ import { source } from "@/lib/provenance/sources";
 import { zoningAt, zoningOutlines, TIGER_PLACES } from "@/lib/zoning/sources";
 import { coveredCityNames, ZONING_CITIES, ZONING_CITY_IDS, type Bbox } from "@/lib/zoning/features";
 import { numParam, parseBbox } from "@/lib/civic/bbox";
+import { CHICAGO_DISCLAIMER } from "@/lib/civic/terms";
 
 export const maxDuration = 60;
 export const OPTIONS = options;
@@ -43,11 +44,12 @@ async function opPoint(lon: number, lat: number) {
   if (r.state === "no-district") caveats.push("No district polygon at the point is not a finding that the land is unzoned: streets, water and gaps in a city's layer have none.");
   if (r.state === "not-covered") caveats.push(`Only ${coveredCityNames()} and Houston (which has no zoning) are wired; everywhere else is not covered, which says nothing about whether zoning applies.`);
   if (r.city === "chicago") caveats.push(CHICAGO_DISCLAIMER);
+  if (a.partial) caveats.push("New York's Zoning Tax Lot Database did not answer this time, so the lot's overlays and special districts are unknown (not absent); ask again shortly.");
   return ok(r, {
-    meta: { source: r.publisher ? `${r.publisher} zoning` : "Census TIGERweb (place only)", state: r.state, cacheAge: a.age },
+    meta: { source: r.publisher ? `${r.publisher} zoning` : "Census TIGERweb (place only)", state: r.state, partial: a.partial, cacheAge: a.age },
     provenance: a.provenance,
     caveats,
-    ttlS: 3600,
+    ttlS: a.partial ? 300 : 3600,
   });
 }
 
@@ -110,10 +112,6 @@ function opCoverage() {
     ttlS: 86_400,
   });
 }
-
-/** The City of Chicago's required disclaimer, verbatim from its data terms (read 2026-09-26). */
-const CHICAGO_DISCLAIMER =
-  "This site provides applications using data that has been modified for use from its original source, www.cityofchicago.org, the official website of the City of Chicago. The City of Chicago makes no claims as to the content, accuracy, timeliness, or completeness of any of the data provided at this site. The data provided at this site is subject to change at any time. It is understood that the data provided at this site is being used at one's own risk.";
 
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams;

@@ -21,9 +21,11 @@ const place = (geoid: string, name: string): Fc => ({ features: [{ geometry: nul
 
 const calls: string[] = [];
 let placeAnswer: Fc = place("5363000", "Seattle city");
+let failZtldb = false;
 
 vi.mock("@/lib/server/cache", () => ({
   cached: async <T,>(_k: string, _ttl: number, produce: () => Promise<T>) => ({ value: await produce(), age: 0, hit: false }),
+  cacheDelete: () => {},
 }));
 
 vi.mock("@/lib/civic/request", () => ({
@@ -36,7 +38,10 @@ vi.mock("@/lib/civic/request", () => ({
     if (url.includes("dj47-wfun")) return r(asRows(chicagoPoint));
     if (url.includes("/nyzd/")) return r(asRows(nycPoint));
     if (url.includes("/MAPPLUTO/")) return r(asRows(nycPluto));
-    if (url.includes("fdkv-4t4z")) return r(asRows(nycZtldb));
+    if (url.includes("fdkv-4t4z")) {
+      if (failZtldb) throw new Error("nyc-ztldb 503");
+      return r(asRows(nycZtldb));
+    }
     throw new Error(`unexpected request ${url}`);
   },
 }));
@@ -50,6 +55,7 @@ async function get(qs: string) {
 
 beforeEach(() => {
   calls.length = 0;
+  failZtldb = false;
 });
 
 describe("/api/zoning?op=point", () => {
@@ -83,6 +89,19 @@ describe("/api/zoning?op=point", () => {
     const { body } = await get("op=point&lon=-73.9857&lat=40.7484");
     expect(body.data).toMatchObject({ code: "C6-4.5", lot: { bbl: "1008350041" }, overlays: ["special district MiD"] });
     expect(body.provenance.map((p) => p.source.id)).toEqual(["census-tigerweb", "nyc-dcp-zoning", "nyc-ztldb"]);
+  });
+
+  it("says New York's lot overlays are unknown when the ZTLDB does not answer, and holds that briefly", async () => {
+    placeAnswer = place("3651000", "New York city");
+    failZtldb = true;
+    const res = await GET(new NextRequest("http://localhost/api/zoning?op=point&lon=-73.9857&lat=40.7484"));
+    const body = (await res.json()) as { partial: boolean; data: { code: string; overlays: string[]; published: Record<string, string> }; caveats: string[] };
+    expect(body.partial).toBe(true);
+    expect(body.data.code).toBe("C6-4.5");
+    expect(body.data.overlays).toEqual([]);
+    expect(body.data.published["Zoning Tax Lot Database"]).toMatch(/unknown, not absent/);
+    expect(body.caveats.join(" ")).toMatch(/unknown \(not absent\)/);
+    expect(res.headers.get("cache-control")).toContain("s-maxage=300");
   });
 
   it("carries the City of Chicago's disclaimer verbatim on a Chicago answer", async () => {

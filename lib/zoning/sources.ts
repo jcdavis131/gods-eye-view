@@ -11,7 +11,7 @@
 // Every request goes through lib/civic/request.ts (a gate per host, ten
 // minutes off after a 429 or a 503).
 
-import { cached } from "@/lib/server/cache";
+import { cacheDelete, cached } from "@/lib/server/cache";
 import { provenance, type Provenance } from "@/lib/provenance/types";
 import { source } from "@/lib/provenance/sources";
 import { runRows } from "@/lib/civic/request";
@@ -62,23 +62,36 @@ export interface ZoningAnswer {
   record: ZoningRecord;
   provenance: Provenance[];
   age: number;
+  /** Part of the answer did not arrive (New York's tax-lot lookup); not held, and briefly at the edge. */
+  partial: boolean;
 }
 
-async function nycHit(lon: number, lat: number): Promise<{ hit: ZoningHit | null; bbl: string | null; lotUrl?: string; ztlUrl?: string }> {
+/** Said in the dossier when New York's lot lookup failed: the overlays are unknown, not absent. */
+export const ZTLDB_MISSING = "did not answer this time; the tax lot's overlays, special districts and limited-height district are unknown, not absent";
+
+async function nycHit(lon: number, lat: number): Promise<{ hit: ZoningHit | null; bbl: string | null; lotUrl?: string; ztlUrl?: string; partial: boolean }> {
   const zd = pointRequest("nyc", lon, lat)!;
   const lotReq = arcgisPoint(NYC_PLUTO_LAYER, lon, lat, NYC_PLUTO_FIELDS);
   const [zdRows, lotRows] = await Promise.all([runRows("nyc-dcp", zd), runRows("nyc-dcp", lotReq).catch(() => null)]);
   let hit = hitFor("nyc", zdRows.features.map((f) => f.properties ?? {}));
   const bbl = lotRows ? plutoBbl(lotRows.features.map((f) => f.properties ?? {})) : null;
   let ztlUrl: string | undefined;
-  if (hit && bbl) {
+  let partial = false;
+  if (hit && !lotRows) {
+    // MapPLUTO did not answer: the district stands, the lot's overlays are unknown.
+    partial = true;
+    hit = { ...hit, published: { ...hit.published, "Zoning Tax Lot Database": ZTLDB_MISSING } };
+  } else if (hit && bbl) {
     ztlUrl = ztldbUrl(bbl);
-    // A failed lot lookup leaves the district answer standing, without the lot's overlays.
     const z = await runRows("nyc-ztldb", { kind: "socrata", url: ztlUrl }).catch(() => null);
     if (z) hit = withZtldb(hit, z.features.map((f) => f.properties ?? {}));
-    else ztlUrl = undefined;
+    else {
+      ztlUrl = undefined;
+      partial = true;
+      hit = { ...hit, published: { ...hit.published, "Zoning Tax Lot Database": ZTLDB_MISSING } };
+    }
   }
-  return { hit, bbl, lotUrl: requestUrl(lotReq), ztlUrl };
+  return { hit, bbl, lotUrl: requestUrl(lotReq), ztlUrl, partial };
 }
 
 /** What the city says about one point. */
@@ -92,21 +105,24 @@ export async function zoningAt(lon: number, lat: number): Promise<ZoningAnswer> 
     notes: [place ? `${place.name} (GEOID ${place.geoid})` : "no incorporated place at this point"],
   });
   const city = cityByGeoid(place?.geoid);
-  if (!place || !city) return { record: notCoveredRecord(lon, lat, place), provenance: [placeProv], age: placeAge };
-  if (city.id === "houston") return { record: houstonRecord(lon, lat, place), provenance: [placeProv], age: placeAge };
+  if (!place || !city) return { record: notCoveredRecord(lon, lat, place), provenance: [placeProv], age: placeAge, partial: false };
+  if (city.id === "houston") return { record: houstonRecord(lon, lat, place), provenance: [placeProv], age: placeAge, partial: false };
 
   const x = Number(lon.toFixed(5));
   const y = Number(lat.toFixed(5));
   const id = city.id as Exclude<ZoningCityId, "houston">;
-  const r = await cached(`zoning-point:${id}:${x},${y}`, DAY, async () => {
+  const key = `zoning-point:${id}:${x},${y}`;
+  const r = await cached(key, DAY, async () => {
     if (id === "nyc") {
       const n = await nycHit(x, y);
-      return { hit: n.hit, bbl: n.bbl, urls: [requestUrl(pointRequest("nyc", x, y)!), ...(n.ztlUrl ? [n.lotUrl!, n.ztlUrl] : [])] };
+      return { hit: n.hit, bbl: n.bbl, partial: n.partial, urls: [requestUrl(pointRequest("nyc", x, y)!), ...(n.ztlUrl ? [n.lotUrl!, n.ztlUrl] : [])] };
     }
     const req = pointRequest(id, x, y)!;
     const res = await runRows(`zoning-${id}`, req, id === "sanfrancisco" ? 25_000 : 20_000);
-    return { hit: hitFor(id, res.features.map((f) => f.properties ?? {})), bbl: null as string | null, urls: [requestUrl(req)] };
+    return { hit: hitFor(id, res.features.map((f) => f.properties ?? {})), bbl: null as string | null, partial: false, urls: [requestUrl(req)] };
   });
+  // A partial answer is not held: the next caller asks again.
+  if (r.value.partial) cacheDelete(key);
   const record = cityRecord(id, lon, lat, place, r.value.hit, r.value.bbl ? { bbl: r.value.bbl } : undefined);
   const prov: Provenance[] = [placeProv];
   const src = city.source!;
@@ -130,7 +146,7 @@ export async function zoningAt(lon: number, lat: number): Promise<ZoningAnswer> 
       }),
     );
   }
-  return { record, provenance: prov, age: r.age };
+  return { record, provenance: prov, age: r.age, partial: r.value.partial };
 }
 
 export interface OutlineSource {
