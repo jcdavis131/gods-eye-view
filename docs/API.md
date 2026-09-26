@@ -230,7 +230,7 @@ A number you fetch today may not be the number the same query returns next month
 
 **Agency cameras** (`caltrans-cwwp2`, `drivebc-highwaycams`, `digitraffic-weathercam`, `lta-traffic-images`, `tfl-jamcams`, `nyc-dot-cameras`). Snapshots of live lists (`kind: "snapshot"`); the stills are the agency's current images and nothing is recorded here.
 
-**EPA AirNow** (`epa-airnow`). Preliminary: "not fully verified or validated … subject to change" (AirNow Data Exchange Guidelines). `period` is the observation hour (UTC); `hourUtc` names the file. Validated data live in EPA's AQS archive.
+**EPA AirNow** (`epa-airnow`). Preliminary: "not fully verified or validated … subject to change" (AirNow Data Exchange Guidelines, last updated August 2025). `ozoneAqi`, `pm25Aqi` and `pm10Aqi` are AirNow's NowCast AQI and `no2Aqi` its 1-hour AQI, computed by AirNow from the concentrations each agency sent (HourlyAQObs fact sheet). `period` is the observation hour (UTC); `hourUtc` names the file. Validated data live in EPA's AQS archive. `/api/air` answers 404 until the operator returns AirNow's data-user form (`AIRNOW_ENABLED` in `lib/air/airnow.ts`).
 
 **GDELT** (`gdelt`). 15-minute export files, each fixed once published; a later file can add events about the same incident. The window is in `window`, and `leftOff` counts the rows dropped by the rules (not conflict, not city-level, no position).
 

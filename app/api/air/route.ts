@@ -2,9 +2,13 @@
 // and US embassy monitors), PRELIMINARY as AirNow requires, each site credited
 // to the agency that reported it.
 //
-//   /api/air?op=sites&bbox=w,s,e,n   active monitoring sites in a box with the AQI and
-//                                    concentrations each agency sent for the newest
+//   /api/air?op=sites&bbox=w,s,e,n   active monitoring sites in a box with AirNow's NowCast
+//                                    AQI (ozone, PM2.5, PM10), its 1-hour NO2 AQI and the
+//                                    raw concentrations each agency sent, for the newest
 //                                    published hour, as rows (see `columns`)
+//
+// Answers 404 while AIRNOW_ENABLED is off (lib/air/airnow.ts): AirNow's guidelines
+// ask each data user to return a contact form, and the operator has not decided to.
 //
 // AirNow writes each hour's HourlyAQObs file under a dated folder once the hour
 // is in; the newest one that answers is used (the current hour's file does not
@@ -14,11 +18,11 @@
 import type { NextRequest } from "next/server";
 import { cached } from "@/lib/server/cache";
 import { jsonError, polite, upstream } from "@/lib/server/upstream";
-import { badRequest, ok, options, withCors } from "@/lib/server/respond";
+import { badRequest, notFound, ok, options, withCors } from "@/lib/server/respond";
 import { retrying } from "@/lib/server/net";
 import { provenance } from "@/lib/provenance/types";
 import { source } from "@/lib/provenance/sources";
-import { AIR_PRELIMINARY, hourlyAqObsUrl, parseHourlyAqObs, siteRow, SITE_COLUMNS, type ParsedAqObs } from "@/lib/air/airnow";
+import { AIR_PRELIMINARY, AIRNOW_ENABLED, AIRNOW_OFF_MESSAGE, hourlyAqObsUrl, parseHourlyAqObs, siteRow, SITE_COLUMNS, type ParsedAqObs } from "@/lib/air/airnow";
 
 export const maxDuration = 60;
 export const OPTIONS = options;
@@ -58,6 +62,8 @@ function parseBbox(raw: string | null): [number, number, number, number] | null 
 }
 
 export async function GET(req: NextRequest) {
+  // Nothing is fetched from AirNow until the operator turns it on.
+  if (!AIRNOW_ENABLED) return notFound(AIRNOW_OFF_MESSAGE);
   const q = req.nextUrl.searchParams;
   const op = q.get("op") ?? "";
   try {
@@ -96,7 +102,7 @@ export async function GET(req: NextRequest) {
           caveats: [
             `${AIR_PRELIMINARY}. Validated data are in EPA's AQS archive, not here.`,
             "AirNow's guidelines: these data \"should not be used to formulate or support regulation, ascertain trends, act as guidance, or support any other government or public decision-making\".",
-            "Values are as each agency sent them; a site's colour is its highest pollutant AQI in EPA's category colours, and a site that sent no AQI this hour is not rated.",
+            "ozoneAqi, pm25Aqi and pm10Aqi are AirNow's NowCast AQI (weighted over the last 12 hours) and no2Aqi its 1-hour AQI, computed by AirNow from the concentrations each agency sent; `concentrations` are the raw hourly values. All are as AirNow published them. A site's colour is its highest pollutant AQI in EPA's category colours, and a site with no AQI this hour is not rated.",
           ],
           ttlS: 600,
         });

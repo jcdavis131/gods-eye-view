@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { AIR_PRELIMINARY, airFeature, aqiCategory, hourlyAqObsUrl, parseHourlyAqObs, rowSite, siteAqi, siteRow, type AirExtra } from "./airnow";
+import { AIR_PRELIMINARY, AQI_LABEL, airFeature, aqiCategory, hourlyAqObsUrl, parseHourlyAqObs, rowSite, siteAqi, siteRow, type AirExtra } from "./airnow";
 
 const file = readFileSync(path.join(__dirname, "fixtures", "hourlyaqobs-2026092619.dat"), "utf8");
 
@@ -23,7 +23,7 @@ describe("parseHourlyAqObs", () => {
     expect(sa.validAt).toBe("2026-09-26T19:00:00.000Z");
     expect(sa.reportingArea).toBe("San Antonio");
     expect(sa.conc.find((c) => c.param === "OZONE")).toEqual({ param: "OZONE", value: 62, unit: "PPB" });
-    // This hour TCEQ sent a PM2.5 AQI (59) with the concentration cell empty: no concentration is shown, none is made up.
+    // This hour the file has a PM2.5 NowCast AQI (59) with the hourly concentration cell empty: no concentration is shown, none is made up.
     expect(sa.conc.find((c) => c.param === "PM25")).toBeUndefined();
   });
   it("never invents an AQI for a site that reported none this hour", () => {
@@ -58,10 +58,12 @@ describe("airFeature", () => {
     expect(f.properties.source).toContain("preliminary");
     expect(f.properties.details?.credit).toBe("Texas Commission on Environmental Quality, via the U.S. EPA AirNow program");
   });
-  it("shows the values unchanged", () => {
-    expect(f.properties.details?.["ozone AQI"]).toBe(64);
-    expect(f.properties.details?.["PM2.5 AQI"]).toBe(59);
-    expect(f.properties.details?.AQI).toBe("64 (ozone) · Moderate");
+  it("shows the values unchanged, named as the NowCast or 1-hour AQI the file defines them as", () => {
+    expect(f.properties.details?.["ozone NowCast AQI"]).toBe(64);
+    expect(f.properties.details?.["PM2.5 NowCast AQI"]).toBe(59);
+    expect(f.properties.details?.["OZONE hourly concentration"]).toBe("62 ppb");
+    expect(f.properties.details?.AQI).toBe("64 (ozone NowCast AQI) · Moderate");
+    expect(AQI_LABEL.NO2).toBe("NO₂ 1-hour AQI");
   });
   it("round-trips a site through the compact row the route sends", () => {
     expect(rowSite(siteRow(sa))).toEqual(sa);

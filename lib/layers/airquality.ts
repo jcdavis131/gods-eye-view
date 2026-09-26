@@ -1,8 +1,9 @@
 // Layer: air quality. AirNow's hourly monitor observations, PRELIMINARY as
 // AirNow requires on every display, each site credited to the agency that
-// reported it and coloured by its highest published pollutant AQI in EPA's
-// AQI colours (lib/air/airnow.ts). A site that reported no AQI this hour is
-// drawn "not rated", never green.
+// reported it and coloured by its highest published pollutant AQI (AirNow's
+// NowCast AQI for ozone and particles, its 1-hour AQI for NO2) in EPA's AQI
+// colours (lib/air/airnow.ts). A site that reported no AQI this hour is drawn
+// "not rated", never green. Registered only when AIRNOW_ENABLED is on.
 //
 //   EPA AirNow   HourlyAQObs file (US, Canada, Mexico, US embassy monitors),
 //                through /api/air, the newest published hour
@@ -47,7 +48,7 @@ export const airqualityLayer: LayerDefinition = {
   id: "airquality",
   label: "Air quality (AirNow)",
   description:
-    "Hourly air quality monitors from EPA AirNow (US, Canada, Mexico and US embassies), PRELIMINARY: each site's ozone, PM2.5, PM10 and NO₂ AQI and concentrations as its agency sent them, coloured by the highest AQI in EPA's colours. Sites with no AQI this hour are not rated.",
+    "Hourly air quality monitors from EPA AirNow (US, Canada, Mexico and US embassies), PRELIMINARY: AirNow's NowCast AQI for ozone, PM2.5 and PM10 and its 1-hour AQI for NO₂, computed from the concentrations each agency sent, with those concentrations, coloured by the highest AQI in EPA's colours. Sites with no AQI this hour are not rated.",
   color: "#00E400",
   updateIntervalMs: 20 * 60_000,
   defaultEnabled: false,

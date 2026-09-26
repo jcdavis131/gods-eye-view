@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseIntent } from "./intent";
 import { resolveLayer } from "./commands";
+import { AIRNOW_ENABLED } from "@/lib/air/airnow";
 
 const layerOf = (text: string) => parseIntent(text)?.args as { layer?: string; on?: boolean; place?: string } | undefined;
 
@@ -54,7 +55,9 @@ describe("voice words for the infrastructure and geohazard layers", () => {
     expect(layerOf("show landslides")).toMatchObject({ layer: "landslides" });
     expect(layerOf("show geology")).toMatchObject({ layer: "geology" });
     expect(layerOf("show townships")).toMatchObject({ layer: "plss" });
-    expect(layerOf("show air quality over denver")).toMatchObject({ layer: "airquality", place: "denver" });
+    // Air quality resolves only while AirNow is turned on (lib/air/airnow.ts).
+    if (AIRNOW_ENABLED) expect(layerOf("show air quality over denver")).toMatchObject({ layer: "airquality", place: "denver" });
+    else expect(layerOf("show air quality over denver")?.layer ?? null).toBeNull();
     expect(layerOf("show news events")).toMatchObject({ layer: "events" });
   });
 

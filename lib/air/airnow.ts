@@ -1,8 +1,14 @@
 // AirNow's hourly observations file (HourlyAQObs_YYYYMMDDHH.dat, one row per
-// monitoring site): the AQI values and concentrations each reporting agency
-// sent AirNow for that hour, US, Canada, Mexico and US embassy monitors.
+// monitoring site), US, Canada, Mexico and US embassy monitors. The reporting
+// agencies send AirNow raw hourly concentrations; AirNow's file carries those
+// concentrations and the AQI AirNow computes from them. Its fact sheet (Hourly
+// AQ Obs File, "Last Updated August 2025") defines OZONE_AQI, PM10_AQI and
+// PM25_AQI as the "NowCast Air Quality Index" (NowCast weighs the last 12
+// hours) and NO2_AQI as the hourly "Air Quality Index for NO2"; the labels
+// here say which is which.
 //
-// AirNow's Data Exchange Guidelines (read 2026-09-26) govern how it is shown:
+// AirNow's Data Exchange Guidelines ("Last Updated August 2025", read
+// 2026-09-26) govern how it is shown:
 //   - "AirNow observational data are not fully verified or validated; these
 //     data are subject to change and should be considered preliminary", and
 //     displays "must indicate that these data are preliminary": the layer, each
@@ -11,9 +17,15 @@
 //     and tribal air quality agencies and the EPA AirNow program": each site
 //     names its reporting agency (the file's DataSource) before AirNow;
 //   - values "should not be altered in any way and should be disseminated as
-//     received": the AQI numbers and concentrations are shown as sent;
+//     received": the AQI numbers and concentrations are shown as AirNow
+//     published them;
 //   - colours follow the AQI's own categories and RGB colours (EPA's Technical
-//     Assistance Document for the Reporting of Daily Air Quality).
+//     Assistance Document for the Reporting of Daily Air Quality);
+//   - reliance on the data "must be made known to the relevant federal, state,
+//     local, and tribal air quality agencies and the EPA AirNow program", and
+//     "Data users' contact information must be kept current": the guidelines
+//     end with a form (name, title, email, phone, organization) to return to
+//     dmc@airnowtech.org. See AIRNOW_ENABLED below.
 // A site's colour is its highest published pollutant AQI, which is how the AQI
 // names a place's air quality; the value and the pollutant are both shown. A
 // site with no AQI this hour is drawn "not rated", never green.
@@ -22,6 +34,21 @@
 
 import { parseCsv } from "@/lib/economy/csv";
 import type { LayerFeature } from "@/lib/layers/types";
+
+/**
+ * Whether the air quality layer is registered, listed in Explore and answered by
+ * /api/air. OFF (2026-09-26), pending the operator's decision: AirNow's
+ * guidelines ask each data user to make its reliance known and keep contact
+ * details current by returning a form (name, title, email, phone, organization)
+ * to dmc@airnowtech.org. That is a registration, and this project signs up for
+ * nothing without the operator's explicit decision. Turn this on only after the
+ * operator has sent that form (or has decided otherwise), and record the date and
+ * the decision here and in the README's Air quality row.
+ */
+export const AIRNOW_ENABLED = false;
+
+export const AIRNOW_OFF_MESSAGE =
+  "The AirNow air quality layer is not enabled on this deployment: AirNow's Data Exchange Guidelines ask each data user to return a contact form to dmc@airnowtech.org, and the operator has not decided to yet.";
 
 export const AIRNOW_FILES = "https://files.airnowtech.org/airnow";
 
@@ -35,7 +62,8 @@ export function hourlyAqObsUrl(hourUtcMs: number): string {
 }
 
 export type Pollutant = "OZONE" | "PM25" | "PM10" | "NO2";
-export const POLLUTANT_LABEL: Record<Pollutant, string> = { OZONE: "ozone", PM25: "PM2.5", PM10: "PM10", NO2: "NO₂" };
+/** Which AQI the file carries for each pollutant (HourlyAQObs fact sheet): NowCast for ozone and particles, 1-hour for NO₂. */
+export const AQI_LABEL: Record<Pollutant, string> = { OZONE: "ozone NowCast AQI", PM25: "PM2.5 NowCast AQI", PM10: "PM10 NowCast AQI", NO2: "NO₂ 1-hour AQI" };
 
 /** One site's row, as the columns the route sends (see SITE_COLUMNS). */
 export interface AirSite {
@@ -48,7 +76,7 @@ export interface AirSite {
   /** Observation hour, ISO (UTC). */
   validAt?: string;
   aqi: Partial<Record<Pollutant, number>>;
-  /** Concentrations with the unit AirNow sent. */
+  /** Raw hourly concentrations with the unit AirNow published. */
   conc: Array<{ param: string; value: number; unit?: string }>;
   reportingArea?: string;
   country?: string;
@@ -250,12 +278,14 @@ export function airFeature(s: AirSite): LayerFeature {
   const cat = aqiCategory(top?.value);
   const details: Record<string, string | number | undefined> = {
     status: AIR_PRELIMINARY,
-    AQI: top ? `${top.value} (${POLLUTANT_LABEL[top.pollutant]}) · ${cat?.name ?? "outside the AQI scale"}` : "no AQI reported by this site this hour",
+    AQI: top ? `${top.value} (${AQI_LABEL[top.pollutant]}) · ${cat?.name ?? "outside the AQI scale"}` : "no AQI reported by this site this hour",
   };
   for (const p of ["OZONE", "PM25", "PM10", "NO2"] as Pollutant[]) {
-    if (s.aqi[p] != null) details[`${POLLUTANT_LABEL[p]} AQI`] = s.aqi[p];
+    if (s.aqi[p] != null) details[AQI_LABEL[p]] = s.aqi[p];
   }
-  for (const c of s.conc) details[`${c.param === "PM25" ? "PM2.5" : c.param} concentration`] = `${c.value}${c.unit ? ` ${c.unit.toLowerCase().replace("ug/m3", "µg/m³")}` : ""}`;
+  for (const c of s.conc) details[`${c.param === "PM25" ? "PM2.5" : c.param} hourly concentration`] = `${c.value}${c.unit ? ` ${c.unit.toLowerCase().replace("ug/m3", "µg/m³")}` : ""}`;
+  details["what the AQI is"] =
+    "AirNow's NowCast AQI (weighted over the last 12 hours) for ozone and particles and its 1-hour AQI for NO₂, computed by AirNow from the concentrations the agency sent; the colour is the highest of them";
   details["observation hour (UTC)"] = s.validAt?.slice(0, 16).replace("T", " ");
   details["reporting agency"] = s.agency;
   details["reporting area"] = s.reportingArea;

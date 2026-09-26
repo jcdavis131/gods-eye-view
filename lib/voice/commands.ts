@@ -249,7 +249,9 @@ const LAYER_ALIASES: Record<string, LayerId> = {
 export function resolveLayer(word: string | undefined): LayerId | null {
   if (!word) return null;
   const w = word.toLowerCase().trim();
-  return LAYER_ALIASES[w] ?? (LAYER_BY_ID[w as LayerId] ? (w as LayerId) : null);
+  // An alias counts only for a layer that is registered (air quality can be switched off).
+  const id = LAYER_ALIASES[w] ?? (w as LayerId);
+  return LAYER_BY_ID[id] ? id : null;
 }
 
 async function goToPlace(place: string, altitudeKm?: number): Promise<string> {

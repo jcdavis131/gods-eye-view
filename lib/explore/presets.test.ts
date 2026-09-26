@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { LAYER_IDS } from "@/lib/layers/types";
-import { PRESETS, PRESET_GROUPS, presetShare, presetTarget, type Preset } from "./presets";
+import { AIRNOW_ENABLED } from "@/lib/air/airnow";
+import { INFRA_GROUP_TITLE, PRESETS, PRESET_GROUPS, presetShare, presetTarget, type Preset } from "./presets";
 
 describe("Explore presets", () => {
   it("have unique ids and real layers, and every one sits in a gallery group", () => {
@@ -21,7 +22,7 @@ describe("Explore presets", () => {
       "front-range-whp",
       "galveston-slr",
     ]);
-    expect(PRESET_GROUPS.find((g) => g.title === "Infrastructure, air & events")?.presets.map((p) => p.id)).toEqual([
+    expect(PRESET_GROUPS.find((g) => g.title === INFRA_GROUP_TITLE)?.presets.map((p) => p.id)).toEqual([
       "round-rock-grid",
       "ship-channel-pipelines",
       "texas-power",
@@ -33,7 +34,8 @@ describe("Explore presets", () => {
       "texas-airports",
       "pikes-peak-geology",
       "la-freeway-cams",
-      "us-air-quality",
+      // Only while the operator has turned AirNow on (lib/air/airnow.ts).
+      ...(AIRNOW_ENABLED ? ["us-air-quality"] : []),
       "world-events",
     ]);
   });

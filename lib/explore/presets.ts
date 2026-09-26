@@ -19,6 +19,7 @@ import type { LayerFeature, LayerId } from "@/lib/layers/types";
 import type { ShareState } from "@/lib/globe/share";
 import type { FireExtra } from "@/lib/hazards/features";
 import type { LonLat } from "@/lib/fabric/strataStore";
+import { AIRNOW_ENABLED } from "@/lib/air/airnow";
 
 export interface Preset {
   id: string;
@@ -80,7 +81,7 @@ async function largestFire(): Promise<Partial<ShareState> | null> {
   return { lon, lat, h: Math.min(400_000, Math.max(40_000, spanKm * 2_200)), sel: { layer: "wildfire", id: best.properties.id } };
 }
 
-export const PRESETS: Preset[] = [
+const ALL_PRESETS: Preset[] = [
   {
     id: "planet",
     title: "The planet's water",
@@ -586,7 +587,7 @@ export const PRESETS: Preset[] = [
     title: "Air quality monitors, this hour",
     region: "North America",
     group: "infrastructure",
-    blurb: "About 3,600 active AirNow monitoring sites with the AQI each reporting agency sent for the newest hour, coloured in EPA's AQI colours by the site's highest pollutant AQI; sites with no AQI this hour are drawn not rated. PRELIMINARY data, not fully verified or validated.",
+    blurb: "About 3,600 active AirNow monitoring sites with AirNow's NowCast AQI (ozone, PM2.5, PM10) and 1-hour NO₂ AQI for the newest hour, computed from the concentrations each reporting agency sent, coloured in EPA's AQI colours by the site's highest pollutant AQI; sites with no AQI this hour are drawn not rated. PRELIMINARY data, not fully verified or validated.",
     lon: -97,
     lat: 39,
     height: 6_000_000,
@@ -606,6 +607,12 @@ export const PRESETS: Preset[] = [
     dwellS: 25,
   },
 ];
+
+/** The presets this deployment shows: air quality waits on AIRNOW_ENABLED (lib/air/airnow.ts). */
+export const PRESETS: Preset[] = ALL_PRESETS.filter((p) => AIRNOW_ENABLED || !p.layers.includes("airquality"));
+
+/** The infrastructure gallery's title, which names air only while the air layer is on. */
+export const INFRA_GROUP_TITLE = AIRNOW_ENABLED ? "Infrastructure, air & events" : "Infrastructure & events";
 
 export const PRESET_BY_ID = new Map(PRESETS.map((p) => [p.id, p]));
 
@@ -642,5 +649,5 @@ export const PRESET_GROUPS: Array<{ title: string; presets: Preset[] }> = [
   { title: "Constructs", presets: PRESETS.filter((p) => p.group === "constructs") },
   { title: "Hazards & land", presets: PRESETS.filter((p) => p.group === "hazards") },
   { title: "Terrain & soils", presets: PRESETS.filter((p) => p.group === "terrain") },
-  { title: "Infrastructure, air & events", presets: PRESETS.filter((p) => p.group === "infrastructure") },
+  { title: INFRA_GROUP_TITLE, presets: PRESETS.filter((p) => p.group === "infrastructure") },
 ];
