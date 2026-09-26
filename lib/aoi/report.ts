@@ -13,13 +13,14 @@
 //
 // A layer that is off, still loading or failing is listed as missing, never
 // as zero; samples outside the box a layer loaded are "not loaded", never
-// "none". A line length or a count over an area that runs past the loaded box,
+// "none", and so is a class whose service did not answer (a pipeline
+// commodity). A line length or a count over an area that runs past the loaded box,
 // or from an answer that hit a record limit or was coarsened, says it is
 // partial. Pure, tested.
 
 import type { LayerFeature, LayerId, LoadedBoxExtra } from "@/lib/layers/types";
 import type { Access, FloodZoneExtra, PublicLandExtra, WetlandExtra } from "@/lib/land/features";
-import type { FaultExtra, PipelineExtra, RailExtra, TransmissionExtra } from "@/lib/infra/features";
+import type { FaultExtra, PipelineExtra, PipelineKind, RailExtra, TransmissionExtra } from "@/lib/infra/features";
 import { FAULT_AGE_LEGEND, PIPELINE_LABEL } from "@/lib/infra/features";
 import type { PlantExtra } from "@/lib/infra/plants";
 import { countable } from "./area";
@@ -183,6 +184,8 @@ interface LengthSpec {
   classOf: (f: LayerFeature) => string;
   /** Which segments the route returns first when the record limit is hit. */
   limitOrder?: string;
+  /** The class label of a part the loaded box lists as missing (its service did not answer). */
+  missingLabel?: (part: string) => string;
 }
 
 function lengthSection(spec: LengthSpec, all: LayerFeature[], ring: Ring): ReportSection | null {
@@ -204,6 +207,12 @@ function lengthSection(spec: LengthSpec, all: LayerFeature[], ring: Ring): Repor
       ],
     };
   const notes = partialNotes(own, box, "lengths", spec.limitOrder);
+  // A class whose service did not answer is "not loaded", never left out (which would read as none).
+  const unanswered: ReportLine[] = (loadedExtraOf(own).missing ?? []).map((k) => ({
+    label: spec.missingLabel?.(k) ?? k,
+    value: "not loaded",
+    formula: "the service did not answer when this layer loaded; its lines are missing, not absent",
+  }));
   const by = new Map<string, { m: number; n: number }>();
   for (const f of own) {
     if (!countable(f)) continue;
@@ -216,11 +225,11 @@ function lengthSection(spec: LengthSpec, all: LayerFeature[], ring: Ring): Repor
     cur.n++;
     by.set(c, cur);
   }
-  if (!by.size) return { title: spec.title, source: spec.source, lines: [{ label: "inside the area", value: "none of the loaded lines" }], notes };
+  if (!by.size) return { title: spec.title, source: spec.source, lines: [{ label: "inside the area", value: "none of the loaded lines" }, ...unanswered], notes };
   const lines = [...by.entries()]
     .sort((a, b) => b[1].m - a[1].m)
     .map(([c, v]) => ({ label: c, value: fmtKm(v.m), formula: `Σ of 200 m steps whose midpoint is inside, over ${v.n} loaded segment${v.n === 1 ? "" : "s"}` }));
-  return { title: spec.title, source: spec.source, lines, notes };
+  return { title: spec.title, source: spec.source, lines: [...lines, ...unanswered], notes };
 }
 
 const ACCESS_WORD: Record<Access, string> = { open: "open access", restricted: "restricted access", closed: "closed", unknown: "access unknown" };
@@ -284,7 +293,14 @@ export function areaReport(input: ReportInput): AreaReport {
 
   const lengths: LengthSpec[] = [
     { layer: "transmission", title: "Transmission lines (HIFLD archive)", source: "HIFLD, last updated 2024-09-30", limitOrder: "highest voltage", classOf: (f) => { const x = f.properties.extra as TransmissionExtra | undefined; return x?.kv != null ? `${x.kv} kV` : "voltage not published"; } },
-    { layer: "pipelines", title: "Pipelines (EIA, generalized)", source: "EIA pipeline maps", limitOrder: "in each service's own order", classOf: (f) => PIPELINE_LABEL[(f.properties.extra as PipelineExtra | undefined)?.commodity ?? "natgas"] },
+    {
+      layer: "pipelines",
+      title: "Pipelines (EIA, generalized)",
+      source: "EIA pipeline maps",
+      limitOrder: "in each service's own order",
+      classOf: (f) => PIPELINE_LABEL[(f.properties.extra as PipelineExtra | undefined)?.commodity ?? "natgas"],
+      missingLabel: (k) => PIPELINE_LABEL[k as PipelineKind] ?? k,
+    },
     { layer: "rail", title: "Rail (FRA/BTS)", source: "North American Rail Network", limitOrder: "longest segments", classOf: (f) => (f.properties.extra as RailExtra | undefined)?.cls ?? "rail" },
     { layer: "faults", title: "Quaternary faults (USGS)", source: "USGS Qfaults · not a forecast", limitOrder: "longest traces", classOf: (f) => FAULT_AGE_LEGEND[(f.properties.extra as FaultExtra | undefined)?.ageClass ?? "unspecified"] },
   ];

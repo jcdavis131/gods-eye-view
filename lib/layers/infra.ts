@@ -148,7 +148,12 @@ function boxLayer(o: BoxLayerOptions): LayerDefinition {
       const features = memo.stable(env.data.features as unknown as LayerFeature[]);
       const loaded = Array.isArray(meta.bbox) && meta.bbox.length === 4 ? (meta.bbox as [number, number, number, number]) : bbox;
       const floorMw = t.params?.startsWith("min=") ? Number(t.params.slice(4)) : undefined;
-      const left: LoadedBoxExtra = { truncated: meta.truncated === true, coarsenedForSize: meta.coarsenedForSize === true, floorMw: floorMw || undefined };
+      // A part whose service did not answer (pipelines' counts: null) is missing, not absent.
+      const counts = meta.counts && typeof meta.counts === "object" ? (meta.counts as Record<string, number | null>) : {};
+      const missing = Object.entries(counts)
+        .filter(([, v]) => v == null)
+        .map(([k]) => k);
+      const left: LoadedBoxExtra = { truncated: meta.truncated === true, coarsenedForSize: meta.coarsenedForSize === true, floorMw: floorMw || undefined, ...(missing.length ? { missing } : {}) };
       const drawn = o.loadedBox && !t.world ? [...features, loadedBox(o.id, loaded, o.label.toLowerCase(), left)] : features;
       const trunc = meta.truncated ? " · record limit hit, zoom in for the rest" : "";
       const coarse = meta.coarsenedForSize ? " · outlines coarsened to fit" : "";

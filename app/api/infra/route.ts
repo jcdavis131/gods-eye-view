@@ -251,11 +251,12 @@ async function opPipelines(bbox: Bbox): Promise<OpResult> {
   ];
   for (const p of parts) {
     if (p.error) caveats.push(`${PIPELINE_LABEL[p.kind]} pipelines did not answer (${p.error.slice(0, 80)}); they are missing, not absent.`);
+    else if (p.coarsened) caveats.push(`${PIPELINE_LABEL[p.kind]} pipelines were too large for one response: fewer segments were asked for, drawn coarser; ask for a smaller box for the rest.`);
     else if (p.truncated) caveats.push(`${PIPELINE_LABEL[p.kind]} pipelines hit the record limit; ask for a smaller box.`);
   }
   return {
     data: fc(features),
-    meta: { source: "EIA pipelines (Esri federal caches)", bbox, counts, truncated: parts.some((p) => p.truncated), cacheAge: age },
+    meta: { source: "EIA pipelines (Esri federal caches)", bbox, counts, truncated: parts.some((p) => p.truncated), coarsenedForSize: parts.some((p) => p.coarsened), cacheAge: age },
     ttlS: parts.some((p) => p.error) ? 600 : 6 * 3600,
     provenance: parts
       .filter((p) => !p.error)

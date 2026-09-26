@@ -5,8 +5,9 @@
 import { describe, expect, it } from "vitest";
 import type { LayerFeature, LayerId, LoadedBoxExtra } from "@/lib/layers/types";
 import { buildFloodZones } from "@/lib/land/features";
-import { buildTransmission, type Row } from "@/lib/infra/features";
+import { buildPipelines, buildTransmission, type Row } from "@/lib/infra/features";
 import transmission from "@/lib/infra/fixtures/transmission-austin.json";
+import natgas from "@/lib/infra/fixtures/pipelines-natgas-sanantonio.json";
 import { featureInside, lengthInside, metres, pointInPolygon, sampleGrid, type Ring } from "./geometry";
 import { featuresInside, insideCsv, insideGeoJson, newWatch, watchCsv, watchStep, WATCH_LAYERS, type WatchEvent, type WatchMode } from "./area";
 import { ringKey, useArea, watchModes } from "./store";
@@ -254,6 +255,18 @@ describe("areaReport", () => {
     const t = tl(sq(-98, 30, -97, 31), loaded("transmission", -99, 29, -96, 32, { truncated: true, coarsenedForSize: true }));
     expect(t.notes?.some((n) => /record limit was hit when this layer loaded \(highest voltage first\): lengths are a floor, not a total/.test(n))).toBe(true);
     expect(t.notes?.some((n) => /coarsened to fit the response: lengths are approximate/.test(n))).toBe(true);
+  });
+  it("says a pipeline commodity whose service did not answer is not loaded, never leaves it out as none", () => {
+    // EIA's San Antonio natural gas lines answered; the HGL service did not (counts.hgl null -> missing).
+    const gas = buildPipelines("natgas", natgas.features as Row[]);
+    const pipes = (ring: Ring) =>
+      areaReport({ ring, areaM2: 1e10, features: [...gas, loaded("pipelines", -99, 29, -98, 30, { missing: ["hgl"] })], answering: new Set<LayerId>(["pipelines"]), on: { pipelines: true } }).sections.find((s) => s.title.startsWith("Pipelines"))!;
+    const over = pipes(sq(-98.6, 29.2, -98.2, 29.6));
+    expect(over.lines.find((l) => l.label === "Natural gas")!.value).toMatch(/^[\d.,]+ k?m$/);
+    expect(over.lines.find((l) => l.label === "Hydrocarbon gas liquids")).toEqual(expect.objectContaining({ value: "not loaded", formula: expect.stringContaining("did not answer") }));
+    // No loaded line inside the area: the answered ones are none, the unanswered one is still not loaded.
+    const empty = pipes(sq(-98.95, 29.8, -98.9, 29.85));
+    expect(empty.lines).toEqual([expect.objectContaining({ value: "none of the loaded lines" }), expect.objectContaining({ label: "Hydrocarbon gas liquids", value: "not loaded" })]);
   });
   it("names what the plant sum leaves out: planned-only plants, no-nameplate generators, Wikidata plants and the size floor", () => {
     const ring = sq(0, 0, 1, 1);

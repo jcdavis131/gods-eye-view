@@ -199,6 +199,11 @@ export interface LoadedBoxExtra {
   coarsenedForSize?: boolean;
   /** A size floor the layer asked with at this camera height (power plants: nameplate MW). */
   floorMw?: number;
+  /**
+   * Parts of the answer whose service did not answer (pipelines: the commodities whose
+   * `counts` entry is null), so a report says "not loaded" for them, never "none".
+   */
+  missing?: string[];
 }
 
 export interface LayerDefinition {

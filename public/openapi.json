@@ -5855,6 +5855,10 @@
                   ]
                 },
                 "description": "Segments per commodity (natgas, crude, products, hgl); null where that service did not answer."
+              },
+              "coarsenedForSize": {
+                "type": "boolean",
+                "description": "true when a commodity's answer was too large for one response and was asked again with fewer segments, drawn coarser (a caveat names it); truncated is then true too."
               }
             }
           }
