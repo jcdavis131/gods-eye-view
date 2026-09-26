@@ -52,6 +52,8 @@ const SOURCE: CachedOptions = { deadlineMs: SOURCE_DEADLINE_MS, coolMs: SOURCE_C
 // ---------------------------------------------------------------- WFIGS
 
 const WFIGS = "https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services";
+export const WFIGS_PERIMETERS_URL = `${WFIGS}/WFIGS_Interagency_Perimeters_Current/FeatureServer/0`;
+export const WFIGS_INCIDENTS_URL = `${WFIGS}/WFIGS_Incident_Locations_Current/FeatureServer/0`;
 
 export function wfigs() {
   return cached(
@@ -61,7 +63,7 @@ export function wfigs() {
       const [perims, incidents] = await Promise.all([
         arcgisQuery(
           "nifc-wfigs",
-          `${WFIGS}/WFIGS_Interagency_Perimeters_Current/FeatureServer/0`,
+          WFIGS_PERIMETERS_URL,
           {
             where: "1=1",
             outFields: WFIGS_PERIMETER_FIELDS.join(","),
@@ -75,7 +77,7 @@ export function wfigs() {
         ),
         arcgisQuery(
           "nifc-wfigs",
-          `${WFIGS}/WFIGS_Incident_Locations_Current/FeatureServer/0`,
+          WFIGS_INCIDENTS_URL,
           { where: "1=1", outFields: WFIGS_INCIDENT_FIELDS.join(","), returnGeometry: "true", outSR: "4326" },
           { gate: "nifc-wfigs", timeoutMs: 22_000, tries: 2 },
         ),
@@ -149,6 +151,9 @@ export async function firms(): Promise<FirmsSet> {
 
 // ---------------------------------------------------------------- NWS
 
+/** Every active, actual alert (all severities); the Live warnings feed asks the same endpoint for Severe and Extreme only. */
+export const NWS_ALERTS_URL = "https://api.weather.gov/alerts/active?status=actual";
+
 export function nwsAlerts() {
   return cached(
     "nws:alerts:active",
@@ -159,7 +164,7 @@ export function nwsAlerts() {
           polite("nws", 500, 60_000, () =>
             upstreamJson<{ features?: Array<{ id?: string; geometry: GeoJSON.Geometry | null; properties: Record<string, unknown> }> }>(
               "nws",
-              "https://api.weather.gov/alerts/active?status=actual",
+              NWS_ALERTS_URL,
               { timeoutMs: 18_000, headers: { accept: "application/geo+json" } },
             ),
           ),
@@ -173,7 +178,7 @@ export function nwsAlerts() {
 
 // ---------------------------------------------------------------- TIGERweb counties for NWS
 
-const TIGER_COUNTY_20M = "https://tigerweb.geo.census.gov/arcgis/rest/services/Generalized_ACS2023/State_County/MapServer/13";
+export const TIGER_COUNTY_20M = "https://tigerweb.geo.census.gov/arcgis/rest/services/Generalized_ACS2023/State_County/MapServer/13";
 const countyCache = new Map<string, { name: string; geometry: Polygon | MultiPolygon; at: number } | { missing: true; at: number }>();
 const countyPending = new Set<string>();
 
@@ -236,6 +241,7 @@ export async function countiesByGeoid(geoids: string[], budgetMs = 15_000): Prom
 // ---------------------------------------------------------------- GDACS
 
 const GDACS = "https://www.gdacs.org";
+export const GDACS_RSS_URL = `${GDACS}/xml/rss.xml`;
 const GDACS_TYPES = "EQ;TC;FL;VO;DR;WF";
 /** GDACS's GeoJSON lists stop at this many rows a page. */
 const GDACS_PAGE = 100;
@@ -278,7 +284,7 @@ export function gdacs() {
       const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
       const now = Date.now();
       const [rss, recent, severe] = await Promise.allSettled([
-        gdacsText(`${GDACS}/xml/rss.xml`, "application/rss+xml, application/xml").then(parseGdacsRss),
+        gdacsText(GDACS_RSS_URL, "application/rss+xml, application/xml").then(parseGdacsRss),
         gdacsList(`${GDACS}/gdacsapi/api/events/geteventlist/EVENTS4APP`),
         // Documented search: every current Orange and Red event whose dates touch the last 30 days.
         gdacsList(
@@ -316,6 +322,8 @@ export function gdacs() {
 
 // ---------------------------------------------------------------- EONET
 
+export const EONET_VOLCANOES_URL = "https://eonet.gsfc.nasa.gov/api/v3/events?status=open&category=volcanoes";
+
 export function eonetVolcanoes() {
   return cached(
     "eonet:volcanoes",
@@ -324,7 +332,7 @@ export function eonetVolcanoes() {
       const j = await retrying(
         () =>
           polite("eonet", 500, 60_000, () =>
-            upstreamJson<{ events?: EonetEvent[] }>("eonet", "https://eonet.gsfc.nasa.gov/api/v3/events?status=open&category=volcanoes", { timeoutMs: 18_000 }),
+            upstreamJson<{ events?: EonetEvent[] }>("eonet", EONET_VOLCANOES_URL, { timeoutMs: 18_000 }),
           ),
         2,
       );
@@ -335,6 +343,8 @@ export function eonetVolcanoes() {
 }
 
 // ---------------------------------------------------------------- USGS (GDACS quake marking only)
+
+export const USGS_DAY_URL = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson";
 
 /**
  * The USGS all_day feed as the Earthquakes layer's route (/api/earthquakes)
@@ -350,12 +360,13 @@ export async function usgsDay() {
         () =>
           upstreamJson<{ features?: Array<{ properties: { time: number }; geometry: { coordinates: [number, number, number] } | null }> }>(
             "usgs",
-            "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson",
+            USGS_DAY_URL,
             { timeoutMs: 15_000 },
           ),
         2,
       ),
     SOURCE,
   );
-  return (r.value.features ?? []).filter((f) => f.geometry).map((f) => ({ lon: f.geometry!.coordinates[0], lat: f.geometry!.coordinates[1], t: f.properties.time }));
+  const quakes = (r.value.features ?? []).filter((f) => f.geometry).map((f) => ({ lon: f.geometry!.coordinates[0], lat: f.geometry!.coordinates[1], t: f.properties.time }));
+  return { quakes, age: r.age };
 }

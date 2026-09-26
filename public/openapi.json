@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Embedding Atlas data API",
-    "version": "0.2.0",
-    "summary": "Keyless, CORS-open JSON and CSV over public water, trade, jobs and housing sources, with provenance on every number.",
+    "version": "0.3.0",
+    "summary": "Keyless, CORS-open JSON and CSV over public water, trade, jobs, housing, hazard and land sources, with provenance on every number.",
     "description": "Every JSON response is an envelope: route-specific fields at the top level, the payload in `data`, one `provenance` record per upstream release the numbers came from (estimates carry their formula in `method`), and `generatedAt`. Tabular ops answer `format=csv` with the same provenance as `#` comment lines after the data. See docs/API.md for citation format, caching, courtesy and per-source revision caveats.",
     "license": {
       "name": "MIT",
@@ -39,6 +39,18 @@
     {
       "name": "live",
       "description": "Live NWS warnings and earthquakes: the constructs that are born and die, and the Teleport tour."
+    },
+    {
+      "name": "hazards",
+      "description": "Wildfires, satellite fire detections and hazard alerts: NIFC WFIGS, NASA FIRMS, NWS, GDACS, NASA EONET."
+    },
+    {
+      "name": "land",
+      "description": "Flood zones, wetlands, public and protected lands, ground elevation: FEMA NFHL, USFWS NWI, USGS PAD-US, USGS 3DEP EPQS."
+    },
+    {
+      "name": "space",
+      "description": "Space weather (GFZ Kp, NASA DONKI) and NASA's ISS live stream, checked through YouTube oEmbed."
     },
     {
       "name": "meta",
@@ -2013,6 +2025,272 @@
         "responses": {
           "200": {
             "description": "Envelope with data: { alerts, quakes, items, failed, unmapped }."
+          }
+        }
+      }
+    },
+    "/api/hazards": {
+      "get": {
+        "summary": "Current wildfires, the last 24 hours of satellite fire detections, and hazard alerts",
+        "description": "op=wildfire: every current US wildland fire from NIFC WFIGS, as perimeters (acres, percent contained, discovery date, the perimeter's capture time; `perimeter captured` says \"not published by WFIGS\" where it has none rather than borrowing the record's edit time) and incident points for fires with no perimeter yet. op=fires: NASA FIRMS hotspots of the last 24 hours (VIIRS S-NPP, VIIRS NOAA-20, MODIS) inside `bbox` as rows (see `columns`); over `max` they are binned to a square grid and each cell keeps its brightest detection (max FRP) with the count it stands for. Confidence stays on each instrument's scale (VIIRS low / nominal / high, MODIS 0-100 %). op=alerts: every active NWS alert (the polygon NWS published, or else the counties its SAME codes list, dashed on the globe), every GDACS event marked current (RSS, EVENTS4APP and a SEARCH for current Orange and Red events, merged), and NASA EONET open volcano events; severities as each publisher gives them, unrated as \"not rated by source\". GDACS quakes the USGS 24 h feed also has carry `alsoInUsgs`; none is dropped. Each alerts source gets 20 s; one that does not answer is named in `failed` and in `caveats`. Not a warning service.",
+        "tags": [
+          "hazards"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "wildfire",
+                "fires",
+                "alerts"
+              ]
+            },
+            "description": "wildfire: NIFC WFIGS perimeters and incident points (US). fires: NASA FIRMS 24 h hotspots in a bbox. alerts: NWS + GDACS + EONET."
+          },
+          {
+            "name": "bbox",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Bbox"
+            },
+            "description": "`w,s,e,n` degrees, op=fires only; snapped outward to a 1° grid. Default: the whole globe."
+          },
+          {
+            "name": "max",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 500,
+              "maximum": 8000,
+              "default": 5000
+            },
+            "description": "op=fires: most rows returned; above it the detections are binned (brightest per cell)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope for the op.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/Cors"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/HazardsWildfireResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HazardsFiresResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HazardsAlertsResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/Upstream"
+          }
+        }
+      },
+      "options": {
+        "tags": [
+          "hazards"
+        ],
+        "summary": "CORS preflight",
+        "operationId": "hazardsOptions",
+        "responses": {
+          "204": {
+            "description": "No content."
+          }
+        }
+      }
+    },
+    "/api/land": {
+      "get": {
+        "summary": "Flood zones, wetlands, public and protected lands in a box, or the ground elevation at a point",
+        "description": "op=flood: FEMA National Flood Hazard Layer flood hazard zones (layer 28) with FEMA's meaning of each zone, whether the ground is in the special flood hazard area, and the base flood elevation where FEMA published one (the -9999 sentinel is dropped). A regulatory map, not a forecast; a box with no zone is not a finding of no risk. Boxes are clamped to 0.08° and snapped to a 0.02° grid. op=wetlands: USFWS National Wetlands Inventory polygons with their Cowardin code, type, system, class, water regime, acres and the year of the imagery each was mapped from (`imageYears`, null when NWI's source layer did not answer); same box rules. op=publiclands: USGS PAD-US 4.1 fee, easement, designation and proclamation areas with owner, manager, local owner, easement holder, public access, GAP status and IUCN category as PAD-US publishes them; boxes up to 2°, snapped to 0.25°; a box taller than 1.5° keeps the largest 600 units, generalised. op=elevation: USGS 3DEP ground elevation (EPQS) in metres with the source DEM resolution; outside 3DEP coverage `metres` is absent and `note` carries what EPQS said. Only the returned `bbox` is loaded.",
+        "tags": [
+          "land"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "flood",
+                "wetlands",
+                "publiclands",
+                "elevation"
+              ]
+            },
+            "description": "flood: FEMA NFHL zones. wetlands: USFWS NWI polygons with imagery years. publiclands: USGS PAD-US 4.1 units with owners and access. elevation: USGS 3DEP EPQS at lon, lat."
+          },
+          {
+            "name": "bbox",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Bbox"
+            },
+            "description": "`w,s,e,n` degrees. Required for op=flood, wetlands (clamped to 0.08°), publiclands (clamped to 2°). The snapped box comes back in `bbox`."
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            },
+            "description": "op=elevation: longitude of the point."
+          },
+          {
+            "name": "lat",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            },
+            "description": "op=elevation: latitude of the point."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope for the op.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/Cors"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/LandFloodResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/LandWetlandsResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/LandPubliclandsResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/LandElevationResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/Upstream"
+          }
+        }
+      },
+      "options": {
+        "tags": [
+          "land"
+        ],
+        "summary": "CORS preflight",
+        "operationId": "landOptions",
+        "responses": {
+          "204": {
+            "description": "No content."
+          }
+        }
+      }
+    },
+    "/api/space": {
+      "get": {
+        "summary": "Space weather (Kp, solar flares, notifications) and NASA's ISS live stream",
+        "description": "op=weather: the planetary Kp index for the last three days from GFZ Potsdam (each value with GFZ's status, `pre` preliminary or `def` definitive), NASA DONKI solar flares of the last seven days and space-weather notifications of the last three. A list that did not answer is null and named in `failed`; an empty list means none reported. NOAA SWPC is the official US source for forecasts. op=iss-stream: NASA's ISS stream id when YouTube's oEmbed endpoint confirms it is embeddable, on NASA's own channel and titled as the Space Station stream; otherwise `available: false` with the reason. No YouTube page is fetched.",
+        "tags": [
+          "space"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "weather",
+                "iss-stream"
+              ]
+            },
+            "description": "weather: GFZ Kp + NASA DONKI. iss-stream: the oEmbed-checked ISS stream."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope for the op.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/Cors"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/SpaceWeatherResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SpaceIssStreamResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/Upstream"
+          }
+        }
+      },
+      "options": {
+        "tags": [
+          "space"
+        ],
+        "summary": "CORS preflight",
+        "operationId": "spaceOptions",
+        "responses": {
+          "204": {
+            "description": "No content."
           }
         }
       }
@@ -4197,6 +4475,438 @@
           }
         ],
         "x-op": "msa-jobs"
+      },
+      "HazardsWildfireResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "perimeters": {
+                "type": "integer"
+              },
+              "pointsWithoutPerimeter": {
+                "type": "integer",
+                "description": "Incident points for fires with no perimeter yet."
+              },
+              "truncated": {
+                "type": "boolean",
+                "description": "WFIGS hit its record limit."
+              }
+            }
+          }
+        ],
+        "x-op": "wildfire"
+      },
+      "HazardsFiresResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "description": "One hotspot, in the order of `columns`. confidence is low | nominal | high (VIIRS) or 0-100 (MODIS); null when blank."
+                }
+              },
+              "columns": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "example": [
+                  "lon",
+                  "lat",
+                  "frp_mw",
+                  "acquired_ms",
+                  "satellite",
+                  "instrument",
+                  "confidence",
+                  "day_night",
+                  "detections"
+                ]
+              },
+              "confidence": {
+                "type": "string"
+              },
+              "files": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "product": {
+                      "type": "string"
+                    },
+                    "detections": {
+                      "type": "integer"
+                    },
+                    "version": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "failed": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "FIRMS files that did not answer in time; their detections are missing, not absent."
+              },
+              "lastModified": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "total": {
+                "type": "integer",
+                "description": "Detections in the box before binning."
+              },
+              "returned": {
+                "type": "integer"
+              },
+              "cellDeg": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "description": "Bin size in degrees when binned, else null."
+              }
+            }
+          }
+        ],
+        "x-op": "fires"
+      },
+      "HazardsAlertsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "counts": {
+                "type": "object",
+                "description": "Per source: nws { alerts, drawnAsPolygon, drawnAsCounties, notDrawn }, gdacs { events, quakesAlsoInUsgs, usgsChecked, via, failed, lists, truncated }, eonet { volcanoes }; each with its cacheAge."
+              },
+              "failed": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Sources (NWS, GDACS, EONET) that did not answer within deadlineS."
+              },
+              "truncated": {
+                "type": "boolean",
+                "description": "GDACS's lists may be incomplete."
+              },
+              "deadlineS": {
+                "type": "number"
+              }
+            }
+          }
+        ],
+        "x-op": "alerts"
+      },
+      "LandFloodResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "truncated": {
+                "type": "boolean"
+              }
+            }
+          }
+        ],
+        "x-op": "flood"
+      },
+      "LandWetlandsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "truncated": {
+                "type": "boolean"
+              },
+              "imageYears": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "integer"
+                },
+                "description": "Years of the imagery the polygons in this box were mapped from; null when NWI's source layer did not answer."
+              },
+              "projects": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "wetlands"
+      },
+      "LandPubliclandsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "categories": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "truncated": {
+                "type": "boolean",
+                "description": "Units were left out (the wide-box cap keeps the largest, or the service's limit)."
+              },
+              "maxUnits": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "generalisationDeg": {
+                "type": "number"
+              },
+              "coarsenedForSize": {
+                "type": "boolean"
+              },
+              "domainsDecoded": {
+                "type": "boolean"
+              }
+            }
+          }
+        ],
+        "x-op": "publiclands"
+      },
+      "LandElevationResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "lon",
+                  "lat"
+                ],
+                "properties": {
+                  "lon": {
+                    "type": "number"
+                  },
+                  "lat": {
+                    "type": "number"
+                  },
+                  "metres": {
+                    "type": "number",
+                    "description": "Absent where EPQS has no value."
+                  },
+                  "resolutionM": {
+                    "type": "number"
+                  },
+                  "rasterId": {
+                    "type": "number"
+                  },
+                  "note": {
+                    "type": "string",
+                    "description": "What EPQS said instead of a value."
+                  }
+                }
+              },
+              "units": {
+                "type": "string",
+                "enum": [
+                  "metres"
+                ]
+              }
+            }
+          }
+        ],
+        "x-op": "elevation"
+      },
+      "SpaceWeatherResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "kp": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "time": {
+                          "type": "string"
+                        },
+                        "kp": {
+                          "type": "number"
+                        },
+                        "status": {
+                          "type": "string",
+                          "description": "GFZ status: pre (preliminary) or def (definitive)."
+                        }
+                      }
+                    }
+                  },
+                  "kpLicense": {
+                    "type": "string"
+                  },
+                  "flares": {
+                    "type": [
+                      "array",
+                      "null"
+                    ],
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "notices": {
+                    "type": [
+                      "array",
+                      "null"
+                    ],
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "flaresFrom": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "noticesFrom": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "failed": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "weather"
+      },
+      "SpaceIssStreamResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "available",
+                  "checkedAt"
+                ],
+                "properties": {
+                  "available": {
+                    "type": "boolean"
+                  },
+                  "videoId": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "author": {
+                    "type": "string"
+                  },
+                  "authorUrl": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "description": "Why the stream is not shown."
+                  },
+                  "checkedAt": {
+                    "type": "integer",
+                    "description": "Epoch ms of the oEmbed check."
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "iss-stream"
       }
     }
   }
