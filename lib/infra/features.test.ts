@@ -18,7 +18,6 @@ import {
   buildPlss,
   buildRail,
   buildTransmission,
-  clip,
   faultAgeClass,
   finite,
   str,
@@ -63,11 +62,6 @@ describe("value helpers", () => {
     expect(str(" ")).toBeUndefined();
     expect(str("Unknown", ["UNKNOWN"])).toBeUndefined();
     expect(str("PILOT KNOB")).toBe("PILOT KNOB");
-  });
-  it("clips free text at a word-safe length and says so", () => {
-    expect(clip("a".repeat(300), 240)).toHaveLength(240);
-    expect(clip("a".repeat(300), 240)!.endsWith("…")).toBe(true);
-    expect(clip("short", 240)).toBe("short");
   });
 });
 
@@ -216,8 +210,14 @@ describe("USGS landslide inventory", () => {
   it("shows the confidence on USGS's scale without inventing a label for it", () => {
     expect(String(out[0].properties.details?.confidence)).toMatch(/^8 \(USGS's confidence/);
   });
-  it("cuts the free-text notes", () => {
-    for (const f of out) expect(String(f.properties.details?.notes ?? "").length).toBeLessThanOrEqual(240);
+  it("never relays the inventory's free-text Notes, which can name homeowners and give addresses", () => {
+    const withNotes = rows(landslides).map((r) => ({ ...r, properties: { ...r.properties, Notes: "Originated from the backyard of residence of A. Person at 123 Example Road" } }));
+    const built = buildLandslides(withNotes);
+    expect(built.length).toBe(out.length);
+    for (const f of built) expect(f.properties.details?.notes).toBeUndefined();
+    expect(JSON.stringify(built)).not.toMatch(/residence|Example Road/);
+    // The captured payload is what the route now asks for: no Notes field at all.
+    for (const r of rows(landslides)) expect(Object.keys(r.properties)).not.toContain("Notes");
   });
 });
 

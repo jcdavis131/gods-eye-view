@@ -14,9 +14,10 @@
 // a railroad's reporting marks, a power plant's EIA entity) are shown as the
 // public registry publishes them, in `details` only: never in a feature's
 // `name`, never on the search allowlist (lib/search/allowlist.ts), never
-// joined across sources. Street addresses and contact people are never read:
-// the queries ask for explicit outFields that leave them out (NID's
-// CONG_REPRESNTATIVE, OTHER_NAMES, FORMER_NAMES and DESIGNER_NAMES included).
+// joined across sources. Street addresses, contact people and free-text notes
+// are never read: the queries ask for explicit outFields that leave them out
+// (NID's CONG_REPRESNTATIVE, OTHER_NAMES, FORMER_NAMES and DESIGNER_NAMES, and
+// the landslide inventory's Notes, which quotes news stories naming homeowners).
 
 import type { LineString, MultiLineString, MultiPolygon, Point, Polygon } from "geojson";
 import type { LayerFeature, LayerId } from "@/lib/layers/types";
@@ -535,14 +536,6 @@ function slDate(v: unknown): string | undefined {
   return m ? `${m[1]}-${m[2]}-${m[3]}` : s;
 }
 
-/** Free text from the inventory, as published, cut at `max` characters. */
-export function clip(s: string | undefined, max: number): string | undefined {
-  if (!s) return undefined;
-  const t = s.replace(/\s+/g, " ").trim();
-  if (!t) return undefined;
-  return t.length > max ? `${t.slice(0, max - 1).trimEnd()}…` : t;
-}
-
 export function buildLandslides(rows: Row[]): LayerFeature[] {
   const out: LayerFeature[] = [];
   for (const r of rows) {
@@ -577,7 +570,6 @@ export function buildLandslides(rows: Row[]): LayerFeature[] {
           "source inventory": str(p.Inventory),
           "inventory link": str(p.Inv_URL),
           "information source": str(p.Info_Sourc),
-          notes: clip(str(p.Notes), 240),
         },
         extra: { confidence, type, fatalities } satisfies LandslideExtra,
       },

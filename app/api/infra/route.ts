@@ -25,7 +25,8 @@
 //
 // Every query asks for an explicit field list: owner and operator names are
 // relayed as the registry publishes them, but NID's representative and
-// designer names, and any street address, are never requested. Nothing here
+// designer names, any street address, and free-text notes (the landslide
+// inventory's quote news stories naming homeowners) are never requested. Nothing here
 // searches by an owner or operator; the T-R-S search reads survey numbers only.
 
 import type { NextRequest } from "next/server";
@@ -504,7 +505,8 @@ async function opLandslides(bbox: Bbox): Promise<OpResult> {
         name: "usgs-landslides",
         url: LANDSLIDES,
         gate: "usgs-landslides",
-        outFields: "USGS_ID,Date_Min,Date_Max,Fatalities,Confidence,LS_Type,Inventory,Inv_URL,Info_Sourc,Notes",
+        // No Notes: its free text quotes news stories that name homeowners and give street addresses.
+        outFields: "USGS_ID,Date_Min,Date_Max,Fatalities,Confidence,LS_Type,Inventory,Inv_URL,Info_Sourc",
         orderBy: "Confidence DESC",
       });
       return { features: buildLandslides(f.features as Row[]), truncated: truncated(f) };
