@@ -55,13 +55,18 @@ export function routeSpec(product: RenderProductId, over: Partial<TileSpec> & Pi
 
 const picture = (color: string, tiles: LayerStyle["tiles"]): LayerStyle => ({ color, tiles });
 
+// USGS's relief tiles are opaque JPEGs, almost white (probed means 244-252), so drawn as they come
+// they lay a milky veil over the whole globe; `shade` keeps only the shading. Levels 9 and deeper
+// are published only around the US, and level 9 has holes even there (all 404), hence `sparse`.
 export const reliefStyle = picture("#C9CED6", () => [
   {
     key: "relief",
     kind: "xyz",
     url: RELIEF_TILES,
     maximumLevel: 13,
-    alpha: 0.55,
+    shade: true,
+    sparse: true,
+    alpha: 0.8,
     z: TILE_Z.relief,
     credit: "Relief: USGS The National Map, 3DEP and GMTED2010",
   },
@@ -119,6 +124,9 @@ export const sealevelStyle = picture("#4895E5", ({ meta }) => {
       kind: "xyz",
       url: `${SLR_BASE}/slr_${ft}ft/MapServer/tile/{z}/{y}/{x}`,
       maximumLevel: 16,
+      // Cached only along US coasts: a 404 is "nothing here". The service's published fullExtent
+      // is nearly worldwide (3 ft: 348° of longitude, 45.0° S to 78.4° N), so it bounds nothing.
+      sparse: true,
       alpha: 0.75,
       z: TILE_Z.sealevel,
       maxHeight: SEALEVEL_MAX_HEIGHT_M,

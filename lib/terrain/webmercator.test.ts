@@ -8,6 +8,7 @@ import {
   inkToTint,
   lonLatToTile,
   pixelMetres,
+  shadeToAlpha,
   terrariumHeight,
   tileBbox3857,
   tileBoundsDeg,
@@ -100,6 +101,14 @@ describe("inkToTint", () => {
     expect([...px.slice(4, 8)]).toEqual([0xf3, 0xe3, 0xa6, 254]);
     expect(px[11]).toBeGreaterThan(100);
     expect(px[11]).toBeLessThan(140);
+  });
+
+  it("shadeToAlpha keeps only a hillshade's shading, as a multiply", () => {
+    // USGS relief pixels as probed on 2026-09-26: white, the flat 244 of open ocean, flat Kansas (252), a deep shadow, black.
+    const px = new Uint8ClampedArray([255, 255, 255, 255, 244, 244, 244, 255, 252, 252, 252, 255, 130, 130, 130, 255, 0, 0, 0, 255]);
+    shadeToAlpha(px);
+    for (let i = 0; i < px.length; i += 4) expect([...px.slice(i, i + 3)]).toEqual([0, 0, 0]);
+    expect([px[3], px[7], px[11], px[15], px[19]]).toEqual([0, 11, 3, 125, 255]);
   });
 
   it("parses #RRGGBB and refuses anything else", () => {

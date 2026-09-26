@@ -111,6 +111,17 @@ export function inkToTint(rgba: Uint8ClampedArray | Uint8Array, tint: [number, n
   return rgba;
 }
 
+/**
+ * A light, opaque hillshade (USGS's relief cache is JPEG: flat ground about
+ * 252, open ocean a flat 244, shadows down to about 110) -> its shading alone,
+ * black with alpha (255 − lum) / 255. Drawn over imagery that is a multiply by
+ * the hillshade: lit, flat ground and the sea stay clear, slopes turned from
+ * the sun darken what is under them. Mutates and returns `rgba`.
+ */
+export function shadeToAlpha(rgba: Uint8ClampedArray | Uint8Array): Uint8ClampedArray | Uint8Array {
+  return inkToTint(rgba, [0, 0, 0], 255);
+}
+
 /** "#RRGGBB" -> [r, g, b]. */
 export function hexRgb(hex: string): [number, number, number] {
   const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex.trim());
