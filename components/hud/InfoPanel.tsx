@@ -112,7 +112,7 @@ export default function InfoPanel() {
   const details = Object.entries(p.details ?? {}).filter(([, v]) => v != null && v !== "" && v !== false);
   const isLiveLayer =
     !p.simulated &&
-    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "banks", "spending", "constructs", "field", "flood", "wetlands", "publiclands", "zoning"].includes(p.layer);
+    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "banks", "spending", "constructs", "field", "flood", "wetlands", "publiclands", "zoning", "permits", "licences", "envpermits"].includes(p.layer);
   const banner = BANNER[p.layer];
   const iss = p.layer === "satellites" && p.id === "25544";
   const construct = p.layer === "constructs" || p.layer === "field" || p.layer === "alerts";
@@ -262,6 +262,9 @@ const BANNER: Partial<Record<string, string>> = {
   wetlands: "HABITAT MAP FROM DATED IMAGERY · MAY HAVE CHANGED SINCE · NOT A JURISDICTIONAL DELINEATION",
   fires: "SATELLITE HOTSPOT · NOT A CONFIRMED FIRE",
   zoning: "AS THE CITY'S GIS PUBLISHES IT · THE ADOPTED MAP AND CODE GOVERN · NOT A ZONING VERIFICATION",
+  permits: "A PERMIT AS THE CITY PUBLISHES IT · PERMISSION TO BUILD, NOT PROOF WORK HAPPENED",
+  licences: "AS THE REGISTRY PUBLISHES IT · TRADE NAMES ONLY · APARTMENT AND UNIT ADDRESSES WITHHELD",
+  envpermits: "AS EPA ECHO OR THE CORPS PUBLISHES IT · COMPLIANCE IN ECHO'S OWN WORDS",
 };
 
 /**

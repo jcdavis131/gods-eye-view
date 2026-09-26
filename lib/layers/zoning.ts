@@ -17,7 +17,7 @@
 import type { FetchContext, FetchResult, LayerDefinition, LayerFeature } from "./types";
 import { proxy } from "./aircraft";
 import { FeatureMemo } from "./featureMemo";
-import { civicLoadedBox } from "./civicBox";
+import { civicLoadedBox, gridBox } from "./civicBox";
 import { citiesInBox, coveredCityNames, ZONING_CITIES, type Bbox, type ZoningCityId, type ZoningOutlineExtra } from "@/lib/zoning/features";
 
 /** District outlines load below this camera height. */
@@ -34,10 +34,7 @@ const KEY_GRID = 0.005;
 
 /** The box asked for around the view key's cell: HALF_LAT tall each way, about as wide on the ground. */
 export function districtBox(lon: number, lat: number): Bbox {
-  const c = { lon: Math.round(lon / KEY_GRID) * KEY_GRID, lat: Math.round(lat / KEY_GRID) * KEY_GRID };
-  const halfLon = Math.max(0.0025, Math.round(HALF_LAT / Math.max(Math.cos((c.lat * Math.PI) / 180), 0.2) / 0.0025) * 0.0025);
-  const r = (x: number) => Number(x.toFixed(4));
-  return [r(c.lon - halfLon), r(c.lat - HALF_LAT), r(c.lon + halfLon), r(c.lat + HALF_LAT)];
+  return gridBox(lon, lat, HALF_LAT, KEY_GRID, 0.0025);
 }
 
 const memo = new FeatureMemo(6000);

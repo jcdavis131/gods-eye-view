@@ -74,7 +74,8 @@ export interface Vitals {
  * on their own because only points count. Fire hotspots and wildfire
  * incident points are observations on the ground, like earthquakes, and count.
  */
-const NOT_PHYSICAL = new Set<LayerId>(["constructs", "field", "alerts", "hazards", "occupations", "weather"]);
+// Permits, licences and environmental permits are records about a site, not things on the ground.
+const NOT_PHYSICAL = new Set<LayerId>(["constructs", "field", "alerts", "hazards", "occupations", "weather", "permits", "licences", "envpermits"]);
 
 export function isPhysical(f: LayerFeature): boolean {
   return !NOT_PHYSICAL.has(f.properties.layer) && !f.properties.simulated && f.geometry?.type === "Point";

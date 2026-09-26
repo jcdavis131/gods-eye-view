@@ -40,3 +40,16 @@ export function cellCentre(v: ViewState, grid: number): { lon: number; lat: numb
 export function isLoadedBox(f: LayerFeature): boolean {
   return f.properties.kind === "loaded-box";
 }
+
+/**
+ * A box around the view key's cell, `halfLat` degrees tall each way and about
+ * as wide on the ground, with every edge on the route's `routeGrid` so the
+ * route's snapping does not grow it. `halfLat` and `keyGrid` must be
+ * multiples of `routeGrid`.
+ */
+export function gridBox(lon: number, lat: number, halfLat: number, keyGrid: number, routeGrid: number): Bbox {
+  const c = { lon: Math.round(lon / keyGrid) * keyGrid, lat: Math.round(lat / keyGrid) * keyGrid };
+  const halfLon = Math.max(routeGrid, Math.round(halfLat / Math.max(Math.cos((c.lat * Math.PI) / 180), 0.2) / routeGrid) * routeGrid);
+  const r = (x: number) => Number(x.toFixed(4));
+  return [r(c.lon - halfLon), r(c.lat - halfLat), r(c.lon + halfLon), r(c.lat + halfLat)];
+}

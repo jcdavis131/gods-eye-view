@@ -80,6 +80,13 @@ describe("the search allowlist", () => {
     expect(matchScore(d, "office core")).toBe(0);
   });
 
+  it("searches permit and licence numbers and licence types, never an address, contractor, facility, project or licensee", () => {
+    for (const k of ["permit number", "licence number", "licence type", "permit id"]) expect(searchableDetail(k), k).toBe(true);
+    for (const k of ["address", "contractor (company)", "facility (as EPA publishes it)", "project (as the Corps publishes it)", "name", "registry", "publisher", "description"]) {
+      expect(searchableDetail(k), k).toBe(false);
+    }
+  });
+
   it("scores exact over prefix over contained, and never matches a loaded box", () => {
     expect(matchScore(props({ name: "Zone AE" }), "zone ae")).toBe(3);
     expect(matchScore(props({ name: "Zone AE" }), "zone")).toBe(2);

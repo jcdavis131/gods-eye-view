@@ -27,6 +27,9 @@ import { floodLayer } from "./flood";
 import { wetlandsLayer } from "./wetlands";
 import { publiclandsLayer } from "./publiclands";
 import { zoningLayer } from "./zoning";
+import { permitsLayer } from "./permits";
+import { licencesLayer } from "./licences";
+import { envpermitsLayer } from "./envpermits";
 import { sportsLayer } from "./sports";
 import { constructsLayer } from "./constructs";
 import { fieldLayer } from "./field";
@@ -58,6 +61,9 @@ export const LAYERS: LayerDefinition[] = [
   wetlandsLayer,
   publiclandsLayer,
   zoningLayer,
+  permitsLayer,
+  licencesLayer,
+  envpermitsLayer,
   sportsLayer,
   constructsLayer,
   fieldLayer,

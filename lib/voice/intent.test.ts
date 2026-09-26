@@ -32,4 +32,12 @@ describe("voice words for the civic layers", () => {
     expect(layerOf("show the zoning map")).toMatchObject({ layer: "zoning" });
     expect(layerOf("show districts")).toMatchObject({ layer: "constructs" });
   });
+  it("hears building permits, licences and environmental permits apart", () => {
+    expect(layerOf("show building permits in Chicago")).toMatchObject({ layer: "permits", place: "chicago" });
+    expect(layerOf("show permits")).toMatchObject({ layer: "permits" });
+    expect(layerOf("show environmental permits")).toMatchObject({ layer: "envpermits" });
+    expect(layerOf("show army corps permits")).toMatchObject({ layer: "envpermits" });
+    expect(layerOf("show business licenses")).toMatchObject({ layer: "licences" });
+    expect(layerOf("hide liquor licences")).toMatchObject({ layer: "licences", on: false });
+  });
 });

@@ -53,6 +53,10 @@
       "description": "Zoning districts as city zoning GIS services publish them: Seattle, Denver, New York City (DCP districts and the Zoning Tax Lot Database), Chicago, Dallas, San Antonio, Austin, Los Angeles, San Francisco; Houston answers that it has no zoning ordinance. The city is picked by the Census TIGERweb incorporated place under the point."
     },
     {
+      "name": "permits",
+      "description": "Building permits (Chicago, Austin, Seattle, Denver residential, New York DOB NOW, Los Angeles, San Francisco), business licences (NY State Liquor Authority, Chicago, San Francisco, Los Angeles, NYC DCWP premises) and environmental permits (EPA ECHO Clean Water Act and Clean Air Act, U.S. Army Corps of Engineers ORM), each with a coverage list that says which sources answered and why the others did not."
+    },
+    {
       "name": "space",
       "description": "Space weather (GFZ Kp, NASA DONKI) and NASA's ISS live stream, checked through YouTube oEmbed."
     },
@@ -2324,6 +2328,99 @@
         ],
         "summary": "CORS preflight",
         "operationId": "zoningOptions",
+        "responses": {
+          "204": {
+            "description": "No content."
+          }
+        }
+      }
+    },
+    "/api/permits": {
+      "get": {
+        "summary": "Building permits, business licences or environmental permits in a box",
+        "description": "op=building: permits the cities list as issued in the last `days` (7-90, default 30), newest first, at most 500 per city; boxes clamped to 0.03° and snapped to 0.0025°. Each record keeps its valuation under the column it came from (reported cost, estimated project cost, valuation...), the parcel key the city publishes (BBL, TCAD id, SCHEDNUM, PIN, block/lot), the zoning printed on the permit where there is one, the contractor company and the city's record link. No person's name is requested; San Francisco, whose portal refuses $select, is cut to a fixed field list on the server. op=licences: licensed premises, trade names only (an entity's legal name where there is no trade name; a registrant that may be a person is not named), and licences at apartment or unit addresses withheld as a home-business heuristic (`withheld` counts them); boxes clamped to 0.02°. op=environmental: EPA ECHO NPDES and air facilities (compliance in ECHO's own words; 'not reported by ECHO' when it gives none) and the Corps' regulatory actions (the applicant is never kept; the search returns at most 300, in no date order, sorted newest first here); boxes clamped to 0.2° and snapped to 0.05°. `coverage` lists every source the box meets with its state: covered, partial (a cap was hit), stale (Dallas), no-feed (Houston), token-required (Denver commercial), not-wired (San Antonio) or error (did not answer this time: missing, not absent).",
+        "tags": [
+          "permits"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "building",
+                "licences",
+                "environmental"
+              ]
+            },
+            "description": "building: city building permits. licences: licensed premises. environmental: EPA ECHO facilities and Corps actions."
+          },
+          {
+            "name": "bbox",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Bbox"
+            },
+            "description": "`w,s,e,n` degrees. The snapped box comes back in `bbox`."
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 7,
+              "maximum": 90,
+              "default": 30
+            },
+            "description": "op=building: the window of issue dates."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope for the op.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/Cors"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/PermitsBuildingResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PermitsLicencesResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PermitsEnvironmentalResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/Upstream"
+          }
+        }
+      },
+      "options": {
+        "tags": [
+          "permits"
+        ],
+        "summary": "CORS preflight",
+        "operationId": "permitsOptions",
         "responses": {
           "204": {
             "description": "No content."
@@ -5034,6 +5131,180 @@
           }
         ],
         "x-op": "coverage"
+      },
+      "PermitsCoverage": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "id",
+            "name",
+            "state",
+            "count"
+          ],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string",
+              "enum": [
+                "covered",
+                "partial",
+                "stale",
+                "no-feed",
+                "token-required",
+                "not-wired",
+                "error"
+              ]
+            },
+            "count": {
+              "type": "integer"
+            },
+            "reason": {
+              "type": "string"
+            },
+            "cadence": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "PermitsBuildingResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "days": {
+                "type": "integer"
+              },
+              "coverage": {
+                "$ref": "#/components/schemas/PermitsCoverage"
+              }
+            }
+          }
+        ],
+        "x-op": "building",
+        "x-feature-properties": [
+          "id",
+          "city",
+          "number",
+          "kind",
+          "work",
+          "description",
+          "valuation",
+          "valuationLabel",
+          "fee",
+          "status",
+          "applied",
+          "issued",
+          "finaled",
+          "expires",
+          "address",
+          "parcel",
+          "zoning",
+          "contractorCompany",
+          "url",
+          "published"
+        ]
+      },
+      "PermitsLicencesResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "coverage": {
+                "$ref": "#/components/schemas/PermitsCoverage"
+              },
+              "withheld": {
+                "type": "integer",
+                "description": "Licences withheld by the home-business heuristic."
+              }
+            }
+          }
+        ],
+        "x-op": "licences",
+        "x-feature-properties": [
+          "id",
+          "source",
+          "name",
+          "nameNote",
+          "category",
+          "activity",
+          "number",
+          "status",
+          "issued",
+          "started",
+          "expires",
+          "address",
+          "published"
+        ]
+      },
+      "PermitsEnvironmentalResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "coverage": {
+                "$ref": "#/components/schemas/PermitsCoverage"
+              }
+            }
+          }
+        ],
+        "x-op": "environmental",
+        "x-feature-properties": [
+          "id",
+          "program",
+          "number",
+          "type",
+          "facility",
+          "status",
+          "compliance",
+          "date",
+          "dateLabel",
+          "address",
+          "url",
+          "published"
+        ]
       },
       "LandFloodResponse": {
         "allOf": [

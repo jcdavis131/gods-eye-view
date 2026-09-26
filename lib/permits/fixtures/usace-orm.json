@@ -1,0 +1,686 @@
+{
+ "total": 109678,
+ "results": {
+  "type": "FeatureCollection",
+  "features": [
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -95.17631,
+      29.75189
+     ]
+    },
+    "properties": {
+     "permitType": "Letter of Permission",
+     "vtype": "issued",
+     "applicant": "[removed from this fixture: applicant strings embed personal names]",
+     "projectName": "Industrial Holdings / Maintenance Dredging/ SP / Greens Bayou / Harris County",
+     "identifier": "SWG-1993-01047",
+     "daNumber": "SWG-1993-01047",
+     "district": "Galveston",
+     "org": "SWG",
+     "vdate": "20250617",
+     "displayDate": "06/17/2025",
+     "publicNoticeDate": "N/A",
+     "actionTaken": "Issued With Special Conditions",
+     "dtype": "DA",
+     "count": "1"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -95.15648,
+      29.77688
+     ]
+    },
+    "properties": {
+     "permitType": "Nationwide Permit",
+     "vtype": "wrda",
+     "applicant": "[removed from this fixture: applicant strings embed personal names]",
+     "projectName": "HC 214 Flood/RGP/Repair Channel Erosion/Bank Stabilization N100-00-00-X038/Harris County, Texas",
+     "identifier": "SWG-2024-00661",
+     "daNumber": "SWG-2024-00661",
+     "district": "Galveston",
+     "org": "SWG",
+     "vdate": "20250613",
+     "displayDate": "06/13/2025",
+     "publicNoticeDate": "N/A",
+     "actionTaken": "Verified With Special Conditions",
+     "fundingSource": "Water Resources Development Act (WRDA) 214/Transportation Agreements Regulator Funded (Corps)",
+     "dtype": "DA",
+     "count": "1"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -95.09918,
+      29.7516
+     ]
+    },
+    "properties": {
+     "vtype": "nepa_ea",
+     "applicant": "[removed from this fixture: applicant strings embed personal names]",
+     "projectName": "Houston Jacintoport, LLC/Houston Jacintoport Deepwater Dock/SP/Houston Ship Channel / Harris Co",
+     "identifier": "SWG-2025-00194",
+     "daNumber": "SWG-2025-00194",
+     "district": "Central Branch",
+     "org": "SWG",
+     "pnDate": "05/22/2025",
+     "ormPendingOrFinal": "Pending",
+     "pendingOrFinal": "In Progress",
+     "districtOfficeCode": "SWG",
+     "districtOfficeDescription": "Galveston District",
+     "eaActionType": "SP",
+     "dtype": "DA",
+     "count": "2"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -95.16259,
+      29.74085
+     ]
+    },
+    "properties": {
+     "requestId": "408-SWG-2025-0033",
+     "identifier": "408-SWG-2025-0033",
+     "vtype": "s408",
+     "requestName": "[removed from this fixture: applicant strings embed personal names]",
+     "status": "Waiting for Feedback",
+     "civilWorksProjects": "OM HOUSTON SHIP CHANNEL, TX - FY24 - 25",
+     "fundingAgreementType": "Section 1156(a)(2) of WRDA 2016",
+     "locationName": "408-SWG-2025-0033",
+     "locationDesc": "The applicant requests approval of their plans to make improvements and other modifications to expand upon the existing berthing facilities at the ITC Pasadena Terminal Facility located along the Houston Ship Channel in Harris County, Texas.",
+     "reviewCategory": "Single-Phase Review",
+     "regulatoryPermitId": "SWG-2007-00909-RN",
+     "org": "SWG",
+     "vdate": "20250515",
+     "initialSubmissionDate": "05/15/2025",
+     "dtype": "DA",
+     "count": "1"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -95.10007,
+      29.75305
+     ]
+    },
+    "properties": {
+     "requestId": "408-SWG-2025-0030",
+     "identifier": "408-SWG-2025-0030",
+     "vtype": "s408",
+     "requestName": "[removed from this fixture: applicant strings embed personal names]",
+     "status": "Waiting for Feedback",
+     "civilWorksProjects": "OM HOUSTON SHIP CHANNEL, TX - FY24 - 25",
+     "fundingAgreementType": "Section 1156(a)(2) of WRDA 2016",
+     "locationName": "Houston Jacintoport",
+     "locationDesc": "Houston Jacintoport, LLC project is to provide the necessary terminal infrastructure and dock facilities to support vessel loading and unloading for the transportation, importing, and exporting of products.",
+     "reviewCategory": "Single-Phase Review",
+     "regulatoryPermitId": "SWG-2025-00194",
+     "org": "SWG",
+     "vdate": "20250424",
+     "initialSubmissionDate": "04/24/2025",
+     "dtype": "DA",
+     "count": "1"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -95.02899,
+      29.72821
+     ]
+    },
+    "properties": {
+     "permitType": "Standard Permit",
+     "vtype": "issued",
+     "applicant": "[removed from this fixture: applicant strings embed personal names]",
+     "projectName": "CenterPoint Energy Houston Electric - Transfer Permit No: 22164 - HSC",
+     "identifier": "SWG-2000-02822",
+     "daNumber": "SWG-2000-02822",
+     "district": "Galveston",
+     "org": "SWG",
+     "vdate": "20250331",
+     "displayDate": "03/31/2025",
+     "publicNoticeDate": "24-JUL-2024",
+     "actionTaken": "Issued With Special Conditions",
+     "fEaPubDate": "20250401",
+     "finalEaPublicationDate": "04/01/2025",
+     "dtype": "DA",
+     "count": "2"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -95.10112,
+      29.71358
+     ]
+    },
+    "properties": {
+     "vdate": "20250203",
+     "jdType": "PRE2015_POSTSACKETT",
+     "vtype": "jds",
+     "daNumber": "SWG-2011-01210",
+     "identifier": "SWG-2011-01210",
+     "district": "Galveston",
+     "org": "SWG",
+     "projectName": "Vopak Moda Houston LLC/JD/Tucker Bayou/Harris County",
+     "displayDate": "02/03/2025",
+     "ajdUrl": "https://www.swg.usace.army.mil/Portals/26/docs/regulatory/JDs/SWG201101210.pdf",
+     "dtype": "DA",
+     "count": "1"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -95.1092,
+      29.74514
+     ]
+    },
+    "properties": {
+     "requestId": "408-SWG-2025-0009",
+     "identifier": "408-SWG-2025-0009",
+     "vtype": "s408",
+     "requestName": "[removed from this fixture: applicant strings embed personal names]",
+     "status": "Under Construction",
+     "civilWorksProjects": "OM HOUSTON SHIP CHANNEL, TX - FY24 - 25",
+     "locationName": "408-SWG-2025-0009",
+     "locationDesc": "The applicant plans to expand (deepening and widening) the dredge prism at the Care Terminal Wharf 2 located approximately 2.5 miles southeast of the intersection of Beltway 8 and Jacintoport Boulevard within the project area of the Houston Ship Channel in Harris County, Texas.",
+     "reviewCategory": "Single-Phase Review",
+     "regulatoryPermitId": "SWG-1997-02927",
+     "org": "SWG",
+     "latestSubmissionDate": "04/04/2025",
+     "vdate": "20250130",
+     "initialSubmissionDate": "01/30/2025",
+     "dtype": "DA",
+     "count": "1"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -95.01664,
+      29.72517
+     ]
+    },
+    "properties": {
+     "permitType": "Letter of Permission",
+     "vtype": "issued",
+     "applicant": "[removed from this fixture: applicant strings embed personal names]",
+     "projectName": "ExxonMobil - Permit No: 13613(04) - Add Dredge Disposal Areas - Mitchell Bay - Adjacent to Houston Ship Channel",
+     "identifier": "SWG-1994-02068",
+     "daNumber": "SWG-1994-02068",
+     "district": "Galveston",
+     "org": "SWG",
+     "vdate": "20250115",
+     "displayDate": "01/15/2025",
+     "publicNoticeDate": "N/A",
+     "actionTaken": "Issued With Special Conditions",
+     "dtype": "DA",
+     "count": "3"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -95.03394,
+      29.74842
+     ]
+    },
+    "properties": {
+     "permitType": "Letter of Permission",
+     "vtype": "issued",
+     "applicant": "[removed from this fixture: applicant strings embed personal names]",
+     "projectName": "ExxonMobil MOF Dock",
+     "identifier": "SWG-2024-00380",
+     "daNumber": "SWG-2024-00380",
+     "district": "Galveston",
+     "org": "SWG",
+     "vdate": "20241108",
+     "displayDate": "11/08/2024",
+     "publicNoticeDate": "N/A",
+     "actionTaken": "Issued With Special Conditions",
+     "dtype": "DA",
+     "count": "1"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -95.19795,
+      29.70106
+     ]
+    },
+    "properties": {
+     "requestId": "408-SWG-2024-0060",
+     "identifier": "408-SWG-2024-0060",
+     "vtype": "s408",
+     "requestName": "[removed from this fixture: applicant strings embed personal names]",
+     "status": "Closed Out",
+     "civilWorksProjects": "VINCE & LITTLE VINCE BAYOUS, TX  (CHANNEL RECTIFICATION)",
+     "fundingAgreementType": "Section 1156(a)(2) of WRDA 2016",
+     "locationName": "Little Vince Bayou",
+     "locationDesc": "Church at 705 Williams St. Pasadena, Tx. 77506 is going through a remodel process.\r\nThis includes a stormwater detention facility that will be outfalling to Little Vince Bayou-\r\nI101-00-00.  Little Vince Bayou at this location is a concrete lined channel that is a federal project requiring a 408 Review. The outfall will be through a 24\" RCP following all of Harris County Flood Control District criteria and specifications. Channel lining will be restored to original or better conditions after installation of outfall.\r\nAll access will be made through the Church's parking lot. Sediment dams, erosion control and overall SWPPP will be provided during construction of the project.",
+     "reviewCategory": "Single-Phase Review",
+     "org": "SWG",
+     "latestSubmissionDate": "01/15/2025",
+     "vdate": "20240916",
+     "initialSubmissionDate": "09/16/2024",
+     "dtype": "DA",
+     "count": "1"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -95.04976,
+      29.72921
+     ]
+    },
+    "properties": {
+     "requestId": "408-SWG-2024-0056",
+     "identifier": "408-SWG-2024-0056",
+     "vtype": "s408",
+     "requestName": "[removed from this fixture: applicant strings embed personal names]",
+     "status": "Under Construction",
+     "civilWorksProjects": "OM HOUSTON SHIP CHANNEL, TX - FY24 - 25",
+     "fundingAgreementType": "Section 1156(a)(2) of WRDA 2016",
+     "locationName": "408-SWG-2024-0056",
+     "locationDesc": "The applicant proposes construction of a shoreline stabilization project including riprap located at their existing terminal facility adjacent to the Houston Ship Channel in Harris County, Texas.",
+     "reviewCategory": "Single-Phase Review",
+     "regulatoryPermitId": "SWG-2011-00011",
+     "org": "SWG",
+     "latestSubmissionDate": "08/14/2025",
+     "vdate": "20240729",
+     "initialSubmissionDate": "07/29/2024",
+     "dtype": "DA",
+     "count": "1"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -95.12224,
+      29.73288
+     ]
+    },
+    "properties": {
+     "permitType": "Letter of Permission",
+     "vtype": "issued",
+     "applicant": "[removed from this fixture: applicant strings embed personal names]",
+     "projectName": "Deer Park Refining/NWP/Houston Ship Channel/Harris County",
+     "identifier": "SWG-2023-00464",
+     "daNumber": "SWG-2023-00464",
+     "district": "Galveston",
+     "org": "SWG",
+     "vdate": "20240621",
+     "displayDate": "06/21/2024",
+     "publicNoticeDate": "N/A",
+     "actionTaken": "Issued With Special Conditions",
+     "dtype": "DA",
+     "count": "1"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -95.01798,
+      29.72099
+     ]
+    },
+    "properties": {
+     "requestId": "408-SWG-2024-0043",
+     "identifier": "408-SWG-2024-0043",
+     "vtype": "s408",
+     "requestName": "[removed from this fixture: applicant strings embed personal names]",
+     "status": "Withdrawn (no permission required)",
+     "civilWorksProjects": "OM HOUSTON SHIP CHANNEL FY24",
+     "locationName": "408-SWG-2024-0043",
+     "locationDesc": "dock construction at Exxon facility",
+     "reviewCategory": "Single-Phase Review",
+     "regulatoryPermitId": "SWG-2023-00823",
+     "org": "SWG",
+     "latestSubmissionDate": "02/09/2026",
+     "vdate": "20240521",
+     "initialSubmissionDate": "05/21/2024",
+     "dtype": "DA",
+     "count": "1"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -95.10632,
+      29.7585
+     ]
+    },
+    "properties": {
+     "permitType": "Standard Permit",
+     "vtype": "issued",
+     "applicant": "[removed from this fixture: applicant strings embed personal names]",
+     "projectName": "Powell Industries, Inc. - Permit 16063(04) - EOT for Bulkhead and Dredging - Carpenters Bayou",
+     "identifier": "SWG-2000-03009",
+     "daNumber": "SWG-2000-03009",
+     "district": "Galveston",
+     "org": "SWG",
+     "vdate": "20240426",
+     "displayDate": "04/26/2024",
+     "publicNoticeDate": "19-SEP-2023",
+     "actionTaken": "Issued With Special Conditions",
+     "fEaPubDate": "20250114",
+     "finalEaPublicationDate": "01/14/2025",
+     "dtype": "DA",
+     "count": "2"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -95.04581,
+      29.70368
+     ]
+    },
+    "properties": {
+     "permitType": "Standard Permit",
+     "vtype": "issued",
+     "applicant": "[removed from this fixture: applicant strings embed personal names]",
+     "projectName": "Turn Services, LLC/LOP and NWP/Harris County",
+     "identifier": "SWG-2022-00427",
+     "daNumber": "SWG-2022-00427",
+     "district": "Galveston",
+     "org": "SWG",
+     "vdate": "20240404",
+     "displayDate": "04/04/2024",
+     "publicNoticeDate": "20-OCT-2022",
+     "actionTaken": "Issued With Special Conditions",
+     "fEaPubDate": "20250114",
+     "finalEaPublicationDate": "01/14/2025",
+     "dtype": "DA",
+     "count": "1"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -95.15343,
+      29.71193
+     ]
+    },
+    "properties": {
+     "vdate": "20240327",
+     "jdType": "PRE2015_POSTSACKETT",
+     "vtype": "jds",
+     "daNumber": "SWG-2020-00025",
+     "identifier": "SWG-2020-00025",
+     "district": "Galveston",
+     "org": "SWG",
+     "projectName": "Harris County Toll Road Authority/JD/Boggy Bayou/Harris County",
+     "displayDate": "03/27/2024",
+     "ajdUrl": "https://www.swg.usace.army.mil/Portals/26/docs/regulatory/JDs/SWG202000025",
+     "dtype": "DA",
+     "count": "1"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -95.19,
+      29.74355
+     ]
+    },
+    "properties": {
+     "requestId": "408-SWG-2024-0029",
+     "identifier": "408-SWG-2024-0029",
+     "vtype": "s408",
+     "requestName": "[removed from this fixture: applicant strings embed personal names]",
+     "status": "Waiting for Feedback",
+     "civilWorksProjects": "OM HOUSTON SHIP CHANNEL FY24",
+     "locationName": "409-SWG-2024-0029",
+     "locationDesc": "Dredging of approximately 157,000 cys from a 7.4 acre area to a depth of 40' MLT, construction of a new berth, placement of breasting and mooring dolphins, platform with a ship unloader.",
+     "reviewCategory": "Single-Phase Review",
+     "regulatoryPermitId": "SWG-1998-02503",
+     "org": "SWG",
+     "vdate": "20240312",
+     "initialSubmissionDate": "03/12/2024",
+     "dtype": "DA",
+     "count": "1"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -95.09623,
+      29.76802
+     ]
+    },
+    "properties": {
+     "requestId": "408-SWG-2024-0023",
+     "identifier": "408-SWG-2024-0023",
+     "vtype": "s408",
+     "requestName": "[removed from this fixture: applicant strings embed personal names]",
+     "status": "Withdrawn (no permission required)",
+     "civilWorksProjects": "OM HOUSTON SHIP CHANNEL FY24",
+     "locationName": "408-SWG-2024-0023",
+     "locationDesc": "Dredge for a new barge fleeting facility and add 70 deadmen mooring structures.",
+     "reviewCategory": "Single-Phase Review",
+     "org": "SWG",
+     "latestSubmissionDate": "02/28/2024",
+     "vdate": "20240228",
+     "initialSubmissionDate": "02/28/2024",
+     "dtype": "DA",
+     "count": "1"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -95.17969,
+      29.75747
+     ]
+    },
+    "properties": {
+     "requestId": "408-SWG-2024-0014",
+     "identifier": "408-SWG-2024-0014",
+     "vtype": "s408",
+     "requestName": "[removed from this fixture: applicant strings embed personal names]",
+     "status": "Under Construction",
+     "civilWorksProjects": "OM HOUSTON SHIP CHANNEL FY24",
+     "locationName": "408-SWG-2024-0014",
+     "locationDesc": "Expansion of barge slips",
+     "reviewCategory": "Single-Phase Review",
+     "regulatoryPermitId": "SWG-1993-01047",
+     "org": "SWG",
+     "latestSubmissionDate": "12/12/2024",
+     "vdate": "20240125",
+     "initialSubmissionDate": "01/25/2024",
+     "dtype": "DA",
+     "count": "1"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -95.06656,
+      29.74141
+     ]
+    },
+    "properties": {
+     "requestId": "408-SWG-2024-0015",
+     "identifier": "408-SWG-2024-0015",
+     "vtype": "s408",
+     "requestName": "[removed from this fixture: applicant strings embed personal names]",
+     "status": "Under Construction",
+     "civilWorksProjects": "OM HOUSTON SHIP CHANNEL FY24",
+     "locationName": "408-SWG-2024-0015",
+     "locationDesc": "Construction of outfall pipe and diffuser near Peggy Lake PA",
+     "reviewCategory": "Single-Phase Review",
+     "regulatoryPermitId": "SWG-2023-00483",
+     "org": "SWG",
+     "latestSubmissionDate": "04/14/2025",
+     "vdate": "20240125",
+     "initialSubmissionDate": "01/25/2024",
+     "dtype": "DA",
+     "count": "1"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -95.11804,
+      29.75961
+     ]
+    },
+    "properties": {
+     "permitType": "Letter of Permission",
+     "vtype": "issued",
+     "applicant": "[removed from this fixture: applicant strings embed personal names]",
+     "projectName": "Patterson Tubular - Pilings - Carpenters Bayou - Channelview, Harris County, Texas",
+     "identifier": "SWG-2010-00421",
+     "daNumber": "SWG-2010-00421",
+     "district": "Galveston",
+     "org": "SWG",
+     "vdate": "20240122",
+     "displayDate": "01/22/2024",
+     "publicNoticeDate": "N/A",
+     "actionTaken": "Issued With Special Conditions",
+     "dtype": "DA",
+     "count": "3"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -95.15056,
+      29.73819
+     ]
+    },
+    "properties": {
+     "permitType": "Standard Permit",
+     "vtype": "issued",
+     "applicant": "[removed from this fixture: applicant strings embed personal names]",
+     "projectName": "Texas Deepwater Partner Terminals I LLC-(P-L Jacintoport  No. 19164) - Houston Ship Channel - Harris County, Texas",
+     "identifier": "SWG-2007-01694-RN",
+     "daNumber": "SWG-2007-01694-RN",
+     "district": "Galveston",
+     "org": "SWG",
+     "vdate": "20200603",
+     "displayDate": "06/03/2020",
+     "publicNoticeDate": "16-JAN-2020",
+     "actionTaken": "Issued With Special Conditions",
+     "fEaPubDate": "20250114",
+     "finalEaPublicationDate": "01/14/2025",
+     "dtype": "DA",
+     "count": "2"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -95.09036,
+      29.76264
+     ]
+    },
+    "properties": {
+     "permitType": "Standard Permit",
+     "vtype": "issued",
+     "applicant": "[removed from this fixture: applicant strings embed personal names]",
+     "projectName": "Cemex USA - EOT for 16000(09) - Houston Ship Channel - Harris County, Texas",
+     "identifier": "SWG-2007-01383",
+     "daNumber": "SWG-2007-01383",
+     "district": "Galveston",
+     "org": "SWG",
+     "vdate": "20200518",
+     "displayDate": "05/18/2020",
+     "publicNoticeDate": "20-OCT-2017",
+     "actionTaken": "Issued With Special Conditions",
+     "fEaPubDate": "20250114",
+     "finalEaPublicationDate": "01/14/2025",
+     "dtype": "DA",
+     "count": "1"
+    }
+   },
+   {
+    "type": "Feature",
+    "geometry": {
+     "type": "Point",
+     "coordinates": [
+      -95.07886,
+      29.76437
+     ]
+    },
+    "properties": {
+     "permitType": "Regional General Permit",
+     "vtype": "wrda",
+     "applicant": "[removed from this fixture: applicant strings embed personal names]",
+     "projectName": "Harris County Engineering Department/RGP/Harris County/UPIN 18102MF0SX01",
+     "identifier": "SWG-2019-00341",
+     "daNumber": "SWG-2019-00341",
+     "district": "Galveston",
+     "org": "SWG",
+     "vdate": "20200414",
+     "displayDate": "04/14/2020",
+     "publicNoticeDate": "N/A",
+     "actionTaken": "Verified Without Special Conditions",
+     "fundingSource": "Water Resources Development Act (WRDA) 214/Transportation Agreements Regulator Funded (Corps)",
+     "dtype": "DA",
+     "count": "2"
+    }
+   }
+  ]
+ }
+}

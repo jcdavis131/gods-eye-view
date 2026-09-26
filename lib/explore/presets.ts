@@ -28,7 +28,7 @@ export interface Preset {
   /** Open the market report on arrival. */
   market?: boolean;
   /** Gallery section; water presets carry no group. */
-  group?: "markets" | "constructs" | "hazards";
+  group?: "markets" | "constructs" | "hazards" | "civic";
   /**
    * For places that move (the largest fire): where to go right now, asked
    * when the preset is used. The lat/lon above are the fallback.
@@ -379,6 +379,67 @@ export const PRESETS: Preset[] = [
     layers: ["publiclands", "water"],
     dwellS: 30,
   },
+  // ---- Zoning & permits (probed on 2026-09-26 with each layer's own request box at the preset's height)
+  {
+    id: "seattle-zoning",
+    title: "Downtown Seattle zoning",
+    region: "Seattle, Washington",
+    group: "civic",
+    blurb: "125 district outlines around the Central Library, coloured by Seattle's own categories (downtown, commercial, residential, major institutions), and the 20 building permits the city issued there in the last 30 days. Click the ground for a district's overlays, ordinance and code chapter: at the library it is DOC1 U/450-U, Downtown Office Core 1, ordinance 125291, in effect since 2017-05-14.",
+    lon: -122.3325,
+    lat: 47.6067,
+    height: 3_000,
+    layers: ["zoning", "permits"],
+    dwellS: 30,
+  },
+  {
+    id: "chicago-loop-permits",
+    title: "Chicago Loop permits",
+    region: "The Loop, Chicago",
+    group: "civic",
+    blurb: "About 200 building permits the city issued in the last 30 days within a kilometre of Daley Plaza, larger dots for larger reported costs, over 159 zoning outlines, most of them planned developments. Daley Plaza itself is DC-16; each permit opens with its work, cost, fee, status and parcel PINs.",
+    lon: -87.6305,
+    lat: 41.8842,
+    height: 3_500,
+    layers: ["permits", "zoning"],
+    dwellS: 30,
+  },
+  {
+    id: "denver-civic-zoning",
+    title: "Denver Civic Center",
+    region: "Denver, Colorado",
+    group: "civic",
+    blurb: "68 district outlines from Denver's zoning code, coloured by Denver's own district types. The City and County Building is D-CV, Downtown - Civic, from ordinance 333 of 2010; click any lot for its overlays, waivers, conditions and PUD.",
+    lon: -104.9903,
+    lat: 39.7393,
+    height: 3_000,
+    layers: ["zoning"],
+    dwellS: 25,
+  },
+  {
+    id: "houston-channel-permits",
+    title: "Houston Ship Channel permits",
+    region: "Harris County, Texas",
+    group: "civic",
+    blurb: "301 Clean Water Act (NPDES) and 65 Clean Air Act facilities within about 5 km of the channel, each with ECHO's own compliance words: 29 carry a violation or noncompliance, and the 10 ECHO lists as Unknown are drawn in the not-rated violet. Beside them, the Corps of Engineers' dredging, dock and bulkhead actions along the channel (its search returns 300 at most). Houston itself has no zoning.",
+    lon: -95.12,
+    lat: 29.74,
+    height: 20_000,
+    layers: ["envpermits"],
+    dwellS: 30,
+  },
+  {
+    id: "midtown-licences",
+    title: "Midtown Manhattan licences",
+    region: "Midtown, New York City",
+    group: "civic",
+    blurb: "About 1,400 licensed premises within a kilometre of the Empire State Building from the State Liquor Authority and the city's consumer protection department (restaurants, bars, home improvement contractors), trade names only; 30 at apartment or unit addresses are withheld as likely homes. The building's own lot is C5-3 and C6-4.5 in the Midtown special district.",
+    lon: -73.9857,
+    lat: 40.7484,
+    height: 2_000,
+    layers: ["licences", "zoning"],
+    dwellS: 25,
+  },
 ];
 
 export const PRESET_BY_ID = new Map(PRESETS.map((p) => [p.id, p]));
@@ -405,4 +466,5 @@ export const PRESET_GROUPS: Array<{ title: string; presets: Preset[] }> = [
   { title: "Trade & markets", presets: PRESETS.filter((p) => p.group === "markets") },
   { title: "Constructs", presets: PRESETS.filter((p) => p.group === "constructs") },
   { title: "Hazards & land", presets: PRESETS.filter((p) => p.group === "hazards") },
+  { title: "Zoning & permits", presets: PRESETS.filter((p) => p.group === "civic") },
 ];

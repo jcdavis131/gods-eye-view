@@ -15,6 +15,22 @@ describe("Explore presets", () => {
       "mitchell-lake",
       "government-canyon",
     ]);
+    expect(PRESET_GROUPS.find((g) => g.title === "Zoning & permits")?.presets.map((p) => p.id)).toEqual([
+      "seattle-zoning",
+      "chicago-loop-permits",
+      "denver-civic-zoning",
+      "houston-channel-permits",
+      "midtown-licences",
+    ]);
+  });
+
+  it("land the civic layers below the heights they draw at", async () => {
+    const { ZONING_OUTLINE_MAX_M } = await import("@/lib/layers/zoning");
+    const { PERMITS_MAX_M } = await import("@/lib/layers/permits");
+    const { LICENCES_MAX_M } = await import("@/lib/layers/licences");
+    const { ENV_MAX_M } = await import("@/lib/layers/envpermits");
+    const max: Record<string, number> = { zoning: ZONING_OUTLINE_MAX_M, permits: PERMITS_MAX_M, licences: LICENCES_MAX_M, envpermits: ENV_MAX_M };
+    for (const p of PRESETS.filter((x) => x.group === "civic")) for (const l of p.layers) if (max[l]) expect(p.height, `${p.id} ${l}`).toBeLessThanOrEqual(max[l]);
   });
 });
 

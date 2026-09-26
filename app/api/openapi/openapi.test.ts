@@ -1,5 +1,5 @@
 // public/openapi.json must agree with the routes whose ops it enumerates
-// (economy, water, hazards, land, space): every op in the `op` enum has a
+// (economy, water, hazards, land, space, zoning, permits): every op in the `op` enum has a
 // `case "<op>"` in the route, and every case in the route is documented. Also checks that the reserved placeholders exist and
 // that every route handler under app/api has a documented path and that every
 // $ref resolves.
@@ -53,6 +53,7 @@ describe("public/openapi.json", () => {
     ["/api/land", "app/api/land/route.ts", "elevation"],
     ["/api/space", "app/api/space/route.ts", "iss-stream"],
     ["/api/zoning", "app/api/zoning/route.ts", "point"],
+    ["/api/permits", "app/api/permits/route.ts", "building"],
   ])("documents exactly the ops %s dispatches", (route, file, one) => {
     expect(new Set(opsDocumented(route))).toEqual(new Set(opsInRoute(file)));
     expect(opsDocumented(route)).toContain(one);
@@ -60,9 +61,24 @@ describe("public/openapi.json", () => {
   it("has a response schema tagged x-op for every documented op", () => {
     const schemas = spec.components.schemas as Record<string, { "x-op"?: string }>;
     const tagged = Object.values(schemas).map((s) => s["x-op"]).filter((x): x is string => !!x);
-    for (const route of ["/api/economy", "/api/water", "/api/hazards", "/api/land", "/api/space", "/api/zoning"]) {
+    for (const route of ["/api/economy", "/api/water", "/api/hazards", "/api/land", "/api/space", "/api/zoning", "/api/permits"]) {
       for (const op of opsDocumented(route)) expect(tagged, `${route} op=${op}`).toContain(op);
     }
+  });
+  it("lists the record fields the permits ops send (none it does not, none missing)", async () => {
+    const s = spec.components.schemas as Record<string, { "x-feature-properties"?: string[] }>;
+    const keys = (o: object) => Object.keys(o).filter((k) => k !== "lon" && k !== "lat");
+    const { buildPermits } = await import("@/lib/permits/features");
+    const { buildLicences } = await import("@/lib/permits/licences");
+    const { buildNpdes, echoFacilities } = await import("@/lib/permits/environmental");
+    const rows = (j: unknown) => (j as Array<Record<string, unknown>>).map((r) => ({ geometry: null, properties: r }));
+    const austin = (await import("@/lib/permits/fixtures/permits-austin.json")).default;
+    const permitKeys = new Set(buildPermits("austin", rows(austin)).flatMap(keys));
+    for (const k of permitKeys) expect(s.PermitsBuildingResponse["x-feature-properties"], k).toContain(k);
+    const la = (await import("@/lib/permits/fixtures/licences-losangeles.json")).default as Array<Record<string, unknown>>;
+    for (const k of new Set(buildLicences("losangeles", la).records.flatMap(keys))) expect(s.PermitsLicencesResponse["x-feature-properties"], k).toContain(k);
+    const cwa = (await import("@/lib/permits/fixtures/echo-npdes-rows.json")).default;
+    for (const k of new Set(buildNpdes(echoFacilities(cwa)).flatMap(keys))) expect(s.PermitsEnvironmentalResponse["x-feature-properties"], k).toContain(k);
   });
   it("names the FIRMS row columns the fires op sends", async () => {
     const { FIRE_ROW_COLUMNS } = await import("@/lib/hazards/features");
