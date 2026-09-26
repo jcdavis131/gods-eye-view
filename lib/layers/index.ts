@@ -26,6 +26,7 @@ import { hazardsLayer } from "./hazards";
 import { floodLayer } from "./flood";
 import { wetlandsLayer } from "./wetlands";
 import { publiclandsLayer } from "./publiclands";
+import { TERRAIN_LAYERS } from "./terrain";
 import { sportsLayer } from "./sports";
 import { constructsLayer } from "./constructs";
 import { fieldLayer } from "./field";
@@ -56,6 +57,7 @@ export const LAYERS: LayerDefinition[] = [
   floodLayer,
   wetlandsLayer,
   publiclandsLayer,
+  ...TERRAIN_LAYERS,
   sportsLayer,
   constructsLayer,
   fieldLayer,

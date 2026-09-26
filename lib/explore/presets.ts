@@ -7,10 +7,14 @@
 // listed, so none of them lands on an empty map. The hazards & land presets
 // were probed on 2026-09-25 with the exact box each layer requests. Fires
 // move, so the wildfire preset has no fixed place: it resolves when clicked.
+// The terrain & soils presets were probed on 2026-09-26 at the point each one
+// asks about (Soil Data Access, the WHP identify on a 0.05° grid, the NOAA
+// 3 ft tile over Galveston Island, 3DEP EPQS and the contour render).
 
 import type { LayerFeature, LayerId } from "@/lib/layers/types";
 import type { ShareState } from "@/lib/globe/share";
 import type { FireExtra } from "@/lib/hazards/features";
+import type { LonLat } from "@/lib/fabric/strataStore";
 
 export interface Preset {
   id: string;
@@ -28,7 +32,13 @@ export interface Preset {
   /** Open the market report on arrival. */
   market?: boolean;
   /** Gallery section; water presets carry no group. */
-  group?: "markets" | "constructs" | "hazards";
+  group?: "markets" | "constructs" | "hazards" | "terrain";
+  /** Open a "ground here" answer at this point on arrival (picture layers). */
+  ground?: LonLat;
+  /** Turn 3D terrain on at this exaggeration. */
+  terrain?: number;
+  /** Sea level rise scenario, feet above MHHW. */
+  slr?: number;
   /**
    * For places that move (the largest fire): where to go right now, asked
    * when the preset is used. The lat/lon above are the fallback.
@@ -379,12 +389,76 @@ export const PRESETS: Preset[] = [
     layers: ["publiclands", "water"],
     dwellS: 30,
   },
+  // ---- Terrain & soils (probed on 2026-09-26 at the point each asks about)
+  {
+    id: "brackenridge-contours",
+    title: "Brackenridge Park in 2 ft contours",
+    region: "San Antonio, Texas",
+    group: "terrain",
+    blurb: "USGS's 2 ft contour lines at street scale, drawn from the 3DEP bare-earth DEM, which here is 1 m lidar (the elevation service reports a 1 m source at the park), over USGS shaded relief. The dossier gives the ground elevation at the target, about 205 m.",
+    lon: -98.4718,
+    lat: 29.461,
+    height: 2_500,
+    layers: ["contours", "relief", "water"],
+    ground: { lon: -98.4718, lat: 29.461 },
+    dwellS: 30,
+  },
+  {
+    id: "bexar-soils",
+    title: "South Bexar County soils",
+    region: "San Antonio, Texas",
+    group: "terrain",
+    blurb: "NRCS SSURGO soil map units outlined with their symbols. At the target, San Antonio clay loam, 1 to 3 percent slopes: all areas prime farmland by NRCS's classification, NCCPI 0.455, which NRCS calls moderate inherent productivity. Click anywhere else for its soil. A survey rating, never a price.",
+    lon: -98.45,
+    lat: 29.28,
+    height: 9_000,
+    layers: ["soils", "water"],
+    ground: { lon: -98.45, lat: 29.28 },
+    dwellS: 30,
+  },
+  {
+    id: "front-range-whp",
+    title: "Front Range foothills, wildfire hazard in 3D",
+    region: "Colorado Springs, Colorado",
+    group: "terrain",
+    blurb: "USFS Wildfire Hazard Potential over the foothills west of the city, with keyless 3D terrain at 1.5×: high and very high classes (4 and 5) on the slopes west of the city and non-burnable (6) where the probe grid crossed the city. At the target, class 5, very high. An index for long-term fuels planning, not a map of risk and not a forecast.",
+    lon: -104.95,
+    lat: 38.85,
+    height: 30_000,
+    layers: ["firehazard", "wildfire"],
+    ground: { lon: -104.95, lat: 38.85 },
+    terrain: 1.5,
+    dwellS: 30,
+  },
+  {
+    id: "galveston-slr",
+    title: "Galveston at 3 ft of sea level rise",
+    region: "Galveston Island, Texas",
+    group: "terrain",
+    blurb: "NOAA's 3 ft scenario above today's highest high tides: water depth in blue (darker is deeper, the bay and the Gulf included) and NOAA's low-lying areas in green. A screening-level scenario that shows the scale of flooding, not the exact location, and not when.",
+    lon: -94.85,
+    lat: 29.27,
+    height: 45_000,
+    layers: ["sealevel", "water"],
+    slr: 3,
+    dwellS: 30,
+  },
 ];
 
 export const PRESET_BY_ID = new Map(PRESETS.map((p) => [p.id, p]));
 
 export function presetShare(p: Preset): ShareState {
-  return { lat: p.lat, lon: p.lon, h: p.height, layers: p.layers, report: p.report || undefined, market: p.market || undefined };
+  return {
+    lat: p.lat,
+    lon: p.lon,
+    h: p.height,
+    layers: p.layers,
+    report: p.report || undefined,
+    market: p.market || undefined,
+    ground: p.ground,
+    terrain: p.terrain,
+    slr: p.slr,
+  };
 }
 
 /** presetShare, with a moving preset resolved to where it is now (falls back to the fixed place). */
@@ -405,4 +479,5 @@ export const PRESET_GROUPS: Array<{ title: string; presets: Preset[] }> = [
   { title: "Trade & markets", presets: PRESETS.filter((p) => p.group === "markets") },
   { title: "Constructs", presets: PRESETS.filter((p) => p.group === "constructs") },
   { title: "Hazards & land", presets: PRESETS.filter((p) => p.group === "hazards") },
+  { title: "Terrain & soils", presets: PRESETS.filter((p) => p.group === "terrain") },
 ];

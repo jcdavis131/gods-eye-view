@@ -116,3 +116,30 @@ describe("space weather and drawn shapes in the share link", () => {
     expect(shapeParam(parseShare(q).shape!).split(";")).toHaveLength(60);
   });
 });
+
+describe("terrain, the sea level scenario and ground answers in the share link", () => {
+  it("round-trips a ground point, the terrain exaggeration and the scenario", () => {
+    const s: ShareState = { layers: ["soils", "sealevel"], ground: { lat: 29.28, lon: -98.45 }, terrain: 1.5, slr: 3 };
+    const q = shareQuery(s);
+    expect(q).toContain("ground=29.28000%2C-98.45000");
+    expect(q).toContain("terrain=1.5");
+    expect(q).toContain("slr=3");
+    expect(parseShare(q)).toEqual(s);
+  });
+
+  it("drops an exaggeration outside 1-3 and a scenario NOAA does not cache", () => {
+    expect(parseShare("?terrain=0.5").terrain).toBeUndefined();
+    expect(parseShare("?terrain=9").terrain).toBeUndefined();
+    expect(parseShare("?terrain=").terrain).toBeUndefined();
+    expect(parseShare("?terrain=2").terrain).toBe(2);
+    expect(parseShare("?slr=2.5").slr).toBeUndefined();
+    expect(parseShare("?slr=11").slr).toBeUndefined();
+    expect(parseShare("?slr=").slr).toBeUndefined();
+    expect(parseShare("?ground=91,0").ground).toBeUndefined();
+  });
+
+  it("does not reuse the parcels or zoning branches' parameter names", () => {
+    const q = shareQuery({ ground: { lat: 1, lon: 2 }, terrain: 1, slr: 1 });
+    for (const taken of ["parcel=", "zoning=", "pin=", "cmp=", "sel="]) expect(q).not.toContain(taken);
+  });
+});

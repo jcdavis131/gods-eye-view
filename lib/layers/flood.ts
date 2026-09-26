@@ -96,7 +96,7 @@ async function fetchFlood(ctx: FetchContext): Promise<FetchResult> {
     source: "FEMA NFHL",
     fetchedAt: ctx.now,
     note:
-      `${r.features.length} zones loaded inside the dashed box (outside it: not loaded, not "no flood zone") · ${sfha} in the 1 % annual-chance floodplain · regulatory map, not a forecast` +
+      `${r.features.length} zones to click inside the dashed box (outside it: none loaded to click, not "no flood zone"; FEMA's own map is drawn across the view) · ${sfha} in the 1 % annual-chance floodplain · regulatory map, not a forecast` +
       (r.truncated ? " · FEMA record limit hit, zoom in" : ""),
     meta: { count: r.features.length },
   };
@@ -106,7 +106,7 @@ export const floodLayer: LayerDefinition = {
   id: "flood",
   label: "Flood zones (FEMA)",
   description:
-    "FEMA's National Flood Hazard Layer below 5 km: flood zones (AE, VE, X…), whether ground is in the special flood hazard area, and the base flood elevation where published, inside a dashed box around the view. A regulatory map, not a forecast.",
+    "FEMA's National Flood Hazard Layer below 5 km: flood zones (AE, VE, X…), whether ground is in the special flood hazard area, and the base flood elevation where published, inside a dashed box around the view, over FEMA's own map of the zones. A regulatory map, not a forecast.",
   color: "#3B82F6",
   updateIntervalMs: 6 * 60 * 60_000,
   defaultEnabled: false,

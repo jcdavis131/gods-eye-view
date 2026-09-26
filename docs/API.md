@@ -1,6 +1,6 @@
 # Embedding Atlas data API
 
-Keyless, CORS-open JSON and CSV over the same public sources the globe draws: USGS, NOAA, TWDB and the Drought Monitor for water; BLS QCEW, Zillow, BTS, the World Port Index, the World Bank and FRED for jobs, homes and trade; NIFC, NASA FIRMS, NWS, GDACS and EONET for hazards (`/api/hazards`); FEMA, USFWS, USGS PAD-US and 3DEP for land (`/api/land`); GFZ and NASA DONKI for space weather (`/api/space`). Every number carries provenance. This guide is for people calling it from a notebook, a script or their own page.
+Keyless, CORS-open JSON and CSV over the same public sources the globe draws: USGS, NOAA, TWDB and the Drought Monitor for water; BLS QCEW, Zillow, BTS, the World Port Index, the World Bank and FRED for jobs, homes and trade; NIFC, NASA FIRMS, NWS, GDACS and EONET for hazards (`/api/hazards`); FEMA, USFWS, USGS PAD-US and 3DEP for land (`/api/land`); USGS 3DEP, MRLC NLCD, USFS WHP and FEMA for terrain pictures and point classes (`/api/terrain`); NRCS SSURGO for soils (`/api/soil`); GFZ and NASA DONKI for space weather (`/api/space`). Every number carries provenance. This guide is for people calling it from a notebook, a script or their own page.
 
 Machine-readable description: [`/api/openapi`](https://eye.jcamd.com/api/openapi) (also `public/openapi.json` in the repo).
 
@@ -146,6 +146,9 @@ TTLs follow upstream cadence:
 | Flood zones, wetlands, public lands | 1 h (wetlands 10 min while NWI's imagery layer is missing) | 1 day per snapped box |
 | Elevation (EPQS) | 1 day (10 min for a "no value" answer) | 1 day per point |
 | Space weather, ISS stream | 15 min (2 min while a source is down) | 15 min, 30 min |
+| Terrain tiles (`op=tile`: slope, contours, land cover, FEMA's map) | 30 days (FEMA's map 7 days); browsers 1 day | 1 day, up to 160 tiles per server instance |
+| Terrain point classes, slope (`op=point`) | 1 h | 1 day per point (5 decimals) |
+| Soils (`/api/soil`) | 1 h (point), 6 h (map unit) | 1 day per point, 7 days per map unit |
 
 Bounding boxes are snapped outward (water: 0.5° grid, 4° max span; economy: 1° grid, 18° max span; fire hotspots: 1° grid, up to the whole globe; flood zones and wetlands: 0.02° grid, 0.08° max span; public lands: 0.25° grid, 2° max span), so two callers a few kilometres apart share one entry. The snapped box comes back in `bbox`.
 
@@ -197,6 +200,16 @@ A number you fetch today may not be the number the same query returns next month
 **USGS PAD-US** (`usgs-padus`). Version 4.1 (doi:10.5066/P96WBCHS), relayed as published, owners and easement holders included; a later version replaces it. Public-access codes are PAD-US's, not permission to enter.
 
 **USGS EPQS** (`usgs-epqs`). The 3DEP DEM that covers the point answers; `resolutionM` says which resolution it was, and 3DEP replaces DEMs as new lidar arrives. Outside 3DEP coverage there is no value, never a guessed one.
+
+**USGS 3DEP dynamic service** (`usgs-3dep`). Slope, contours and the point slope are computed by USGS on request from the best DEM it holds for the place, and 3DEP swaps in new lidar as it arrives, so a tile or a slope can change; the tile the edge holds can be up to 30 days older than a fresh render.
+
+**NRCS SSURGO** (`nrcs-ssurgo`). Soil survey areas are revised and re-saved (the September 2025 save for Bexar County is what the probes read); `revision` carries the survey area's save date. NCCPI is an NRCS interpretation of the components, recomputed when they change; a component NRCS did not rate is `null`, never 0.
+
+**USFS Wildfire Hazard Potential** (`usfs-whp`). The 2023 edition (updated 17 July 2024), landscape as of the end of 2020; the next edition replaces it. The class labels come from the service's own legend.
+
+**MRLC NLCD 2021** (`mrlc-nlcd`). A fixed edition; MRLC also publishes annual land cover, which this app does not read yet. Labels and colours are MRLC's legend.
+
+**NOAA sea level rise** (`noaa-slr`). Fixed scenario caches, one per foot of rise above today's MHHW; NOAA revises them when it re-runs an area.
 
 **GFZ Kp and NASA DONKI** (`gfz-kp`, `nasa-donki`). GFZ marks recent Kp values preliminary (`status: "pre"`) and replaces them with definitive ones later; the provenance `revision` says `preliminary` while any value in the answer is. DONKI calls itself experimental research information and points to NOAA SWPC as the official source.
 

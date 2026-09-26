@@ -145,4 +145,12 @@ export const LAYER_LABEL_PRIORITY: Record<string, number> = {
   weather: 12,
   fires: 8,
   traffic: 4,
+  // Picture layers draw no globe labels of their own (their values open in the ground dossier).
+  relief: 2,
+  slope: 2,
+  contours: 2,
+  soils: 2,
+  firehazard: 2,
+  landcover: 2,
+  sealevel: 2,
 };

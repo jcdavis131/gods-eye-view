@@ -49,6 +49,10 @@
       "description": "Flood zones, wetlands, public and protected lands, ground elevation: FEMA NFHL, USFWS NWI, USGS PAD-US, USGS 3DEP EPQS."
     },
     {
+      "name": "terrain",
+      "description": "Terrain, slope, contours, soils, land cover and the long-range hazard pictures: USGS 3DEP, NRCS SSURGO, USFS WHP, MRLC NLCD, FEMA NFHL, NOAA sea level rise."
+    },
+    {
       "name": "space",
       "description": "Space weather (GFZ Kp, NASA DONKI) and NASA's ISS live stream, checked through YouTube oEmbed."
     },
@@ -2219,6 +2223,241 @@
         ],
         "summary": "CORS preflight",
         "operationId": "landOptions",
+        "responses": {
+          "204": {
+            "description": "No content."
+          }
+        }
+      }
+    },
+    "/api/terrain": {
+      "get": {
+        "summary": "Slope, 2 ft contour, land cover and FEMA flood-map tiles rendered once and held at the edge; the hazard class, land cover class or slope at a point; the catalog of terrain pictures",
+        "description": "op=tile: one 512 px PNG in Web Mercator (XYZ, y down) of a product no publisher caches as tiles: slope (USGS 3DEP \"Slope Map\", z 8-16), contours (3DEP \"Preset 2ft Contour Interval\", black lines on white, unlabelled, z 13-17), landcover (MRLC NLCD 2021 WMS, z 5-12), floodmap (FEMA NFHL layer 28 export, transparent, z 14-17). The route builds the upstream request from the product and the tile's EPSG:3857 box and never takes a URL; the image is the publisher's own render, cached a day in the server and for weeks at the edge. op=point: firehazard (USFS Wildfire Hazard Potential 2023 class, with the class table from the service's own legend), landcover (NLCD 2021 class, from MRLC's GetFeatureInfo and legend) or slope (3DEP \"Slope Degrees\", whole degrees) at lon, lat; a point with no value answers `class: null` / `degrees: null`, never 0. op=products: every terrain picture the globe draws, direct or rendered here, with its source, zoom range, class tables, caveats and the terrain tiles' required attribution.",
+        "tags": [
+          "terrain"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "tile",
+                "point",
+                "products"
+              ]
+            },
+            "description": "tile: a rendered PNG tile. point: a class or slope at lon, lat. products: the catalog."
+          },
+          {
+            "name": "product",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "slope",
+                "contours",
+                "landcover",
+                "floodmap",
+                "firehazard"
+              ]
+            },
+            "description": "op=tile: slope | contours | landcover | floodmap. op=point: firehazard | landcover | slope."
+          },
+          {
+            "name": "z",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "op=tile: zoom, inside the product's range."
+          },
+          {
+            "name": "x",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "op=tile: tile column."
+          },
+          {
+            "name": "y",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "op=tile: tile row (XYZ, north at 0)."
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            },
+            "description": "op=point: longitude."
+          },
+          {
+            "name": "lat",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            },
+            "description": "op=point: latitude."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "op=tile: the PNG. op=point and op=products: the envelope.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/Cors"
+              }
+            },
+            "content": {
+              "image/png": {
+                "schema": {
+                  "$ref": "#/components/schemas/TerrainTileImage"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/TerrainPointResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TerrainProductsResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/Upstream"
+          }
+        }
+      },
+      "options": {
+        "tags": [
+          "terrain"
+        ],
+        "summary": "CORS preflight",
+        "operationId": "terrainOptions",
+        "responses": {
+          "204": {
+            "description": "No content."
+          }
+        }
+      }
+    },
+    "/api/soil": {
+      "get": {
+        "summary": "The NRCS SSURGO soil map unit at a point, with its farmland classification and the NCCPI of its components",
+        "description": "Two Soil Data Access queries. op=point: the map unit under lon, lat (name, symbol, NRCS farmland classification, survey area and the date it was saved), then its components with their share of the map unit and NRCS's \"NCCPI - National Commodity Crop Productivity Index (Ver 3.0)\" interpretation (0 to 1 with NRCS's class words), the dominant component first; `nccpi` prints the dominant one's rating. `data` is null where no map unit is mapped (water, outside the survey, outside the US). op=mapunit: the components of one map unit key. A component NRCS did not rate has `nccpi: null` and \"Not rated\", never 0. A soil rating, never a price or a parcel score.",
+        "tags": [
+          "terrain"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "point",
+                "mapunit"
+              ]
+            },
+            "description": "point: the map unit at lon, lat with its components. mapunit: the components of mukey."
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            },
+            "description": "op=point: longitude."
+          },
+          {
+            "name": "lat",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            },
+            "description": "op=point: latitude."
+          },
+          {
+            "name": "mukey",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{1,12}$"
+            },
+            "description": "op=mapunit: SSURGO map unit key (digits)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope for the op.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/Cors"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/SoilPointResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SoilMapunitResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/Upstream"
+          }
+        }
+      },
+      "options": {
+        "tags": [
+          "terrain"
+        ],
+        "summary": "CORS preflight",
+        "operationId": "soilOptions",
         "responses": {
           "204": {
             "description": "No content."
@@ -4790,6 +5029,315 @@
           }
         ],
         "x-op": "elevation"
+      },
+      "TerrainClass": {
+        "type": "object",
+        "required": [
+          "code",
+          "label",
+          "color"
+        ],
+        "properties": {
+          "code": {
+            "type": "integer"
+          },
+          "label": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string",
+            "description": "#RRGGBB from the publisher's legend."
+          }
+        }
+      },
+      "TerrainTileImage": {
+        "type": "string",
+        "format": "binary",
+        "contentMediaType": "image/png",
+        "description": "The publisher's render of one Web Mercator tile.",
+        "x-op": "tile"
+      },
+      "TerrainPointResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "lon",
+                  "lat",
+                  "product"
+                ],
+                "properties": {
+                  "lon": {
+                    "type": "number"
+                  },
+                  "lat": {
+                    "type": "number"
+                  },
+                  "product": {
+                    "type": "string",
+                    "enum": [
+                      "firehazard",
+                      "landcover",
+                      "slope"
+                    ]
+                  },
+                  "class": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/components/schemas/TerrainClass"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "firehazard, landcover: the class at the point, null where the service has none."
+                  },
+                  "classes": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/TerrainClass"
+                    },
+                    "description": "firehazard, landcover: the whole class table."
+                  },
+                  "degrees": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "description": "slope: whole degrees, null where 3DEP has no value."
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "point"
+      },
+      "TerrainProductsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "products": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "delivery": {
+                          "type": "string",
+                          "enum": [
+                            "route",
+                            "direct"
+                          ]
+                        },
+                        "tile": {
+                          "type": "string"
+                        },
+                        "minZoom": {
+                          "type": "integer"
+                        },
+                        "maxZoom": {
+                          "type": "integer"
+                        },
+                        "source": {
+                          "type": "object"
+                        }
+                      }
+                    }
+                  },
+                  "classes": {
+                    "type": "object"
+                  },
+                  "sealevelFeet": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    }
+                  },
+                  "caveats": {
+                    "type": "object"
+                  },
+                  "terrainAttribution": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "AWS Terrain Tiles' required attribution, verbatim."
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "products"
+      },
+      "SoilComponent": {
+        "type": "object",
+        "properties": {
+          "cokey": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "percent": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Representative share of the map unit, percent."
+          },
+          "major": {
+            "type": "boolean"
+          },
+          "nccpi": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "0 to 1; null when NRCS did not rate the component."
+          },
+          "nccpiClass": {
+            "type": "string",
+            "description": "NRCS's class words, e.g. \"Moderate inherent productivity\", \"Not rated\"."
+          }
+        }
+      },
+      "SoilPointResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "lon": {
+                    "type": "number"
+                  },
+                  "lat": {
+                    "type": "number"
+                  },
+                  "mapUnit": {
+                    "type": "object",
+                    "required": [
+                      "mukey"
+                    ],
+                    "properties": {
+                      "mukey": {
+                        "type": "string"
+                      },
+                      "symbol": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "farmlandClass": {
+                        "type": "string",
+                        "description": "NRCS farmland classification as published."
+                      },
+                      "areaSymbol": {
+                        "type": "string"
+                      },
+                      "areaName": {
+                        "type": "string"
+                      },
+                      "surveySaved": {
+                        "type": "string",
+                        "description": "When the survey area was last saved in SSURGO, as SDA sends it."
+                      }
+                    }
+                  },
+                  "components": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/SoilComponent"
+                    }
+                  },
+                  "dominant": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/components/schemas/SoilComponent"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "nccpi": {
+                    "type": "string",
+                    "description": "The dominant component's NCCPI as text, or \"not rated\"."
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "point"
+      },
+      "SoilMapunitResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "mukey": {
+                    "type": "string"
+                  },
+                  "components": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/SoilComponent"
+                    }
+                  },
+                  "dominant": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/components/schemas/SoilComponent"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "nccpi": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "mapunit"
       },
       "SpaceWeatherResponse": {
         "allOf": [

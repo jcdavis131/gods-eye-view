@@ -11,6 +11,7 @@ import { PERSONA_BY_ID } from "@/lib/personas/registry";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import FieldControls from "./FieldControls";
+import TileControls, { PICTURE_LAYERS } from "./TileControls";
 
 /** One layer in the pinned list: dot, name, badges, count, switch, status line. */
 function LayerRow({
@@ -43,7 +44,7 @@ function LayerRow({
           {l.label}
         </button>
         <span className="min-w-[44px] shrink-0 text-right text-[13px] tabular-nums text-foreground/90 md:text-[11px]">
-          {on && st ? st.count.toLocaleString() : "—"}
+          {on && st ? (st.picture ? "MAP" : st.count.toLocaleString()) : "—"}
         </span>
         {/* Short-landscape phones keep the pinned panel, so both sizes stay. */}
         <Switch
@@ -80,6 +81,7 @@ function LayerRow({
         </div>
       )}
       {on && l.id === "field" && <FieldControls />}
+      {on && PICTURE_LAYERS.has(l.id) && <TileControls id={l.id} />}
     </li>
   );
 }
@@ -170,6 +172,14 @@ function CompactLayers({
     <div className="px-2 py-2">
       <Tiles items={groups.primary} layers={layers} status={status} setLayer={setLayer} />
       {layers.field && <FieldControls />}
+      {LAYERS.filter((l) => layers[l.id] && PICTURE_LAYERS.has(l.id)).map((l) => (
+        <div key={l.id} className="mt-2">
+          <div className="px-1 text-[9px] uppercase tracking-widest" style={{ color: l.color }}>
+            {l.label}
+          </div>
+          <TileControls id={l.id} />
+        </div>
+      ))}
       {groups.more.length > 0 && (
         <>
           {showAll && (
@@ -258,6 +268,8 @@ function Tiles({
                 <span className="text-alert">ERR</span>
               ) : st?.loading ? (
                 <span className="blink text-primary">•••</span>
+              ) : st?.picture ? (
+                "MAP"
               ) : (
                 (st?.count ?? 0).toLocaleString()
               )}

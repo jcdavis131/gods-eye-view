@@ -52,7 +52,8 @@ export default function SettingsDialog() {
             <PrefSwitch id="atmosphere" label="Atmosphere & fog" />
             <PrefSwitch id="nightLights" label="Night lights (NASA Black Marble on the dark side)" />
             <PrefSwitch id="googleTiles" label="Google Photorealistic 3D Tiles (needs GOOGLE_MAPS_API_KEY)" />
-            <PrefSwitch id="terrain" label="Cesium World Terrain (needs CESIUM_ION_TOKEN)" />
+            <PrefSwitch id="terrain" label="3D terrain (keyless AWS Terrain Tiles; Cesium World Terrain with a CESIUM_ION_TOKEN)" />
+            <TerrainExaggeration />
           </TabsContent>
           <TabsContent value="data" className="space-y-5">
             <AircraftSource />
@@ -131,6 +132,31 @@ function PrefSwitch({ id, label }: { id: keyof Prefs; label: string }) {
     <label className="flex cursor-pointer items-center justify-between gap-3 border border-border/60 px-3 py-2 text-[11px]">
       <span>{label}</span>
       <Switch size="sm" checked={value} onCheckedChange={(v) => setPref(id, v as never)} />
+    </label>
+  );
+}
+
+/** Scene.verticalExaggeration, 1× to 3×: what the terrain shows, stretched upward; heights read anywhere stay true. */
+function TerrainExaggeration() {
+  const value = useSettings((s) => s.prefs.terrainExaggeration);
+  const terrain = useSettings((s) => s.prefs.terrain);
+  const setPref = useSettings((s) => s.setPref);
+  return (
+    <label className="flex items-center justify-between gap-3 border border-border/60 px-3 py-2 text-[11px]">
+      <span className={terrain ? "" : "text-muted-foreground"}>
+        Terrain exaggeration <span className="tabular-nums text-foreground">{value.toFixed(1)}×</span>
+        <span className="block text-[9px] text-muted-foreground">Stretches the relief you see upward; elevations the app reports are never exaggerated.</span>
+      </span>
+      <input
+        type="range"
+        min={1}
+        max={3}
+        step={0.25}
+        value={value}
+        onChange={(e) => setPref("terrainExaggeration", Number(e.target.value))}
+        className="w-36 accent-[var(--primary)]"
+        aria-label="Terrain vertical exaggeration"
+      />
     </label>
   );
 }

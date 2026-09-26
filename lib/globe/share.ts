@@ -14,6 +14,12 @@
 //   &pin=27.8000,-97.3960        the constructs stack anchored at this point (lat,lon)
 //   &cmp=27.8800,-97.3200        a second place compared with the pinned one (lat,lon)
 //   &space=1                     space-weather panel open
+//   &ground=29.28000,-98.45000   a "ground here" answer (soil, land cover, hazard class,
+//                                slope, elevation) asked at this point (lat,lon, 5 decimals)
+//                                once the camera is there, with the layers the link turns on
+//   &terrain=1.5                 3D terrain on, at this vertical exaggeration (1 to 3)
+//   &slr=3                       the sea level rise scenario, feet above MHHW (1 to 10;
+//                                written only while the Sea level rise layer is on)
 //   &shape=a:-98.5,29.4;-98.49,29.4;-98.49,29.41   a drawn area (a:) or line (l:),
 //                                vertices as lon,lat to 5 decimals, at most 60;
 //                                written last and unescaped so it stays readable
@@ -31,6 +37,9 @@ import { getVintage, isValidVintage, useReleases, vintageClockMs } from "@/lib/r
 import { isPersonaId, type PersonaId } from "@/lib/personas/registry";
 import { applyPersona, useLens } from "@/lib/personas/store";
 import { useStrata, type LonLat } from "@/lib/fabric/strataStore";
+import { useSettings } from "@/lib/store/settings";
+import { identifyGround, isGroundSelection, useGroundPick } from "@/lib/terrain/ground";
+import { isSlrFeet } from "@/lib/terrain/products";
 
 export interface ShareState {
   lat?: number;
@@ -63,6 +72,19 @@ export interface ShareState {
   space?: boolean;
   /** A drawn line or area, shown with its measurement. */
   shape?: Shape;
+  /** The point a "ground here" answer was asked for (a click on a picture layer, not a feed feature). */
+  ground?: LonLat;
+  /** 3D terrain on, at this vertical exaggeration. */
+  terrain?: number;
+  /** Sea level rise scenario, whole feet above MHHW. */
+  slr?: number;
+}
+
+/** Terrain exaggeration from a link: 1 to 3, else undefined. */
+export function parseTerrain(v: string | null | undefined): number | undefined {
+  if (v == null || v.trim() === "") return undefined;
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 1 && n <= 3 ? n : undefined;
 }
 
 /** "a:lon,lat;lon,lat;…" or "l:…" -> Shape, or undefined when malformed. */
@@ -168,6 +190,12 @@ export function parseShare(search: string): ShareState {
   if (q.get("space") === "1") out.space = true;
   const shape = parseShape(q.get("shape"));
   if (shape) out.shape = shape;
+  const ground = parseLatLon(q.get("ground"));
+  if (ground) out.ground = ground;
+  const terrain = parseTerrain(q.get("terrain"));
+  if (terrain != null) out.terrain = terrain;
+  const slr = num("slr");
+  if (isSlrFeet(slr)) out.slr = slr;
   return out;
 }
 
@@ -194,6 +222,9 @@ export function shareQuery(s: ShareState): string {
   if (s.pin) q.set("pin", formatLatLonParam(s.pin));
   if (s.cmp) q.set("cmp", formatLatLonParam(s.cmp));
   if (s.space) q.set("space", "1");
+  if (s.ground) q.set("ground", `${s.ground.lat.toFixed(5)},${s.ground.lon.toFixed(5)}`);
+  if (s.terrain != null) q.set("terrain", String(Number(s.terrain.toFixed(2))));
+  if (s.slr != null) q.set("slr", String(s.slr));
   let str = q.toString();
   // The shape goes last and unescaped (URLSearchParams would write , ; : as
   // %2C %3B %3A), so a link with a drawn area stays readable. Its characters
@@ -208,6 +239,10 @@ export function currentShare(): ShareState {
   const st = useGlobe.getState();
   const strata = useStrata.getState();
   const on = LAYER_IDS.filter((id) => st.layers[id]);
+  const prefs = useSettings.getState().prefs;
+  // A ground answer travels as its point: its selection id cannot be looked up in a feed.
+  const gp = useGroundPick.getState().pick;
+  const ground = gp && isGroundSelection(st.selected) ? { lat: gp.lat, lon: gp.lon } : undefined;
   return {
     lat: st.view.lat,
     lon: st.view.lon,
@@ -216,7 +251,7 @@ export function currentShare(): ShareState {
     p: st.view.pitch,
     layers: on,
     t: Math.abs(st.clock.offsetMs) >= 60_000 ? Date.now() + st.clock.offsetMs : undefined,
-    sel: st.selected ?? undefined,
+    sel: ground || isGroundSelection(st.selected) ? undefined : (st.selected ?? undefined),
     report: st.waterReportOpen || undefined,
     market: st.marketReportOpen || undefined,
     vintage: getVintage() ?? undefined,
@@ -226,6 +261,9 @@ export function currentShare(): ShareState {
     cmp: strata.compare ?? undefined,
     space: st.spaceWeatherOpen || undefined,
     shape: completeShape(st.measure.shape),
+    ground,
+    terrain: prefs.terrain ? prefs.terrainExaggeration : undefined,
+    slr: st.layers.sealevel ? prefs.seaLevelFt : undefined,
   };
 }
 
@@ -277,11 +315,21 @@ export function startUrlSync(): () => void {
   const unsubStrata = useStrata.subscribe((s, prev) => {
     if (s.pin !== prev.pin || s.compare !== prev.compare) schedule();
   });
+  const unsubPrefs = useSettings.subscribe((s, prev) => {
+    const a = s.prefs;
+    const b = prev.prefs;
+    if (a.terrain !== b.terrain || a.terrainExaggeration !== b.terrainExaggeration || a.seaLevelFt !== b.seaLevelFt) schedule();
+  });
+  const unsubGround = useGroundPick.subscribe((s, prev) => {
+    if (s.pick?.lon !== prev.pick?.lon || s.pick?.lat !== prev.pick?.lat) schedule();
+  });
   return () => {
     unsub();
     unsubReleases();
     unsubLens();
     unsubStrata();
+    unsubPrefs();
+    unsubGround();
     if (timer) clearTimeout(timer);
   };
 }
@@ -314,6 +362,20 @@ export function applyShare(s: ShareState, opts: { fly?: boolean } = {}): void {
   if (s.report) st.setWaterReportOpen(true);
   if (s.market) st.setMarketReportOpen(true);
   if (s.space) st.setSpaceWeatherOpen(true);
+  // Terrain and the sea level scenario are display settings: a link that carries them sets them.
+  if (s.terrain != null || s.slr != null) {
+    const set = useSettings.getState().setPref;
+    if (s.terrain != null) {
+      set("terrain", true);
+      set("terrainExaggeration", s.terrain);
+    }
+    if (s.slr != null) set("seaLevelFt", s.slr);
+  }
+  // A shared ground answer: asked once the camera has arrived, of the layers now on.
+  if (s.ground) {
+    const g = s.ground;
+    setTimeout(() => void identifyGround(g.lon, g.lat), opts.fly !== false && s.lat != null ? 4200 : 300);
+  }
   // A shared shape is shown with its readout, not left in drawing mode.
   if (s.shape) st.setMeasure({ mode: "off", shape: s.shape, elevation: null });
   if (opts.fly !== false && s.lat != null && s.lon != null) {

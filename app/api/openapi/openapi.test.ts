@@ -1,5 +1,5 @@
 // public/openapi.json must agree with the routes whose ops it enumerates
-// (economy, water, hazards, land, space): every op in the `op` enum has a
+// (economy, water, hazards, land, space, terrain, soil): every op in the `op` enum has a
 // `case "<op>"` in the route, and every case in the route is documented. Also checks that the reserved placeholders exist and
 // that every route handler under app/api has a documented path and that every
 // $ref resolves.
@@ -52,6 +52,8 @@ describe("public/openapi.json", () => {
     ["/api/hazards", "app/api/hazards/route.ts", "fires"],
     ["/api/land", "app/api/land/route.ts", "elevation"],
     ["/api/space", "app/api/space/route.ts", "iss-stream"],
+    ["/api/terrain", "app/api/terrain/route.ts", "tile"],
+    ["/api/soil", "app/api/soil/route.ts", "point"],
   ])("documents exactly the ops %s dispatches", (route, file, one) => {
     expect(new Set(opsDocumented(route))).toEqual(new Set(opsInRoute(file)));
     expect(opsDocumented(route)).toContain(one);
@@ -59,7 +61,7 @@ describe("public/openapi.json", () => {
   it("has a response schema tagged x-op for every documented op", () => {
     const schemas = spec.components.schemas as Record<string, { "x-op"?: string }>;
     const tagged = Object.values(schemas).map((s) => s["x-op"]).filter((x): x is string => !!x);
-    for (const route of ["/api/economy", "/api/water", "/api/hazards", "/api/land", "/api/space"]) {
+    for (const route of ["/api/economy", "/api/water", "/api/hazards", "/api/land", "/api/space", "/api/terrain", "/api/soil"]) {
       for (const op of opsDocumented(route)) expect(tagged, `${route} op=${op}`).toContain(op);
     }
   });

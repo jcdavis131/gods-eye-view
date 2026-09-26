@@ -15,6 +15,20 @@ describe("Explore presets", () => {
       "mitchell-lake",
       "government-canyon",
     ]);
+    expect(PRESET_GROUPS.find((g) => g.title === "Terrain & soils")?.presets.map((p) => p.id)).toEqual([
+      "brackenridge-contours",
+      "bexar-soils",
+      "front-range-whp",
+      "galveston-slr",
+    ]);
+  });
+
+  it("carry a terrain preset's ground point, terrain and scenario into its link", () => {
+    const soils = presetShare(PRESETS.find((p) => p.id === "bexar-soils")!);
+    expect(soils.ground).toEqual({ lon: -98.45, lat: 29.28 });
+    expect(soils.layers).toContain("soils");
+    expect(presetShare(PRESETS.find((p) => p.id === "front-range-whp")!).terrain).toBe(1.5);
+    expect(presetShare(PRESETS.find((p) => p.id === "galveston-slr")!).slr).toBe(3);
   });
 });
 
