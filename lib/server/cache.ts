@@ -29,13 +29,21 @@ export interface CachedOptions {
    */
   deadlineMs?: number;
   /**
-   * After a timeout or a failure, callers with no stored value fail fast for
-   * this long instead of waiting on the same upstream again.
+   * After a timeout or a failure, callers get the stored value at once, or
+   * with none stored fail fast for this long instead of asking the same
+   * upstream again. A query still in flight (an earlier caller's deadline
+   * passed, the query did not) is waited on, up to the caller's own deadline,
+   * when there is no stored value to give.
    */
   coolMs?: number;
 }
 
 export class DeadlineError extends Error {}
+
+/** 2500 -> "2.5", 30000 -> "30": a deadline as set, not rounded to a whole second. */
+function seconds(ms: number): string {
+  return String(Number((ms / 1000).toFixed(2)));
+}
 
 /**
  * Get a value from the cache or produce it. Concurrent callers for the same
@@ -55,14 +63,18 @@ export async function cached<T>(
     return { value: hit.value, age: now - hit.storedAt, hit: true };
   }
   const stale = (): Cached<T> | null => (hit ? { value: hit.value, age: now - hit.storedAt, hit: true } : null);
-  // Only callers that opted in to cooling are turned away by it.
+  let p = inflight.get(key) as Promise<T> | undefined;
+  // Only callers that opted in to cooling are turned away by it. During the
+  // cool-down a held value is served at once. With nothing held, a query
+  // still in flight is waited on (an earlier caller's deadline passing does
+  // not mean the query failed, and waiting on it adds no upstream load); only
+  // with nothing in flight either is the caller turned away.
   const cool = opts.coolMs ? cooling.get(key) : undefined;
   if (cool && cool.until > now) {
     const s = stale();
     if (s) return s;
-    throw cool.error;
+    if (!p) throw cool.error;
   }
-  let p = inflight.get(key) as Promise<T> | undefined;
   if (!p) {
     p = produce()
       .then((value) => {
@@ -85,7 +97,7 @@ export async function cached<T>(
       ? await Promise.race([
           p,
           new Promise<never>((_, reject) => {
-            timer = setTimeout(() => reject(new DeadlineError(`${key}: no answer within ${Math.round(opts.deadlineMs! / 1000)} s`)), opts.deadlineMs);
+            timer = setTimeout(() => reject(new DeadlineError(`${key}: no answer within ${seconds(opts.deadlineMs!)} s`)), opts.deadlineMs);
           }),
         ])
       : await p;

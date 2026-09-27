@@ -16,6 +16,18 @@
 //   &pin=27.8000,-97.3960        the constructs stack anchored at this point (lat,lon)
 //   &cmp=27.8800,-97.3200        a second place compared with the pinned one (lat,lon)
 //   &space=1                     space-weather panel open
+//   &parcel=29.42600,-98.48610   the parcel identified at this point (lat,lon, 5 decimals:
+//                                a lot can be narrower than 4 decimals' 11 m); its dossier
+//                                opens once the camera is there
+//   &ground=29.28000,-98.45000   a "ground here" answer (soil, land cover, hazard class,
+//                                slope, elevation) asked at this point (lat,lon, 5 decimals)
+//                                once the camera is there, with the layers the link turns on
+//   &terrain=1.5                 3D terrain on, at this vertical exaggeration (1 to 3)
+//   &slr=3                       the sea level rise scenario, feet above MHHW (1 to 10;
+//                                written only while the Sea level rise layer is on)
+//   &aoi=1                       the Area panel open on the drawn area (shape=a:…)
+//   &here=29.42410,-98.49360     a "what's here" answer asked at this point (lat,lon,
+//                                5 decimals) once the camera is there
 //   &shape=a:-98.5,29.4;-98.49,29.4;-98.49,29.41   a drawn area (a:) or line (l:),
 //                                vertices as lon,lat to 5 decimals, at most 60;
 //                                written last and unescaped so it stays readable
@@ -35,6 +47,12 @@ import { applyPersona, useLens } from "@/lib/personas/store";
 import { useStrata, type LonLat } from "@/lib/fabric/strataStore";
 import { identifyZoning, useZoningPick } from "@/lib/zoning/pick";
 import { zoningPointId } from "@/lib/zoning/dossier";
+import { identifyParcel, useParcelPick } from "@/lib/parcels/pick";
+import { useSettings } from "@/lib/store/settings";
+import { areaRing, useArea } from "@/lib/aoi/store";
+import { openHere, useHere } from "@/lib/whatshere/here";
+import { identifyGround, isGroundSelection, useGroundPick } from "@/lib/terrain/ground";
+import { isSlrFeet } from "@/lib/terrain/products";
 
 export interface ShareState {
   lat?: number;
@@ -69,6 +87,25 @@ export interface ShareState {
   space?: boolean;
   /** A drawn line or area, shown with its measurement. */
   shape?: Shape;
+  /** The point a parcel was identified at (the parcels layer's dossier). */
+  parcel?: LonLat;
+  /** The point a "ground here" answer was asked for (a click on a picture layer, not a feed feature). */
+  ground?: LonLat;
+  /** The Area panel open on the drawn area. */
+  aoi?: boolean;
+  /** The point a "what's here" answer was asked for. */
+  here?: LonLat;
+  /** 3D terrain on, at this vertical exaggeration. */
+  terrain?: number;
+  /** Sea level rise scenario, whole feet above MHHW. */
+  slr?: number;
+}
+
+/** Terrain exaggeration from a link: 1 to 3, else undefined. */
+export function parseTerrain(v: string | null | undefined): number | undefined {
+  if (v == null || v.trim() === "") return undefined;
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 1 && n <= 3 ? n : undefined;
 }
 
 /** "a:lon,lat;lon,lat;…" or "l:…" -> Shape, or undefined when malformed. */
@@ -116,6 +153,11 @@ export function parseLatLon(v: string | null | undefined): LonLat | undefined {
 
 export function formatLatLonParam(p: LonLat): string {
   return `${p.lat.toFixed(4)},${p.lon.toFixed(4)}`;
+}
+
+/** A parcel point keeps 5 decimals (about 1 m): a narrow lot is smaller than 4 decimals' 11 m. */
+export function formatParcelParam(p: LonLat): string {
+  return `${p.lat.toFixed(5)},${p.lon.toFixed(5)}`;
 }
 
 const LAYER_SET = new Set<string>(LAYER_IDS);
@@ -176,6 +218,17 @@ export function parseShare(search: string): ShareState {
   if (q.get("space") === "1") out.space = true;
   const shape = parseShape(q.get("shape"));
   if (shape) out.shape = shape;
+  const parcel = parseLatLon(q.get("parcel"));
+  if (parcel) out.parcel = parcel;
+  const ground = parseLatLon(q.get("ground"));
+  if (ground) out.ground = ground;
+  if (q.get("aoi") === "1") out.aoi = true;
+  const here = parseLatLon(q.get("here"));
+  if (here) out.here = here;
+  const terrain = parseTerrain(q.get("terrain"));
+  if (terrain != null) out.terrain = terrain;
+  const slr = num("slr");
+  if (isSlrFeet(slr)) out.slr = slr;
   return out;
 }
 
@@ -193,7 +246,8 @@ export function shareQuery(s: ShareState): string {
   if (s.p != null) q.set("p", s.p.toFixed(0));
   if (s.layers) q.set("layers", s.layers.join(","));
   if (s.t != null) q.set("t", new Date(s.t).toISOString().slice(0, 19) + "Z");
-  if (s.sel) q.set("sel", `${s.sel.layer}:${s.sel.id}`);
+  // An identified parcel travels as its point; its selection id cannot be looked up in a feed.
+  if (s.sel && !(s.parcel && s.sel.layer === "parcels")) q.set("sel", `${s.sel.layer}:${s.sel.id}`);
   if (s.report) q.set("report", "1");
   if (s.market) q.set("market", "1");
   if (s.vintage && isValidVintage(s.vintage)) q.set("v", s.vintage);
@@ -203,6 +257,13 @@ export function shareQuery(s: ShareState): string {
   if (s.pin) q.set("pin", formatLatLonParam(s.pin));
   if (s.cmp) q.set("cmp", formatLatLonParam(s.cmp));
   if (s.space) q.set("space", "1");
+  if (s.parcel) q.set("parcel", formatParcelParam(s.parcel));
+  if (s.ground) q.set("ground", `${s.ground.lat.toFixed(5)},${s.ground.lon.toFixed(5)}`);
+  if (s.terrain != null) q.set("terrain", String(Number(s.terrain.toFixed(2))));
+  if (s.slr != null) q.set("slr", String(s.slr));
+  // The Area panel belongs to a drawn area; without one it has nothing to show.
+  if (s.aoi && completeShape(s.shape)?.kind === "area") q.set("aoi", "1");
+  if (s.here) q.set("here", `${s.here.lat.toFixed(5)},${s.here.lon.toFixed(5)}`);
   let str = q.toString();
   // The shape goes last and unescaped (URLSearchParams would write , ; : as
   // %2C %3B %3A), so a link with a drawn area stays readable. Its characters
@@ -217,6 +278,13 @@ export function currentShare(): ShareState {
   const st = useGlobe.getState();
   const strata = useStrata.getState();
   const on = LAYER_IDS.filter((id) => st.layers[id]);
+  const pick = useParcelPick.getState().pick;
+  const parcel = st.selected?.layer === "parcels" && pick ? { lat: pick.lat, lon: pick.lon } : undefined;
+  const prefs = useSettings.getState().prefs;
+  // A ground answer travels as its point: its selection id cannot be looked up in a feed.
+  const gp = useGroundPick.getState().pick;
+  const ground = gp && isGroundSelection(st.selected) ? { lat: gp.lat, lon: gp.lon } : undefined;
+  const here = useHere.getState().pick;
   // A zoning answer travels as its point: its selection id cannot be looked up in a feed.
   const zpick = useZoningPick.getState().pick;
   const zoning = zpick && st.selected?.layer === "zoning" && st.selected.id === zoningPointId(zpick.lon, zpick.lat) ? zpick : undefined;
@@ -228,7 +296,7 @@ export function currentShare(): ShareState {
     p: st.view.pitch,
     layers: on,
     t: Math.abs(st.clock.offsetMs) >= 60_000 ? Date.now() + st.clock.offsetMs : undefined,
-    sel: zoning ? undefined : (st.selected ?? undefined),
+    sel: zoning || ground || isGroundSelection(st.selected) ? undefined : (st.selected ?? undefined),
     report: st.waterReportOpen || undefined,
     market: st.marketReportOpen || undefined,
     vintage: getVintage() ?? undefined,
@@ -239,6 +307,12 @@ export function currentShare(): ShareState {
     cmp: strata.compare ?? undefined,
     space: st.spaceWeatherOpen || undefined,
     shape: completeShape(st.measure.shape),
+    parcel,
+    ground,
+    terrain: prefs.terrain ? prefs.terrainExaggeration : undefined,
+    slr: st.layers.sealevel ? prefs.seaLevelFt : undefined,
+    aoi: useArea.getState().open && areaRing(st.measure.shape) ? true : undefined,
+    here: here ? { lat: here.lat, lon: here.lon } : undefined,
   };
 }
 
@@ -293,12 +367,34 @@ export function startUrlSync(): () => void {
   const unsubZoning = useZoningPick.subscribe((s, prev) => {
     if (s.pick !== prev.pick) schedule();
   });
+  const unsubParcel = useParcelPick.subscribe((s, prev) => {
+    if (s.pick?.lon !== prev.pick?.lon || s.pick?.lat !== prev.pick?.lat) schedule();
+  });
+  const unsubPrefs = useSettings.subscribe((s, prev) => {
+    const a = s.prefs;
+    const b = prev.prefs;
+    if (a.terrain !== b.terrain || a.terrainExaggeration !== b.terrainExaggeration || a.seaLevelFt !== b.seaLevelFt) schedule();
+  });
+  const unsubGround = useGroundPick.subscribe((s, prev) => {
+    if (s.pick?.lon !== prev.pick?.lon || s.pick?.lat !== prev.pick?.lat) schedule();
+  });
+  const unsubArea = useArea.subscribe((s, prev) => {
+    if (s.open !== prev.open) schedule();
+  });
+  const unsubHere = useHere.subscribe((s, prev) => {
+    if (s.pick?.lon !== prev.pick?.lon || s.pick?.lat !== prev.pick?.lat) schedule();
+  });
   return () => {
     unsub();
     unsubReleases();
     unsubLens();
     unsubStrata();
     unsubZoning();
+    unsubParcel();
+    unsubPrefs();
+    unsubGround();
+    unsubArea();
+    unsubHere();
     if (timer) clearTimeout(timer);
   };
 }
@@ -337,12 +433,38 @@ export function applyShare(s: ShareState, opts: { fly?: boolean } = {}): void {
   if (s.report) st.setWaterReportOpen(true);
   if (s.market) st.setMarketReportOpen(true);
   if (s.space) st.setSpaceWeatherOpen(true);
+  // Terrain and the sea level scenario are display settings: a link that carries them sets them.
+  if (s.terrain != null || s.slr != null) {
+    const set = useSettings.getState().setPref;
+    if (s.terrain != null) {
+      set("terrain", true);
+      set("terrainExaggeration", s.terrain);
+    }
+    if (s.slr != null) set("seaLevelFt", s.slr);
+  }
+  // A shared ground answer: asked once the camera has arrived, of the layers now on.
+  if (s.ground) {
+    const g = s.ground;
+    setTimeout(() => void identifyGround(g.lon, g.lat), opts.fly !== false && s.lat != null ? 4200 : 300);
+  }
   // A shared shape is shown with its readout, not left in drawing mode.
   if (s.shape) st.setMeasure({ mode: "off", shape: s.shape, elevation: null });
+  if (s.aoi && s.shape?.kind === "area") useArea.getState().setOpen(true);
+  // A shared "what's here": asked once the camera has arrived.
+  if (s.here) {
+    const h = s.here;
+    setTimeout(() => void openHere(h.lon, h.lat), opts.fly !== false && s.lat != null ? 4200 : 300);
+  }
   if (opts.fly !== false && s.lat != null && s.lon != null) {
     flyTo(s.lon, s.lat, { height: s.h ?? 120_000, pitchDeg: s.p ?? -55, headingDeg: s.hd ?? 0, durationS: 4 });
   }
-  if (s.sel) {
+  // A shared parcel: the layer on, and its dossier asked for once the camera has arrived.
+  if (s.parcel) {
+    const pt = s.parcel;
+    st.setLayer("parcels", true);
+    setTimeout(() => void identifyParcel(pt.lon, pt.lat), opts.fly !== false && s.lat != null ? 4200 : 300);
+  }
+  if (s.sel && !(s.parcel && s.sel.layer === "parcels")) {
     const sel = s.sel;
     const started = Date.now();
     const tryPick = () => {
@@ -363,7 +485,7 @@ export async function copyShareLink(): Promise<string> {
   const url = shareUrl();
   try {
     await navigator.clipboard.writeText(url);
-    useGlobe.getState().pushLog({ level: "info", text: "Link copied. It carries the view, the layers, the clock, the vintage, the selection, open reports, any comparison and a drawn shape." });
+    useGlobe.getState().pushLog({ level: "info", text: "Link copied. It carries the view, the layers, the clock, the vintage, the selection (an identified parcel as its point), open reports, any comparison and a drawn shape." });
   } catch {
     useGlobe.getState().pushLog({ level: "warn", text: `Clipboard blocked; the link is ${url}` });
   }

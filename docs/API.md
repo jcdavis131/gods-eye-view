@@ -1,6 +1,6 @@
 # Embedding Atlas data API
 
-Keyless, CORS-open JSON and CSV over the same public sources the globe draws: USGS, NOAA, TWDB and the Drought Monitor for water; BLS QCEW, Zillow, BTS, the World Port Index, the World Bank and FRED for jobs, homes and trade; NIFC, NASA FIRMS, NWS, GDACS and EONET for hazards (`/api/hazards`); FEMA, USFWS, USGS PAD-US and 3DEP for land (`/api/land`); GFZ and NASA DONKI for space weather (`/api/space`); ten city zoning services for zoning (`/api/zoning`); seven city permit portals, five licence registries, EPA ECHO and the Corps of Engineers for permits (`/api/permits`). Every number carries provenance. This guide is for people calling it from a notebook, a script or their own page.
+Keyless, CORS-open JSON and CSV over the same public sources the globe draws: USGS, NOAA, TWDB and the Drought Monitor for water; BLS QCEW, Zillow, BTS, the World Port Index, the World Bank and FRED for jobs, homes and trade; NIFC, NASA FIRMS, NWS, GDACS and EONET for hazards (`/api/hazards`); FEMA, USFWS, USGS PAD-US and 3DEP for land (`/api/land`); USGS 3DEP, MRLC NLCD, USFS WHP and FEMA for terrain pictures and point classes (`/api/terrain`); NRCS SSURGO for soils (`/api/soil`); GFZ and NASA DONKI for space weather (`/api/space`); HIFLD, EIA, FRA/BTS, FAA, USACE, EIA-860M, Wikidata, USGS, BLM and Macrostrat for infrastructure and geohazards (`/api/infra`); EPA AirNow for air quality (`/api/air`); GDELT for news events (`/api/events`); ten city zoning services for zoning (`/api/zoning`); seven city permit portals, five licence registries, EPA ECHO and the Corps of Engineers for permits (`/api/permits`). Every number carries provenance. This guide is for people calling it from a notebook, a script or their own page.
 
 Machine-readable description: [`/api/openapi`](https://eye.jcamd.com/api/openapi) (also `public/openapi.json` in the repo).
 
@@ -145,17 +145,29 @@ TTLs follow upstream cadence:
 | Hazard alerts (NWS, GDACS, EONET) | 2 min (1 min while a source is down) | 2 min (NWS), 10 min (GDACS), 30 min (EONET) |
 | Flood zones, wetlands, public lands | 1 h (wetlands 10 min while NWI's imagery layer is missing) | 1 day per snapped box |
 | Elevation (EPQS) | 1 day (10 min for a "no value" answer) | 1 day per point |
+| Parcel at a point (`/api/parcels`) | 1 h (10 min when no parcel was found) | 1 day per point to 5 decimals; the county lookup 30 days; NAD 7 days; PLSS 30 days |
+| Parcel outlines (`mode=outlines`) | 6 h (10 min when a source failed) | 7 days per snapped box |
 | Space weather, ISS stream | 15 min (2 min while a source is down) | 15 min, 30 min |
+| Terrain tiles (`op=tile`: slope, contours, land cover, FEMA's map) | 30 days (FEMA's map 7 days); browsers 1 day | 1 day, up to 160 tiles per server instance |
+| Terrain point classes, slope (`op=point`) | 1 h | 1 day per point (5 decimals) |
+| Soils (`/api/soil`) | 1 h (point), 6 h (map unit) | 1 day per point, 7 days per map unit |
+| Transmission, faults, landslides (`/api/infra`) | 6 h (faults, landslides 12 h) | 7 days per snapped box (archived or slow-changing) |
+| Pipelines, rail, airports, dams (`/api/infra`) | 6 h (10 min while a pipeline service is down) | 1 day per snapped box |
+| Power plants (`/api/infra?op=plants`) | 1 day | bundled snapshot (EIA-860M month, Wikidata pull date) |
+| PLSS, T-R-S search, geology at a point (`/api/infra`) | 1 day | 30 days per box, query or point |
+| Agency cameras (`/api/cameras`) | 2 min (LTA) to 1 h (DriveBC) | 2 min (LTA) to 6 h (DriveBC); Caltrans 1 h |
+| Air quality (`/api/air`) | 10 min | 20 min per hourly file |
+| News events (`/api/events`) | 10 min | 6 h per 15-minute export file; lastupdate.txt 5 min |
 | Zoning (point, districts) | 1 h (5 min for a New York answer whose tax-lot lookup failed) | 1 day per point or snapped box; the Census place 30 days |
 | Building permits | 15 min (2 min while a city is down) | 30 min per city and box (Los Angeles 6 h) |
 | Business licences | 30 min (2 min while a registry is down) | 1 h per registry and box (Los Angeles 6 h) |
 | Environmental permits (ECHO, ORM) | 1 h (2 min while a source is down) | 6 h per program and box |
 
-Bounding boxes are snapped outward (water: 0.5° grid, 4° max span; economy: 1° grid, 18° max span; fire hotspots: 1° grid, up to the whole globe; flood zones and wetlands: 0.02° grid, 0.08° max span; public lands: 0.25° grid, 2° max span; zoning outlines: 0.0025° grid, 0.04° max span; building permits and licences: 0.0025° grid, 0.03° and 0.02° max span; environmental permits: 0.05° grid, 0.2° max span), so two callers a few kilometres apart share one entry. The snapped box comes back in `bbox`.
+Bounding boxes are snapped outward (water: 0.5° grid, 4° max span; economy: 1° grid, 18° max span; fire hotspots: 1° grid, up to the whole globe; flood zones and wetlands: 0.02° grid, 0.08° max span; public lands: 0.25° grid, 2° max span; parcel outlines: 0.002° grid, 0.01° max span; infrastructure: transmission 2° / 0.25°, pipelines 4° / 0.5°, rail 1° / 0.1°, airports 8° / 1°, dams and faults 1.5° / 0.25°, landslides 0.5° / 0.1°, PLSS townships 2° / 0.25° and sections 0.4° / 0.05°, plants any span on a 1° grid, but a box whose US plants would not fit in one response returns the largest first, with `truncated` and a caveat naming the floor reached; zoning outlines: 0.0025° grid, 0.04° max span; building permits and licences: 0.0025° grid, 0.03° and 0.02° max span; environmental permits: 0.05° grid, 0.2° max span), so two callers a few kilometres apart share one entry. The snapped box comes back in `bbox`.
 
 ## Rate limits and courtesy
 
-There is no key and no quota on this API. Behind it, the server rate-gates each upstream (one request per 150–400 ms per upstream, backing off for 30–60 s after a 429) and answers from cache whenever it can, so a burst from you becomes at most one upstream call per table. Please still:
+There is no key and no quota on this API. Behind it, the server rate-gates each upstream (one request per 150–400 ms per upstream, backing off for 30–60 s after a 429; county and state parcel servers one request per second per host, five minutes off after a 429 or a 503) and answers from cache whenever it can, so a burst from you becomes at most one upstream call per table. Please still:
 
 - send a `User-Agent` that identifies your project;
 - fetch tables once and keep them (the CSV is a file; save it);
@@ -202,6 +214,16 @@ A number you fetch today may not be the number the same query returns next month
 
 **USGS EPQS** (`usgs-epqs`). The 3DEP DEM that covers the point answers; `resolutionM` says which resolution it was, and 3DEP replaces DEMs as new lidar arrives. Outside 3DEP coverage there is no value, never a guessed one.
 
+**USGS 3DEP dynamic service** (`usgs-3dep`). Slope, contours and the point slope are computed by USGS on request from the best DEM it holds for the place, and 3DEP swaps in new lidar as it arrives, so a tile or a slope can change; the tile the edge holds can be up to 30 days older than a fresh render.
+
+**NRCS SSURGO** (`nrcs-ssurgo`). Soil survey areas are revised and re-saved (the September 2025 save for Bexar County is what the probes read); `revision` carries the survey area's save date. NCCPI is an NRCS interpretation of the components, recomputed when they change; a component NRCS did not rate is `null`, never 0.
+
+**USFS Wildfire Hazard Potential** (`usfs-whp`). The 2023 edition (updated 17 July 2024), landscape as of the end of 2020; the next edition replaces it. The class labels come from the service's own legend.
+
+**MRLC NLCD 2021** (`mrlc-nlcd`). A fixed edition; MRLC also publishes annual land cover, which this app does not read yet. Labels and colours are MRLC's legend.
+
+**NOAA sea level rise** (`noaa-slr`). Fixed scenario caches, one per foot of rise above today's MHHW; NOAA revises them when it re-runs an area.
+
 **City zoning** (`seattle-zoning`, `denver-zoning`, `nyc-dcp-zoning`, `nyc-ztldb`, `chicago-zoning`, `dallas-zoning`, `sanantonio-zoning`, `austin-zoning`, `la-zoning`, `sf-zoning`). Each city edits its layer as ordinances pass, a few times a month; the ZTLDB is monthly. The ZTLDB has no row for a condominium's billing lot (75xx) and there is no lot in a street, so there New York's overlays come from DCP's special purpose district, commercial overlay and limited-height layers at the point (`published["overlays from"]` says so); `overlaysUnknown: true` means neither answered and the overlays are unknown, not empty. `state` says what the answer is (district, right-of-way, no-district, no-ordinance for Houston, not-covered), `place` is the Census place that picked the city, and `published` carries the city's further fields label by label. The adopted zoning map and code govern; this is not a zoning verification.
 
 **Building permits** (`chicago-permits`, `austin-permits`, `seattle-permits`, `denver-permits`, `nyc-dob-permits`, `la-permits`, `sf-permits`). Live records: a permit's status, dates and valuation change as the city processes it, and the same query later answers differently. `coverage[]` names every city the box meets and its state; `partial` means the newest 500 came back and there are more. Valuations keep the name of the column they came from (`valuationLabel`), because the cities do not measure the same thing.
@@ -211,6 +233,22 @@ A number you fetch today may not be the number the same query returns next month
 **Environmental permits** (`epa-echo-cwa`, `epa-echo-air`, `usace-orm`). ECHO refreshes weekly; compliance is ECHO's words, and `not reported by ECHO` is not "no violation". The Corps' search is an undocumented public API: it returns at most 300 actions, every one in the box first and then actions from anywhere in the country to fill the 300, so only those inside the box are kept (sorted newest first here); `coverage` says `partial` only when all 300 lay in the box. Its `total` is national, so it is not relayed. Project names are the Corps' own, except one that opens "Surname, Given" (a private applicant's project), which is withheld with `facilityNote` saying so; a project name can still carry a person's name in another form.
 
 **GFZ Kp and NASA DONKI** (`gfz-kp`, `nasa-donki`). GFZ marks recent Kp values preliminary (`status: "pre"`) and replaces them with definitive ones later; the provenance `revision` says `preliminary` while any value in the answer is. DONKI calls itself experimental research information and points to NOAA SWPC as the official source.
+
+**HIFLD transmission lines** (`hifld-transmission`). An archived layer: "It will no longer be updated or maintained", last data update 2024-09-30 (`period`). Lines built, rebuilt or retired since are not shown as they are now. HIFLD's -999999 voltage and `UNKNOWN<n>` substations are dropped.
+
+**EIA pipelines, FRA rail, FAA airports, USACE NID, USGS Qfaults and landslides, BLM PLSS** (`eia-pipelines`, `bts-narn`, `faa-airports`, `usace-nid`, `usgs-qfaults`, `usgs-landslides`, `blm-plss`). Relayed as published from each feature service; each publisher revises on its own cycle (FAA every 56 days, FRA's network last on 2026-07-21 when read, NID continuously with a per-record update date, the landslide inventory as version 3.0 of February 2025). A box that hit a service's record limit says so in `truncated` and `caveats` (transmission highest voltage first, rail longest first, faults longest first, landslides most confident first; dams in the service's own order).
+
+**EIA-860M and Wikidata** (`eia-860m`, `wikidata`). Bundled snapshots written by `node scripts/infra-data.mjs`: the newest monthly EIA-860M generator workbook that answers (preliminary; EIA replaces it monthly and with the annual EIA-860) and a Wikidata SPARQL pull of nuclear power plants outside the US. `inventoryAsOf` and `snapshotsPulled` say which.
+
+**Macrostrat** (`macrostrat`). A compilation of published maps at several scales; each unit cites its map in `source`. CC BY 4.0.
+
+**Agency cameras** (`caltrans-cwwp2`, `drivebc-highwaycams`, `digitraffic-weathercam`, `lta-traffic-images`, `tfl-jamcams`, `nyc-dot-cameras`). Snapshots of live lists (`kind: "snapshot"`); the stills are the agency's current images and nothing is recorded here.
+
+**EPA AirNow** (`epa-airnow`). Preliminary: "not fully verified or validated … subject to change" (AirNow Data Exchange Guidelines, last updated August 2025). `ozoneAqi`, `pm25Aqi` and `pm10Aqi` are AirNow's NowCast AQI and `no2Aqi` its 1-hour AQI, computed by AirNow from the concentrations each agency sent (HourlyAQObs fact sheet). `period` is the observation hour (UTC); `hourUtc` names the file. Validated data live in EPA's AQS archive. `/api/air` answers 404 until the operator returns AirNow's data-user form (`AIRNOW_ENABLED` in `lib/air/airnow.ts`).
+
+**GDELT** (`gdelt`). 15-minute export files, each fixed once published; a later file can add events about the same incident. The window is in `window`, and `leftOff` counts the rows dropped by the rules (not conflict, not city-level, no position).
+
+**Parcels** (`txgio-stratmap`, `hcad-parcels`, `maricopa-assessor`, `lacounty-assessor`, `cook-parcels`, `king-parcels`, `detroit-parcels`, `wi-parcels`, `nc-parcels`, `mt-cadastral`, `mn-parcels`, `fl-dor-cadastral`, `massgis-parcels`, `vcgi-parcels`, `ugrc-lir`, `ohio-parcels`, `njogis-parcels`, `nys-tax-parcels`, `ct-parcels`, `md-parcels`, with `usdot-nad` and `blm-plss`). Each record is the county's or state's tax roll as its service holds it on the day it is read: values carry the source's own year label (`values.year`: tax, roll, fiscal or grand-list year), and a statewide composite (TxGIO StratMap, Florida DOR, Ohio OGRIP) can be a year or more behind the county's own record, which `link` points to where the source publishes one. Owners change hands and flags change at the source; a record here follows within about a day. `/api/parcels` takes a point (`lon`, `lat`) or a box (`bbox`) and refuses any name or search parameter; see the README's "Parcels & ownership" for what is withheld and why.
 
 **Estimates** (`kind: "estimate"`). Deterministic given their inputs; the inputs are the records next to them. Re-running with revised inputs gives a different estimate, and `method` shows exactly which numbers went in.
 

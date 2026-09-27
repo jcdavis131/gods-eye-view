@@ -12,6 +12,8 @@ import WaterReportPanel from "./WaterReportPanel";
 import MarketReportPanel from "./MarketReportPanel";
 import SpaceWeatherPanel from "./SpaceWeatherPanel";
 import MeasurePanel from "./MeasurePanel";
+import AreaPanel from "./AreaPanel";
+import WhatsHerePanel from "./WhatsHerePanel";
 import IndicatorsPanel from "./IndicatorsPanel";
 import ReleasesPanel from "./ReleasesPanel";
 import WatchlistPanel from "./WatchlistPanel";
@@ -189,6 +191,8 @@ export default function Cockpit({ initialMobile = false }: { initialMobile?: boo
               {layersOpen && <LayerPanel embedded />}
               <StrataRail />
               <MeasurePanel />
+              <AreaPanel />
+              <WhatsHerePanel />
               <WaterReportPanel />
               <MarketReportPanel />
               <SpaceWeatherPanel />
@@ -223,6 +227,8 @@ export default function Cockpit({ initialMobile = false }: { initialMobile?: boo
             <StrataRail />
             <StartHere />
             <MeasurePanel />
+            <AreaPanel />
+            <WhatsHerePanel />
             <WaterReportPanel />
             <MarketReportPanel />
             <SpaceWeatherPanel />

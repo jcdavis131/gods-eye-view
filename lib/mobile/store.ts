@@ -11,6 +11,8 @@ import { useWatchlists } from "@/lib/watch/store";
 import { useScreener } from "@/lib/screener/store";
 import { useStrata } from "@/lib/fabric/strataStore";
 import { measureOpen } from "@/lib/globe/measure";
+import { areaRing, useArea } from "@/lib/aoi/store";
+import { useHere } from "@/lib/whatshere/here";
 
 /** Peek shows the sheet's header row (the strata rail's focused construct); half and tall show the panels. */
 export type SheetHeight = "peek" | "half" | "tall";
@@ -59,6 +61,8 @@ export function openPanels(): string[] {
   if (g.marketReportOpen) out.push("market");
   if (g.spaceWeatherOpen) out.push("space");
   if (measureOpen(g.measure)) out.push("measure");
+  if (useArea.getState().open && areaRing(g.measure.shape)) out.push("area");
+  if (useHere.getState().pick) out.push("here");
   if (useIndicators.getState().open) out.push("indicators");
   if (useReleases.getState().releasesOpen) out.push("releases");
   if (useWatchlists.getState().open) out.push("watch");
@@ -76,6 +80,8 @@ export function closeAllPanels(): void {
   g.setMarketReportOpen(false);
   g.setSpaceWeatherOpen(false);
   g.setMeasure({ mode: "off", shape: null, elevation: null });
+  useArea.getState().setOpen(false);
+  useHere.getState().set(null);
   g.select(null);
   useIndicators.getState().setOpen(false);
   useReleases.getState().setReleasesOpen(false);
@@ -96,6 +102,10 @@ export function useOpenPanels(): string[] {
   const market = useGlobe((s) => s.marketReportOpen);
   const space = useGlobe((s) => s.spaceWeatherOpen);
   const measure = useGlobe((s) => measureOpen(s.measure));
+  const areaShape = useGlobe((s) => !!areaRing(s.measure.shape));
+  const areaOpen = useArea((s) => s.open);
+  const area = areaOpen && areaShape;
+  const here = useHere((s) => !!s.pick);
   const selected = useGlobe((s) => s.selected);
   const ind = useIndicators((s) => s.open);
   const rel = useReleases((s) => s.releasesOpen);
@@ -108,6 +118,8 @@ export function useOpenPanels(): string[] {
   if (market) out.push("market");
   if (space) out.push("space");
   if (measure) out.push("measure");
+  if (area) out.push("area");
+  if (here) out.push("here");
   if (ind) out.push("indicators");
   if (rel) out.push("releases");
   if (watch) out.push("watch");

@@ -7,10 +7,22 @@
 // listed, so none of them lands on an empty map. The hazards & land presets
 // were probed on 2026-09-25 with the exact box each layer requests. Fires
 // move, so the wildfire preset has no fixed place: it resolves when clicked.
+// The terrain & soils presets were probed on 2026-09-26 at the point each one
+// asks about (Soil Data Access, the WHP identify on a 0.05° grid, the NOAA
+// 3 ft tile over Galveston Island, 3DEP EPQS and the contour render).
+// The infrastructure, air and events presets were probed on 2026-09-26 by
+// running each layer's own fetch at the preset's view against /api/infra,
+// /api/cameras, /api/air and /api/events, so the counts in their blurbs are
+// what that box held that day.
+// The parcel presets were probed on 2026-09-26 through /api/parcels with the
+// outline box the layer asks for at their height and an identify at the
+// target; each opens the record of a publicly owned parcel.
 
 import type { LayerFeature, LayerId } from "@/lib/layers/types";
 import type { ShareState } from "@/lib/globe/share";
 import type { FireExtra } from "@/lib/hazards/features";
+import type { LonLat } from "@/lib/fabric/strataStore";
+import { AIRNOW_ENABLED } from "@/lib/air/airnow";
 
 export interface Preset {
   id: string;
@@ -28,7 +40,15 @@ export interface Preset {
   /** Open the market report on arrival. */
   market?: boolean;
   /** Gallery section; water presets carry no group. */
-  group?: "markets" | "constructs" | "hazards" | "civic";
+  group?: "markets" | "constructs" | "hazards" | "terrain" | "infrastructure" | "parcels" | "civic";
+  /** Open a "ground here" answer at this point on arrival (picture layers). */
+  ground?: LonLat;
+  /** Turn 3D terrain on at this exaggeration. */
+  terrain?: number;
+  /** Sea level rise scenario, feet above MHHW. */
+  slr?: number;
+  /** Open the parcel dossier at the target on arrival (parcels layer). */
+  parcel?: boolean;
   /**
    * For places that move (the largest fire): where to go right now, asked
    * when the preset is used. The lat/lon above are the fallback.
@@ -66,7 +86,7 @@ async function largestFire(): Promise<Partial<ShareState> | null> {
   return { lon, lat, h: Math.min(400_000, Math.max(40_000, spanKm * 2_200)), sel: { layer: "wildfire", id: best.properties.id } };
 }
 
-export const PRESETS: Preset[] = [
+const ALL_PRESETS: Preset[] = [
   {
     id: "planet",
     title: "The planet's water",
@@ -379,6 +399,257 @@ export const PRESETS: Preset[] = [
     layers: ["publiclands", "water"],
     dwellS: 30,
   },
+  // ---- Terrain & soils (probed on 2026-09-26 at the point each asks about)
+  {
+    id: "brackenridge-contours",
+    title: "Brackenridge Park in 2 ft contours",
+    region: "San Antonio, Texas",
+    group: "terrain",
+    blurb: "USGS's 2 ft contour lines at street scale, drawn from the 3DEP bare-earth DEM, which here is 1 m lidar (the elevation service reports a 1 m source at the park), over USGS shaded relief. The dossier gives the ground elevation at the target, about 205 m.",
+    lon: -98.4718,
+    lat: 29.461,
+    height: 2_500,
+    layers: ["contours", "relief", "water"],
+    ground: { lon: -98.4718, lat: 29.461 },
+    dwellS: 30,
+  },
+  {
+    id: "bexar-soils",
+    title: "South Bexar County soils",
+    region: "San Antonio, Texas",
+    group: "terrain",
+    blurb: "NRCS SSURGO soil map units outlined with their symbols. At the target, San Antonio clay loam, 1 to 3 percent slopes: all areas prime farmland by NRCS's classification, NCCPI 0.455, which NRCS calls moderate inherent productivity. Click anywhere else for its soil. A survey rating, never a price.",
+    lon: -98.45,
+    lat: 29.28,
+    height: 9_000,
+    layers: ["soils", "water"],
+    ground: { lon: -98.45, lat: 29.28 },
+    dwellS: 30,
+  },
+  {
+    id: "front-range-whp",
+    title: "Front Range foothills, wildfire hazard in 3D",
+    region: "Colorado Springs, Colorado",
+    group: "terrain",
+    blurb: "USFS Wildfire Hazard Potential over the foothills west of the city, with keyless 3D terrain at 1.5×: high and very high classes (4 and 5) on the slopes west of the city and non-burnable (6) where the probe grid crossed the city. At the target, class 5, very high. An index for long-term fuels planning, not a map of risk and not a forecast.",
+    lon: -104.95,
+    lat: 38.85,
+    height: 30_000,
+    layers: ["firehazard", "wildfire"],
+    ground: { lon: -104.95, lat: 38.85 },
+    terrain: 1.5,
+    dwellS: 30,
+  },
+  {
+    id: "galveston-slr",
+    title: "Galveston at 3 ft of sea level rise",
+    region: "Galveston Island, Texas",
+    group: "terrain",
+    blurb: "NOAA's 3 ft scenario above today's highest high tides: water depth in blue (darker is deeper, the bay and the Gulf included) and NOAA's low-lying areas in green. A screening-level scenario that shows the scale of flooding, not the exact location, and not when.",
+    lon: -94.85,
+    lat: 29.27,
+    height: 45_000,
+    layers: ["sealevel", "water"],
+    slr: 3,
+    dwellS: 30,
+  },
+  // ---- Infrastructure, air and events (probed on 2026-09-26 with each layer's own request)
+  {
+    id: "round-rock-grid",
+    title: "The grid around Round Rock",
+    region: "North of Austin, Texas",
+    group: "infrastructure",
+    blurb: "HIFLD's archived map of transmission lines of 69 kV and above, about 300 segments inside the dashed box, 33 of them at 345 kV, with the substations HIFLD names at their ends (Round Rock South on the 138 kV lines, Round Rock Northeast on the 345 kV), and the power plants EIA-860M lists within reach. The line map's last update was 2024-09-30.",
+    lon: -97.68,
+    lat: 30.51,
+    height: 60_000,
+    layers: ["transmission", "plants"],
+    dwellS: 30,
+  },
+  {
+    id: "ship-channel-pipelines",
+    title: "Pipelines of the Houston Ship Channel",
+    region: "Houston, Texas",
+    group: "infrastructure",
+    blurb: "EIA's national pipeline maps, about 1,500 segments in the box, most of them natural gas, with the crude oil systems EIA names (Seaway, Longhorn, BridgeTex, Houston–Houma…) and the operator EIA publishes on each, beside the area's power plants. Generalized routes with no diameter or depth: not for locating a line.",
+    lon: -95.1,
+    lat: 29.72,
+    height: 150_000,
+    layers: ["pipelines", "plants"],
+    dwellS: 30,
+  },
+  {
+    id: "texas-power",
+    title: "Power plants of Texas",
+    region: "Texas and its neighbours",
+    group: "infrastructure",
+    blurb: "About 1,150 plants of 50 MW or more from EIA-860M's monthly inventory within 600 km, coloured by the technology with the most nameplate capacity (gas, wind, solar, coal, nuclear, storage) and sized by it, with planned additions. Descend below 250 km for every plant down to 1 MW.",
+    lon: -98,
+    lat: 31,
+    height: 1_200_000,
+    layers: ["plants"],
+    dwellS: 25,
+  },
+  {
+    id: "kansas-city-rail",
+    title: "Kansas City rail hub",
+    region: "Kansas City, Missouri and Kansas",
+    group: "infrastructure",
+    blurb: "About 1,850 segments of the FRA's North American Rail Network in the dashed box: main lines, branches and some 700 yard tracks, Amtrak routes, the subdivisions FRA names, and the owning railroads' reporting marks on each segment.",
+    lon: -94.6,
+    lat: 39.1,
+    height: 30_000,
+    layers: ["rail"],
+    dwellS: 25,
+  },
+  {
+    id: "okc-sections",
+    title: "Oklahoma City in townships and sections",
+    region: "Oklahoma City, Oklahoma",
+    group: "infrastructure",
+    blurb: "BLM's Public Land Survey System grid, about 730 sections in the dashed box, labelled with BLM's section numbers, in townships of the Indian Meridian. Type a description like T12N R3W S33 OK in the search palette to fly to one section. A survey grid for reference, not a parcel boundary.",
+    lon: -97.45,
+    lat: 35.47,
+    height: 15_000,
+    layers: ["plss"],
+    dwellS: 25,
+  },
+  {
+    id: "bay-area-faults",
+    title: "Bay Area faults",
+    region: "San Francisco Bay, California",
+    group: "infrastructure",
+    blurb: "About 1,860 USGS Quaternary fault traces around the Bay, the San Andreas, Hayward, Calaveras, Concord and Greenville among them, coloured by the age of their most recent movement in USGS's classes (about 450 historic), dashed where the trace is inferred, with slip rates. Beside today's earthquakes; not a forecast.",
+    lon: -122.1,
+    lat: 37.7,
+    height: 120_000,
+    layers: ["faults", "earthquakes"],
+    dwellS: 30,
+  },
+  {
+    id: "seattle-landslides",
+    title: "Seattle's mapped landslides",
+    region: "Seattle, Washington",
+    group: "infrastructure",
+    blurb: "About 1,900 landslides from the USGS national compilation in the dashed box, almost all from Washington's own inventory, with their type, date where known and the inventory's link. Coverage is where someone mapped: none shown is not none there.",
+    lon: -122.33,
+    lat: 47.6,
+    height: 20_000,
+    layers: ["landslides"],
+    dwellS: 25,
+  },
+  {
+    id: "highland-lakes-dams",
+    title: "Dams of the Highland Lakes",
+    region: "Central Texas",
+    group: "infrastructure",
+    blurb: "About 465 dams from the USACE National Inventory of Dams, from Mansfield (3,223,000 acre-ft) and Buchanan to farm ponds, about 200 of them rated High hazard potential: the damage a failure would cause downstream, not the dam's condition. Condition assessments where the regulator published one; no owner names.",
+    lon: -98.2,
+    lat: 30.5,
+    height: 200_000,
+    layers: ["dams", "water"],
+    dwellS: 30,
+  },
+  {
+    id: "texas-airports",
+    title: "Texas public-use airports",
+    region: "Texas",
+    group: "infrastructure",
+    blurb: "About 330 FAA public-use airports, heliports and seaplane bases in the 8° box, with the FAA location id, ICAO code, field elevation and whether an instrument approach is published. Private-use strips are left out on purpose. Not for navigation.",
+    lon: -97.5,
+    lat: 30.5,
+    height: 800_000,
+    layers: ["airports"],
+    dwellS: 25,
+  },
+  {
+    id: "pikes-peak-geology",
+    title: "Pikes Peak granite",
+    region: "Colorado Springs, Colorado",
+    group: "infrastructure",
+    blurb: "Macrostrat's geologic map over the Front Range, coloured by age. At the target, the Rocks of Pikes Peak Batholith (Mesoproterozoic granite, 1,000 to 1,600 million years), from the State Geologic Map Compilation, with coarser maps' units beside it. Click anywhere for the unit there.",
+    lon: -104.95,
+    lat: 38.85,
+    height: 60_000,
+    layers: ["geology"],
+    ground: { lon: -104.95, lat: 38.85 },
+    dwellS: 30,
+  },
+  {
+    id: "la-freeway-cams",
+    title: "Los Angeles freeway cameras",
+    region: "Los Angeles, California",
+    group: "infrastructure",
+    blurb: "Caltrans CWWP2 cameras within reach of downtown, about 1,900, each with its live still, the route and the direction word Caltrans publishes. Positions are Caltrans's; no bearing is drawn.",
+    lon: -118.25,
+    lat: 34.05,
+    height: 40_000,
+    layers: ["cameras"],
+    dwellS: 25,
+  },
+  {
+    id: "us-air-quality",
+    title: "Air quality monitors, this hour",
+    region: "North America",
+    group: "infrastructure",
+    blurb: "About 3,600 active AirNow monitoring sites with AirNow's NowCast AQI (ozone, PM2.5, PM10) and 1-hour NO₂ AQI for the newest hour, computed from the concentrations each reporting agency sent, coloured in EPA's AQI colours by the site's highest pollutant AQI; sites with no AQI this hour are drawn not rated. PRELIMINARY data, not fully verified or validated.",
+    lon: -97,
+    lat: 39,
+    height: 6_000_000,
+    layers: ["airquality"],
+    dwellS: 25,
+  },
+  {
+    id: "world-events",
+    title: "Conflict events in the news",
+    region: "The world",
+    group: "infrastructure",
+    blurb: "Conflict events GDELT coded from the last three hours of the world's news, counted at the city each was placed in, about 300 cities: protests, threats, assaults, fighting, by CAMEO class, with the sites that reported them. City-level only, no actor names, no article links; counts of reports, not verified incidents.",
+    lon: 20,
+    lat: 25,
+    height: 16_000_000,
+    layers: ["events"],
+    dwellS: 25,
+  },
+  {
+    id: "alamo-parcel",
+    title: "The Alamo's parcel",
+    region: "Downtown San Antonio, Texas",
+    group: "parcels",
+    blurb: "About 500 lot lines from TxGIO's StratMap copy of the Bexar Appraisal District roll, with the Alamo's own record open: owner State of Texas, a 2025 market value of $200,000,000 as the district publishes it, its legal description and the date of the roll. Click any other lot for its record; owners appear only for the one parcel you click, and nothing searches them.",
+    lon: -98.4861,
+    lat: 29.426,
+    height: 1_500,
+    layers: ["parcels"],
+    parcel: true,
+    dwellS: 30,
+  },
+  {
+    id: "houston-city-hall",
+    title: "Houston City Hall",
+    region: "Downtown Houston, Texas",
+    group: "parcels",
+    blurb: "Some 750 lot lines from the Harris Central Appraisal District around City Hall, whose record opens with the City of Houston as owner, the 2026 appraised and market value of $19,625,000 and HCAD's new-owner date (1988), as HCAD publishes them. Where HCAD flags a record confidential it shows no owner name, and this app shows that owner as withheld and leaves out the mailing address too.",
+    lon: -95.3693,
+    lat: 29.7604,
+    height: 1_500,
+    layers: ["parcels"],
+    parcel: true,
+    dwellS: 30,
+  },
+  {
+    id: "helena-capitol",
+    title: "Montana State Capitol",
+    region: "Helena, Montana",
+    group: "parcels",
+    blurb: "About 750 lot lines from the Montana Cadastral Framework, and the Capitol grounds' record from the Department of Revenue: owner, 2026 values and legal description, the NAD address points on the parcel, and the BLM Public Land Survey section it lies in (T10N R3W, section 32, Montana Meridian).",
+    lon: -112.0181,
+    lat: 46.5857,
+    height: 1_500,
+    layers: ["parcels"],
+    parcel: true,
+    dwellS: 30,
+  },
   // ---- Zoning & permits (probed on 2026-09-26 with each layer's own request box at the preset's height)
   {
     id: "seattle-zoning",
@@ -442,10 +713,27 @@ export const PRESETS: Preset[] = [
   },
 ];
 
+/** The presets this deployment shows: air quality waits on AIRNOW_ENABLED (lib/air/airnow.ts). */
+export const PRESETS: Preset[] = ALL_PRESETS.filter((p) => AIRNOW_ENABLED || !p.layers.includes("airquality"));
+
+/** The infrastructure gallery's title, which names air only while the air layer is on. */
+export const INFRA_GROUP_TITLE = AIRNOW_ENABLED ? "Infrastructure, air & events" : "Infrastructure & events";
+
 export const PRESET_BY_ID = new Map(PRESETS.map((p) => [p.id, p]));
 
 export function presetShare(p: Preset): ShareState {
-  return { lat: p.lat, lon: p.lon, h: p.height, layers: p.layers, report: p.report || undefined, market: p.market || undefined };
+  return {
+    lat: p.lat,
+    lon: p.lon,
+    h: p.height,
+    layers: p.layers,
+    report: p.report || undefined,
+    market: p.market || undefined,
+    ground: p.ground,
+    terrain: p.terrain,
+    slr: p.slr,
+    parcel: p.parcel ? { lat: p.lat, lon: p.lon } : undefined,
+  };
 }
 
 /** presetShare, with a moving preset resolved to where it is now (falls back to the fixed place). */
@@ -466,5 +754,8 @@ export const PRESET_GROUPS: Array<{ title: string; presets: Preset[] }> = [
   { title: "Trade & markets", presets: PRESETS.filter((p) => p.group === "markets") },
   { title: "Constructs", presets: PRESETS.filter((p) => p.group === "constructs") },
   { title: "Hazards & land", presets: PRESETS.filter((p) => p.group === "hazards") },
+  { title: "Terrain & soils", presets: PRESETS.filter((p) => p.group === "terrain") },
+  { title: INFRA_GROUP_TITLE, presets: PRESETS.filter((p) => p.group === "infrastructure") },
+  { title: "Parcels & ownership", presets: PRESETS.filter((p) => p.group === "parcels") },
   { title: "Zoning & permits", presets: PRESETS.filter((p) => p.group === "civic") },
 ];

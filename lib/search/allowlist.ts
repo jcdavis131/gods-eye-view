@@ -43,6 +43,26 @@ export const SEARCHABLE_DETAILS: ReadonlySet<string> = new Set([
   "port code",
   "locode",
   "local name",
+  // infrastructure and geohazards: the registries' own identifiers and survey
+  // numbers. Never a line's owner, a pipeline's operator, a railroad's
+  // reporting marks or trackage rights, or a plant's reporting entity.
+  "nid id",
+  "faa location id",
+  "icao code",
+  "eia plant id",
+  "wikidata item",
+  "hifld id",
+  "fra arc id",
+  "usgs id",
+  "fault number",
+  "plss id",
+  "first division id",
+  "township",
+  "range",
+  "section",
+  // parcels: the parcel id the county or state publishes. Never "owner",
+  // "taxpayer", "mailing" or "owner address": no search from a name to land.
+  "parcel id",
   // zoning: the district code a city publishes ("DOC1 U/450-U", "C6-4.5"); never the
   // ordinance, the city's prose or a record link
   "zoning",

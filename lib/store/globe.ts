@@ -18,6 +18,10 @@ export interface LayerStatus {
   loading: boolean;
   error?: string;
   note?: string;
+  /** A picture layer (tiled imagery): it has no feature count, the panel says MAP. */
+  picture?: boolean;
+  /** The view key the drawn answer was fetched for ("static" when not view-dependent); see FetchResult.viewKey. */
+  viewKey?: string;
 }
 
 export interface LogEntry {

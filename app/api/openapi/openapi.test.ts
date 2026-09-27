@@ -1,5 +1,5 @@
 // public/openapi.json must agree with the routes whose ops it enumerates
-// (economy, water, hazards, land, space, zoning, permits): every op in the `op` enum has a
+// (economy, water, hazards, land, space, terrain, soil, infra, air, events, zoning, permits, and parcels' `mode`): every op in the `op` enum has a
 // `case "<op>"` in the route, and every case in the route is documented. Also checks that the reserved placeholders exist and
 // that every route handler under app/api has a documented path and that every
 // $ref resolves.
@@ -14,8 +14,8 @@ const spec = JSON.parse(readFileSync(path.join(root, "public/openapi.json"), "ut
   components: { schemas: Record<string, unknown>; parameters: Record<string, unknown>; responses: Record<string, unknown>; headers: Record<string, unknown> };
 };
 
-function opsDocumented(route: string): string[] {
-  const p = spec.paths[route].get.parameters!.find((x) => x.name === "op");
+function opsDocumented(route: string, param = "op"): string[] {
+  const p = spec.paths[route].get.parameters!.find((x) => x.name === param);
   return p?.schema?.enum ?? [];
 }
 
@@ -52,18 +52,31 @@ describe("public/openapi.json", () => {
     ["/api/hazards", "app/api/hazards/route.ts", "fires"],
     ["/api/land", "app/api/land/route.ts", "elevation"],
     ["/api/space", "app/api/space/route.ts", "iss-stream"],
+    ["/api/terrain", "app/api/terrain/route.ts", "tile"],
+    ["/api/soil", "app/api/soil/route.ts", "point"],
+    ["/api/infra", "app/api/infra/route.ts", "plss-search"],
+    ["/api/air", "app/api/air/route.ts", "sites"],
+    ["/api/events", "app/api/events/route.ts", "conflict"],
     ["/api/zoning", "app/api/zoning/route.ts", "point"],
     ["/api/permits", "app/api/permits/route.ts", "building"],
   ])("documents exactly the ops %s dispatches", (route, file, one) => {
     expect(new Set(opsDocumented(route))).toEqual(new Set(opsInRoute(file)));
     expect(opsDocumented(route)).toContain(one);
   });
+  it("documents exactly the modes /api/parcels dispatches (its switch is on `mode`, not `op`)", () => {
+    expect(new Set(opsDocumented("/api/parcels", "mode"))).toEqual(new Set(opsInRoute("app/api/parcels/route.ts")));
+    expect(opsDocumented("/api/parcels", "mode")).toContain("identify");
+    // No name, owner or free-text parameter is documented, because none is accepted.
+    const names = spec.paths["/api/parcels"].get.parameters!.map((x) => x.name);
+    expect(names.sort()).toEqual(["bbox", "lat", "lon", "mode"]);
+  });
   it("has a response schema tagged x-op for every documented op", () => {
     const schemas = spec.components.schemas as Record<string, { "x-op"?: string }>;
     const tagged = Object.values(schemas).map((s) => s["x-op"]).filter((x): x is string => !!x);
-    for (const route of ["/api/economy", "/api/water", "/api/hazards", "/api/land", "/api/space", "/api/zoning", "/api/permits"]) {
+    for (const route of ["/api/economy", "/api/water", "/api/hazards", "/api/land", "/api/space", "/api/terrain", "/api/soil", "/api/infra", "/api/air", "/api/events", "/api/zoning", "/api/permits"]) {
       for (const op of opsDocumented(route)) expect(tagged, `${route} op=${op}`).toContain(op);
     }
+    for (const mode of opsDocumented("/api/parcels", "mode")) expect(tagged, `/api/parcels mode=${mode}`).toContain(mode);
   });
   it("lists the record fields the permits ops send (none it does not, none missing)", async () => {
     const s = spec.components.schemas as Record<string, { "x-feature-properties"?: string[] }>;

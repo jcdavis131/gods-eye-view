@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { LAYERS } from "@/lib/layers";
-import { viewKey, type LayerDefinition } from "@/lib/layers/types";
+import { viewKey, type FetchResult, type LayerDefinition } from "@/lib/layers/types";
 import { getViewer } from "@/lib/globe/cesium";
 import { LayerRenderer } from "@/lib/globe/renderer";
 import { getRenderer, registerRenderer, unregisterRenderer } from "@/lib/globe/registry";
@@ -27,6 +27,7 @@ const OPTION_KEYS: Partial<Record<LayerDefinition["id"], Array<keyof Prefs>>> = 
   aircraft: ["aircraftSource"],
   satellites: ["satelliteGroups"],
   field: ["fieldPov"],
+  sealevel: ["seaLevelFt"],
 };
 
 export default function LayerHost() {
@@ -98,6 +99,17 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
     const r = new LayerRenderer(viewer, def.id, style);
     r.show = useGlobe.getState().layers[def.id];
     r.setLabelsEnabled(useSettings.getState().prefs.labels);
+    r.setTileAlpha(useSettings.getState().prefs.tileAlpha?.[def.id] ?? null);
+    // Pictures (tiled imagery) report failing tiles through the same status line as a failed fetch.
+    r.onTileHealth = (h) => {
+      const g = useGlobe.getState();
+      if (h.failing) {
+        g.setStatus(def.id, { error: h.message });
+        g.pushLog({ level: "warn", text: `${def.label}: ${h.message}`, layer: def.id });
+      } else if (g.status[def.id]?.error?.startsWith("tiles failing")) {
+        g.setStatus(def.id, { error: undefined });
+      }
+    };
     registerRenderer(def.id, r);
     rendererRef.current = r;
     return () => {
@@ -105,7 +117,8 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
       r.destroy();
       rendererRef.current = null;
     };
-  }, [def.id]);
+    // A layer's id and label never change; listed so the tile-health callback reads the right label.
+  }, [def.id, def.label]);
 
   useEffect(() => {
     if (rendererRef.current) rendererRef.current.show = enabled;
@@ -116,6 +129,11 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
   useEffect(() => {
     rendererRef.current?.setLabelsEnabled(labels);
   }, [labels]);
+
+  const tileAlpha = prefs.tileAlpha?.[def.id];
+  useEffect(() => {
+    rendererRef.current?.setTileAlpha(tileAlpha ?? null);
+  }, [tileAlpha]);
 
   // The state of the layers this one's refine() reads: on/off, their last
   // answer and whether it failed (hazards steps aside for Earthquakes and Live
@@ -133,15 +151,19 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
   // the latest settled view, keys and prefs without touching refs in render.
   const query = useQuery({
     queryKey: ["layer", def.id, vk, optionsKey, missionDay],
-    queryFn: ({ signal }) =>
-      def.fetch({
-        keys,
-        view,
-        now: Date.now(),
-        missionTime: Date.now() + useGlobe.getState().clock.offsetMs,
-        signal,
-        options: { ...prefs } as unknown as Record<string, unknown>,
-      }),
+    // Each answer carries the view key it was fetched for, so one kept on screen while
+    // the next view loads (keepPreviousData) still says which view it describes.
+    queryFn: ({ signal }): Promise<FetchResult> =>
+      def
+        .fetch({
+          keys,
+          view,
+          now: Date.now(),
+          missionTime: Date.now() + useGlobe.getState().clock.offsetMs,
+          signal,
+          options: { ...prefs } as unknown as Record<string, unknown>,
+        })
+        .then((r) => ({ ...r, viewKey: vk })),
     enabled,
     refetchInterval: def.updateIntervalMs,
     staleTime: Math.max(1000, def.updateIntervalMs / 2),
@@ -157,20 +179,21 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
     if (!fetched || !def.refine) return fetched;
     const deps = def.dependsOn ?? [];
     const s = useGlobe.getState();
-    return def.refine(fetched, {
+    const refined = def.refine(fetched, {
       layersOn: Object.fromEntries(deps.map((id) => [id, !!s.layers[id]])),
       answering: Object.fromEntries(deps.map((id) => [id, s.status[id]?.fetchedAt != null && !s.status[id]?.error])),
       // What the layer's renderer holds; whether it is shown is layersOn (the
       // store flips before the renderer's own effect catches up).
       holds: (layer, id) => deps.includes(layer) && !!getRenderer(layer)?.getFeature(id),
     });
+    return { ...refined, viewKey: fetched.viewKey };
     // depsKey is what the store reads above: re-run when it changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetched, def, depsKey]);
 
   useEffect(() => {
     if (!data) return;
-    rendererRef.current?.update(data.collection);
+    rendererRef.current?.update(data.collection, data.meta);
     const live = data.collection.features.filter((f) => !f.properties.simulated).length;
     const metaCount = typeof data.meta?.count === "number" ? (data.meta.count as number) : undefined;
     setStatus(def.id, {
@@ -180,6 +203,8 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
       note: data.note,
       error: undefined,
       loading: false,
+      picture: data.meta?.picture === true,
+      viewKey: data.viewKey,
     });
   }, [data, def.id, def.simulated, setStatus]);
 

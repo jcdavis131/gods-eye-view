@@ -13,7 +13,7 @@ import { FLOW_CLASSES, FLOW_CLASS_ORDER } from "@/lib/fabric/condition";
 import { GAUGE_MAX_HEIGHT_M } from "@/lib/layers/water";
 
 // Not measures: layers whose points are not physical (lib/fabric/emergence.ts isPhysical) and area-only layers.
-const NOT_MEASURES = new Set(["constructs", "field", "occupations", "weather", "commerce", "realestate", "spending", "traffic", "hazards", "flood", "wetlands", "publiclands", "zoning", "permits", "licences", "envpermits"]);
+const NOT_MEASURES = new Set(["constructs", "field", "occupations", "weather", "commerce", "realestate", "spending", "traffic", "hazards", "flood", "wetlands", "publiclands", "relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "transmission", "pipelines", "rail", "faults", "geology", "plss", "events", "parcels", "zoning", "permits", "licences", "envpermits"]);
 
 export default function FieldControls() {
   const pov = useSettings((s) => s.prefs.fieldPov) ?? "hydrologic";

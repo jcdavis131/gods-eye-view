@@ -75,7 +75,7 @@ export interface Vitals {
  * incident points are observations on the ground, like earthquakes, and count.
  */
 // Permits, licences and environmental permits are records about a site, not things on the ground.
-const NOT_PHYSICAL = new Set<LayerId>(["constructs", "field", "alerts", "hazards", "occupations", "weather", "permits", "licences", "envpermits"]);
+const NOT_PHYSICAL = new Set<LayerId>(["constructs", "field", "alerts", "hazards", "occupations", "weather", "plss", "events", "permits", "licences", "envpermits"]);
 
 export function isPhysical(f: LayerFeature): boolean {
   return !NOT_PHYSICAL.has(f.properties.layer) && !f.properties.simulated && f.geometry?.type === "Point";

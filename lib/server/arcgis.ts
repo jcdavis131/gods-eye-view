@@ -24,6 +24,9 @@ export interface ArcgisOptions {
   timeoutMs?: number;
   /** Total attempts including the first. */
   tries?: number;
+  /** How long the gate stays closed after a status in `backoffOn` (default 30 s after a 429). */
+  backoffMs?: number;
+  backoffOn?: readonly number[];
 }
 
 /** GET a layer's /query endpoint as GeoJSON, with retry on resets and 5xx. */
@@ -36,8 +39,12 @@ export async function arcgisQuery<P = Record<string, unknown>>(
   const qs = new URLSearchParams({ f: "geojson", ...params });
   const url = `${layerUrl}/query?${qs.toString()}`;
   return retrying(async () => {
-    const j = await polite(opts.gate, opts.minIntervalMs ?? 250, 30_000, () =>
-      upstreamJson<ArcgisFc<P> & { error?: { code?: number; message?: string } }>(name, url, { timeoutMs: opts.timeoutMs ?? 20_000 }),
+    const j = await polite(
+      opts.gate,
+      opts.minIntervalMs ?? 250,
+      opts.backoffMs ?? 30_000,
+      () => upstreamJson<ArcgisFc<P> & { error?: { code?: number; message?: string } }>(name, url, { timeoutMs: opts.timeoutMs ?? 20_000 }),
+      opts.backoffOn,
     );
     if (j.error) throw new UpstreamError(name, j.error.code ?? 502, `${name}: ${j.error.message ?? "query error"}`);
     return j;

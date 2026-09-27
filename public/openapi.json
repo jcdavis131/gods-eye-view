@@ -49,16 +49,28 @@
       "description": "Flood zones, wetlands, public and protected lands, ground elevation: FEMA NFHL, USFWS NWI, USGS PAD-US, USGS 3DEP EPQS."
     },
     {
-      "name": "zoning",
-      "description": "Zoning districts as city zoning GIS services publish them: Seattle, Denver, New York City (DCP districts and the Zoning Tax Lot Database), Chicago, Dallas, San Antonio, Austin, Los Angeles, San Francisco; Houston answers that it has no zoning ordinance. The city is picked by the Census TIGERweb incorporated place under the point."
+      "name": "terrain",
+      "description": "Terrain, slope, contours, soils, land cover and the long-range hazard pictures: USGS 3DEP, NRCS SSURGO, USFS WHP, MRLC NLCD, FEMA NFHL, NOAA sea level rise."
     },
     {
-      "name": "permits",
-      "description": "Building permits (Chicago, Austin, Seattle, Denver residential, New York DOB NOW, Los Angeles, San Francisco), business licences (NY State Liquor Authority, Chicago, San Francisco, Los Angeles, NYC DCWP premises) and environmental permits (EPA ECHO Clean Water Act and Clean Air Act, U.S. Army Corps of Engineers ORM), each with a coverage list that says which sources answered and why the others did not."
+      "name": "parcels",
+      "description": "Parcels and ownership as each county or state service publishes them, NAD address points and BLM PLSS; found only by a point or a box, never by a name."
     },
     {
       "name": "space",
       "description": "Space weather (GFZ Kp, NASA DONKI) and NASA's ISS live stream, checked through YouTube oEmbed."
+    },
+    {
+      "name": "infra",
+      "description": "Infrastructure and geohazards: HIFLD transmission lines (archive), EIA pipelines, FRA/BTS rail, FAA public-use airports, USACE dams, EIA-860M power plants and Wikidata nuclear plants, USGS Quaternary faults and landslides, BLM PLSS with T-R-S search, Macrostrat geology."
+    },
+    {
+      "name": "air",
+      "description": "Air quality: EPA AirNow hourly monitor observations (NowCast AQI, 1-hour for NO2), preliminary, credited to each reporting agency. Not switched on yet: answers 404 until the operator returns AirNow's data-user form."
+    },
+    {
+      "name": "events",
+      "description": "News events: GDELT 2.0 conflict events folded into the cities they were coded at; no actors, no article links."
     },
     {
       "name": "meta",
@@ -67,6 +79,14 @@
     {
       "name": "reserved",
       "description": "Routes other workstreams add in this build; documented in docs/*.md, schemas to be filled in by the integrator."
+    },
+    {
+      "name": "zoning",
+      "description": "Zoning districts as city zoning GIS services publish them: Seattle, Denver, New York City (DCP districts and the Zoning Tax Lot Database), Chicago, Dallas, San Antonio, Austin, Los Angeles, San Francisco; Houston answers that it has no zoning ordinance. The city is picked by the Census TIGERweb incorporated place under the point."
+    },
+    {
+      "name": "permits",
+      "description": "Building permits (Chicago, Austin, Seattle, Denver residential, New York DOB NOW, Los Angeles, San Francisco), business licences (NY State Liquor Authority, Chicago, San Francisco, Los Angeles, NYC DCWP premises) and environmental permits (EPA ECHO Clean Water Act and Clean Air Act, U.S. Army Corps of Engineers ORM), each with a coverage list that says which sources answered and why the others did not."
     }
   ],
   "paths": {
@@ -2234,6 +2254,343 @@
         }
       }
     },
+    "/api/terrain": {
+      "get": {
+        "summary": "Slope, 2 ft contour, land cover and FEMA flood-map tiles rendered once and held at the edge; the hazard class, land cover class or slope at a point; the catalog of terrain pictures",
+        "description": "op=tile: one 512 px PNG in Web Mercator (XYZ, y down) of a product no publisher caches as tiles: slope (USGS 3DEP \"Slope Map\", z 8-16), contours (3DEP \"Preset 2ft Contour Interval\", black lines on white, unlabelled, z 13-17), landcover (MRLC NLCD 2021 WMS, z 5-12), floodmap (FEMA NFHL layer 28 export, transparent, z 14-17). The route builds the upstream request from the product and the tile's EPSG:3857 box and never takes a URL; the image is the publisher's own render, cached a day in the server and for weeks at the edge. op=point: firehazard (USFS Wildfire Hazard Potential 2023 class, with the class table from the service's own legend), landcover (NLCD 2021 class, from MRLC's GetFeatureInfo and legend) or slope (3DEP \"Slope Degrees\", whole degrees) at lon, lat; a point with no value answers `class: null` / `degrees: null`, never 0. op=products: every terrain picture the globe draws, direct or rendered here, with its source, zoom range, class tables, caveats and the terrain tiles' required attribution.",
+        "tags": [
+          "terrain"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "tile",
+                "point",
+                "products"
+              ]
+            },
+            "description": "tile: a rendered PNG tile. point: a class or slope at lon, lat. products: the catalog."
+          },
+          {
+            "name": "product",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "slope",
+                "contours",
+                "landcover",
+                "floodmap",
+                "firehazard"
+              ]
+            },
+            "description": "op=tile: slope | contours | landcover | floodmap. op=point: firehazard | landcover | slope."
+          },
+          {
+            "name": "z",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "op=tile: zoom, inside the product's range."
+          },
+          {
+            "name": "x",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "op=tile: tile column."
+          },
+          {
+            "name": "y",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "op=tile: tile row (XYZ, north at 0)."
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            },
+            "description": "op=point: longitude."
+          },
+          {
+            "name": "lat",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            },
+            "description": "op=point: latitude."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "op=tile: the PNG. op=point and op=products: the envelope.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/Cors"
+              }
+            },
+            "content": {
+              "image/png": {
+                "schema": {
+                  "$ref": "#/components/schemas/TerrainTileImage"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/TerrainPointResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TerrainProductsResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/Upstream"
+          }
+        }
+      },
+      "options": {
+        "tags": [
+          "terrain"
+        ],
+        "summary": "CORS preflight",
+        "operationId": "terrainOptions",
+        "responses": {
+          "204": {
+            "description": "No content."
+          }
+        }
+      }
+    },
+    "/api/soil": {
+      "get": {
+        "summary": "The NRCS SSURGO soil map unit at a point, with its farmland classification and the NCCPI of its components",
+        "description": "Two Soil Data Access queries. op=point: the map unit under lon, lat (name, symbol, NRCS farmland classification, survey area and the date it was saved), then its components with their share of the map unit and NRCS's \"NCCPI - National Commodity Crop Productivity Index (Ver 3.0)\" interpretation (0 to 1 with NRCS's class words), the dominant component first; `nccpi` prints the dominant one's rating. `data` is null where no map unit is mapped (water, outside the survey, outside the US). op=mapunit: the components of one map unit key. A component NRCS did not rate has `nccpi: null` and \"Not rated\", never 0. A soil rating, never a price or a parcel score.",
+        "tags": [
+          "terrain"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "point",
+                "mapunit"
+              ]
+            },
+            "description": "point: the map unit at lon, lat with its components. mapunit: the components of mukey."
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            },
+            "description": "op=point: longitude."
+          },
+          {
+            "name": "lat",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            },
+            "description": "op=point: latitude."
+          },
+          {
+            "name": "mukey",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{1,12}$"
+            },
+            "description": "op=mapunit: SSURGO map unit key (digits)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope for the op.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/Cors"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/SoilPointResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SoilMapunitResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/Upstream"
+          }
+        }
+      },
+      "options": {
+        "tags": [
+          "terrain"
+        ],
+        "summary": "CORS preflight",
+        "operationId": "soilOptions",
+        "responses": {
+          "204": {
+            "description": "No content."
+          }
+        }
+      }
+    },
+    "/api/parcels": {
+      "get": {
+        "summary": "The parcel at a point as its county or state publishes it, or parcel outlines in a small box",
+        "description": "mode=identify (the default): the county at lon, lat (Census TIGERweb), the keyless parcel service wired for it, and the parcel record(s) there as that service publishes them: parcel id, site address, owner names (or `withheld` with the reason: the source's confidentiality flag, a placeholder such as \"Current Owner\", or New Jersey's Daniel's Law; or `not-published` where the service carries no owner field), mailing address, values each with the source's own label and year, exemption, use, zoning, year built, area with its basis, last sale, legal description, and the source's own record link. Also USDOT NAD address points on the parcel (`addresses`, null when NAD did not answer within 2.5 s) and, in the 30 PLSS states, the BLM township and section (`plss`). mode=outlines: parcel outlines in a box of at most 0.01° snapped to 0.002°, carrying the parcel id and use class only, never an owner. mode=addresses: NAD address points on the parcel at the point, waiting up to 30 s. There is no name parameter: `owner`, `name`, `q`, `where`, `search` and `query` are refused with 400.",
+        "tags": [
+          "parcels"
+        ],
+        "parameters": [
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "identify",
+                "outlines",
+                "addresses"
+              ],
+              "default": "identify"
+            },
+            "description": "identify: the parcel record(s) at lon, lat. outlines: lot lines in bbox (id and use class only). addresses: NAD address points at lon, lat."
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            },
+            "description": "mode=identify and addresses: longitude of the point (rounded to 5 decimals)."
+          },
+          {
+            "name": "lat",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            },
+            "description": "mode=identify and addresses: latitude of the point (rounded to 5 decimals)."
+          },
+          {
+            "name": "bbox",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Bbox"
+            },
+            "description": "`w,s,e,n` degrees. Required for mode=outlines; clamped to 0.01° and snapped to 0.002°. The snapped box comes back in `bbox`."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope for the mode.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/Cors"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ParcelsIdentifyResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ParcelsOutlinesResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ParcelsAddressesResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/Upstream"
+          }
+        }
+      },
+      "options": {
+        "tags": [
+          "parcels"
+        ],
+        "summary": "CORS preflight",
+        "operationId": "parcelsOptions",
+        "responses": {
+          "204": {
+            "description": "No content."
+          }
+        }
+      }
+    },
     "/api/zoning": {
       "get": {
         "summary": "The zoning district at a point, district outlines in a box, or which cities are covered",
@@ -2490,6 +2847,322 @@
         ],
         "summary": "CORS preflight",
         "operationId": "spaceOptions",
+        "responses": {
+          "204": {
+            "description": "No content."
+          }
+        }
+      }
+    },
+    "/api/infra": {
+      "get": {
+        "summary": "Transmission lines, pipelines, rail, airports, dams, power plants, Quaternary faults, landslides and the PLSS grid in a box; T-R-S search; the geologic unit at a point",
+        "description": "op=transmission: HIFLD U.S. Electric Power Transmission Lines, the archived snapshot Esri hosts (last data update 2024-09-30): voltage (HIFLD's -999999 sentinel dropped), class, type, status, owner and end substations as HIFLD published them, highest voltage first. op=pipelines: EIA natural gas (interstate, intrastate, gathering), crude oil trunk, petroleum product and HGL pipelines with the operator EIA published; generalized routes with no diameter or pressure, not for locating a line. `counts` gives segments per commodity, null for a service that did not answer. op=rail: FRA/BTS North American Rail Network lines with FRA's network, passenger and STRACNET codes decoded from the service's domains and the owning railroads' reporting marks; physically removed track and rail-trails are left out; longest segments first. op=airports: FAA ADDS public-use airports, heliports and seaplane bases only (PRIVATEUSE = 0). op=dams: USACE National Inventory of Dams (public service): hazard potential (consequence of a failure, not condition), condition assessment and its date, height, storage, purposes; no owner, designer or representative names are requested; largest storage first. op=plants: EIA-860M plants from a bundled monthly snapshot (nameplate MW by technology, operating and planned, the reporting entity as EIA publishes it) plus Wikidata (CC0) nuclear plants outside the US; `min` sets a US MW floor, and a box whose US plants would not fit in one response returns the largest first (`truncated`, `matched`). op=faults: USGS Quaternary faults with USGS's age class, slip rate and sense, line type and mapping certainty. op=landslides: USGS US Landslide Inventory v3 points (type, date range, fatalities, confidence, source inventory); most confident first. op=plss: BLM CadNSDI townships or sections. op=plss-search: the townships (or sections) a T-R-S description names under every principal meridian, with boxes and centres; it reads survey numbers only. op=geology: Macrostrat's geologic map units at a point, most detailed map first, each with the map it comes from. Owners and operators are never searchable anywhere in this app.",
+        "tags": [
+          "infra"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "transmission",
+                "pipelines",
+                "rail",
+                "airports",
+                "dams",
+                "plants",
+                "faults",
+                "landslides",
+                "plss",
+                "plss-search",
+                "geology"
+              ]
+            },
+            "description": "transmission: HIFLD lines. pipelines: EIA pipelines. rail: FRA/BTS rail. airports: FAA public-use. dams: USACE NID. plants: EIA-860M + Wikidata nuclear. faults: USGS Qfaults. landslides: USGS inventory. plss: BLM townships or sections. plss-search: T-R-S lookup. geology: Macrostrat units at lon, lat."
+          },
+          {
+            "name": "bbox",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Bbox"
+            },
+            "description": "`w,s,e,n` degrees, required for every op except plss-search and geology. Clamped and snapped per op: transmission 2° (0.25° grid), pipelines 4° (0.5°), rail 1° (0.1°), airports 8° (1°), dams 1.5° (0.25°), faults 1.5° (0.25°), landslides 0.5° (0.1°), plss townships 2° (0.25°) or sections 0.4° (0.05°), plants any size (1°; past one response's size, the largest plants first). The snapped box comes back in `bbox`."
+          },
+          {
+            "name": "min",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 5000
+            },
+            "description": "op=plants: only US plants with at least this much operating or planned nameplate MW (default 0)."
+          },
+          {
+            "name": "level",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "section",
+                "township"
+              ]
+            },
+            "description": "op=plss: sections (default) or townships."
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "op=plss-search: a township, range and optional section, optionally followed by a PLSS state: `T12N R3W S33`, `T12N R3W S33 OK`, `12N 3W 33`."
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            },
+            "description": "op=geology: longitude of the point."
+          },
+          {
+            "name": "lat",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            },
+            "description": "op=geology: latitude of the point."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope for the op.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/Cors"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/InfraTransmissionResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InfraPipelinesResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InfraRailResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InfraAirportsResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InfraDamsResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InfraPlantsResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InfraFaultsResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InfraLandslidesResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InfraPlssResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InfraPlssSearchResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InfraGeologyResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/Upstream"
+          }
+        }
+      },
+      "options": {
+        "tags": [
+          "infra"
+        ],
+        "summary": "CORS preflight",
+        "operationId": "infraOptions",
+        "responses": {
+          "204": {
+            "description": "No content."
+          }
+        }
+      }
+    },
+    "/api/air": {
+      "get": {
+        "summary": "AirNow hourly air quality monitors in a box (preliminary)",
+        "description": "op=sites: the active monitoring sites in `bbox` from AirNow's newest HourlyAQObs file (US, Canada, Mexico, US embassy monitors), as rows named by `columns`: AirNow's NowCast AQI for ozone, PM2.5 and PM10 (ozoneAqi, pm25Aqi, pm10Aqi) and its 1-hour AQI for NO2 (no2Aqi), computed by AirNow from the concentrations each reporting agency sent, those raw hourly concentrations, the agency, the observation hour (UTC) and the reporting area. PRELIMINARY: not fully verified or validated and subject to change (AirNow Data Exchange Guidelines, last updated August 2025); credit the reporting agency, then the EPA AirNow program. Inactive sites and sites at 0,0 are left out and counted. NOT SWITCHED ON: every call answers 404 until the operator returns AirNow's data-user form (AIRNOW_ENABLED in lib/air/airnow.ts).",
+        "tags": [
+          "air"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "sites"
+              ]
+            },
+            "description": "sites: monitoring sites with their AQI values and concentrations."
+          },
+          {
+            "name": "bbox",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Bbox"
+            },
+            "description": "`w,s,e,n` degrees; `-180,-90,180,90` for every site."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope for the op.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/Cors"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/AirSitesResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "description": "The air quality layer is not switched on in this deployment (AIRNOW_ENABLED in lib/air/airnow.ts): `{ error }` says why."
+          },
+          "502": {
+            "$ref": "#/components/responses/Upstream"
+          }
+        }
+      },
+      "options": {
+        "tags": [
+          "air"
+        ],
+        "summary": "CORS preflight",
+        "operationId": "airOptions",
+        "responses": {
+          "204": {
+            "description": "No content."
+          }
+        }
+      }
+    },
+    "/api/events": {
+      "get": {
+        "summary": "GDELT conflict events of the last hours, folded into the cities they were coded at",
+        "description": "op=conflict: the last `hours` (1 to 6) of GDELT 2.0's 15-minute event export files, keeping city-level locations (ActionGeo_Type 3 and 4) and conflict classes (QuadClass 3 and 4) only, folded into one feature per place with counts by CAMEO root class, the published Goldstein range, articles and mentions, coded event dates and the publishing sites' domains. No actor names and no article links are relayed. `leftOff` counts the rows left off and why. Machine-coded from news reports, not verified incidents. Cite the GDELT Project and link https://www.gdeltproject.org/.",
+        "tags": [
+          "events"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "conflict"
+              ]
+            },
+            "description": "conflict: conflict events per city."
+          },
+          {
+            "name": "hours",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 6,
+              "default": 1
+            },
+            "description": "How many hours of 15-minute files to fold."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope for the op.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/Cors"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/EventsConflictResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/Upstream"
+          }
+        }
+      },
+      "options": {
+        "tags": [
+          "events"
+        ],
+        "summary": "CORS preflight",
+        "operationId": "eventsOptions",
         "responses": {
           "204": {
             "description": "No content."
@@ -4829,6 +5502,599 @@
         ],
         "x-op": "alerts"
       },
+      "ParcelRecord": {
+        "type": "object",
+        "required": [
+          "adapter",
+          "parcelId",
+          "owner"
+        ],
+        "description": "One parcel as its source publishes it. A field the source does not publish is absent, never filled in.",
+        "properties": {
+          "adapter": {
+            "type": "string",
+            "description": "Which service answered (tx-stratmap, tx-hcad, az-maricopa, ca-la, il-cook, wa-king, mi-detroit, wi-statewide, nc-statewide, mt-statewide, mn-parcels, fl-dor, ma-massgis, vt-vcgi, ut-lir, oh-statewide, nj-modiv, ny-its, ct-cama, md-sdat)."
+          },
+          "parcelId": {
+            "type": "string"
+          },
+          "otherIds": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "county": {
+            "type": "string"
+          },
+          "municipality": {
+            "type": "string"
+          },
+          "situs": {
+            "type": "string",
+            "description": "Site address as published."
+          },
+          "propertyName": {
+            "type": "string",
+            "description": "A name the source gives the property (a building), never an owner's."
+          },
+          "owner": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": [
+                  "status",
+                  "names",
+                  "role"
+                ],
+                "properties": {
+                  "status": {
+                    "const": "published"
+                  },
+                  "names": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "role": {
+                    "enum": [
+                      "owner",
+                      "taxpayer"
+                    ]
+                  },
+                  "careOf": {
+                    "type": "string"
+                  },
+                  "dba": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "status",
+                  "reason"
+                ],
+                "properties": {
+                  "status": {
+                    "const": "withheld"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "status",
+                  "reason"
+                ],
+                "properties": {
+                  "status": {
+                    "const": "not-published"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              }
+            ]
+          },
+          "mailing": {
+            "type": "string"
+          },
+          "mailingNote": {
+            "type": "string",
+            "description": "Why a mailing address the source has is not shown."
+          },
+          "ownerAddress": {
+            "type": "string"
+          },
+          "taxpayer": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "address": {
+                "type": "string"
+              }
+            }
+          },
+          "ownedSince": {
+            "type": "string",
+            "format": "date"
+          },
+          "values": {
+            "type": "object",
+            "required": [
+              "items"
+            ],
+            "properties": {
+              "year": {
+                "type": "string",
+                "description": "The source's own year label: \"tax year 2025\", \"fiscal year 2023\", \"grand list 2025\"."
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "label",
+                    "amount"
+                  ],
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "description": "The source's own term: market value, full cash value, just value, estimated fair market value…"
+                    },
+                    "amount": {
+                      "type": "number"
+                    }
+                  }
+                }
+              },
+              "note": {
+                "type": "string"
+              }
+            }
+          },
+          "exempt": {
+            "type": "string"
+          },
+          "use": {
+            "type": "string"
+          },
+          "zoning": {
+            "type": "string"
+          },
+          "yearBuilt": {
+            "type": "string"
+          },
+          "area": {
+            "type": "object",
+            "required": [
+              "value",
+              "unit",
+              "basis"
+            ],
+            "properties": {
+              "value": {
+                "type": "number"
+              },
+              "unit": {
+                "enum": [
+                  "acres",
+                  "sq ft"
+                ]
+              },
+              "basis": {
+                "type": "string"
+              }
+            }
+          },
+          "lastSale": {
+            "type": "object",
+            "properties": {
+              "date": {
+                "type": "string"
+              },
+              "price": {
+                "type": "number"
+              },
+              "reference": {
+                "type": "string"
+              }
+            }
+          },
+          "legal": {
+            "type": "string"
+          },
+          "subdivision": {
+            "type": "string"
+          },
+          "plssText": {
+            "type": "string"
+          },
+          "asOf": {
+            "type": "string"
+          },
+          "link": {
+            "type": "object",
+            "required": [
+              "url",
+              "label"
+            ],
+            "properties": {
+              "url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "label": {
+                "type": "string"
+              }
+            }
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ParcelsIdentifyResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "point",
+                  "county",
+                  "adapter",
+                  "parcels",
+                  "addresses",
+                  "notes"
+                ],
+                "properties": {
+                  "point": {
+                    "type": "object",
+                    "properties": {
+                      "lon": {
+                        "type": "number"
+                      },
+                      "lat": {
+                        "type": "number"
+                      }
+                    }
+                  },
+                  "county": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "geoid": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "basename": {
+                        "type": "string"
+                      },
+                      "state": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "adapter": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "publisher": {
+                        "type": "string"
+                      },
+                      "coverage": {
+                        "type": "string"
+                      },
+                      "ownerPublished": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "parcels": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "record",
+                        "geometry"
+                      ],
+                      "properties": {
+                        "record": {
+                          "$ref": "#/components/schemas/ParcelRecord"
+                        },
+                        "geometry": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "description": "GeoJSON Polygon or MultiPolygon."
+                        }
+                      }
+                    }
+                  },
+                  "addresses": {
+                    "type": [
+                      "array",
+                      "null"
+                    ],
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "address",
+                        "lon",
+                        "lat",
+                        "onParcel"
+                      ],
+                      "properties": {
+                        "address": {
+                          "type": "string"
+                        },
+                        "lon": {
+                          "type": "number"
+                        },
+                        "lat": {
+                          "type": "number"
+                        },
+                        "onParcel": {
+                          "type": "boolean",
+                          "description": "Inside the identified parcel's outline; false: within 40 m of the point instead."
+                        },
+                        "source": {
+                          "type": "string",
+                          "description": "NAD contributor, e.g. \"State of Texas\"."
+                        },
+                        "updated": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "type": {
+                          "type": "string"
+                        },
+                        "parcelId": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "description": "null when NAD did not answer within 2.5 s (mode=addresses asks again)."
+                  },
+                  "plss": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "state": {
+                        "type": "string"
+                      },
+                      "meridian": {
+                        "type": "string"
+                      },
+                      "township": {
+                        "type": "string"
+                      },
+                      "section": {
+                        "type": "string"
+                      },
+                      "sectionType": {
+                        "type": "string"
+                      },
+                      "plssId": {
+                        "type": "string"
+                      },
+                      "firstDivisionId": {
+                        "type": "string"
+                      }
+                    },
+                    "description": "Absent outside the 30 PLSS states; null when BLM did not answer."
+                  },
+                  "notes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "mode": {
+                "const": "identify"
+              },
+              "stale": {
+                "type": "boolean",
+                "description": "The source did not answer; this is its last answer, older than a day."
+              }
+            }
+          }
+        ],
+        "x-op": "identify"
+      },
+      "ParcelsOutlinesResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "mode": {
+                "const": "outlines"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "sources": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              },
+              "failed": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "uncovered": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Counties in the box with no keyless parcel service wired."
+              },
+              "identifyOnly": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "description": "Services in the box that answer a click but draw no lot lines, and why (Wisconsin: box queries take 25-45 s)."
+              },
+              "cutForSize": {
+                "type": "boolean",
+                "description": "Outlines past 3.5 MB were left out to stay under the platform's 4.5 MB response limit."
+              },
+              "truncated": {
+                "type": "boolean"
+              }
+            }
+          }
+        ],
+        "x-op": "outlines"
+      },
+      "ParcelsAddressesResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "point": {
+                    "type": "object"
+                  },
+                  "parcelOutline": {
+                    "type": "boolean"
+                  },
+                  "addresses": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "address",
+                        "lon",
+                        "lat",
+                        "onParcel"
+                      ],
+                      "properties": {
+                        "address": {
+                          "type": "string"
+                        },
+                        "lon": {
+                          "type": "number"
+                        },
+                        "lat": {
+                          "type": "number"
+                        },
+                        "onParcel": {
+                          "type": "boolean",
+                          "description": "Inside the identified parcel's outline; false: within 40 m of the point instead."
+                        },
+                        "source": {
+                          "type": "string",
+                          "description": "NAD contributor, e.g. \"State of Texas\"."
+                        },
+                        "updated": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "type": {
+                          "type": "string"
+                        },
+                        "parcelId": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "mode": {
+                "const": "addresses"
+              }
+            }
+          }
+        ],
+        "x-op": "addresses"
+      },
       "ZoningPointResponse": {
         "allOf": [
           {
@@ -5480,6 +6746,315 @@
         ],
         "x-op": "elevation"
       },
+      "TerrainClass": {
+        "type": "object",
+        "required": [
+          "code",
+          "label",
+          "color"
+        ],
+        "properties": {
+          "code": {
+            "type": "integer"
+          },
+          "label": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string",
+            "description": "#RRGGBB from the publisher's legend."
+          }
+        }
+      },
+      "TerrainTileImage": {
+        "type": "string",
+        "format": "binary",
+        "contentMediaType": "image/png",
+        "description": "The publisher's render of one Web Mercator tile.",
+        "x-op": "tile"
+      },
+      "TerrainPointResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "lon",
+                  "lat",
+                  "product"
+                ],
+                "properties": {
+                  "lon": {
+                    "type": "number"
+                  },
+                  "lat": {
+                    "type": "number"
+                  },
+                  "product": {
+                    "type": "string",
+                    "enum": [
+                      "firehazard",
+                      "landcover",
+                      "slope"
+                    ]
+                  },
+                  "class": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/components/schemas/TerrainClass"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "firehazard, landcover: the class at the point, null where the service has none."
+                  },
+                  "classes": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/TerrainClass"
+                    },
+                    "description": "firehazard, landcover: the whole class table."
+                  },
+                  "degrees": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "description": "slope: whole degrees, null where 3DEP has no value."
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "point"
+      },
+      "TerrainProductsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "products": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "delivery": {
+                          "type": "string",
+                          "enum": [
+                            "route",
+                            "direct"
+                          ]
+                        },
+                        "tile": {
+                          "type": "string"
+                        },
+                        "minZoom": {
+                          "type": "integer"
+                        },
+                        "maxZoom": {
+                          "type": "integer"
+                        },
+                        "source": {
+                          "type": "object"
+                        }
+                      }
+                    }
+                  },
+                  "classes": {
+                    "type": "object"
+                  },
+                  "sealevelFeet": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    }
+                  },
+                  "caveats": {
+                    "type": "object"
+                  },
+                  "terrainAttribution": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "AWS Terrain Tiles' required attribution, verbatim."
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "products"
+      },
+      "SoilComponent": {
+        "type": "object",
+        "properties": {
+          "cokey": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "percent": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Representative share of the map unit, percent."
+          },
+          "major": {
+            "type": "boolean"
+          },
+          "nccpi": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "0 to 1; null when NRCS did not rate the component."
+          },
+          "nccpiClass": {
+            "type": "string",
+            "description": "NRCS's class words, e.g. \"Moderate inherent productivity\", \"Not rated\"."
+          }
+        }
+      },
+      "SoilPointResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "lon": {
+                    "type": "number"
+                  },
+                  "lat": {
+                    "type": "number"
+                  },
+                  "mapUnit": {
+                    "type": "object",
+                    "required": [
+                      "mukey"
+                    ],
+                    "properties": {
+                      "mukey": {
+                        "type": "string"
+                      },
+                      "symbol": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "farmlandClass": {
+                        "type": "string",
+                        "description": "NRCS farmland classification as published."
+                      },
+                      "areaSymbol": {
+                        "type": "string"
+                      },
+                      "areaName": {
+                        "type": "string"
+                      },
+                      "surveySaved": {
+                        "type": "string",
+                        "description": "When the survey area was last saved in SSURGO, as SDA sends it."
+                      }
+                    }
+                  },
+                  "components": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/SoilComponent"
+                    }
+                  },
+                  "dominant": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/components/schemas/SoilComponent"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "nccpi": {
+                    "type": "string",
+                    "description": "The dominant component's NCCPI as text, or \"not rated\"."
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "point"
+      },
+      "SoilMapunitResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "mukey": {
+                    "type": "string"
+                  },
+                  "components": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/SoilComponent"
+                    }
+                  },
+                  "dominant": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/components/schemas/SoilComponent"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "nccpi": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "mapunit"
+      },
       "SpaceWeatherResponse": {
         "allOf": [
           {
@@ -5596,6 +7171,607 @@
           }
         ],
         "x-op": "iss-stream"
+      },
+      "InfraTransmissionResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "description": "The snapped box that was loaded."
+              },
+              "truncated": {
+                "type": "boolean",
+                "description": "true when the service's record limit was hit (the note says which features come first)."
+              },
+              "lastDataUpdate": {
+                "type": "string",
+                "description": "HIFLD's last data update for the archived layer."
+              },
+              "coarsenedForSize": {
+                "type": "boolean"
+              },
+              "generalisationDeg": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            }
+          }
+        ],
+        "x-op": "transmission"
+      },
+      "InfraPipelinesResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "description": "The snapped box that was loaded."
+              },
+              "truncated": {
+                "type": "boolean",
+                "description": "true when the service's record limit was hit (the note says which features come first)."
+              },
+              "counts": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "description": "Segments per commodity (natgas, crude, products, hgl); null where that service did not answer."
+              },
+              "coarsenedForSize": {
+                "type": "boolean",
+                "description": "true when a commodity's answer was too large for one response and was asked again with fewer segments, drawn coarser (a caveat names it); truncated is then true too."
+              }
+            }
+          }
+        ],
+        "x-op": "pipelines"
+      },
+      "InfraRailResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "description": "The snapped box that was loaded."
+              },
+              "truncated": {
+                "type": "boolean",
+                "description": "true when the service's record limit was hit (the note says which features come first)."
+              },
+              "coarsenedForSize": {
+                "type": "boolean"
+              },
+              "generalisationDeg": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            }
+          }
+        ],
+        "x-op": "rail"
+      },
+      "InfraAirportsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "description": "The snapped box that was loaded."
+              },
+              "truncated": {
+                "type": "boolean",
+                "description": "true when the service's record limit was hit (the note says which features come first)."
+              }
+            }
+          }
+        ],
+        "x-op": "airports"
+      },
+      "InfraDamsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "description": "The snapped box that was loaded."
+              },
+              "truncated": {
+                "type": "boolean",
+                "description": "true when the service's record limit was hit (the note says which features come first)."
+              }
+            }
+          }
+        ],
+        "x-op": "dams"
+      },
+      "InfraPlantsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "description": "The snapped box that was loaded."
+              },
+              "truncated": {
+                "type": "boolean",
+                "description": "true when the box held more US plants than one response carries: the largest (by the larger of operating and planned nameplate MW) are returned and a caveat names the floor reached. Ask with a higher min or a smaller box for the rest."
+              },
+              "minMW": {
+                "type": "number"
+              },
+              "matched": {
+                "type": "object",
+                "description": "US plants in the box at this min before any size cap; counts.eia is how many were returned.",
+                "properties": {
+                  "eia": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "counts": {
+                "type": "object",
+                "properties": {
+                  "eia": {
+                    "type": "integer"
+                  },
+                  "wikidata": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "inventoryAsOf": {
+                "type": "string",
+                "description": "The EIA-860M month, e.g. \"August 2026\"."
+              },
+              "snapshotsPulled": {
+                "type": "object",
+                "properties": {
+                  "eia": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "wikidata": {
+                    "type": "string",
+                    "format": "date"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "plants"
+      },
+      "InfraFaultsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "description": "The snapped box that was loaded."
+              },
+              "truncated": {
+                "type": "boolean",
+                "description": "true when the service's record limit was hit (the note says which features come first)."
+              },
+              "coarsenedForSize": {
+                "type": "boolean"
+              },
+              "generalisationDeg": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            }
+          }
+        ],
+        "x-op": "faults"
+      },
+      "InfraLandslidesResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "description": "The snapped box that was loaded."
+              },
+              "truncated": {
+                "type": "boolean",
+                "description": "true when the service's record limit was hit (the note says which features come first)."
+              }
+            }
+          }
+        ],
+        "x-op": "landslides"
+      },
+      "InfraPlssResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "description": "The snapped box that was loaded."
+              },
+              "truncated": {
+                "type": "boolean",
+                "description": "true when the service's record limit was hit (the note says which features come first)."
+              },
+              "level": {
+                "type": "string",
+                "enum": [
+                  "section",
+                  "township"
+                ]
+              }
+            }
+          }
+        ],
+        "x-op": "plss"
+      },
+      "InfraPlssSearchResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "label",
+                    "plssId",
+                    "bbox",
+                    "lon",
+                    "lat"
+                  ],
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "example": "T12N R3W S33, Indian Meridian (OK)"
+                    },
+                    "plssId": {
+                      "type": "string",
+                      "example": "OK170120N0030W0"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "meridian": {
+                      "type": "string"
+                    },
+                    "townshipLabel": {
+                      "type": "string",
+                      "description": "BLM's label as published (\"12N 3W\", \"12.5N 3W\", \"T12N R03W\")."
+                    },
+                    "section": {
+                      "type": "integer"
+                    },
+                    "firstDivisionId": {
+                      "type": "string"
+                    },
+                    "bbox": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 4,
+                      "maxItems": 4
+                    },
+                    "lon": {
+                      "type": "number"
+                    },
+                    "lat": {
+                      "type": "number"
+                    }
+                  }
+                }
+              },
+              "query": {
+                "type": "string"
+              },
+              "parsed": {
+                "type": "object"
+              },
+              "count": {
+                "type": "integer"
+              }
+            }
+          }
+        ],
+        "x-op": "plss-search"
+      },
+      "InfraGeologyResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "lon": {
+                    "type": "number"
+                  },
+                  "lat": {
+                    "type": "number"
+                  },
+                  "license": {
+                    "type": "string"
+                  },
+                  "units": {
+                    "type": "array",
+                    "description": "Most detailed map first.",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "mapId": {
+                          "type": "integer"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "stratName": {
+                          "type": "string"
+                        },
+                        "lith": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "age": {
+                          "type": "string"
+                        },
+                        "topMa": {
+                          "type": "number"
+                        },
+                        "bottomMa": {
+                          "type": "number"
+                        },
+                        "color": {
+                          "type": "string"
+                        },
+                        "source": {
+                          "type": "string",
+                          "description": "The map the unit comes from, as Macrostrat cites it."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "geology"
+      },
+      "AirSitesResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "type": "array"
+                },
+                "description": "One row per site, in the order of `columns`."
+              },
+              "columns": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "example": [
+                  "aqsid",
+                  "name",
+                  "lat",
+                  "lon",
+                  "agency",
+                  "validAt",
+                  "ozoneAqi",
+                  "pm25Aqi",
+                  "pm10Aqi",
+                  "no2Aqi",
+                  "concentrations",
+                  "reportingArea",
+                  "country",
+                  "state"
+                ]
+              },
+              "hourUtc": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "count": {
+                "type": "integer"
+              },
+              "sitesInFile": {
+                "type": "integer"
+              },
+              "inactiveLeftOut": {
+                "type": "integer"
+              },
+              "withoutPositionLeftOut": {
+                "type": "integer"
+              },
+              "preliminary": {
+                "type": "boolean",
+                "const": true
+              }
+            }
+          }
+        ],
+        "x-op": "sites"
+      },
+      "EventsConflictResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "window": {
+                "type": "object",
+                "properties": {
+                  "from": {
+                    "type": "string"
+                  },
+                  "to": {
+                    "type": "string"
+                  },
+                  "files": {
+                    "type": "integer"
+                  },
+                  "asked": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "places": {
+                "type": "integer"
+              },
+              "events": {
+                "type": "integer"
+              },
+              "leftOff": {
+                "type": "object",
+                "properties": {
+                  "rowsRead": {
+                    "type": "integer"
+                  },
+                  "notConflict": {
+                    "type": "integer"
+                  },
+                  "notCityLevel": {
+                    "type": "integer"
+                  },
+                  "noPosition": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "conflict"
       }
     }
   }
