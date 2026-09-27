@@ -6,7 +6,7 @@ const props = (p: Partial<BaseProps>): BaseProps => ({ id: "x", layer: "publicla
 
 describe("the search allowlist", () => {
   it("never lists an owner, operator, manager, holder, bank or recipient field", () => {
-    for (const k of ["owner", "local owner", "owner type", "operator", "manager", "easement holder", "easement holder type", "bank", "provider", "HQ", "recipient", "issued by"]) {
+    for (const k of ["owner", "local owner", "owner type", "operator", "manager", "easement holder", "easement holder type", "bank", "provider", "HQ", "recipient", "issued by", "owning railroads (reporting marks)", "trackage rights", "reporting entity (EIA)", "from substation", "to substation"]) {
       expect(searchableDetail(k), k).toBe(false);
     }
     for (const k of SEARCHABLE_DETAILS) expect(k).toBe(k.toLowerCase());
@@ -77,5 +77,24 @@ describe("the search allowlist", () => {
     expect(matchScore(props({ name: "Zone AE" }), "zone")).toBe(2);
     expect(matchScore(props({ name: "Big Zone" }), "zone")).toBe(1);
     expect(matchScore(props({ name: "Loaded area", kind: "loaded-box", details: { zone: "AE" } }), "loaded")).toBe(0);
+  });
+});
+
+describe("the search allowlist on infrastructure layers", () => {
+  it("finds a dam, an airport and a plant by the registry's identifier, never by owner or operator", () => {
+    const dam = props({ layer: "dams", id: "nid:TX01432", name: "Victor Braunig Dam", details: { "NID id": "TX01432", "owner type": "Local Government" } });
+    expect(matchScore(dam, "tx01432")).toBe(1);
+    expect(matchScore(dam, "local government")).toBe(0);
+    const line = props({ layer: "transmission", id: "hifld-tl:312435", name: "138 kV line", details: { owner: "ONCOR ELECTRIC DELIVERY CO.", "HIFLD id": "312435" } });
+    expect(matchScore(line, "oncor")).toBe(0);
+    const plant = props({ layer: "plants", id: "eia:3612", name: "V H Braunig", details: { "EIA plant id": 3612, "reporting entity (EIA)": "City of San Antonio - (TX)" } });
+    expect(matchScore(plant, "3612")).toBe(1);
+    expect(matchScore(plant, "city of san antonio")).toBe(0);
+    const rail = props({ layer: "rail", id: "narn:441507", name: "CORPUS CHRISTI subdivision", details: { "owning railroads (reporting marks)": "UP", "trackage rights": "AMTK" } });
+    expect(matchScore(rail, "amtk")).toBe(0);
+  });
+  it("finds a PLSS section by its township, range and section", () => {
+    const sec = props({ layer: "plss", id: "plss-s:OK170120N0030W0SN330", name: "Section 33", details: { section: "33", "PLSS id": "OK170120N0030W0" } });
+    expect(matchScore(sec, "ok170120n0030w0")).toBe(1);
   });
 });

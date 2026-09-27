@@ -21,6 +21,8 @@ The README's **Layer API** section is the recipe: one file in `lib/layers/`, a s
 - voice aliases in `lib/voice/commands.ts` and the word list in `lib/voice/intent.ts`, without shadowing another layer's id;
 - tests next to the code (`*.test.ts`, vitest, no network) for every rule that keeps a value honest.
 
+A picture layer (a raster its publisher renders: relief, soils, land cover) sets `tiles` on its style (`lib/globe/tiles.ts`) instead of drawing features, and its fetch() only reports the height band and what the picture is not (`lib/layers/terrain.ts`). Put the source in `lib/terrain/products.ts`: a publisher's own tile cache or map service goes there as a direct source, whose host the CSP test then checks; a slow or flaky dynamic render (an ArcGIS `exportImage` or `export`, a WMS without a cache) goes through `/api/terrain` as a product, built from the product and the tile's projected box, never from a URL the caller sends. A cache that answers 404 where it publishes nothing sets `sparse` on its spec, so a 404 there is "no tile here" rather than the layer failing (probe a few levels first: a 404 says nothing about the tiles under it); a light, opaque picture sets `ink` (line art) or `shade` (a hillshade) so it does not veil the globe. If the service answers a point with a bare code, bundle its own legend as the class table and test the table against the legend payload (`lib/terrain/classes.test.ts`). A click on the ground while a picture is on opens the ground dossier (`lib/terrain/ground.ts`); add your layer's question there.
+
 Layers that only make sense up close (flood zones below 5 km) return an empty collection with a note above their height, use a fine `viewKey`, and draw the box they loaded as a dashed outline (`loadedBoxFeature` in `lib/layers/flood.ts`) so ground that was never loaded does not read as ground with nothing on it; the default key only moves every half degree. Static polygon layers pass their features through a `FeatureMemo` (`lib/layers/featureMemo.ts`) so polygons still in view are not rebuilt on every pan. A layer that draws differently depending on another layer lists it in `dependsOn` and does it in `refine(result, ctx)`, not in `fetch`: `ctx.layersOn`, `ctx.answering` (the layer has an answer on the map: not failed, not still loading) and `ctx.holds(layer, id)`, re-run whenever one of those layers is toggled, answers or fails, with no refetch. Step aside for another layer only for what it is drawing right now (`answering` and `holds`), never merely because it is on: the Hazard alerts layer leaves an NWS alert to Live warnings only when that layer holds it, so a warning it could not outline, or a feed that failed, is still drawn somewhere.
 
 Before opening a PR:
@@ -33,6 +35,14 @@ npm run build
 ```
 
 Then drive the production build in a real browser (`npx next start -p 3100`, open it, watch the console). Two of the bugs in this repo's history only appeared in production bundles, never in `next dev`; the README's development notes explain both.
+
+## Infrastructure layers, cameras and operators
+
+Infrastructure registries name who owns or runs things: a transmission line's owner, a pipeline's operator, a railroad's reporting marks, a power plant's reporting entity. Relay them as the registry publishes them, in `details` only: never in a feature's `name` (the palette always searches names), never on `SEARCHABLE_DETAILS`, never joined across sources. Ask each service for an explicit `outFields` list that leaves out people and addresses (NID's representative and designer names, contact fields, street addresses, and free-text notes: USGS's landslide `Notes` quotes news stories that name homeowners and give their addresses); `lib/infra/features.test.ts` checks that operator fields stay out of names and off the allowlist.
+
+A camera source is added only after reading the agency's own terms, and only when they allow reuse; quote the operative sentence in `lib/cameras/agencies.ts`, in the source's licence and in the README's attribution. Stills must be https (the page upgrades http). Agencies left out and why are listed in the same file.
+
+`node scripts/infra-data.mjs` rebuilds the two power plant snapshots in `lib/infra/data/`: the newest EIA-860M generator workbook that answers (the EIA page links months that are not published yet; they redirect) and a Wikidata SPARQL pull of nuclear plants outside the US. `node scripts/infra-data.mjs eia` or `... nuclear` rebuilds only that one. Both carry the file or query and the date they were pulled; do not hand-edit them.
 
 ## Refreshing the bundled port and country data
 

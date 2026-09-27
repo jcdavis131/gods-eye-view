@@ -33,6 +33,25 @@ export type LayerId =
   | "flood"
   | "wetlands"
   | "publiclands"
+  | "relief"
+  | "slope"
+  | "contours"
+  | "soils"
+  | "firehazard"
+  | "landcover"
+  | "sealevel"
+  | "transmission"
+  | "pipelines"
+  | "plants"
+  | "rail"
+  | "airports"
+  | "dams"
+  | "faults"
+  | "landslides"
+  | "geology"
+  | "plss"
+  | "airquality"
+  | "events"
   | "parcels"
   | "sports"
   | "constructs"
@@ -64,6 +83,25 @@ export const LAYER_IDS: LayerId[] = [
   "flood",
   "wetlands",
   "publiclands",
+  "relief",
+  "slope",
+  "contours",
+  "soils",
+  "firehazard",
+  "landcover",
+  "sealevel",
+  "transmission",
+  "pipelines",
+  "plants",
+  "rail",
+  "airports",
+  "dams",
+  "faults",
+  "landslides",
+  "geology",
+  "plss",
+  "airquality",
+  "events",
   "parcels",
   "sports",
   "constructs",
@@ -147,6 +185,27 @@ export interface FetchResult {
   /** Short operator note shown next to the layer, e.g. coverage caveats. */
   note?: string;
   meta?: Record<string, unknown>;
+  /**
+   * The view key this answer was fetched for ("static" for a layer that is not
+   * view-dependent). The host stamps it, so an answer kept on screen while the
+   * next view loads still says which view it belongs to.
+   */
+  viewKey?: string;
+}
+
+/** `extra` of a near-only layer's dashed "loaded area" feature (kind "loaded-box"): what the answer it outlines left out. */
+export interface LoadedBoxExtra {
+  /** The service's record limit was hit, so only the first records (in the order the route asks for) came back. */
+  truncated?: boolean;
+  /** Outlines were coarsened to fit the response, so lengths drawn from them are approximate. */
+  coarsenedForSize?: boolean;
+  /** A size floor the layer asked with at this camera height (power plants: nameplate MW). */
+  floorMw?: number;
+  /**
+   * Parts of the answer whose service did not answer (pipelines: the commodities whose
+   * `counts` entry is null), so a report says "not loaded" for them, never "none".
+   */
+  missing?: string[];
 }
 
 export interface LayerDefinition {

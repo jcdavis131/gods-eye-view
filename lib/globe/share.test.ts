@@ -139,3 +139,84 @@ describe("an identified parcel in the share link", () => {
     expect(q).toContain("sel=water%3Ausgs%3A1");
   });
 });
+
+describe("terrain, the sea level scenario and ground answers in the share link", () => {
+  it("round-trips a ground point, the terrain exaggeration and the scenario", () => {
+    const s: ShareState = { layers: ["soils", "sealevel"], ground: { lat: 29.28, lon: -98.45 }, terrain: 1.5, slr: 3 };
+    const q = shareQuery(s);
+    expect(q).toContain("ground=29.28000%2C-98.45000");
+    expect(q).toContain("terrain=1.5");
+    expect(q).toContain("slr=3");
+    expect(parseShare(q)).toEqual(s);
+  });
+
+  it("drops an exaggeration outside 1-3 and a scenario NOAA does not cache", () => {
+    expect(parseShare("?terrain=0.5").terrain).toBeUndefined();
+    expect(parseShare("?terrain=9").terrain).toBeUndefined();
+    expect(parseShare("?terrain=").terrain).toBeUndefined();
+    expect(parseShare("?terrain=2").terrain).toBe(2);
+    expect(parseShare("?slr=2.5").slr).toBeUndefined();
+    expect(parseShare("?slr=11").slr).toBeUndefined();
+    expect(parseShare("?slr=").slr).toBeUndefined();
+    expect(parseShare("?ground=91,0").ground).toBeUndefined();
+  });
+
+  it("does not reuse the parcels or zoning branches' parameter names", () => {
+    const q = shareQuery({ ground: { lat: 1, lon: 2 }, terrain: 1, slr: 1 });
+    for (const taken of ["parcel=", "zoning=", "pin=", "cmp=", "sel="]) expect(q).not.toContain(taken);
+  });
+});
+
+describe("the Area panel and what's here in the share link", () => {
+  const area = { kind: "area" as const, points: [[-98.5, 29.4], [-98.49, 29.4], [-98.49, 29.41]] as Array<[number, number]> };
+  it("round-trips aoi=1 with its drawn area and a what's-here point", () => {
+    const s: ShareState = { shape: area, aoi: true, here: { lat: 29.4241, lon: -98.4936 } };
+    const q = shareQuery(s);
+    expect(q).toContain("aoi=1");
+    expect(q).toContain("here=29.42410%2C-98.49360");
+    // The shape still goes last, unescaped.
+    expect(q.endsWith("shape=a:-98.50000,29.40000;-98.49000,29.40000;-98.49000,29.41000")).toBe(true);
+    expect(parseShare(q)).toEqual(s);
+  });
+  it("writes aoi only with a drawn area to show", () => {
+    expect(shareQuery({ aoi: true })).not.toContain("aoi");
+    expect(shareQuery({ aoi: true, shape: { kind: "line", points: [[0, 0], [1, 1]] } })).not.toContain("aoi");
+    expect(parseShare("?here=91,0").here).toBeUndefined();
+  });
+});
+
+describe("a link minted before the parcels and infrastructure branches", () => {
+  // Written by origin/master's shareQuery (5976456): parameters are keyed by name
+  // and layers by id, so new branches only add names. This exact string must
+  // keep decoding to the same state and re-encode byte for byte.
+  const minted =
+    "?lat=29.2812&lon=-98.3412&h=60000&hd=45&p=-55&layers=water%2Csoils%2Csealevel&t=2026-09-02T18%3A00%3A00Z" +
+    "&sel=water%3Ausgs%3AUSGS-08180800&report=1&v=2026-08-15&pin=27.8000%2C-97.3960&space=1" +
+    "&ground=29.28000%2C-98.45000&terrain=1.5&slr=3&shape=a:-98.50000,29.40000;-98.49000,29.40000;-98.49000,29.41000";
+  const state: ShareState = {
+    lat: 29.2812,
+    lon: -98.3412,
+    h: 60000,
+    hd: 45,
+    p: -55,
+    layers: ["water", "soils", "sealevel"],
+    t: Date.UTC(2026, 8, 2, 18, 0, 0),
+    sel: { layer: "water", id: "usgs:USGS-08180800" },
+    report: true,
+    vintage: "2026-08-15",
+    pin: { lat: 27.8, lon: -97.396 },
+    space: true,
+    ground: { lat: 29.28, lon: -98.45 },
+    terrain: 1.5,
+    slr: 3,
+    shape: { kind: "area", points: [[-98.5, 29.4], [-98.49, 29.4], [-98.49, 29.41]] },
+  };
+
+  it("decodes exactly as before, with no parcel, area-panel or what's-here state", () => {
+    expect(parseShare(minted)).toEqual(state);
+  });
+
+  it("re-encodes to the same string", () => {
+    expect(shareQuery(state)).toBe(minted);
+  });
+});

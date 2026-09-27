@@ -17,6 +17,7 @@ import { getCesium } from "./cesium";
 import { getGlow, getIcon, iconKey, type IconKind } from "./icons";
 import { DEG } from "./geo";
 import { LAYER_LABEL_PRIORITY } from "./labelBudget";
+import { addOrdered, createTileLayer, inHeightGate, removeOrdered, type TileHealth, type TileSpec } from "./tiles";
 import type { LayerCollection, LayerFeature, LayerId } from "@/lib/layers/types";
 
 export type LonLatAlt = [lon: number, lat: number, alt: number];
@@ -85,6 +86,12 @@ export interface LayerStyle {
   polygons?: (f: LayerFeature) => StyledPolygon[] | null;
   /** One raster overlay derived from the whole collection (turbidity map). */
   overlay?: (features: LayerFeature[]) => OverlaySpec | null;
+  /**
+   * Tiled imagery (lib/globe/tiles.ts): a picture a publisher renders, drawn with
+   * an opacity, a camera-height gate and a credit. Read on every update with the
+   * fetch result's `meta` (a scenario level, a product), so a new key rebuilds it.
+   */
+  tiles?: (ctx: { meta?: Record<string, unknown> }) => TileSpec[] | null;
 }
 
 export interface PickId {
@@ -161,6 +168,12 @@ export class LayerRenderer {
   private readonly ground: CesiumNS.PrimitiveCollection;
   private readonly groundOk: boolean;
   private overlayLayer: CesiumNS.ImageryLayer | null = null;
+  private tileLayers: Array<{ spec: TileSpec; layer: CesiumNS.ImageryLayer; inGate: boolean }> = [];
+  /** The viewer's opacity for this layer's pictures; null = each spec's own default. */
+  private tileAlpha: number | null = null;
+  private lastGate = 0;
+  /** Told when this layer's tiles start failing, and when they load again. */
+  onTileHealth?: (h: TileHealth) => void;
   private readonly items = new Map<string, Item>();
   private selectedId: string | null = null;
   private hoverId: string | null = null;
@@ -202,6 +215,7 @@ export class LayerRenderer {
     this.fx.show = v;
     this.ground.show = v;
     if (this.overlayLayer) this.overlayLayer.show = v;
+    for (const t of this.tileLayers) t.layer.show = v && t.inGate;
   }
 
   setLabelsEnabled(on: boolean) {
@@ -226,8 +240,8 @@ export class LayerRenderer {
     return this.items.get(id)?.pos;
   }
 
-  /** Replace the layer contents with a fresh collection, diffing by id. */
-  update(collection: LayerCollection) {
+  /** Replace the layer contents with a fresh collection, diffing by id. `meta` is the fetch result's, for tiled pictures. */
+  update(collection: LayerCollection, meta?: Record<string, unknown>) {
     if (this.destroyed) return;
     const now = this.currentTimeMs();
     const seen = new Set<string>();
@@ -263,6 +277,7 @@ export class LayerRenderer {
     }
     this.refreshLabels();
     this.applyOverlay();
+    this.applyTiles(meta);
     // A refetch can hand back the selected feature as a new object (the
     // constructs stack at a new height): redraw what hangs off the selection.
     if (this.selectedId && this.items.has(this.selectedId)) this.refreshSelectedLines();
@@ -302,6 +317,64 @@ export class LayerRenderer {
     this.overlayLayer.alpha = spec.alpha ?? 0.85;
     this.overlayLayer.magnificationFilter = C.TextureMagnificationFilter.NEAREST;
     this.overlayLayer.show = this._show;
+  }
+
+  private cameraHeight(): number {
+    return this.viewer.camera.positionCartographic.height;
+  }
+
+  /** Add, keep or drop this layer's tiled pictures to match the style's specs (diffed by key). */
+  private applyTiles(meta?: Record<string, unknown>) {
+    if (!this.style.tiles) return;
+    let specs: TileSpec[] = [];
+    try {
+      specs = this.style.tiles({ meta }) ?? [];
+    } catch (err) {
+      this.onTileHealth?.({ failing: true, message: `tiles: ${err instanceof Error ? err.message : String(err)}` });
+    }
+    const want = new Set(specs.map((s) => s.key));
+    for (const t of this.tileLayers.filter((x) => !want.has(x.spec.key))) removeOrdered(this.viewer, t.layer);
+    this.tileLayers = this.tileLayers.filter((x) => want.has(x.spec.key));
+    const have = new Set(this.tileLayers.map((t) => t.spec.key));
+    const height = this.cameraHeight();
+    for (const spec of specs) {
+      if (have.has(spec.key)) continue;
+      try {
+        const layer = createTileLayer(spec, (h) => this.onTileHealth?.(h));
+        layer.alpha = this.tileAlpha ?? spec.alpha;
+        const inGate = inHeightGate(spec, height);
+        layer.show = this._show && inGate;
+        addOrdered(this.viewer, layer, spec.z);
+        this.tileLayers.push({ spec, layer, inGate });
+      } catch (err) {
+        this.onTileHealth?.({ failing: true, message: `tiles: ${err instanceof Error ? err.message : String(err)}` });
+      }
+    }
+  }
+
+  /** The viewer's opacity for this layer's pictures (null restores each picture's default). */
+  setTileAlpha(alpha: number | null) {
+    this.tileAlpha = alpha == null || !Number.isFinite(alpha) ? null : Math.max(0, Math.min(1, alpha));
+    for (const t of this.tileLayers) t.layer.alpha = this.tileAlpha ?? t.spec.alpha;
+  }
+
+  /** Whether the layer has tiled pictures (a picture layer, or a vector layer with a picture). */
+  get hasTiles(): boolean {
+    return this.tileLayers.length > 0;
+  }
+
+  /** Show each picture only inside its camera-height gate (checked about four times a second). */
+  private gateTiles(force = false) {
+    if (!this.tileLayers.length) return;
+    const now = performance.now();
+    if (!force && now - this.lastGate < 250) return;
+    this.lastGate = now;
+    const height = this.cameraHeight();
+    for (const t of this.tileLayers) {
+      t.inGate = inHeightGate(t.spec, height);
+      const want = this._show && t.inGate;
+      if (t.layer.show !== want) t.layer.show = want;
+    }
   }
 
   private currentTimeMs(): number {
@@ -500,6 +573,7 @@ export class LayerRenderer {
   /** Advance dynamic features to mission time. Called every frame; throttled by style.tickMs. */
   tick(timeMs: number, force = false) {
     if (this.destroyed || !this._show) return;
+    this.gateTiles(force);
     const cadence = this.style.tickMs ?? 1000;
     const jumped = Math.abs(timeMs - this.lastTime) > Math.max(cadence, 250) * 4;
     this.lastTime = timeMs;
@@ -742,6 +816,7 @@ export class LayerRenderer {
     // has already released every collection below.
     if (this.viewer.isDestroyed()) {
       this.items.clear();
+      this.tileLayers = [];
       return;
     }
     const p = this.viewer.scene.primitives;
@@ -754,6 +829,8 @@ export class LayerRenderer {
       this.viewer.imageryLayers.remove(this.overlayLayer, true);
       this.overlayLayer = null;
     }
+    for (const t of this.tileLayers) removeOrdered(this.viewer, t.layer);
+    this.tileLayers = [];
     this.items.clear();
   }
 }

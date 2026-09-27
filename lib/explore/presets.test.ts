@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { LAYER_IDS } from "@/lib/layers/types";
-import { PRESETS, PRESET_GROUPS, presetShare, presetTarget, type Preset } from "./presets";
+import { AIRNOW_ENABLED } from "@/lib/air/airnow";
+import { INFRA_GROUP_TITLE, PRESETS, PRESET_GROUPS, presetShare, presetTarget, type Preset } from "./presets";
 
 describe("Explore presets", () => {
   it("have unique ids and real layers, and every one sits in a gallery group", () => {
@@ -15,6 +16,28 @@ describe("Explore presets", () => {
       "mitchell-lake",
       "government-canyon",
     ]);
+    expect(PRESET_GROUPS.find((g) => g.title === "Terrain & soils")?.presets.map((p) => p.id)).toEqual([
+      "brackenridge-contours",
+      "bexar-soils",
+      "front-range-whp",
+      "galveston-slr",
+    ]);
+    expect(PRESET_GROUPS.find((g) => g.title === INFRA_GROUP_TITLE)?.presets.map((p) => p.id)).toEqual([
+      "round-rock-grid",
+      "ship-channel-pipelines",
+      "texas-power",
+      "kansas-city-rail",
+      "okc-sections",
+      "bay-area-faults",
+      "seattle-landslides",
+      "highland-lakes-dams",
+      "texas-airports",
+      "pikes-peak-geology",
+      "la-freeway-cams",
+      // Only while the operator has turned AirNow on (lib/air/airnow.ts).
+      ...(AIRNOW_ENABLED ? ["us-air-quality"] : []),
+      "world-events",
+    ]);
     expect(PRESET_GROUPS.find((g) => g.title === "Parcels & ownership")?.presets.map((p) => p.id)).toEqual(["alamo-parcel", "houston-city-hall", "helena-capitol"]);
   });
 
@@ -24,6 +47,36 @@ describe("Explore presets", () => {
       expect(p.height).toBeLessThanOrEqual(2_000);
       expect(presetShare(p).parcel).toEqual({ lat: p.lat, lon: p.lon });
     }
+  });
+
+  it("put each infrastructure preset below the height its first layer draws at", async () => {
+    const { LAYER_BY_ID } = await import("@/lib/layers");
+    const { tierFor, TRANSMISSION_TIERS, PIPELINE_TIERS, PLANT_TIERS, RAIL_TIERS, PLSS_TIERS, FAULT_TIERS, LANDSLIDE_TIERS, DAM_TIERS, AIRPORT_TIERS } = await import("@/lib/layers/infra");
+    const tiers: Record<string, Parameters<typeof tierFor>[0]> = {
+      transmission: TRANSMISSION_TIERS,
+      pipelines: PIPELINE_TIERS,
+      plants: PLANT_TIERS,
+      rail: RAIL_TIERS,
+      plss: PLSS_TIERS,
+      faults: FAULT_TIERS,
+      landslides: LANDSLIDE_TIERS,
+      dams: DAM_TIERS,
+      airports: AIRPORT_TIERS,
+    };
+    for (const p of PRESETS.filter((x) => x.group === "infrastructure")) {
+      const first = p.layers[0];
+      expect(LAYER_BY_ID[first], p.id).toBeDefined();
+      if (tiers[first]) expect(tierFor(tiers[first], p.height), `${p.id} at ${p.height} m`).not.toBeNull();
+    }
+    expect(presetShare(PRESETS.find((p) => p.id === "pikes-peak-geology")!).ground).toEqual({ lon: -104.95, lat: 38.85 });
+  });
+
+  it("carry a terrain preset's ground point, terrain and scenario into its link", () => {
+    const soils = presetShare(PRESETS.find((p) => p.id === "bexar-soils")!);
+    expect(soils.ground).toEqual({ lon: -98.45, lat: 29.28 });
+    expect(soils.layers).toContain("soils");
+    expect(presetShare(PRESETS.find((p) => p.id === "front-range-whp")!).terrain).toBe(1.5);
+    expect(presetShare(PRESETS.find((p) => p.id === "galveston-slr")!).slr).toBe(3);
   });
 });
 

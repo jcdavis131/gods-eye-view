@@ -6,13 +6,15 @@
 import { useEffect, useRef } from "react";
 import type * as CesiumNS from "cesium";
 import { loadCesium, setViewer } from "@/lib/globe/cesium";
-import { addBaseImagery, addNightLights, setGoogleTiles, setTerrain } from "@/lib/globe/imagery";
+import { addBaseImagery, addNightLights, setGoogleTiles, setTerrain, terrainLogText } from "@/lib/globe/imagery";
 import { allRenderers, getRenderer } from "@/lib/globe/registry";
 import type { PickId } from "@/lib/globe/renderer";
 import { cinematicTick, followTick } from "@/lib/globe/camera";
 import { isMobileViewport } from "@/lib/hooks/useIsMobile";
 import { satWorker } from "@/lib/globe/satWorker";
 import { measureClick, startMeasureOverlay } from "@/lib/globe/measure";
+import { groundClickWanted, identifyGround, startGroundOverlay } from "@/lib/terrain/ground";
+import { openHere, startHereOverlay } from "@/lib/whatshere/here";
 import { identifyParcel, startParcelOverlay } from "@/lib/parcels/pick";
 import { PARCEL_IDENTIFY_MAX_M } from "@/lib/layers/parcels";
 import { parseShare } from "@/lib/globe/share";
@@ -113,10 +115,11 @@ export default function CesiumGlobe() {
         if (r.active) useGlobe.getState().pushLog({ level: "info", text: "Google Photorealistic 3D Tiles online" });
         else if (r.error) useGlobe.getState().pushLog({ level: "warn", text: `Google tiles: ${r.error}` });
       });
-      void setTerrain(viewer, keys.CESIUM_ION_TOKEN, prefs.terrain).then((r) => {
-        if (r.active) useGlobe.getState().pushLog({ level: "info", text: "Cesium World Terrain online" });
-        else if (r.error) useGlobe.getState().pushLog({ level: "warn", text: `Terrain: ${r.error}` });
+      void setTerrain(viewer, keys.CESIUM_ION_TOKEN, prefs.terrain, (line) => useGlobe.getState().pushLog(line)).then((r) => {
+        const line = terrainLogText(r);
+        if (line) useGlobe.getState().pushLog(line);
       });
+      scene.verticalExaggeration = prefs.terrainExaggeration;
 
       // Opening move: from deep space down to a tilted continental view.
       viewer.camera.setView({
@@ -236,6 +239,9 @@ export default function CesiumGlobe() {
 
       // Measure tools draw their own overlay from the store.
       cleanups.push(startMeasureOverlay(viewer));
+      // Where a "ground here" answer (terrain, soil and land cover pictures) was asked.
+      cleanups.push(startGroundOverlay(viewer));
+      cleanups.push(startHereOverlay(viewer));
       // The parcel a click identified: its outline, while its dossier is open.
       cleanups.push(startParcelOverlay(viewer));
 
@@ -360,10 +366,27 @@ export default function CesiumGlobe() {
         if (isPickId(id) && id.layer !== "parcels") {
           const feature = getRenderer(id.layer)?.getFeature(id.id) ?? null;
           st.select({ layer: id.layer, id: id.id }, feature);
+        } else if (groundClickWanted(st.layers, st.view.height)) {
+          // Pictures (soils, land cover, hazard classes, slope, relief) have nothing to pick:
+          // a click on the ground asks what is under it.
+          const ray = viewer!.camera.getPickRay(e.position);
+          const hit = (ray && scene.globe.pick(ray, scene)) || viewer!.camera.pickEllipsoid(e.position, ellipsoid);
+          if (hit) {
+            const c = C.Cartographic.fromCartesian(hit);
+            void identifyGround(C.Math.toDegrees(c.longitude), C.Math.toDegrees(c.latitude), st.layers);
+          } else st.select(null);
         } else {
           st.select(null);
         }
       }, C.ScreenSpaceEventType.LEFT_CLICK);
+      // Right-click (a click, not the right-drag that zooms): "what's here" at the ground under the cursor.
+      handler.setInputAction((e: CesiumNS.ScreenSpaceEventHandler.PositionedEvent) => {
+        const ray = viewer!.camera.getPickRay(e.position);
+        const hit = (ray && scene.globe.pick(ray, scene)) || viewer!.camera.pickEllipsoid(e.position, ellipsoid);
+        if (!hit) return;
+        const c = C.Cartographic.fromCartesian(hit);
+        void openHere(C.Math.toDegrees(c.longitude), C.Math.toDegrees(c.latitude));
+      }, C.ScreenSpaceEventType.RIGHT_CLICK);
       let lastHoverPick = 0;
       handler.setInputAction((e: CesiumNS.ScreenSpaceEventHandler.MotionEvent) => {
         const now = performance.now();
@@ -432,12 +455,12 @@ export default function CesiumGlobe() {
           });
         }
         if (p.terrain !== q.terrain || s.keys.CESIUM_ION_TOKEN !== prev.keys.CESIUM_ION_TOKEN) {
-          void setTerrain(viewer, s.keys.CESIUM_ION_TOKEN, p.terrain).then((r) => {
-            const log = useGlobe.getState().pushLog;
-            if (r.active) log({ level: "info", text: "Cesium World Terrain online" });
-            else if (r.error) log({ level: "warn", text: `Terrain: ${r.error}` });
+          void setTerrain(viewer, s.keys.CESIUM_ION_TOKEN, p.terrain, (line) => useGlobe.getState().pushLog(line)).then((r) => {
+            const line = terrainLogText(r);
+            if (line) useGlobe.getState().pushLog(line);
           });
         }
+        if (p.terrainExaggeration !== q.terrainExaggeration) scene.verticalExaggeration = p.terrainExaggeration;
       });
       cleanups.push(unsubPrefs);
 

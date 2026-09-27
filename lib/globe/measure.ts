@@ -63,6 +63,11 @@ function geodesic(a: [number, number], b: [number, number]): CesiumNS.EllipsoidG
   return new C.EllipsoidGeodesic(C.Cartographic.fromDegrees(a[0], a[1]), C.Cartographic.fromDegrees(b[0], b[1]), C.Ellipsoid.WGS84);
 }
 
+/** Geodesic length of one segment on the WGS84 ellipsoid, metres (the same as the measure readout). */
+export function geodesicLength(a: [number, number], b: [number, number]): number {
+  return geodesic(a, b).surfaceDistance;
+}
+
 export interface Measurement {
   /** Path length (line) or perimeter (area), metres. */
   lengthM: number;
