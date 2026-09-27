@@ -25,6 +25,8 @@ export const NLCD_WMS = "https://www.mrlc.gov/geoserver/mrlc_display/wms";
 export const NLCD_LAYER = "NLCD_2021_Land_Cover_L48";
 export const NFHL_MAP = "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer";
 export const TERRARIUM = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png";
+/** Macrostrat's "carto" geologic map: 512 px PNG tiles that switch map scale with zoom (CC BY 4.0). */
+export const MACROSTRAT_TILES = "https://tiles.macrostrat.org/carto/{z}/{x}/{y}.png";
 /**
  * WHP's classified render for one Web Mercator tile: an ImageServer exportImage asked for the
  * tile's projected box ({westProjected}… are the imagery provider's own tags), with the
@@ -134,7 +136,7 @@ export function routeTileUrl(product: RenderProductId, z: number | string, x: nu
 // ---------------------------------------------------------------- direct sources
 
 export interface DirectSource {
-  id: "relief" | "soils" | "firehazard" | "sealevel" | "terrain";
+  id: "relief" | "soils" | "firehazard" | "sealevel" | "terrain" | "geology";
   title: string;
   source: SourceId;
   /** Host the browser fetches from (CSP img-src / connect-src must allow it). */
@@ -189,6 +191,15 @@ export const DIRECT_SOURCES: DirectSource[] = [
     template: TERRARIUM,
     maxZoom: TERRARIUM_MAX_ZOOM,
     note: "Heights decoded in the browser; the profile tool reads the same tiles.",
+  },
+  {
+    id: "geology",
+    title: "Macrostrat geologic map (carto tiles)",
+    source: "macrostrat",
+    host: "tiles.macrostrat.org",
+    template: MACROSTRAT_TILES,
+    maxZoom: 16,
+    note: "512 px tiles from Macrostrat's compilation, which changes map scale with zoom; the Geology layer's click answer comes from its geologic_units/map API through /api/infra.",
   },
 ];
 

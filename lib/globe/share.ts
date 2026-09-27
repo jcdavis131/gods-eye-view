@@ -20,6 +20,9 @@
 //   &terrain=1.5                 3D terrain on, at this vertical exaggeration (1 to 3)
 //   &slr=3                       the sea level rise scenario, feet above MHHW (1 to 10;
 //                                written only while the Sea level rise layer is on)
+//   &aoi=1                       the Area panel open on the drawn area (shape=a:…)
+//   &here=29.42410,-98.49360     a "what's here" answer asked at this point (lat,lon,
+//                                5 decimals) once the camera is there
 //   &shape=a:-98.5,29.4;-98.49,29.4;-98.49,29.41   a drawn area (a:) or line (l:),
 //                                vertices as lon,lat to 5 decimals, at most 60;
 //                                written last and unescaped so it stays readable
@@ -38,6 +41,8 @@ import { isPersonaId, type PersonaId } from "@/lib/personas/registry";
 import { applyPersona, useLens } from "@/lib/personas/store";
 import { useStrata, type LonLat } from "@/lib/fabric/strataStore";
 import { useSettings } from "@/lib/store/settings";
+import { areaRing, useArea } from "@/lib/aoi/store";
+import { openHere, useHere } from "@/lib/whatshere/here";
 import { identifyGround, isGroundSelection, useGroundPick } from "@/lib/terrain/ground";
 import { isSlrFeet } from "@/lib/terrain/products";
 
@@ -74,6 +79,10 @@ export interface ShareState {
   shape?: Shape;
   /** The point a "ground here" answer was asked for (a click on a picture layer, not a feed feature). */
   ground?: LonLat;
+  /** The Area panel open on the drawn area. */
+  aoi?: boolean;
+  /** The point a "what's here" answer was asked for. */
+  here?: LonLat;
   /** 3D terrain on, at this vertical exaggeration. */
   terrain?: number;
   /** Sea level rise scenario, whole feet above MHHW. */
@@ -192,6 +201,9 @@ export function parseShare(search: string): ShareState {
   if (shape) out.shape = shape;
   const ground = parseLatLon(q.get("ground"));
   if (ground) out.ground = ground;
+  if (q.get("aoi") === "1") out.aoi = true;
+  const here = parseLatLon(q.get("here"));
+  if (here) out.here = here;
   const terrain = parseTerrain(q.get("terrain"));
   if (terrain != null) out.terrain = terrain;
   const slr = num("slr");
@@ -225,6 +237,9 @@ export function shareQuery(s: ShareState): string {
   if (s.ground) q.set("ground", `${s.ground.lat.toFixed(5)},${s.ground.lon.toFixed(5)}`);
   if (s.terrain != null) q.set("terrain", String(Number(s.terrain.toFixed(2))));
   if (s.slr != null) q.set("slr", String(s.slr));
+  // The Area panel belongs to a drawn area; without one it has nothing to show.
+  if (s.aoi && completeShape(s.shape)?.kind === "area") q.set("aoi", "1");
+  if (s.here) q.set("here", `${s.here.lat.toFixed(5)},${s.here.lon.toFixed(5)}`);
   let str = q.toString();
   // The shape goes last and unescaped (URLSearchParams would write , ; : as
   // %2C %3B %3A), so a link with a drawn area stays readable. Its characters
@@ -243,6 +258,7 @@ export function currentShare(): ShareState {
   // A ground answer travels as its point: its selection id cannot be looked up in a feed.
   const gp = useGroundPick.getState().pick;
   const ground = gp && isGroundSelection(st.selected) ? { lat: gp.lat, lon: gp.lon } : undefined;
+  const here = useHere.getState().pick;
   return {
     lat: st.view.lat,
     lon: st.view.lon,
@@ -264,6 +280,8 @@ export function currentShare(): ShareState {
     ground,
     terrain: prefs.terrain ? prefs.terrainExaggeration : undefined,
     slr: st.layers.sealevel ? prefs.seaLevelFt : undefined,
+    aoi: useArea.getState().open && areaRing(st.measure.shape) ? true : undefined,
+    here: here ? { lat: here.lat, lon: here.lon } : undefined,
   };
 }
 
@@ -323,6 +341,12 @@ export function startUrlSync(): () => void {
   const unsubGround = useGroundPick.subscribe((s, prev) => {
     if (s.pick?.lon !== prev.pick?.lon || s.pick?.lat !== prev.pick?.lat) schedule();
   });
+  const unsubArea = useArea.subscribe((s, prev) => {
+    if (s.open !== prev.open) schedule();
+  });
+  const unsubHere = useHere.subscribe((s, prev) => {
+    if (s.pick?.lon !== prev.pick?.lon || s.pick?.lat !== prev.pick?.lat) schedule();
+  });
   return () => {
     unsub();
     unsubReleases();
@@ -330,6 +354,8 @@ export function startUrlSync(): () => void {
     unsubStrata();
     unsubPrefs();
     unsubGround();
+    unsubArea();
+    unsubHere();
     if (timer) clearTimeout(timer);
   };
 }
@@ -378,6 +404,12 @@ export function applyShare(s: ShareState, opts: { fly?: boolean } = {}): void {
   }
   // A shared shape is shown with its readout, not left in drawing mode.
   if (s.shape) st.setMeasure({ mode: "off", shape: s.shape, elevation: null });
+  if (s.aoi && s.shape?.kind === "area") useArea.getState().setOpen(true);
+  // A shared "what's here": asked once the camera has arrived.
+  if (s.here) {
+    const h = s.here;
+    setTimeout(() => void openHere(h.lon, h.lat), opts.fly !== false && s.lat != null ? 4200 : 300);
+  }
   if (opts.fly !== false && s.lat != null && s.lon != null) {
     flyTo(s.lon, s.lat, { height: s.h ?? 120_000, pitchDeg: s.p ?? -55, headingDeg: s.hd ?? 0, durationS: 4 });
   }

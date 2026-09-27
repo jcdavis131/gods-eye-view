@@ -10,7 +10,7 @@ import { NLCD_CLASSES, SLR_LEGEND, WHP_CLASSES } from "@/lib/terrain/classes";
 import { SLR_DEFAULT_FT, SLR_FEET, isSlrFeet } from "@/lib/terrain/products";
 
 /** Layers that draw a tiled picture (their own, or the FEMA map under flood zones). */
-export const PICTURE_LAYERS = new Set<LayerId>(["relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "flood"]);
+export const PICTURE_LAYERS = new Set<LayerId>(["relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "flood", "geology"]);
 
 const DEFAULT_ALPHA: Partial<Record<LayerId, number>> = {
   relief: 0.55,
@@ -21,6 +21,7 @@ const DEFAULT_ALPHA: Partial<Record<LayerId, number>> = {
   landcover: 0.7,
   sealevel: 0.75,
   flood: 0.8,
+  geology: 0.55,
 };
 
 function Swatches({ items }: { items: Array<{ label: string; color: string }> }) {

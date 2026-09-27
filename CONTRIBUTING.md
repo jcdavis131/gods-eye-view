@@ -36,6 +36,14 @@ npm run build
 
 Then drive the production build in a real browser (`npx next start -p 3100`, open it, watch the console). Two of the bugs in this repo's history only appeared in production bundles, never in `next dev`; the README's development notes explain both.
 
+## Infrastructure layers, cameras and operators
+
+Infrastructure registries name who owns or runs things: a transmission line's owner, a pipeline's operator, a railroad's reporting marks, a power plant's reporting entity. Relay them as the registry publishes them, in `details` only: never in a feature's `name` (the palette always searches names), never on `SEARCHABLE_DETAILS`, never joined across sources. Ask each service for an explicit `outFields` list that leaves out people and addresses (NID's representative and designer names, contact fields, street addresses, and free-text notes: USGS's landslide `Notes` quotes news stories that name homeowners and give their addresses); `lib/infra/features.test.ts` checks that operator fields stay out of names and off the allowlist.
+
+A camera source is added only after reading the agency's own terms, and only when they allow reuse; quote the operative sentence in `lib/cameras/agencies.ts`, in the source's licence and in the README's attribution. Stills must be https (the page upgrades http). Agencies left out and why are listed in the same file.
+
+`node scripts/infra-data.mjs` rebuilds the two power plant snapshots in `lib/infra/data/`: the newest EIA-860M generator workbook that answers (the EIA page links months that are not published yet; they redirect) and a Wikidata SPARQL pull of nuclear plants outside the US. `node scripts/infra-data.mjs eia` or `... nuclear` rebuilds only that one. Both carry the file or query and the date they were pulled; do not hand-edit them.
+
 ## Refreshing the bundled port and country data
 
 `node scripts/economy-data.mjs` re-downloads the NGA World Port Index and the Natural Earth countries, re-matches the BTS port authorities to harbours (World Port Index entry within 150 km of the geocoded harbour city, otherwise the city point, otherwise left off) and rewrites `lib/economy/data/`. Every file carries the date it was pulled. Do not hand-edit coordinates in those files; fix the crosswalk in the script instead.

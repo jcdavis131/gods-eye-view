@@ -1,6 +1,6 @@
 # Embedding Atlas data API
 
-Keyless, CORS-open JSON and CSV over the same public sources the globe draws: USGS, NOAA, TWDB and the Drought Monitor for water; BLS QCEW, Zillow, BTS, the World Port Index, the World Bank and FRED for jobs, homes and trade; NIFC, NASA FIRMS, NWS, GDACS and EONET for hazards (`/api/hazards`); FEMA, USFWS, USGS PAD-US and 3DEP for land (`/api/land`); USGS 3DEP, MRLC NLCD, USFS WHP and FEMA for terrain pictures and point classes (`/api/terrain`); NRCS SSURGO for soils (`/api/soil`); GFZ and NASA DONKI for space weather (`/api/space`). Every number carries provenance. This guide is for people calling it from a notebook, a script or their own page.
+Keyless, CORS-open JSON and CSV over the same public sources the globe draws: USGS, NOAA, TWDB and the Drought Monitor for water; BLS QCEW, Zillow, BTS, the World Port Index, the World Bank and FRED for jobs, homes and trade; NIFC, NASA FIRMS, NWS, GDACS and EONET for hazards (`/api/hazards`); FEMA, USFWS, USGS PAD-US and 3DEP for land (`/api/land`); USGS 3DEP, MRLC NLCD, USFS WHP and FEMA for terrain pictures and point classes (`/api/terrain`); NRCS SSURGO for soils (`/api/soil`); GFZ and NASA DONKI for space weather (`/api/space`); HIFLD, EIA, FRA/BTS, FAA, USACE, EIA-860M, Wikidata, USGS, BLM and Macrostrat for infrastructure and geohazards (`/api/infra`); EPA AirNow for air quality (`/api/air`); GDELT for news events (`/api/events`). Every number carries provenance. This guide is for people calling it from a notebook, a script or their own page.
 
 Machine-readable description: [`/api/openapi`](https://eye.jcamd.com/api/openapi) (also `public/openapi.json` in the repo).
 
@@ -149,8 +149,15 @@ TTLs follow upstream cadence:
 | Terrain tiles (`op=tile`: slope, contours, land cover, FEMA's map) | 30 days (FEMA's map 7 days); browsers 1 day | 1 day, up to 160 tiles per server instance |
 | Terrain point classes, slope (`op=point`) | 1 h | 1 day per point (5 decimals) |
 | Soils (`/api/soil`) | 1 h (point), 6 h (map unit) | 1 day per point, 7 days per map unit |
+| Transmission, faults, landslides (`/api/infra`) | 6 h (faults, landslides 12 h) | 7 days per snapped box (archived or slow-changing) |
+| Pipelines, rail, airports, dams (`/api/infra`) | 6 h (10 min while a pipeline service is down) | 1 day per snapped box |
+| Power plants (`/api/infra?op=plants`) | 1 day | bundled snapshot (EIA-860M month, Wikidata pull date) |
+| PLSS, T-R-S search, geology at a point (`/api/infra`) | 1 day | 30 days per box, query or point |
+| Agency cameras (`/api/cameras`) | 2 min (LTA) to 1 h (DriveBC) | 2 min (LTA) to 6 h (DriveBC); Caltrans 1 h |
+| Air quality (`/api/air`) | 10 min | 20 min per hourly file |
+| News events (`/api/events`) | 10 min | 6 h per 15-minute export file; lastupdate.txt 5 min |
 
-Bounding boxes are snapped outward (water: 0.5° grid, 4° max span; economy: 1° grid, 18° max span; fire hotspots: 1° grid, up to the whole globe; flood zones and wetlands: 0.02° grid, 0.08° max span; public lands: 0.25° grid, 2° max span), so two callers a few kilometres apart share one entry. The snapped box comes back in `bbox`.
+Bounding boxes are snapped outward (water: 0.5° grid, 4° max span; economy: 1° grid, 18° max span; fire hotspots: 1° grid, up to the whole globe; flood zones and wetlands: 0.02° grid, 0.08° max span; public lands: 0.25° grid, 2° max span; infrastructure: transmission 2° / 0.25°, pipelines 4° / 0.5°, rail 1° / 0.1°, airports 8° / 1°, dams and faults 1.5° / 0.25°, landslides 0.5° / 0.1°, PLSS townships 2° / 0.25° and sections 0.4° / 0.05°, plants any span on a 1° grid, but a box whose US plants would not fit in one response returns the largest first, with `truncated` and a caveat naming the floor reached), so two callers a few kilometres apart share one entry. The snapped box comes back in `bbox`.
 
 ## Rate limits and courtesy
 
@@ -212,6 +219,20 @@ A number you fetch today may not be the number the same query returns next month
 **NOAA sea level rise** (`noaa-slr`). Fixed scenario caches, one per foot of rise above today's MHHW; NOAA revises them when it re-runs an area.
 
 **GFZ Kp and NASA DONKI** (`gfz-kp`, `nasa-donki`). GFZ marks recent Kp values preliminary (`status: "pre"`) and replaces them with definitive ones later; the provenance `revision` says `preliminary` while any value in the answer is. DONKI calls itself experimental research information and points to NOAA SWPC as the official source.
+
+**HIFLD transmission lines** (`hifld-transmission`). An archived layer: "It will no longer be updated or maintained", last data update 2024-09-30 (`period`). Lines built, rebuilt or retired since are not shown as they are now. HIFLD's -999999 voltage and `UNKNOWN<n>` substations are dropped.
+
+**EIA pipelines, FRA rail, FAA airports, USACE NID, USGS Qfaults and landslides, BLM PLSS** (`eia-pipelines`, `bts-narn`, `faa-airports`, `usace-nid`, `usgs-qfaults`, `usgs-landslides`, `blm-plss`). Relayed as published from each feature service; each publisher revises on its own cycle (FAA every 56 days, FRA's network last on 2026-07-21 when read, NID continuously with a per-record update date, the landslide inventory as version 3.0 of February 2025). A box that hit a service's record limit says so in `truncated` and `caveats` (transmission highest voltage first, rail longest first, faults longest first, landslides most confident first; dams in the service's own order).
+
+**EIA-860M and Wikidata** (`eia-860m`, `wikidata`). Bundled snapshots written by `node scripts/infra-data.mjs`: the newest monthly EIA-860M generator workbook that answers (preliminary; EIA replaces it monthly and with the annual EIA-860) and a Wikidata SPARQL pull of nuclear power plants outside the US. `inventoryAsOf` and `snapshotsPulled` say which.
+
+**Macrostrat** (`macrostrat`). A compilation of published maps at several scales; each unit cites its map in `source`. CC BY 4.0.
+
+**Agency cameras** (`caltrans-cwwp2`, `drivebc-highwaycams`, `digitraffic-weathercam`, `lta-traffic-images`, `tfl-jamcams`, `nyc-dot-cameras`). Snapshots of live lists (`kind: "snapshot"`); the stills are the agency's current images and nothing is recorded here.
+
+**EPA AirNow** (`epa-airnow`). Preliminary: "not fully verified or validated … subject to change" (AirNow Data Exchange Guidelines, last updated August 2025). `ozoneAqi`, `pm25Aqi` and `pm10Aqi` are AirNow's NowCast AQI and `no2Aqi` its 1-hour AQI, computed by AirNow from the concentrations each agency sent (HourlyAQObs fact sheet). `period` is the observation hour (UTC); `hourUtc` names the file. Validated data live in EPA's AQS archive. `/api/air` answers 404 until the operator returns AirNow's data-user form (`AIRNOW_ENABLED` in `lib/air/airnow.ts`).
+
+**GDELT** (`gdelt`). 15-minute export files, each fixed once published; a later file can add events about the same incident. The window is in `window`, and `leftOff` counts the rows dropped by the rules (not conflict, not city-level, no position).
 
 **Estimates** (`kind: "estimate"`). Deterministic given their inputs; the inputs are the records next to them. Re-running with revised inputs gives a different estimate, and `method` shows exactly which numbers went in.
 

@@ -193,12 +193,65 @@ const LAYER_ALIASES: Record<string, LayerId> = {
   "sea level rise": "sealevel",
   "sea-level rise": "sealevel",
   "sea level": "sealevel",
+  // Infrastructure and geohazards. "planes" stays with aircraft and "reservoirs" with surface water.
+  "transmission lines": "transmission",
+  transmission: "transmission",
+  "power lines": "transmission",
+  "power grid": "transmission",
+  grid: "transmission",
+  pipelines: "pipelines",
+  pipeline: "pipelines",
+  "gas pipelines": "pipelines",
+  "oil pipelines": "pipelines",
+  "power plants": "plants",
+  "power stations": "plants",
+  "nuclear plants": "plants",
+  "nuclear power plants": "plants",
+  plants: "plants",
+  rail: "rail",
+  railroads: "rail",
+  railways: "rail",
+  "rail lines": "rail",
+  railroad: "rail",
+  trains: "rail",
+  airports: "airports",
+  airport: "airports",
+  airfields: "airports",
+  heliports: "airports",
+  dams: "dams",
+  dam: "dams",
+  faults: "faults",
+  "fault lines": "faults",
+  "quaternary faults": "faults",
+  landslides: "landslides",
+  landslide: "landslides",
+  mudslides: "landslides",
+  geology: "geology",
+  "geologic map": "geology",
+  bedrock: "geology",
+  rocks: "geology",
+  plss: "plss",
+  "survey grid": "plss",
+  townships: "plss",
+  sections: "plss",
+  "public land survey": "plss",
+  "air quality": "airquality",
+  "air pollution": "airquality",
+  aqi: "airquality",
+  smog: "airquality",
+  airnow: "airquality",
+  "news events": "events",
+  "conflict events": "events",
+  gdelt: "events",
+  protests: "events",
 };
 
 export function resolveLayer(word: string | undefined): LayerId | null {
   if (!word) return null;
   const w = word.toLowerCase().trim();
-  return LAYER_ALIASES[w] ?? (LAYER_BY_ID[w as LayerId] ? (w as LayerId) : null);
+  // An alias counts only for a layer that is registered (air quality can be switched off).
+  const id = LAYER_ALIASES[w] ?? (w as LayerId);
+  return LAYER_BY_ID[id] ? id : null;
 }
 
 async function goToPlace(place: string, altitudeKm?: number): Promise<string> {

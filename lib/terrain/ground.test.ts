@@ -65,3 +65,27 @@ describe("the ground dossier", () => {
     expect(isGroundSelection({ id: "nfhl:48029C:0" })).toBe(false);
   });
 });
+
+describe("the geology part of the ground dossier", () => {
+  it("asks Macrostrat when the Geology picture is on", () => {
+    expect(partsFor({ geology: true })).toEqual(["geology"]);
+    expect(groundClickWanted({ geology: true }, 20_000)).toBe(true);
+  });
+
+  it("reads the most detailed unit with its age, lithology and map, and names the coarser ones", async () => {
+    const { parseMacrostrat } = await import("@/lib/infra/geology");
+    const pikes = (await import("@/lib/infra/fixtures/macrostrat-pikes-peak.json")).default;
+    const d = groundDetails({ lon: -104.95, lat: 38.85, parts: { geology: { loading: false, data: parseMacrostrat(pikes) } } });
+    expect(d["geologic unit"]).toBe("Rocks of Pikes Peak Batholith (1000-m.y. age group)");
+    expect(d["geologic age"]).toBe("Mesoproterozoic (1,000 to 1,600 million years)");
+    expect(d["geologic map"]).toMatch(/State Geologic Map Compilation/);
+    expect(d["on coarser maps"]).toBe("Mesoproterozoic plutonic: granite; Paleoproterozoic crystalline metamorphic rocks");
+  });
+
+  it("says when there is no unit, and when Macrostrat did not answer", async () => {
+    const { parseMacrostrat } = await import("@/lib/infra/geology");
+    const empty = (await import("@/lib/infra/fixtures/macrostrat-empty.json")).default;
+    expect(groundDetails({ lon: -150, lat: 0, parts: { geology: { loading: false, data: parseMacrostrat(empty) } } }).geology).toMatch(/no mapped unit/);
+    expect(groundDetails({ lon: 0, lat: 0, parts: { geology: { loading: false, error: "macrostrat 502" } } }).geology).toMatch(/did not answer: macrostrat 502/);
+  });
+});

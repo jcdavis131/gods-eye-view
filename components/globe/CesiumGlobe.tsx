@@ -14,6 +14,7 @@ import { isMobileViewport } from "@/lib/hooks/useIsMobile";
 import { satWorker } from "@/lib/globe/satWorker";
 import { measureClick, startMeasureOverlay } from "@/lib/globe/measure";
 import { groundClickWanted, identifyGround, startGroundOverlay } from "@/lib/terrain/ground";
+import { openHere, startHereOverlay } from "@/lib/whatshere/here";
 import { parseShare } from "@/lib/globe/share";
 import { flyTo } from "@/lib/globe/camera";
 import { useGlobe } from "@/lib/store/globe";
@@ -238,6 +239,7 @@ export default function CesiumGlobe() {
       cleanups.push(startMeasureOverlay(viewer));
       // Where a "ground here" answer (terrain, soil and land cover pictures) was asked.
       cleanups.push(startGroundOverlay(viewer));
+      cleanups.push(startHereOverlay(viewer));
 
       // Compare: a second pin (B) for the constructs stack. Dropped by the
       // rail's Compare button (next tap), a long-press on a phone, or a
@@ -362,6 +364,14 @@ export default function CesiumGlobe() {
           st.select(null);
         }
       }, C.ScreenSpaceEventType.LEFT_CLICK);
+      // Right-click (a click, not the right-drag that zooms): "what's here" at the ground under the cursor.
+      handler.setInputAction((e: CesiumNS.ScreenSpaceEventHandler.PositionedEvent) => {
+        const ray = viewer!.camera.getPickRay(e.position);
+        const hit = (ray && scene.globe.pick(ray, scene)) || viewer!.camera.pickEllipsoid(e.position, ellipsoid);
+        if (!hit) return;
+        const c = C.Cartographic.fromCartesian(hit);
+        void openHere(C.Math.toDegrees(c.longitude), C.Math.toDegrees(c.latitude));
+      }, C.ScreenSpaceEventType.RIGHT_CLICK);
       let lastHoverPick = 0;
       handler.setInputAction((e: CesiumNS.ScreenSpaceEventHandler.MotionEvent) => {
         const now = performance.now();

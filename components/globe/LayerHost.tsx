@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { LAYERS } from "@/lib/layers";
-import { viewKey, type LayerDefinition } from "@/lib/layers/types";
+import { viewKey, type FetchResult, type LayerDefinition } from "@/lib/layers/types";
 import { getViewer } from "@/lib/globe/cesium";
 import { LayerRenderer } from "@/lib/globe/renderer";
 import { getRenderer, registerRenderer, unregisterRenderer } from "@/lib/globe/registry";
@@ -151,15 +151,19 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
   // the latest settled view, keys and prefs without touching refs in render.
   const query = useQuery({
     queryKey: ["layer", def.id, vk, optionsKey, missionDay],
-    queryFn: ({ signal }) =>
-      def.fetch({
-        keys,
-        view,
-        now: Date.now(),
-        missionTime: Date.now() + useGlobe.getState().clock.offsetMs,
-        signal,
-        options: { ...prefs } as unknown as Record<string, unknown>,
-      }),
+    // Each answer carries the view key it was fetched for, so one kept on screen while
+    // the next view loads (keepPreviousData) still says which view it describes.
+    queryFn: ({ signal }): Promise<FetchResult> =>
+      def
+        .fetch({
+          keys,
+          view,
+          now: Date.now(),
+          missionTime: Date.now() + useGlobe.getState().clock.offsetMs,
+          signal,
+          options: { ...prefs } as unknown as Record<string, unknown>,
+        })
+        .then((r) => ({ ...r, viewKey: vk })),
     enabled,
     refetchInterval: def.updateIntervalMs,
     staleTime: Math.max(1000, def.updateIntervalMs / 2),
@@ -175,13 +179,14 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
     if (!fetched || !def.refine) return fetched;
     const deps = def.dependsOn ?? [];
     const s = useGlobe.getState();
-    return def.refine(fetched, {
+    const refined = def.refine(fetched, {
       layersOn: Object.fromEntries(deps.map((id) => [id, !!s.layers[id]])),
       answering: Object.fromEntries(deps.map((id) => [id, s.status[id]?.fetchedAt != null && !s.status[id]?.error])),
       // What the layer's renderer holds; whether it is shown is layersOn (the
       // store flips before the renderer's own effect catches up).
       holds: (layer, id) => deps.includes(layer) && !!getRenderer(layer)?.getFeature(id),
     });
+    return { ...refined, viewKey: fetched.viewKey };
     // depsKey is what the store reads above: re-run when it changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetched, def, depsKey]);
@@ -199,6 +204,7 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
       error: undefined,
       loading: false,
       picture: data.meta?.picture === true,
+      viewKey: data.viewKey,
     });
   }, [data, def.id, def.simulated, setStatus]);
 

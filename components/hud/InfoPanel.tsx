@@ -112,7 +112,7 @@ export default function InfoPanel() {
   const details = Object.entries(p.details ?? {}).filter(([, v]) => v != null && v !== "" && v !== false);
   const isLiveLayer =
     !p.simulated &&
-    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "banks", "spending", "constructs", "field", "flood", "wetlands", "publiclands", "relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel"].includes(p.layer);
+    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "banks", "spending", "constructs", "field", "flood", "wetlands", "publiclands", "relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "transmission", "pipelines", "plants", "rail", "airports", "dams", "faults", "landslides", "geology", "plss"].includes(p.layer);
   const banner = BANNER[p.layer];
   const iss = p.layer === "satellites" && p.id === "25544";
   const construct = p.layer === "constructs" || p.layer === "field" || p.layer === "alerts";
@@ -261,6 +261,16 @@ const BANNER: Partial<Record<string, string>> = {
   flood: "REGULATORY FLOOD MAP · NOT A FORECAST",
   wetlands: "HABITAT MAP FROM DATED IMAGERY · MAY HAVE CHANGED SINCE · NOT A JURISDICTIONAL DELINEATION",
   fires: "SATELLITE HOTSPOT · NOT A CONFIRMED FIRE",
+  transmission: "HIFLD ARCHIVE · LAST UPDATED 2024-09-30 · LINES BUILT OR RETIRED SINCE ARE NOT SHOWN AS THEY ARE",
+  pipelines: "GENERALIZED ROUTE · NOT FOR LOCATING A LINE (CALL 811 BEFORE YOU DIG)",
+  plants: "EIA-860M PRELIMINARY MONTHLY INVENTORY (US) · WIKIDATA NUCLEAR PLANTS (ELSEWHERE)",
+  airports: "PUBLIC-USE FACILITY · NOT FOR NAVIGATION",
+  dams: "HAZARD POTENTIAL IS THE CONSEQUENCE OF A FAILURE · NOT THE DAM'S CONDITION",
+  faults: "QUATERNARY FAULT · NOT AN EARTHQUAKE FORECAST",
+  landslides: "MAPPED WHERE SOMEONE LOOKED · NONE SHOWN IS NOT NONE THERE",
+  plss: "SURVEY GRID FOR REFERENCE · NOT A PARCEL BOUNDARY",
+  airquality: "PRELIMINARY · NOT FULLY VERIFIED OR VALIDATED · SUBJECT TO CHANGE (EPA AIRNOW)",
+  events: "MACHINE-CODED FROM NEWS REPORTS · NOT VERIFIED INCIDENTS · NO ACTORS, NO ARTICLE LINKS",
 };
 
 /**

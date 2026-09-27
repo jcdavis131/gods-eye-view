@@ -95,6 +95,17 @@ describe("security headers", () => {
     }
   });
 
+  it("lets the camera dossier show every agency's still image (https only)", async () => {
+    // The info panel draws each camera's still with <img>; upgrade-insecure-requests would break an http host.
+    const { CAMERA_IMAGE_HOSTS } = await import("@/lib/cameras/agencies");
+    for (const r of await rules()) {
+      const imgSrc = directive(get(r, "content-security-policy")!, "img-src").split(/\s+/).slice(1);
+      for (const host of CAMERA_IMAGE_HOSTS) {
+        expect(imgSrc.includes("https:") || imgSrc.includes(`https://${host}`), `img-src ${host}`).toBe(true);
+      }
+    }
+  });
+
   it("keeps the rest of the policy strict on both rules", async () => {
     for (const r of await rules()) {
       const csp = get(r, "content-security-policy")!;

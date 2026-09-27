@@ -20,6 +20,20 @@ import { alertsStyle } from "./alertStyles";
 import { firesStyle, hazardsStyle, wildfireStyle } from "./hazardStyles";
 import { floodStyle, publiclandsStyle, wetlandsStyle } from "./landStyles";
 import { contoursStyle, firehazardStyle, landcoverStyle, reliefStyle, sealevelStyle, slopeStyle, soilsStyle } from "./terrainStyles";
+import {
+  airportsStyle,
+  airqualityStyle,
+  damsStyle,
+  eventsStyle,
+  faultsStyle,
+  geologyStyle,
+  landslidesStyle,
+  pipelinesStyle,
+  plantsStyle,
+  plssStyle,
+  railStyle,
+  transmissionStyle,
+} from "./infraStyles";
 
 /** Distinctive major-group colours for the occupations layer: one hue per SOC major group. */
 const OCCUPATION_COLORS: Record<string, string> = {
@@ -397,6 +411,18 @@ export const STYLES: Partial<Record<LayerId, LayerStyle>> = {
   firehazard: firehazardStyle,
   landcover: landcoverStyle,
   sealevel: sealevelStyle,
+  transmission: transmissionStyle,
+  pipelines: pipelinesStyle,
+  plants: plantsStyle,
+  rail: railStyle,
+  airports: airportsStyle,
+  dams: damsStyle,
+  faults: faultsStyle,
+  landslides: landslidesStyle,
+  geology: geologyStyle,
+  plss: plssStyle,
+  airquality: airqualityStyle,
+  events: eventsStyle,
   sports: sportsStyle,
   constructs: constructsStyle,
   field: fieldStyle,
@@ -437,6 +463,18 @@ export const FOLLOW_RANGE: Record<LayerId, number> = {
   firehazard: 20_000,
   landcover: 10_000,
   sealevel: 20_000,
+  transmission: 15_000,
+  pipelines: 20_000,
+  plants: 8_000,
+  rail: 5_000,
+  airports: 10_000,
+  dams: 6_000,
+  faults: 20_000,
+  landslides: 3_000,
+  geology: 20_000,
+  plss: 6_000,
+  airquality: 20_000,
+  events: 150_000,
   sports: 500_000,
   constructs: 150_000,
   field: 400_000,
