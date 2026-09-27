@@ -199,6 +199,18 @@ export interface FetchResult {
    * next view loads still says which view it belongs to.
    */
   viewKey?: string;
+  /**
+   * The view this answer was fetched with, stamped by the host like `viewKey`. The
+   * coarse key can stay the same while the view inside it moves; the area watch reads
+   * this to know what a moving layer's answer covers (lib/aoi/coverage.ts).
+   */
+  fetchView?: ViewState;
+  /**
+   * The answer is still filling in (a stream that has just connected), so something
+   * missing from it may only not have been heard yet: the area watch holds the layer and
+   * retakes its baseline silently once an answer is not settling.
+   */
+  settling?: boolean;
 }
 
 /** `extra` of a near-only layer's dashed "loaded area" feature (kind "loaded-box"): what the answer it outlines left out. */

@@ -42,12 +42,12 @@ export function featuresInside(features: Iterable<LayerFeature>, ring: Ring): In
 // ---------------------------------------------------------------- watch
 
 /**
- * Layers whose features come and go: the watch reports these. Aircraft and ships are
- * left out on purpose: a saved, timestamped log of which airframes and vessels came
- * and went over a drawn area (a home, a private strip) is a pattern-of-life record,
- * which waits on the operator's decision (and a LADD/PIA exclusion) before it exists.
+ * Layers whose features come and go: the watch reports these. That includes the moving
+ * contacts, aircraft and ships, by their stable id (ICAO hex, MMSI) and as each feed
+ * reports them: the operator's decision (Cam, 2026-09-26). No LADD/PIA filter is added;
+ * none was chosen.
  */
-export const WATCH_LAYERS: ReadonlySet<LayerId> = new Set<LayerId>(["earthquakes", "fires", "wildfire", "hazards", "alerts", "events"]);
+export const WATCH_LAYERS: ReadonlySet<LayerId> = new Set<LayerId>(["aircraft", "ships", "earthquakes", "fires", "wildfire", "hazards", "alerts", "events"]);
 
 export interface WatchEvent {
   at: number;
@@ -61,36 +61,45 @@ export interface WatchState {
   /** key "<layer>:<id>" -> what was inside at the last step. */
   inside: Map<string, { layer: LayerId; id: string; name: string }>;
   /**
-   * Layers whose baseline has been taken, with the view key of the answer it was taken
-   * from. A layer's first answer, and its first answer for another view, set a new
-   * baseline silently: only two answers for the same view are compared.
+   * Layers whose baseline has been taken, with the step key (view and sources) of the
+   * answer it was taken from. A layer's first answer, and its first answer for another
+   * view or from other sources, set a new baseline silently: only two answers for the
+   * same view from the same sources are compared.
    */
   seen: Map<LayerId, string>;
+  /** Newest first, at most WATCH_LOG_MAX events. */
   log: WatchEvent[];
+  /** Older events the log no longer holds, and when the newest of them happened. */
+  dropped: number;
+  droppedThrough: number | null;
 }
 
 export function newWatch(): WatchState {
-  return { inside: new Map(), seen: new Map(), log: [] };
+  return { inside: new Map(), seen: new Map(), log: [], dropped: 0, droppedThrough: null };
 }
 
 /**
  * What one watch step does with a watched layer:
- *   step  its answer is settled: compare it with the baseline taken for the same view key
+ *   step  its answer is settled: compare it with the baseline taken for the same key (the
+ *         view the answer was fetched for and the sources that answered)
  *   hold  it is refetching, or its answer does not describe the area right now: skip it and
  *         keep its baseline; `stale` also forgets the baseline (the area left the view of a
- *         view-dependent layer), so it is retaken silently once the layer settles again
+ *         view-dependent layer, its answer did not cover the whole area, or it is still
+ *         filling in), so it is retaken silently once the layer settles again. `reason`
+ *         says why, when the panel has something to tell: "coverage" (the answer did not
+ *         reach the whole area) or "settling" (a stream still filling in)
  *   drop  it is off, failed, or left out: forget it, so its return is a silent baseline
  * A layer with no mode is dropped.
  */
-export type WatchMode = { mode: "step"; key: string } | { mode: "hold"; stale?: boolean } | { mode: "drop" };
+export type WatchMode = { mode: "step"; key: string } | { mode: "hold"; stale?: boolean; reason?: "coverage" | "settling" } | { mode: "drop" };
 
-/** Most events kept in the log. */
+/** Most events kept in the log (and so in its CSV); older ones are counted in WatchState.dropped. */
 export const WATCH_LOG_MAX = 500;
 
 /**
  * One watch step. `features` are the loaded features now; `modes` says what to do with
  * each watched layer (see WatchMode, and watchModes in ./store.ts). Only a layer that
- * steps, on the same view key as its baseline, reports arrivals and departures. A held
+ * steps, on the same key as its baseline, reports arrivals and departures. A held
  * layer (refetching, or its answer kept on screen while another view loads) keeps what
  * was inside; a dropped layer (off, failed) is forgotten, so neither a layer switching
  * off nor its return reads as everything leaving or arriving.
@@ -104,7 +113,7 @@ export function watchStep(state: WatchState, features: Iterable<LayerFeature>, r
     if (!featureInside(f, ring, box)) continue;
     current.set(`${l}:${f.properties.id}`, { layer: l, id: f.properties.id, name: f.properties.name });
   }
-  // A layer compares only against a baseline taken from an answer for the same view.
+  // A layer compares only against a baseline taken from an answer for the same view, from the same sources.
   const compares = (l: LayerId) => {
     const m = modes.get(l);
     return m?.mode === "step" && state.seen.get(l) === m.key;
@@ -124,7 +133,12 @@ export function watchStep(state: WatchState, features: Iterable<LayerFeature>, r
     else if (!m || m.mode === "drop" || m.stale) state.seen.delete(l);
   }
   state.inside = next;
-  state.log = [...events, ...state.log].slice(0, WATCH_LOG_MAX);
+  const log = [...events, ...state.log];
+  for (const e of log.slice(WATCH_LOG_MAX)) {
+    state.dropped += 1;
+    if (state.droppedThrough == null || e.at > state.droppedThrough) state.droppedThrough = e.at;
+  }
+  state.log = log.slice(0, WATCH_LOG_MAX);
   return events;
 }
 
@@ -192,8 +206,16 @@ export function insideCsv(groups: InsideGroup[]): string {
   return rows.join("\r\n") + "\r\n";
 }
 
-export function watchCsv(log: WatchEvent[]): string {
+/**
+ * The watch log as CSV, newest first. When older events were dropped (WATCH_LOG_MAX), a last
+ * row with event "dropped" says how many, timed at the newest of them.
+ */
+export function watchCsv(log: WatchEvent[], dropped?: { count: number; through: number | null }): string {
   const rows = ["time,event,layer,id,name"];
   for (const e of log) rows.push([new Date(e.at).toISOString(), e.kind, e.layer, e.id, e.name].map(cell).join(","));
+  if (dropped && dropped.count > 0) {
+    const note = `${dropped.count} earlier event${dropped.count === 1 ? "" : "s"} not kept: the log keeps the newest ${WATCH_LOG_MAX}`;
+    rows.push([dropped.through != null ? new Date(dropped.through).toISOString() : "", "dropped", "", "", note].map(cell).join(","));
+  }
   return rows.join("\r\n") + "\r\n";
 }

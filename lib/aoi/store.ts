@@ -8,6 +8,7 @@ import { create } from "zustand";
 import type { LayerId } from "@/lib/layers/types";
 import type { LayerStatus } from "@/lib/store/globe";
 import { newWatch, WATCH_LAYERS, type WatchMode, type WatchState } from "./area";
+import { coverageKey, coversRing, WATCH_COVERAGE } from "./coverage";
 import type { Ring } from "./geometry";
 
 interface AreaStore {
@@ -70,9 +71,17 @@ export interface WatchLayerInfo {
  *         (Hazard alerts steps aside for Earthquakes and Live warnings), so its features
  *         would vanish without leaving: it is left out of the watch while they are on
  *   hold  refetching; or view-dependent while the area is out of view (stale: its
- *         baseline is retaken silently when the area is back and the layer has settled)
- *   step  settled, keyed by the view its answer was fetched for (LayerStatus.viewKey), so
- *         an answer for another view sets a new baseline instead of being compared
+ *         baseline is retaken silently when the area is back and the layer has settled);
+ *         or (stale) its answer is still filling in (LayerStatus.settling: AISStream's
+ *         first minutes); or (stale) a layer with a partial coverage (./coverage.ts:
+ *         Aircraft) whose answer did not reach the whole area, since an airframe crossing
+ *         the rim of what was asked is not one crossing the area's edge
+ *   step  settled, keyed by the view its answer was fetched for (LayerStatus.viewKey), or
+ *         for a layer with a partial coverage by what the answer covered (the snapped
+ *         circle, the box, the world), and by the sources that answered (LayerStatus.source).
+ *         So an answer for another view or coverage, or one from other sources (Aircraft's
+ *         OpenSky falling back to adsb.lol, Ships without Digitraffic or without a live
+ *         AISStream), sets a new baseline instead of being compared
  * Known gap: in the frame between a partner switching off and Hazard alerts re-running its
  * refine, a step could baseline without the events it takes back; they would then read as
  * arrivals. The window is one render, against a 5 s step.
@@ -82,16 +91,20 @@ export function watchModes(
   status: Partial<Record<LayerId, LayerStatus>>,
   inView: boolean,
   info: (id: LayerId) => WatchLayerInfo | undefined,
+  ring: Ring,
 ): Map<LayerId, WatchMode> {
   const out = new Map<LayerId, WatchMode>();
   for (const id of WATCH_LAYERS) {
     const st = status[id];
     const def = info(id);
+    const coverage = WATCH_COVERAGE[id]?.(st?.source ?? "", st?.fetchView);
     if (!on[id] || !st || st.error || !(st.fetchedAt > 0)) out.set(id, { mode: "drop" });
     else if (def?.dependsOn?.some((d) => on[d])) out.set(id, { mode: "drop" });
     else if (def?.viewDependent && !inView) out.set(id, { mode: "hold", stale: true });
     else if (st.loading) out.set(id, { mode: "hold" });
-    else out.set(id, { mode: "step", key: st.viewKey ?? "static" });
+    else if (st.settling) out.set(id, { mode: "hold", stale: true, reason: "settling" });
+    else if (coverage && !coversRing(coverage, ring)) out.set(id, { mode: "hold", stale: true, reason: "coverage" });
+    else out.set(id, { mode: "step", key: `${coverage ? coverageKey(coverage) : (st.viewKey ?? "static")}|${st.source}` });
   }
   return out;
 }

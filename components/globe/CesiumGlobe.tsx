@@ -16,7 +16,7 @@ import { measureClick, startMeasureOverlay } from "@/lib/globe/measure";
 import { groundClickWanted, identifyGround, startGroundOverlay } from "@/lib/terrain/ground";
 import { openHere, startHereOverlay } from "@/lib/whatshere/here";
 import { identifyParcel, startParcelOverlay } from "@/lib/parcels/pick";
-import { PARCEL_IDENTIFY_MAX_M } from "@/lib/layers/parcels";
+import { clickAnswer } from "@/lib/globe/clickPrecedence";
 import { parseShare } from "@/lib/globe/share";
 import { flyTo } from "@/lib/globe/camera";
 import { useGlobe } from "@/lib/store/globe";
@@ -26,7 +26,6 @@ import { GLOBE_ERROR_EVENT } from "@/components/hud/TitleCard";
 import { arbitrateLabels } from "@/lib/globe/labelArbiter";
 import { useStrata } from "@/lib/fabric/strataStore";
 import { identifyZoning, startZoningOverlay } from "@/lib/zoning/pick";
-import { ZONING_IDENTIFY_MAX_M } from "@/lib/layers/zoning";
 import { currentFabric } from "@/lib/fabric/strataClient";
 
 function isPickId(v: unknown): v is PickId {
@@ -357,11 +356,16 @@ export default function CesiumGlobe() {
         const picked = scene.pick(e.position) as { id?: unknown } | undefined;
         const id = picked?.id;
         const st = useGlobe.getState();
-        // Parcels: a click on the ground, or on a lot line (outlines carry no record),
-        // asks for the parcel at that point. Any other object picked wins. This comes
-        // before the ground-picture click below (groundClickWanted): with Parcels on and
-        // low enough, a click on the ground is a parcel question, not a soils/land cover one.
-        if ((!isPickId(id) || id.layer === "parcels") && st.layers.parcels && st.view.height <= PARCEL_IDENTIFY_MAX_M) {
+        // What the click answers, first match wins (lib/globe/clickPrecedence.ts): the parcel,
+        // then the zoning, then any other object picked, then a ground picture's answer.
+        const answer = clickAnswer(isPickId(id) ? id.layer : null, st.layers, st.view.height);
+        // Parcels: with Parcels on and the camera below PARCEL_IDENTIFY_MAX_M (5 km), a click on
+        // the ground, on a lot line (outlines carry no record) or on anything the zoning layer
+        // draws (a district's fill or outline, its dashed loaded box) asks for the parcel at that
+        // point (Cam, 2026-09-27). Any other object picked wins. This comes before the zoning
+        // click and the ground-picture click below (groundClickWanted): switch Parcels off to
+        // read zoning up close.
+        if (answer === "parcel") {
           const ray = viewer!.camera.getPickRay(e.position);
           const hit = (ray && scene.globe.pick(ray, scene)) || viewer!.camera.pickEllipsoid(e.position, ellipsoid);
           if (hit) {
@@ -370,13 +374,12 @@ export default function CesiumGlobe() {
             return;
           }
         }
-        // Zoning: a click on the ground, or on a district outline (it carries only its code),
-        // asks for the zoning at that point. Any other object picked wins. With Parcels also
-        // on, a click on the bare ground below the parcels height is the parcel's (above), but
-        // a drawn district's fill picks as zoning (same id as its outline), so below the outline
-        // height a click inside a district is zoning's: Zoning must be off for the parcel there.
-        // Either comes before the ground-picture click below.
-        if ((!isPickId(id) || id.layer === "zoning") && st.layers.zoning && st.view.height <= ZONING_IDENTIFY_MAX_M) {
+        // Zoning: below ZONING_IDENTIFY_MAX_M (15 km), a click on the ground or on a district
+        // (its fill picks with the same id as its outline, which carries only its code) asks for
+        // the zoning at that point, unless the parcel took it above: with Parcels on, zoning
+        // answers from 5 to 15 km; with Parcels off, everywhere below 15 km. Any other object
+        // picked wins. It comes before the ground-picture click below.
+        if (answer === "zoning") {
           const ray = viewer!.camera.getPickRay(e.position);
           const hit = (ray && scene.globe.pick(ray, scene)) || viewer!.camera.pickEllipsoid(e.position, ellipsoid);
           if (hit) {
@@ -385,6 +388,8 @@ export default function CesiumGlobe() {
             return;
           }
         }
+        // Any other object picked opens its own dossier (so does a district outline whose ground
+        // point did not resolve, as before).
         if (isPickId(id) && id.layer !== "parcels") {
           const feature = getRenderer(id.layer)?.getFeature(id.id) ?? null;
           st.select({ layer: id.layer, id: id.id }, feature);

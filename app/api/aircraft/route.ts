@@ -7,6 +7,7 @@
 //   /api/aircraft?source=adsbx&lat=..&lon=..&dist=250     ADS-B Exchange via RapidAPI (key required)
 
 import type { NextRequest } from "next/server";
+import { snapPointQuery } from "@/lib/layers/pointQuery";
 import { cached } from "@/lib/server/cache";
 import { jsonError, keyFrom, num, polite, proxied, upstream, upstreamJson } from "@/lib/server/upstream";
 
@@ -37,10 +38,8 @@ export async function GET(req: NextRequest) {
   try {
     if (source === "adsblol" || source === "adsbx") {
       // Snap the query to a 0.1° grid and 10 nm steps so slightly different
-      // camera targets share one upstream request.
-      const lat = Math.round(num(q.get("lat"), 0, -90, 90) * 10) / 10;
-      const lon = Math.round(num(q.get("lon"), 0, -180, 180) * 10) / 10;
-      const dist = Math.min(250, Math.max(10, Math.ceil(num(q.get("dist"), 250, 1, 250) / 10) * 10));
+      // camera targets share one upstream request (the area watch reads the same snap).
+      const { lat, lon, distNm: dist } = snapPointQuery(num(q.get("lat"), 0, -90, 90), num(q.get("lon"), 0, -180, 180), num(q.get("dist"), 250, 1, 250));
       const key = `${source}:${lat.toFixed(1)}:${lon.toFixed(1)}:${dist}`;
       if (source === "adsbx") {
         const rapid = keyFrom(req, "ADSBX_RAPIDAPI_KEY");

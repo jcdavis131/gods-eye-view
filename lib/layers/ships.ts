@@ -100,6 +100,17 @@ const aisTable = new Map<number, AisRecord>();
 let aisSocket: WebSocket | null = null;
 let aisKey: string | null = null;
 let aisError: string | null = null;
+/** When the current socket opened; null while it is connecting or gone. */
+let aisOpenedAt: number | null = null;
+
+/**
+ * How long after the socket opens its vessel table is still filling in. AIS reporting
+ * intervals (ITU-R M.1371): a Class A ship at anchor or moored sends its position every
+ * 3 min, and static data (name, type) comes every 6 min, so a vessel that has been there
+ * all along can first be heard up to 6 min in. Until then an answer is `settling`, and
+ * the area watch does not read a vessel first heard as one that arrived.
+ */
+export const AIS_WARMUP_MS = 6 * 60_000;
 
 /**
  * Open (or keep) the AISStream websocket. Global bounding box; AISStream is
@@ -111,9 +122,11 @@ export function ensureAisStream(key: string) {
   aisSocket?.close();
   aisKey = key;
   aisError = null;
+  aisOpenedAt = null;
   const ws = new WebSocket("wss://stream.aisstream.io/v0/stream");
   aisSocket = ws;
   ws.onopen = () => {
+    if (aisSocket === ws) aisOpenedAt = Date.now();
     ws.send(
       JSON.stringify({
         APIKey: key,
@@ -170,7 +183,10 @@ export function ensureAisStream(key: string) {
     aisError = "websocket error";
   };
   ws.onclose = () => {
-    if (aisSocket === ws) aisSocket = null;
+    if (aisSocket === ws) {
+      aisSocket = null;
+      aisOpenedAt = null;
+    }
   };
 }
 
@@ -178,6 +194,7 @@ export function stopAisStream() {
   aisSocket?.close();
   aisSocket = null;
   aisKey = null;
+  aisOpenedAt = null;
 }
 
 function toFeature(
@@ -234,19 +251,28 @@ async function fetchShips(ctx: FetchContext): Promise<FetchResult> {
   const features: LayerFeature<Point>[] = [];
   const sources: string[] = [];
   let note: string | undefined;
+  let settling = false;
 
   if (ctx.keys.AISSTREAM_KEY) {
     ensureAisStream(ctx.keys.AISSTREAM_KEY);
-    const cutoff = Date.now() - 20 * 60_000;
-    for (const r of aisTable.values()) {
-      if (r.observedAt < cutoff) continue;
-      features.push(toFeature(r.mmsi, r.lon, r.lat, r, r.observedAt, "AISStream"));
+    // Only a live socket's table is an answer. While it connects, or after it died, its
+    // vessels would only age out one by one, so they are left out, and so is its name
+    // in the sources: they go in the same answer as the sources change, which the area
+    // watch reads as a new baseline, not as each vessel leaving.
+    const live = aisSocket?.readyState === WebSocket.OPEN;
+    if (live) {
+      const cutoff = Date.now() - 20 * 60_000;
+      for (const r of aisTable.values()) {
+        if (r.observedAt < cutoff) continue;
+        features.push(toFeature(r.mmsi, r.lon, r.lat, r, r.observedAt, "AISStream"));
+      }
+      sources.push("AISStream");
+      settling = aisOpenedAt == null || Date.now() - aisOpenedAt < AIS_WARMUP_MS;
     }
-    sources.push("AISStream");
     note = aisError
       ? `AISStream: ${aisError}`
-      : aisSocket?.readyState === WebSocket.OPEN
-        ? `AISStream live · ${aisTable.size} vessels heard`
+      : live
+        ? `AISStream live · ${aisTable.size} vessels heard${settling ? " · still filling in (first 6 min)" : ""}`
         : "AISStream connecting…";
   }
 
@@ -296,6 +322,7 @@ async function fetchShips(ctx: FetchContext): Promise<FetchResult> {
     source: sources.join(" + "),
     fetchedAt: Date.now(),
     note,
+    settling,
   };
 }
 

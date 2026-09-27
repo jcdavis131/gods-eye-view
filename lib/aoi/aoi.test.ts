@@ -9,7 +9,7 @@ import { buildPipelines, buildTransmission, type Row } from "@/lib/infra/feature
 import transmission from "@/lib/infra/fixtures/transmission-austin.json";
 import natgas from "@/lib/infra/fixtures/pipelines-natgas-sanantonio.json";
 import { featureInside, lengthInside, metres, pointInPolygon, sampleGrid, type Ring } from "./geometry";
-import { featuresInside, insideCsv, insideGeoJson, newWatch, watchCsv, watchStep, WATCH_LAYERS, type WatchEvent, type WatchMode } from "./area";
+import { featuresInside, insideCsv, insideGeoJson, newWatch, watchCsv, watchStep, WATCH_LAYERS, WATCH_LOG_MAX, type WatchEvent, type WatchMode } from "./area";
 import { ringKey, useArea, watchModes } from "./store";
 import type { LayerStatus } from "@/lib/store/globe";
 import { areaReport, reportText } from "./report";
@@ -98,13 +98,47 @@ describe("watchStep", () => {
     expect(w.log).toHaveLength(2);
     expect(watchCsv(w.log).split("\r\n")[0]).toBe("time,event,layer,id,name");
   });
-  it("does not watch aircraft or ships", () => {
-    expect(WATCH_LAYERS.has("aircraft")).toBe(false);
-    expect(WATCH_LAYERS.has("ships")).toBe(false);
+  it("keeps the newest WATCH_LOG_MAX events, counts the ones it drops, and says so in the CSV", () => {
     const w = newWatch();
-    watchStep(w, [point("aircraft", "a1", 0.5, 0.5)], ring, modes({ aircraft: step() }), 1);
-    expect(watchStep(w, [point("aircraft", "a2", 0.5, 0.5)], ring, modes({ aircraft: step() }), 2)).toEqual([]);
-    expect(w.inside.size).toBe(0);
+    watchStep(w, [], ring, modes({ earthquakes: step() }), 1);
+    const many = Array.from({ length: WATCH_LOG_MAX - 100 }, (_, i) => point("earthquakes", `q${i}`, 0.5, 0.5));
+    watchStep(w, many, ring, modes({ earthquakes: step() }), 2);
+    expect(w.dropped).toBe(0);
+    expect(watchCsv(w.log, { count: w.dropped, through: w.droppedThrough }).trimEnd().split("\r\n")).toHaveLength(WATCH_LOG_MAX - 100 + 1);
+    // They all leave: 400 more events, 300 of the oldest arrivals are dropped.
+    watchStep(w, [], ring, modes({ earthquakes: step() }), 3);
+    expect(w.log).toHaveLength(WATCH_LOG_MAX);
+    expect(w.log.every((e, i) => i < WATCH_LOG_MAX - 100 || e.kind === "arrived")).toBe(true);
+    expect(w.dropped).toBe(WATCH_LOG_MAX - 200);
+    expect(w.droppedThrough).toBe(2);
+    const rows = watchCsv(w.log, { count: w.dropped, through: w.droppedThrough }).trimEnd().split("\r\n");
+    expect(rows).toHaveLength(WATCH_LOG_MAX + 2);
+    expect(rows.at(-1)).toBe(`1970-01-01T00:00:00.002Z,dropped,,,${WATCH_LOG_MAX - 200} earlier events not kept: the log keeps the newest ${WATCH_LOG_MAX}`);
+    expect(newWatch().dropped).toBe(0);
+  });
+  it("reports an aircraft and a ship arriving and leaving, by their stable ids", () => {
+    expect(WATCH_LAYERS.has("aircraft")).toBe(true);
+    expect(WATCH_LAYERS.has("ships")).toBe(true);
+    const w = newWatch();
+    const m = modes({ aircraft: step("0.5,0.5,5|adsb.lol"), ships: step("static|Digitraffic") });
+    expect(watchStep(w, [], ring, m, 1)).toEqual([]);
+    const e2 = watchStep(w, [point("aircraft", "a1b2c3", 0.5, 0.5), point("ships", "230000001", 0.3, 0.3)], ring, m, 2);
+    expect(ids(e2)).toEqual(["arrived:230000001", "arrived:a1b2c3"]);
+    const e3 = watchStep(w, [point("aircraft", "a1b2c3", 1.5, 0.5), point("ships", "230000001", 0.3, -0.2)], ring, m, 3);
+    expect(ids(e3)).toEqual(["left:230000001", "left:a1b2c3"]);
+    expect(e3.map((e) => e.layer).sort()).toEqual(["aircraft", "ships"]);
+  });
+  it("logs nothing for a contact that moves within the area", () => {
+    const w = newWatch();
+    const m = modes({ aircraft: step("0.5,0.5,5|adsb.lol"), ships: step("static|Digitraffic") });
+    watchStep(w, [point("aircraft", "a1b2c3", 0.1, 0.1), point("ships", "230000001", 0.2, 0.8)], ring, m, 1);
+    // Same id, a new reported position every refresh.
+    for (let t = 2; t <= 5; t++) {
+      const d = t / 10;
+      expect(watchStep(w, [point("aircraft", "a1b2c3", 0.1 + d, 0.1 + d), point("ships", "230000001", 0.2 + d, 0.8)], ring, m, t)).toEqual([]);
+    }
+    expect(w.inside.size).toBe(2);
+    expect(w.log).toEqual([]);
   });
   it("never reports a layer switched off as everything leaving, nor its return as arrivals", () => {
     const w = newWatch();
@@ -149,33 +183,51 @@ describe("watchStep", () => {
 describe("watchModes", () => {
   const status = (x: Partial<LayerStatus>): LayerStatus => ({ count: 0, source: "t", fetchedAt: 1, loading: false, ...x });
   const info = (id: LayerId) => ({ fires: { viewDependent: true }, hazards: { dependsOn: ["earthquakes", "alerts"] as LayerId[] } })[id as "fires" | "hazards"];
-  it("steps a settled layer on the view key its answer was fetched for", () => {
-    const m = watchModes({ fires: true, earthquakes: true }, { fires: status({ viewKey: "12,4" }), earthquakes: status({ viewKey: "static" }) }, true, info);
-    expect(m.get("fires")).toEqual({ mode: "step", key: "12,4" });
-    expect(m.get("earthquakes")).toEqual({ mode: "step", key: "static" });
+  const ring = sq(0, 0, 1, 1);
+  it("steps a settled layer on the view key its answer was fetched for and the sources that answered", () => {
+    const m = watchModes({ fires: true, earthquakes: true }, { fires: status({ viewKey: "12,4" }), earthquakes: status({ viewKey: "static" }) }, true, info, ring);
+    expect(m.get("fires")).toEqual({ mode: "step", key: "12,4|t" });
+    expect(m.get("earthquakes")).toEqual({ mode: "step", key: "static|t" });
+  });
+  it("retakes the baseline silently when the same view is answered from other sources", () => {
+    const air = (id: LayerId) => (id === "aircraft" ? { viewDependent: true } : undefined);
+    // Zoomed out past OpenSky's global height: OpenSky answers for the world; refused, adsb.lol's 250 nm around the view centre covers the area.
+    const view = { lon: 0.5, lat: 0.5, height: 3_000_000, heading: 0, pitch: -90 };
+    const opensky = { aircraft: status({ viewKey: "0.5,0.5,12", source: "opensky (anon) + adsb.lol mil", fetchView: view }) };
+    const fallback = { aircraft: status({ viewKey: "0.5,0.5,12", source: "adsb.lol + adsb.lol mil", fetchView: view }) };
+    const w = newWatch();
+    watchStep(w, [point("aircraft", "a1", 0.5, 0.5), point("aircraft", "a2", 0.6, 0.6)], ring, watchModes({ aircraft: true }, opensky, true, air, ring), 1);
+    // OpenSky did not answer and adsb.lol does not report a1: another feed, not a departure.
+    expect(watchStep(w, [point("aircraft", "a2", 0.6, 0.6)], ring, watchModes({ aircraft: true }, fallback, true, air, ring), 2)).toEqual([]);
+    // Two answers from the same sources are compared again.
+    const e3 = watchStep(w, [], ring, watchModes({ aircraft: true }, fallback, true, air, ring), 3);
+    expect(e3.map((e) => `${e.kind}:${e.id}`)).toEqual(["left:a2"]);
   });
   it("holds a layer that is loading, and forgets a view-dependent one while the area is out of view", () => {
-    expect(watchModes({ earthquakes: true }, { earthquakes: status({ loading: true }) }, true, info).get("earthquakes")).toEqual({ mode: "hold" });
-    const out = watchModes({ fires: true, earthquakes: true }, { fires: status({}), earthquakes: status({}) }, false, info);
+    expect(watchModes({ earthquakes: true }, { earthquakes: status({ loading: true }) }, true, info, ring).get("earthquakes")).toEqual({ mode: "hold" });
+    const out = watchModes({ fires: true, earthquakes: true }, { fires: status({}), earthquakes: status({}) }, false, info, ring);
     expect(out.get("fires")).toEqual({ mode: "hold", stale: true });
     // A layer that loads the whole world keeps watching while the camera is elsewhere.
     expect(out.get("earthquakes")?.mode).toBe("step");
   });
+  it("forgets a layer whose answer is still filling in, and steps it once it has settled", () => {
+    expect(watchModes({ ships: true }, { ships: status({ settling: true }) }, true, info, ring).get("ships")).toEqual({ mode: "hold", stale: true, reason: "settling" });
+    expect(watchModes({ ships: true }, { ships: status({ settling: false }) }, true, info, ring).get("ships")?.mode).toBe("step");
+  });
   it("drops a layer that is off, failed or has not answered", () => {
-    const m = watchModes({ earthquakes: false, fires: true, events: true }, { earthquakes: status({}), fires: status({ error: "x" }), events: status({ fetchedAt: 0 }) }, true, info);
+    const m = watchModes({ earthquakes: false, fires: true, events: true }, { earthquakes: status({}), fires: status({ error: "x" }), events: status({ fetchedAt: 0 }) }, true, info, ring);
     expect([m.get("earthquakes"), m.get("fires"), m.get("events")]).toEqual([{ mode: "drop" }, { mode: "drop" }, { mode: "drop" }]);
   });
   it("leaves Hazard alerts out while a layer it hands events to is on, so a hand-off is never a departure", () => {
     const st = { hazards: status({}), earthquakes: status({}) };
-    expect(watchModes({ hazards: true }, st, true, info).get("hazards")?.mode).toBe("step");
-    expect(watchModes({ hazards: true, earthquakes: true }, st, true, info).get("hazards")).toEqual({ mode: "drop" });
-    expect(watchModes({ hazards: true, alerts: true }, st, true, info).get("hazards")).toEqual({ mode: "drop" });
+    expect(watchModes({ hazards: true }, st, true, info, ring).get("hazards")?.mode).toBe("step");
+    expect(watchModes({ hazards: true, earthquakes: true }, st, true, info, ring).get("hazards")).toEqual({ mode: "drop" });
+    expect(watchModes({ hazards: true, alerts: true }, st, true, info, ring).get("hazards")).toEqual({ mode: "drop" });
     // Switching Earthquakes on mid-watch: the hazard quakes it takes over are not logged as leaving.
-    const ring = sq(0, 0, 1, 1);
     const w = newWatch();
-    watchStep(w, [point("hazards", "h1", 0.5, 0.5)], ring, watchModes({ hazards: true }, st, true, info), 1);
-    expect(watchStep(w, [], ring, watchModes({ hazards: true, earthquakes: true }, st, true, info), 2)).toEqual([]);
-    expect(watchStep(w, [point("hazards", "h1", 0.5, 0.5)], ring, watchModes({ hazards: true }, st, true, info), 3)).toEqual([]);
+    watchStep(w, [point("hazards", "h1", 0.5, 0.5)], ring, watchModes({ hazards: true }, st, true, info, ring), 1);
+    expect(watchStep(w, [], ring, watchModes({ hazards: true, earthquakes: true }, st, true, info, ring), 2)).toEqual([]);
+    expect(watchStep(w, [point("hazards", "h1", 0.5, 0.5)], ring, watchModes({ hazards: true }, st, true, info, ring), 3)).toEqual([]);
   });
 });
 
