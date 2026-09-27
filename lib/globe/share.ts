@@ -11,9 +11,14 @@
 //   &v=2026-08-15                data vintage (pins the mission clock to that day;
 //                                history-aware layers will read that release later)
 //   &embed=1                     no HUD chrome (iframes)
+//   &zoning=47.60670,-122.33250  the zoning answer at this point (lat,lon, 5 decimals);
+//                                asked for once the camera is there, with the Zoning layer on
 //   &pin=27.8000,-97.3960        the constructs stack anchored at this point (lat,lon)
 //   &cmp=27.8800,-97.3200        a second place compared with the pinned one (lat,lon)
 //   &space=1                     space-weather panel open
+//   &parcel=29.42600,-98.48610   the parcel identified at this point (lat,lon, 5 decimals:
+//                                a lot can be narrower than 4 decimals' 11 m); its dossier
+//                                opens once the camera is there
 //   &ground=29.28000,-98.45000   a "ground here" answer (soil, land cover, hazard class,
 //                                slope, elevation) asked at this point (lat,lon, 5 decimals)
 //                                once the camera is there, with the layers the link turns on
@@ -40,6 +45,9 @@ import { getVintage, isValidVintage, useReleases, vintageClockMs } from "@/lib/r
 import { isPersonaId, type PersonaId } from "@/lib/personas/registry";
 import { applyPersona, useLens } from "@/lib/personas/store";
 import { useStrata, type LonLat } from "@/lib/fabric/strataStore";
+import { identifyZoning, useZoningPick } from "@/lib/zoning/pick";
+import { zoningPointId } from "@/lib/zoning/dossier";
+import { identifyParcel, useParcelPick } from "@/lib/parcels/pick";
 import { useSettings } from "@/lib/store/settings";
 import { areaRing, useArea } from "@/lib/aoi/store";
 import { openHere, useHere } from "@/lib/whatshere/here";
@@ -69,6 +77,8 @@ export interface ShareState {
   /** Lens (who is looking): sets layers, the arrival panel and the camera unless the link carries its own. */
   lens?: PersonaId;
   embed?: boolean;
+  /** The point a zoning answer was asked for (a clicked point, not a feed feature). */
+  zoning?: LonLat;
   /** The point the constructs stack is anchored to (the "A" of a comparison). */
   pin?: LonLat;
   /** The second place of a comparison ("B"). */
@@ -77,6 +87,8 @@ export interface ShareState {
   space?: boolean;
   /** A drawn line or area, shown with its measurement. */
   shape?: Shape;
+  /** The point a parcel was identified at (the parcels layer's dossier). */
+  parcel?: LonLat;
   /** The point a "ground here" answer was asked for (a click on a picture layer, not a feed feature). */
   ground?: LonLat;
   /** The Area panel open on the drawn area. */
@@ -143,6 +155,11 @@ export function formatLatLonParam(p: LonLat): string {
   return `${p.lat.toFixed(4)},${p.lon.toFixed(4)}`;
 }
 
+/** A parcel point keeps 5 decimals (about 1 m): a narrow lot is smaller than 4 decimals' 11 m. */
+export function formatParcelParam(p: LonLat): string {
+  return `${p.lat.toFixed(5)},${p.lon.toFixed(5)}`;
+}
+
 const LAYER_SET = new Set<string>(LAYER_IDS);
 
 export function parseShare(search: string): ShareState {
@@ -192,6 +209,8 @@ export function parseShare(search: string): ShareState {
   const lens = q.get("lens");
   if (isPersonaId(lens)) out.lens = lens;
   if (q.get("embed") === "1") out.embed = true;
+  const zoning = parseLatLon(q.get("zoning"));
+  if (zoning) out.zoning = zoning;
   const pin = parseLatLon(q.get("pin"));
   if (pin) out.pin = pin;
   const cmp = parseLatLon(q.get("cmp"));
@@ -199,6 +218,8 @@ export function parseShare(search: string): ShareState {
   if (q.get("space") === "1") out.space = true;
   const shape = parseShape(q.get("shape"));
   if (shape) out.shape = shape;
+  const parcel = parseLatLon(q.get("parcel"));
+  if (parcel) out.parcel = parcel;
   const ground = parseLatLon(q.get("ground"));
   if (ground) out.ground = ground;
   if (q.get("aoi") === "1") out.aoi = true;
@@ -225,15 +246,18 @@ export function shareQuery(s: ShareState): string {
   if (s.p != null) q.set("p", s.p.toFixed(0));
   if (s.layers) q.set("layers", s.layers.join(","));
   if (s.t != null) q.set("t", new Date(s.t).toISOString().slice(0, 19) + "Z");
-  if (s.sel) q.set("sel", `${s.sel.layer}:${s.sel.id}`);
+  // An identified parcel travels as its point; its selection id cannot be looked up in a feed.
+  if (s.sel && !(s.parcel && s.sel.layer === "parcels")) q.set("sel", `${s.sel.layer}:${s.sel.id}`);
   if (s.report) q.set("report", "1");
   if (s.market) q.set("market", "1");
   if (s.vintage && isValidVintage(s.vintage)) q.set("v", s.vintage);
   if (s.lens) q.set("lens", s.lens);
   if (s.embed) q.set("embed", "1");
+  if (s.zoning) q.set("zoning", `${s.zoning.lat.toFixed(5)},${s.zoning.lon.toFixed(5)}`);
   if (s.pin) q.set("pin", formatLatLonParam(s.pin));
   if (s.cmp) q.set("cmp", formatLatLonParam(s.cmp));
   if (s.space) q.set("space", "1");
+  if (s.parcel) q.set("parcel", formatParcelParam(s.parcel));
   if (s.ground) q.set("ground", `${s.ground.lat.toFixed(5)},${s.ground.lon.toFixed(5)}`);
   if (s.terrain != null) q.set("terrain", String(Number(s.terrain.toFixed(2))));
   if (s.slr != null) q.set("slr", String(s.slr));
@@ -254,11 +278,16 @@ export function currentShare(): ShareState {
   const st = useGlobe.getState();
   const strata = useStrata.getState();
   const on = LAYER_IDS.filter((id) => st.layers[id]);
+  const pick = useParcelPick.getState().pick;
+  const parcel = st.selected?.layer === "parcels" && pick ? { lat: pick.lat, lon: pick.lon } : undefined;
   const prefs = useSettings.getState().prefs;
   // A ground answer travels as its point: its selection id cannot be looked up in a feed.
   const gp = useGroundPick.getState().pick;
   const ground = gp && isGroundSelection(st.selected) ? { lat: gp.lat, lon: gp.lon } : undefined;
   const here = useHere.getState().pick;
+  // A zoning answer travels as its point: its selection id cannot be looked up in a feed.
+  const zpick = useZoningPick.getState().pick;
+  const zoning = zpick && st.selected?.layer === "zoning" && st.selected.id === zoningPointId(zpick.lon, zpick.lat) ? zpick : undefined;
   return {
     lat: st.view.lat,
     lon: st.view.lon,
@@ -267,16 +296,18 @@ export function currentShare(): ShareState {
     p: st.view.pitch,
     layers: on,
     t: Math.abs(st.clock.offsetMs) >= 60_000 ? Date.now() + st.clock.offsetMs : undefined,
-    sel: ground || isGroundSelection(st.selected) ? undefined : (st.selected ?? undefined),
+    sel: zoning || ground || isGroundSelection(st.selected) ? undefined : (st.selected ?? undefined),
     report: st.waterReportOpen || undefined,
     market: st.marketReportOpen || undefined,
     vintage: getVintage() ?? undefined,
     lens: useLens.getState().personaId ?? undefined,
     embed: st.embed || undefined,
+    zoning: zoning ? { lat: zoning.lat, lon: zoning.lon } : undefined,
     pin: strata.pin ?? undefined,
     cmp: strata.compare ?? undefined,
     space: st.spaceWeatherOpen || undefined,
     shape: completeShape(st.measure.shape),
+    parcel,
     ground,
     terrain: prefs.terrain ? prefs.terrainExaggeration : undefined,
     slr: st.layers.sealevel ? prefs.seaLevelFt : undefined,
@@ -333,6 +364,12 @@ export function startUrlSync(): () => void {
   const unsubStrata = useStrata.subscribe((s, prev) => {
     if (s.pin !== prev.pin || s.compare !== prev.compare) schedule();
   });
+  const unsubZoning = useZoningPick.subscribe((s, prev) => {
+    if (s.pick !== prev.pick) schedule();
+  });
+  const unsubParcel = useParcelPick.subscribe((s, prev) => {
+    if (s.pick?.lon !== prev.pick?.lon || s.pick?.lat !== prev.pick?.lat) schedule();
+  });
   const unsubPrefs = useSettings.subscribe((s, prev) => {
     const a = s.prefs;
     const b = prev.prefs;
@@ -352,6 +389,8 @@ export function startUrlSync(): () => void {
     unsubReleases();
     unsubLens();
     unsubStrata();
+    unsubZoning();
+    unsubParcel();
     unsubPrefs();
     unsubGround();
     unsubArea();
@@ -385,6 +424,12 @@ export function applyShare(s: ShareState, opts: { fly?: boolean } = {}): void {
     st.setLayer("constructs", true);
     if (s.cmp) void strata.setCompare(s.cmp);
   }
+  // A shared zoning answer: the layer on, and the point asked about once the camera has arrived.
+  if (s.zoning) {
+    const z = s.zoning;
+    st.setLayer("zoning", true);
+    setTimeout(() => void identifyZoning(z.lon, z.lat), opts.fly !== false && s.lat != null ? 4200 : 300);
+  }
   if (s.report) st.setWaterReportOpen(true);
   if (s.market) st.setMarketReportOpen(true);
   if (s.space) st.setSpaceWeatherOpen(true);
@@ -413,7 +458,13 @@ export function applyShare(s: ShareState, opts: { fly?: boolean } = {}): void {
   if (opts.fly !== false && s.lat != null && s.lon != null) {
     flyTo(s.lon, s.lat, { height: s.h ?? 120_000, pitchDeg: s.p ?? -55, headingDeg: s.hd ?? 0, durationS: 4 });
   }
-  if (s.sel) {
+  // A shared parcel: the layer on, and its dossier asked for once the camera has arrived.
+  if (s.parcel) {
+    const pt = s.parcel;
+    st.setLayer("parcels", true);
+    setTimeout(() => void identifyParcel(pt.lon, pt.lat), opts.fly !== false && s.lat != null ? 4200 : 300);
+  }
+  if (s.sel && !(s.parcel && s.sel.layer === "parcels")) {
     const sel = s.sel;
     const started = Date.now();
     const tryPick = () => {
@@ -434,7 +485,7 @@ export async function copyShareLink(): Promise<string> {
   const url = shareUrl();
   try {
     await navigator.clipboard.writeText(url);
-    useGlobe.getState().pushLog({ level: "info", text: "Link copied. It carries the view, the layers, the clock, the vintage, the selection, open reports, any comparison and a drawn shape." });
+    useGlobe.getState().pushLog({ level: "info", text: "Link copied. It carries the view, the layers, the clock, the vintage, the selection (an identified parcel as its point), open reports, any comparison and a drawn shape." });
   } catch {
     useGlobe.getState().pushLog({ level: "warn", text: `Clipboard blocked; the link is ${url}` });
   }

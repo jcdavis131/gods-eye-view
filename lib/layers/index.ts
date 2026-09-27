@@ -31,6 +31,11 @@ import { INFRA_LAYERS } from "./infra";
 import { airqualityLayer } from "./airquality";
 import { AIRNOW_ENABLED } from "@/lib/air/airnow";
 import { eventsLayer } from "./events";
+import { parcelsLayer } from "./parcels";
+import { zoningLayer } from "./zoning";
+import { permitsLayer } from "./permits";
+import { licencesLayer } from "./licences";
+import { envpermitsLayer } from "./envpermits";
 import { sportsLayer } from "./sports";
 import { constructsLayer } from "./constructs";
 import { fieldLayer } from "./field";
@@ -66,6 +71,11 @@ export const LAYERS: LayerDefinition[] = [
   // Off until the operator decides on AirNow's data-user form (lib/air/airnow.ts).
   ...(AIRNOW_ENABLED ? [airqualityLayer] : []),
   eventsLayer,
+  parcelsLayer,
+  zoningLayer,
+  permitsLayer,
+  licencesLayer,
+  envpermitsLayer,
   sportsLayer,
   constructsLayer,
   fieldLayer,

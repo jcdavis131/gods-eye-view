@@ -34,6 +34,8 @@ import {
   railStyle,
   transmissionStyle,
 } from "./infraStyles";
+import { parcelsStyle } from "./parcelStyles";
+import { envpermitsStyle, licencesStyle, permitsStyle, zoningStyle } from "./civicStyles";
 
 /** Distinctive major-group colours for the occupations layer: one hue per SOC major group. */
 const OCCUPATION_COLORS: Record<string, string> = {
@@ -423,6 +425,11 @@ export const STYLES: Partial<Record<LayerId, LayerStyle>> = {
   plss: plssStyle,
   airquality: airqualityStyle,
   events: eventsStyle,
+  parcels: parcelsStyle,
+  zoning: zoningStyle,
+  permits: permitsStyle,
+  licences: licencesStyle,
+  envpermits: envpermitsStyle,
   sports: sportsStyle,
   constructs: constructsStyle,
   field: fieldStyle,
@@ -475,6 +482,11 @@ export const FOLLOW_RANGE: Record<LayerId, number> = {
   plss: 6_000,
   airquality: 20_000,
   events: 150_000,
+  parcels: 800,
+  zoning: 3_000,
+  permits: 1_500,
+  licences: 1_000,
+  envpermits: 8_000,
   sports: 500_000,
   constructs: 150_000,
   field: 400_000,

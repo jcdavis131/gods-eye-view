@@ -53,6 +53,18 @@
       "description": "Terrain, slope, contours, soils, land cover and the long-range hazard pictures: USGS 3DEP, NRCS SSURGO, USFS WHP, MRLC NLCD, FEMA NFHL, NOAA sea level rise."
     },
     {
+      "name": "parcels",
+      "description": "Parcels and ownership as each county or state service publishes them, NAD address points and BLM PLSS; found only by a point or a box, never by a name."
+    },
+    {
+      "name": "zoning",
+      "description": "Zoning districts as city zoning GIS services publish them: Seattle, Denver, New York City (DCP districts and the Zoning Tax Lot Database), Chicago, Dallas, San Antonio, Austin, Los Angeles, San Francisco; Houston answers that it has no zoning ordinance. The city is picked by the Census TIGERweb incorporated place under the point."
+    },
+    {
+      "name": "permits",
+      "description": "Building permits (Chicago, Austin, Seattle, Denver residential, New York DOB NOW, Los Angeles, San Francisco), business licences (NY State Liquor Authority, Chicago, San Francisco, Los Angeles, NYC DCWP premises) and environmental permits (EPA ECHO Clean Water Act and Clean Air Act, U.S. Army Corps of Engineers ORM), each with a coverage list that says which sources answered and why the others did not."
+    },
+    {
       "name": "space",
       "description": "Space weather (GFZ Kp, NASA DONKI) and NASA's ISS live stream, checked through YouTube oEmbed."
     },
@@ -2470,6 +2482,302 @@
         ],
         "summary": "CORS preflight",
         "operationId": "soilOptions",
+        "responses": {
+          "204": {
+            "description": "No content."
+          }
+        }
+      }
+    },
+    "/api/parcels": {
+      "get": {
+        "summary": "The parcel at a point as its county or state publishes it, or parcel outlines in a small box",
+        "description": "mode=identify (the default): the county at lon, lat (Census TIGERweb), the keyless parcel service wired for it, and the parcel record(s) there as that service publishes them: parcel id, site address, owner names (or `withheld` with the reason: the source's confidentiality flag, a placeholder such as \"Current Owner\", or New Jersey's Daniel's Law; or `not-published` where the service carries no owner field), mailing address, values each with the source's own label and year, exemption, use, zoning, year built, area with its basis, last sale, legal description, and the source's own record link. Also USDOT NAD address points on the parcel (`addresses`, null when NAD did not answer within 2.5 s) and, in the 30 PLSS states, the BLM township and section (`plss`). mode=outlines: parcel outlines in a box of at most 0.01° snapped to 0.002°, carrying the parcel id and use class only, never an owner. mode=addresses: NAD address points on the parcel at the point, waiting up to 30 s. There is no name parameter: `owner`, `name`, `q`, `where`, `search` and `query` are refused with 400.",
+        "tags": [
+          "parcels"
+        ],
+        "parameters": [
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "identify",
+                "outlines",
+                "addresses"
+              ],
+              "default": "identify"
+            },
+            "description": "identify: the parcel record(s) at lon, lat. outlines: lot lines in bbox (id and use class only). addresses: NAD address points at lon, lat."
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            },
+            "description": "mode=identify and addresses: longitude of the point (rounded to 5 decimals)."
+          },
+          {
+            "name": "lat",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            },
+            "description": "mode=identify and addresses: latitude of the point (rounded to 5 decimals)."
+          },
+          {
+            "name": "bbox",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Bbox"
+            },
+            "description": "`w,s,e,n` degrees. Required for mode=outlines; clamped to 0.01° and snapped to 0.002°. The snapped box comes back in `bbox`."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope for the mode.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/Cors"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ParcelsIdentifyResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ParcelsOutlinesResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ParcelsAddressesResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/Upstream"
+          }
+        }
+      },
+      "options": {
+        "tags": [
+          "parcels"
+        ],
+        "summary": "CORS preflight",
+        "operationId": "parcelsOptions",
+        "responses": {
+          "204": {
+            "description": "No content."
+          }
+        }
+      }
+    },
+    "/api/zoning": {
+      "get": {
+        "summary": "The zoning district at a point, district outlines in a box, or which cities are covered",
+        "description": "op=point: the district a city's own zoning GIS puts the point in, with the city's description and category words, overlays and special districts, ordinance, effective date, case number and code link where the city publishes them. `state` is one of district, right-of-way (San Antonio's UZROW), no-district (no polygon at the point: a street, water or a gap; never 'unzoned'), no-ordinance (Houston) or not-covered (no source wired for the Census place under the point). New York adds the Zoning Tax Lot Database row of the tax lot under the point (MapPLUTO is asked for the BBL only), or DCP's overlay layers at the point where the lot has no row (condominium billing lots) or there is no lot; `overlaysUnknown` is true when neither answered. op=districts: district outlines (code and colour family only) from every covered city the box meets, generalised on each city's server to about 3 m; boxes clamped to 0.04° and snapped to 0.0025°. op=coverage: the cities, what each answers and why. Zoning as each city's GIS publishes it; the adopted zoning map and code govern.",
+        "tags": [
+          "zoning"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "point",
+                "districts",
+                "coverage"
+              ]
+            },
+            "description": "point: the district at lon, lat. districts: outlines in bbox. coverage: the wired cities."
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            },
+            "description": "op=point: longitude."
+          },
+          {
+            "name": "lat",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            },
+            "description": "op=point: latitude."
+          },
+          {
+            "name": "bbox",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Bbox"
+            },
+            "description": "op=districts: `w,s,e,n` degrees, clamped to 0.04° and snapped to 0.0025°. The snapped box comes back in `bbox`."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope for the op.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/Cors"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ZoningPointResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ZoningDistrictsResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ZoningCoverageResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/Upstream"
+          }
+        }
+      },
+      "options": {
+        "tags": [
+          "zoning"
+        ],
+        "summary": "CORS preflight",
+        "operationId": "zoningOptions",
+        "responses": {
+          "204": {
+            "description": "No content."
+          }
+        }
+      }
+    },
+    "/api/permits": {
+      "get": {
+        "summary": "Building permits, business licences or environmental permits in a box",
+        "description": "op=building: permits the cities list as issued in the last `days` (7-90, default 30), newest first, at most 500 per city; boxes clamped to 0.03° and snapped to 0.0025°. Each record keeps its valuation under the column it came from (reported cost, estimated project cost, valuation...), the parcel key the city publishes (BBL, TCAD id, SCHEDNUM, PIN, block/lot), the zoning printed on the permit where there is one, the contractor company and the city's record link. Every portal is asked for named columns ($select or outFields), and no applicant, owner or contact name is requested; the contractor company is shown as the city publishes it and can be a sole trader's own name (never searched). op=licences: licensed premises, by trade name (an entity's legal name where there is no trade name; the legal or registrant name is requested only to test for an entity form and to compare it with the trade name, and is discarded otherwise, so a trade name that is a non-company registrant's own name is not shown and `nameNote` says why; a trade name is otherwise as published and can contain a person's name), and licences at apartment or unit addresses withheld as a home-business heuristic (`withheld` counts them); boxes clamped to 0.02°. op=environmental: EPA ECHO NPDES and air facilities (compliance in ECHO's own words; 'not reported by ECHO' when it gives none) and the Corps' regulatory actions (the applicant is never kept; a project name that opens 'Surname, Given' is withheld and `facilityNote` says so, though a project name can carry a person's name in another form; the search returns at most 300, the box's actions first and then actions from anywhere in the country, so only those inside the box are kept, sorted newest first here, and USACE is partial only when all 300 lay in the box); boxes clamped to 0.2° and snapped to 0.05°. `coverage` lists every source the box meets with its state: covered, partial (a cap was hit), stale (Dallas), no-feed (Houston), token-required (Denver commercial), not-wired (San Antonio) or error (did not answer this time: missing, not absent).",
+        "tags": [
+          "permits"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "building",
+                "licences",
+                "environmental"
+              ]
+            },
+            "description": "building: city building permits. licences: licensed premises. environmental: EPA ECHO facilities and Corps actions."
+          },
+          {
+            "name": "bbox",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Bbox"
+            },
+            "description": "`w,s,e,n` degrees. The snapped box comes back in `bbox`."
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 7,
+              "maximum": 90,
+              "default": 30
+            },
+            "description": "op=building: the window of issue dates."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope for the op.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/Cors"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/PermitsBuildingResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PermitsLicencesResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PermitsEnvironmentalResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/Upstream"
+          }
+        }
+      },
+      "options": {
+        "tags": [
+          "permits"
+        ],
+        "summary": "CORS preflight",
+        "operationId": "permitsOptions",
         "responses": {
           "204": {
             "description": "No content."
@@ -5193,6 +5501,1086 @@
           }
         ],
         "x-op": "alerts"
+      },
+      "ParcelRecord": {
+        "type": "object",
+        "required": [
+          "adapter",
+          "parcelId",
+          "owner"
+        ],
+        "description": "One parcel as its source publishes it. A field the source does not publish is absent, never filled in.",
+        "properties": {
+          "adapter": {
+            "type": "string",
+            "description": "Which service answered (tx-stratmap, tx-hcad, az-maricopa, ca-la, il-cook, wa-king, mi-detroit, wi-statewide, nc-statewide, mt-statewide, mn-parcels, fl-dor, ma-massgis, vt-vcgi, ut-lir, oh-statewide, nj-modiv, ny-its, ct-cama, md-sdat)."
+          },
+          "parcelId": {
+            "type": "string"
+          },
+          "otherIds": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "county": {
+            "type": "string"
+          },
+          "municipality": {
+            "type": "string"
+          },
+          "situs": {
+            "type": "string",
+            "description": "Site address as published."
+          },
+          "propertyName": {
+            "type": "string",
+            "description": "A name the source gives the property (a building), never an owner's."
+          },
+          "owner": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": [
+                  "status",
+                  "names",
+                  "role"
+                ],
+                "properties": {
+                  "status": {
+                    "const": "published"
+                  },
+                  "names": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "role": {
+                    "enum": [
+                      "owner",
+                      "taxpayer"
+                    ]
+                  },
+                  "careOf": {
+                    "type": "string"
+                  },
+                  "dba": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "status",
+                  "reason"
+                ],
+                "properties": {
+                  "status": {
+                    "const": "withheld"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "status",
+                  "reason"
+                ],
+                "properties": {
+                  "status": {
+                    "const": "not-published"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              }
+            ]
+          },
+          "mailing": {
+            "type": "string"
+          },
+          "mailingNote": {
+            "type": "string",
+            "description": "Why a mailing address the source has is not shown."
+          },
+          "ownerAddress": {
+            "type": "string"
+          },
+          "taxpayer": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "address": {
+                "type": "string"
+              }
+            }
+          },
+          "ownedSince": {
+            "type": "string",
+            "format": "date"
+          },
+          "values": {
+            "type": "object",
+            "required": [
+              "items"
+            ],
+            "properties": {
+              "year": {
+                "type": "string",
+                "description": "The source's own year label: \"tax year 2025\", \"fiscal year 2023\", \"grand list 2025\"."
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "label",
+                    "amount"
+                  ],
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "description": "The source's own term: market value, full cash value, just value, estimated fair market value…"
+                    },
+                    "amount": {
+                      "type": "number"
+                    }
+                  }
+                }
+              },
+              "note": {
+                "type": "string"
+              }
+            }
+          },
+          "exempt": {
+            "type": "string"
+          },
+          "use": {
+            "type": "string"
+          },
+          "zoning": {
+            "type": "string"
+          },
+          "yearBuilt": {
+            "type": "string"
+          },
+          "area": {
+            "type": "object",
+            "required": [
+              "value",
+              "unit",
+              "basis"
+            ],
+            "properties": {
+              "value": {
+                "type": "number"
+              },
+              "unit": {
+                "enum": [
+                  "acres",
+                  "sq ft"
+                ]
+              },
+              "basis": {
+                "type": "string"
+              }
+            }
+          },
+          "lastSale": {
+            "type": "object",
+            "properties": {
+              "date": {
+                "type": "string"
+              },
+              "price": {
+                "type": "number"
+              },
+              "reference": {
+                "type": "string"
+              }
+            }
+          },
+          "legal": {
+            "type": "string"
+          },
+          "subdivision": {
+            "type": "string"
+          },
+          "plssText": {
+            "type": "string"
+          },
+          "asOf": {
+            "type": "string"
+          },
+          "link": {
+            "type": "object",
+            "required": [
+              "url",
+              "label"
+            ],
+            "properties": {
+              "url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "label": {
+                "type": "string"
+              }
+            }
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ParcelsIdentifyResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "point",
+                  "county",
+                  "adapter",
+                  "parcels",
+                  "addresses",
+                  "notes"
+                ],
+                "properties": {
+                  "point": {
+                    "type": "object",
+                    "properties": {
+                      "lon": {
+                        "type": "number"
+                      },
+                      "lat": {
+                        "type": "number"
+                      }
+                    }
+                  },
+                  "county": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "geoid": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "basename": {
+                        "type": "string"
+                      },
+                      "state": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "adapter": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "publisher": {
+                        "type": "string"
+                      },
+                      "coverage": {
+                        "type": "string"
+                      },
+                      "ownerPublished": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "parcels": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "record",
+                        "geometry"
+                      ],
+                      "properties": {
+                        "record": {
+                          "$ref": "#/components/schemas/ParcelRecord"
+                        },
+                        "geometry": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "description": "GeoJSON Polygon or MultiPolygon."
+                        }
+                      }
+                    }
+                  },
+                  "addresses": {
+                    "type": [
+                      "array",
+                      "null"
+                    ],
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "address",
+                        "lon",
+                        "lat",
+                        "onParcel"
+                      ],
+                      "properties": {
+                        "address": {
+                          "type": "string"
+                        },
+                        "lon": {
+                          "type": "number"
+                        },
+                        "lat": {
+                          "type": "number"
+                        },
+                        "onParcel": {
+                          "type": "boolean",
+                          "description": "Inside the identified parcel's outline; false: within 40 m of the point instead."
+                        },
+                        "source": {
+                          "type": "string",
+                          "description": "NAD contributor, e.g. \"State of Texas\"."
+                        },
+                        "updated": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "type": {
+                          "type": "string"
+                        },
+                        "parcelId": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "description": "null when NAD did not answer within 2.5 s (mode=addresses asks again)."
+                  },
+                  "plss": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "state": {
+                        "type": "string"
+                      },
+                      "meridian": {
+                        "type": "string"
+                      },
+                      "township": {
+                        "type": "string"
+                      },
+                      "section": {
+                        "type": "string"
+                      },
+                      "sectionType": {
+                        "type": "string"
+                      },
+                      "plssId": {
+                        "type": "string"
+                      },
+                      "firstDivisionId": {
+                        "type": "string"
+                      }
+                    },
+                    "description": "Absent outside the 30 PLSS states; null when BLM did not answer."
+                  },
+                  "notes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "mode": {
+                "const": "identify"
+              },
+              "stale": {
+                "type": "boolean",
+                "description": "The source did not answer; this is its last answer, older than a day."
+              }
+            }
+          }
+        ],
+        "x-op": "identify"
+      },
+      "ParcelsOutlinesResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "mode": {
+                "const": "outlines"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "sources": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              },
+              "failed": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "uncovered": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Counties in the box with no keyless parcel service wired."
+              },
+              "identifyOnly": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "description": "Services in the box that answer a click but draw no lot lines, and why (Wisconsin: box queries take 25-45 s)."
+              },
+              "cutForSize": {
+                "type": "boolean",
+                "description": "Outlines past 3.5 MB were left out to stay under the platform's 4.5 MB response limit."
+              },
+              "truncated": {
+                "type": "boolean"
+              }
+            }
+          }
+        ],
+        "x-op": "outlines"
+      },
+      "ParcelsAddressesResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "point": {
+                    "type": "object"
+                  },
+                  "parcelOutline": {
+                    "type": "boolean"
+                  },
+                  "addresses": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "address",
+                        "lon",
+                        "lat",
+                        "onParcel"
+                      ],
+                      "properties": {
+                        "address": {
+                          "type": "string"
+                        },
+                        "lon": {
+                          "type": "number"
+                        },
+                        "lat": {
+                          "type": "number"
+                        },
+                        "onParcel": {
+                          "type": "boolean",
+                          "description": "Inside the identified parcel's outline; false: within 40 m of the point instead."
+                        },
+                        "source": {
+                          "type": "string",
+                          "description": "NAD contributor, e.g. \"State of Texas\"."
+                        },
+                        "updated": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "type": {
+                          "type": "string"
+                        },
+                        "parcelId": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "mode": {
+                "const": "addresses"
+              }
+            }
+          }
+        ],
+        "x-op": "addresses"
+      },
+      "ZoningPointResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": [
+                  "district",
+                  "right-of-way",
+                  "no-district",
+                  "no-ordinance",
+                  "not-covered"
+                ]
+              },
+              "partial": {
+                "type": "boolean",
+                "description": "Part of the answer did not arrive this time (a New York lookup); it is not held, and the next request asks again."
+              },
+              "overlaysUnknown": {
+                "type": "boolean",
+                "description": "New York: neither the tax lot's Zoning Tax Lot Database row nor DCP's overlay layers answered, so `data.overlays` is unknown, not empty."
+              },
+              "data": {
+                "type": "object",
+                "required": [
+                  "state",
+                  "lon",
+                  "lat",
+                  "overlays",
+                  "published",
+                  "note"
+                ],
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "district",
+                      "right-of-way",
+                      "no-district",
+                      "no-ordinance",
+                      "not-covered"
+                    ]
+                  },
+                  "lon": {
+                    "type": "number"
+                  },
+                  "lat": {
+                    "type": "number"
+                  },
+                  "place": {
+                    "type": "object",
+                    "properties": {
+                      "geoid": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "description": "The Census incorporated place under the point (TIGERweb layer 28)."
+                  },
+                  "city": {
+                    "type": "string",
+                    "enum": [
+                      "seattle",
+                      "denver",
+                      "nyc",
+                      "chicago",
+                      "dallas",
+                      "sanantonio",
+                      "austin",
+                      "losangeles",
+                      "sanfrancisco",
+                      "houston"
+                    ]
+                  },
+                  "cityName": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string",
+                    "description": "The district string as published, e.g. DOC1 U/450-U, C6-4.5, [LF1-WH1-5][P2-FA][CPIO]."
+                  },
+                  "base": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string",
+                    "description": "The city's own description of the district."
+                  },
+                  "category": {
+                    "type": "string",
+                    "description": "The city's own category words, verbatim."
+                  },
+                  "family": {
+                    "type": "string",
+                    "enum": [
+                      "residential",
+                      "mixed",
+                      "commercial",
+                      "downtown",
+                      "industrial",
+                      "planned",
+                      "public",
+                      "right-of-way",
+                      "other",
+                      "coded"
+                    ],
+                    "description": "Colour family: from the city's category words, or New York and Chicago district letters; 'coded' where the city publishes neither."
+                  },
+                  "overlays": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Overlays, special districts and combining districts as published. New York: from the tax lot's Zoning Tax Lot Database row, or, where the lot has no row (a condominium's billing lot, 75xx) or there is no lot, from DCP's special purpose district, commercial overlay and limited-height layers at the point; `published['overlays from']` says which, and `published.overlays` says when they are unknown."
+                  },
+                  "alsoHere": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Other districts the point touches."
+                  },
+                  "ordinance": {
+                    "type": "string"
+                  },
+                  "effective": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "caseNumber": {
+                    "type": "string"
+                  },
+                  "editedAt": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "codeUrl": {
+                    "type": "string"
+                  },
+                  "recordUrl": {
+                    "type": "string"
+                  },
+                  "lot": {
+                    "type": "object",
+                    "properties": {
+                      "bbl": {
+                        "type": "string"
+                      }
+                    },
+                    "description": "New York: the tax lot under the point."
+                  },
+                  "published": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "description": "Further fields as the city publishes them, label to value."
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "publisher": {
+                    "type": "string"
+                  },
+                  "note": {
+                    "type": "string",
+                    "description": "What the state means here, in plain words."
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "point"
+      },
+      "ZoningDistrictsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "sources": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "city": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              },
+              "failed": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "city": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "description": "Cities that did not answer: their districts are missing, not absent."
+              },
+              "pointOnly": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "city": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "truncated": {
+                "type": "boolean"
+              }
+            }
+          }
+        ],
+        "x-op": "districts"
+      },
+      "ZoningCoverageResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string"
+                    },
+                    "placeGeoid": {
+                      "type": "string"
+                    },
+                    "point": {
+                      "type": "boolean"
+                    },
+                    "outlines": {
+                      "type": "boolean"
+                    },
+                    "zoning": {
+                      "type": "string"
+                    },
+                    "publisher": {
+                      "type": "string"
+                    },
+                    "note": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "coverage"
+      },
+      "PermitsCoverage": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "id",
+            "name",
+            "state",
+            "count"
+          ],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string",
+              "enum": [
+                "covered",
+                "partial",
+                "stale",
+                "no-feed",
+                "token-required",
+                "not-wired",
+                "error"
+              ]
+            },
+            "count": {
+              "type": "integer"
+            },
+            "reason": {
+              "type": "string"
+            },
+            "cadence": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "PermitsBuildingResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "days": {
+                "type": "integer"
+              },
+              "coverage": {
+                "$ref": "#/components/schemas/PermitsCoverage"
+              }
+            }
+          }
+        ],
+        "x-op": "building",
+        "x-feature-properties": [
+          "id",
+          "city",
+          "number",
+          "kind",
+          "work",
+          "description",
+          "valuation",
+          "valuationLabel",
+          "fee",
+          "status",
+          "applied",
+          "issued",
+          "finaled",
+          "expires",
+          "address",
+          "parcel",
+          "zoning",
+          "contractorCompany",
+          "url",
+          "published"
+        ]
+      },
+      "PermitsLicencesResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "coverage": {
+                "$ref": "#/components/schemas/PermitsCoverage"
+              },
+              "withheld": {
+                "type": "integer",
+                "description": "Licences withheld by the home-business heuristic."
+              }
+            }
+          }
+        ],
+        "x-op": "licences",
+        "x-feature-properties": [
+          "id",
+          "source",
+          "name",
+          "nameNote",
+          "category",
+          "activity",
+          "number",
+          "status",
+          "issued",
+          "started",
+          "expires",
+          "address",
+          "published"
+        ]
+      },
+      "PermitsEnvironmentalResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "coverage": {
+                "$ref": "#/components/schemas/PermitsCoverage"
+              }
+            }
+          }
+        ],
+        "x-op": "environmental",
+        "x-feature-properties": [
+          "id",
+          "program",
+          "number",
+          "type",
+          "facility",
+          "facilityNote",
+          "status",
+          "compliance",
+          "date",
+          "dateLabel",
+          "address",
+          "url",
+          "published"
+        ]
       },
       "LandFloodResponse": {
         "allOf": [

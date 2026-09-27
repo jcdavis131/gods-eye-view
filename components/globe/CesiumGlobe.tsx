@@ -15,6 +15,8 @@ import { satWorker } from "@/lib/globe/satWorker";
 import { measureClick, startMeasureOverlay } from "@/lib/globe/measure";
 import { groundClickWanted, identifyGround, startGroundOverlay } from "@/lib/terrain/ground";
 import { openHere, startHereOverlay } from "@/lib/whatshere/here";
+import { identifyParcel, startParcelOverlay } from "@/lib/parcels/pick";
+import { PARCEL_IDENTIFY_MAX_M } from "@/lib/layers/parcels";
 import { parseShare } from "@/lib/globe/share";
 import { flyTo } from "@/lib/globe/camera";
 import { useGlobe } from "@/lib/store/globe";
@@ -23,6 +25,8 @@ import type { ViewState } from "@/lib/layers/types";
 import { GLOBE_ERROR_EVENT } from "@/components/hud/TitleCard";
 import { arbitrateLabels } from "@/lib/globe/labelArbiter";
 import { useStrata } from "@/lib/fabric/strataStore";
+import { identifyZoning, startZoningOverlay } from "@/lib/zoning/pick";
+import { ZONING_IDENTIFY_MAX_M } from "@/lib/layers/zoning";
 import { currentFabric } from "@/lib/fabric/strataClient";
 
 function isPickId(v: unknown): v is PickId {
@@ -235,11 +239,16 @@ export default function CesiumGlobe() {
       });
       cleanups.push(offPreUpdate);
 
+      // The point a zoning answer was asked for, marked while its dossier is open.
+      cleanups.push(startZoningOverlay(viewer));
+
       // Measure tools draw their own overlay from the store.
       cleanups.push(startMeasureOverlay(viewer));
       // Where a "ground here" answer (terrain, soil and land cover pictures) was asked.
       cleanups.push(startGroundOverlay(viewer));
       cleanups.push(startHereOverlay(viewer));
+      // The parcel a click identified: its outline, while its dossier is open.
+      cleanups.push(startParcelOverlay(viewer));
 
       // Compare: a second pin (B) for the constructs stack. Dropped by the
       // rail's Compare button (next tap), a long-press on a phone, or a
@@ -348,7 +357,35 @@ export default function CesiumGlobe() {
         const picked = scene.pick(e.position) as { id?: unknown } | undefined;
         const id = picked?.id;
         const st = useGlobe.getState();
-        if (isPickId(id)) {
+        // Parcels: a click on the ground, or on a lot line (outlines carry no record),
+        // asks for the parcel at that point. Any other object picked wins. This comes
+        // before the ground-picture click below (groundClickWanted): with Parcels on and
+        // low enough, a click on the ground is a parcel question, not a soils/land cover one.
+        if ((!isPickId(id) || id.layer === "parcels") && st.layers.parcels && st.view.height <= PARCEL_IDENTIFY_MAX_M) {
+          const ray = viewer!.camera.getPickRay(e.position);
+          const hit = (ray && scene.globe.pick(ray, scene)) || viewer!.camera.pickEllipsoid(e.position, ellipsoid);
+          if (hit) {
+            const c = C.Cartographic.fromCartesian(hit);
+            void identifyParcel(C.Math.toDegrees(c.longitude), C.Math.toDegrees(c.latitude));
+            return;
+          }
+        }
+        // Zoning: a click on the ground, or on a district outline (it carries only its code),
+        // asks for the zoning at that point. Any other object picked wins. With Parcels also
+        // on, a click on the bare ground below the parcels height is the parcel's (above), but
+        // a drawn district's fill picks as zoning (same id as its outline), so below the outline
+        // height a click inside a district is zoning's: Zoning must be off for the parcel there.
+        // Either comes before the ground-picture click below.
+        if ((!isPickId(id) || id.layer === "zoning") && st.layers.zoning && st.view.height <= ZONING_IDENTIFY_MAX_M) {
+          const ray = viewer!.camera.getPickRay(e.position);
+          const hit = (ray && scene.globe.pick(ray, scene)) || viewer!.camera.pickEllipsoid(e.position, ellipsoid);
+          if (hit) {
+            const c = C.Cartographic.fromCartesian(hit);
+            void identifyZoning(C.Math.toDegrees(c.longitude), C.Math.toDegrees(c.latitude));
+            return;
+          }
+        }
+        if (isPickId(id) && id.layer !== "parcels") {
           const feature = getRenderer(id.layer)?.getFeature(id.id) ?? null;
           st.select({ layer: id.layer, id: id.id }, feature);
         } else if (groundClickWanted(st.layers, st.view.height)) {

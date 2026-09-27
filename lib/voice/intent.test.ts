@@ -26,6 +26,34 @@ describe("voice words for the hazards and land layers", () => {
   });
 });
 
+describe("voice words for the civic layers", () => {
+  it("hears zoning, and zoning districts before the constructs' districts", () => {
+    expect(layerOf("show zoning")).toMatchObject({ layer: "zoning", on: true });
+    expect(layerOf("show zoning districts over Seattle")).toMatchObject({ layer: "zoning", place: "seattle" });
+    expect(layerOf("show the zoning map")).toMatchObject({ layer: "zoning" });
+    expect(layerOf("show districts")).toMatchObject({ layer: "constructs" });
+  });
+  it("hears building permits, licences and environmental permits apart", () => {
+    expect(layerOf("show building permits in Chicago")).toMatchObject({ layer: "permits", place: "chicago" });
+    expect(layerOf("show permits")).toMatchObject({ layer: "permits" });
+    expect(layerOf("show environmental permits")).toMatchObject({ layer: "envpermits" });
+    expect(layerOf("show army corps permits")).toMatchObject({ layer: "envpermits" });
+    expect(layerOf("show business licenses")).toMatchObject({ layer: "licences" });
+    expect(layerOf("hide liquor licences")).toMatchObject({ layer: "licences", on: false });
+  });
+});
+
+describe("voice words for parcels", () => {
+  it("hears parcels by their plain names without taking 'property' from home values", () => {
+    expect(layerOf("show parcels")).toMatchObject({ layer: "parcels", on: true });
+    expect(layerOf("show property lines over Austin")).toMatchObject({ layer: "parcels", place: "austin" });
+    expect(layerOf("show lot lines")).toMatchObject({ layer: "parcels" });
+    expect(layerOf("hide tax parcels")).toMatchObject({ layer: "parcels", on: false });
+    expect(layerOf("show property values")).toMatchObject({ layer: "realestate" });
+    expect(layerOf("show property")).toMatchObject({ layer: "realestate" });
+  });
+});
+
 describe("voice words for the terrain & soils layers", () => {
   it("hears each picture layer by its plain names, before the fire and flood words they share", () => {
     expect(layerOf("show wildfire hazard")).toMatchObject({ layer: "firehazard", on: true });

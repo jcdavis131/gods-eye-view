@@ -24,6 +24,9 @@ import EconomyAside from "./EconomyAsides";
 import CompanyAside from "./CompanyAside";
 import FinanceAside from "./FinanceAsides";
 import ConstructAside, { ConstructContext } from "./ConstructAside";
+import { requiredDisclaimer } from "@/lib/civic/terms";
+import ParcelAside from "./ParcelAside";
+import { flyTo } from "@/lib/globe/camera";
 
 function useRefresh(ms: number) {
   const [, set] = useState(0);
@@ -109,10 +112,13 @@ export default function InfoPanel() {
   // A construct floats above the point it was asked about; report that point, not the stratum.
   const ground = p.layer === "constructs" || p.layer === "field" ? (p.extra as { ground?: [number, number] } | undefined)?.ground : undefined;
   if (ground) lonlat = [ground[0], ground[1], 0];
+  // An identified parcel: the point that was clicked.
+  const parcel = p.layer === "parcels";
+  if (parcel && p.anchor) lonlat = [p.anchor[0], p.anchor[1], 0];
   const details = Object.entries(p.details ?? {}).filter(([, v]) => v != null && v !== "" && v !== false);
   const isLiveLayer =
     !p.simulated &&
-    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "banks", "spending", "constructs", "field", "flood", "wetlands", "publiclands", "relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "transmission", "pipelines", "plants", "rail", "airports", "dams", "faults", "landslides", "geology", "plss"].includes(p.layer);
+    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "banks", "spending", "constructs", "field", "flood", "wetlands", "publiclands", "relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "transmission", "pipelines", "plants", "rail", "airports", "dams", "faults", "landslides", "geology", "plss", "parcels", "zoning", "permits", "licences", "envpermits"].includes(p.layer);
   const banner = BANNER[p.layer];
   const iss = p.layer === "satellites" && p.id === "25544";
   const construct = p.layer === "constructs" || p.layer === "field" || p.layer === "alerts";
@@ -122,6 +128,7 @@ export default function InfoPanel() {
   const sat = p.layer === "satellites" ? ((p.extra as SatExtra | undefined)?.omm ?? null) : null;
   const estimate = p.layer === "turbidity" || p.layer === "realestate" || p.layer === "spending" || p.layer === "field" ? "ESTIMATE" : null;
   const economy = p.layer === "trade" || p.layer === "commerce" || p.layer === "realestate";
+  const disclaimer = requiredDisclaimer(p);
 
   return (
     <aside className="pointer-events-auto w-full" aria-label={`Selected: ${p.name}`}>
@@ -211,6 +218,8 @@ export default function InfoPanel() {
           ))}
         </dl>
 
+        {disclaimer && <p className="border-t border-border/60 px-3 py-2 text-[9px] leading-snug text-muted-foreground">{disclaimer}</p>}
+
         {gauge?.primary && (
           <GaugeHistory key={`${gauge.site}:${gauge.primary}`} site={gauge.site} param={gauge.primary} latest={gauge.readings[gauge.primary]?.value} />
         )}
@@ -218,6 +227,7 @@ export default function InfoPanel() {
         {economy && <EconomyAside key={p.id} feature={feature} />}
         {p.layer === "companies" && <CompanyAside key={p.id} feature={feature} />}
         {(p.layer === "banks" || p.layer === "spending") && <FinanceAside key={p.id} feature={feature} />}
+        {parcel && <ParcelAside key={p.id} feature={feature} />}
         {construct ? <ConstructAside key={p.id} feature={feature} /> : <ConstructContext key={`ctx:${p.layer}:${p.id}`} feature={feature} />}
         {well && (
           <GaugeHistory
@@ -230,26 +240,39 @@ export default function InfoPanel() {
         )}
 
         <div className="flex gap-1 border-t border-border p-2">
-          <button
-            type="button"
-            onClick={() => (following ? stopFollowing() : startFollowing())}
-            className={`flex flex-1 items-center justify-center gap-2 border px-2 py-1.5 text-[10px] uppercase tracking-widest ${
-              following
-                ? "border-signal/60 bg-signal/10 text-signal"
-                : "border-border text-foreground/80 hover:bg-accent hover:text-primary"
-            }`}
-          >
-            <LocateFixed className="size-3.5" />
-            {following ? "Following" : "Follow"}
-          </button>
-          <button
-            type="button"
-            onClick={() => flyToSelection(selected)}
-            className="flex flex-1 items-center justify-center gap-2 border border-border px-2 py-1.5 text-[10px] uppercase tracking-widest text-foreground/80 hover:bg-accent hover:text-primary"
-          >
-            <Crosshair className="size-3.5" />
-            Fly to
-          </button>
+          {parcel ? (
+            <button
+              type="button"
+              onClick={() => lonlat && flyTo(lonlat[0], lonlat[1], { height: 900, pitchDeg: -60 })}
+              className="flex flex-1 items-center justify-center gap-2 border border-border px-2 py-1.5 text-[10px] uppercase tracking-widest text-foreground/80 hover:bg-accent hover:text-primary"
+            >
+              <Crosshair className="size-3.5" />
+              Fly to
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => (following ? stopFollowing() : startFollowing())}
+                className={`flex flex-1 items-center justify-center gap-2 border px-2 py-1.5 text-[10px] uppercase tracking-widest ${
+                  following
+                    ? "border-signal/60 bg-signal/10 text-signal"
+                    : "border-border text-foreground/80 hover:bg-accent hover:text-primary"
+                }`}
+              >
+                <LocateFixed className="size-3.5" />
+                {following ? "Following" : "Follow"}
+              </button>
+              <button
+                type="button"
+                onClick={() => flyToSelection(selected)}
+                className="flex flex-1 items-center justify-center gap-2 border border-border px-2 py-1.5 text-[10px] uppercase tracking-widest text-foreground/80 hover:bg-accent hover:text-primary"
+              >
+                <Crosshair className="size-3.5" />
+                Fly to
+              </button>
+            </>
+          )}
         </div>
       </div>
     </aside>
@@ -259,6 +282,7 @@ export default function InfoPanel() {
 /** One-line reminders of what a layer's features are and are not. */
 const BANNER: Partial<Record<string, string>> = {
   flood: "REGULATORY FLOOD MAP · NOT A FORECAST",
+  parcels: "PUBLIC RECORD AS ITS SOURCE PUBLISHES IT · A TAX MAP, NOT A SURVEY",
   wetlands: "HABITAT MAP FROM DATED IMAGERY · MAY HAVE CHANGED SINCE · NOT A JURISDICTIONAL DELINEATION",
   fires: "SATELLITE HOTSPOT · NOT A CONFIRMED FIRE",
   transmission: "HIFLD ARCHIVE · LAST UPDATED 2024-09-30 · LINES BUILT OR RETIRED SINCE ARE NOT SHOWN AS THEY ARE",
@@ -271,6 +295,10 @@ const BANNER: Partial<Record<string, string>> = {
   plss: "SURVEY GRID FOR REFERENCE · NOT A PARCEL BOUNDARY",
   airquality: "PRELIMINARY · NOT FULLY VERIFIED OR VALIDATED · SUBJECT TO CHANGE (EPA AIRNOW)",
   events: "MACHINE-CODED FROM NEWS REPORTS · NOT VERIFIED INCIDENTS · NO ACTORS, NO ARTICLE LINKS",
+  zoning: "AS THE CITY'S GIS PUBLISHES IT · THE ADOPTED MAP AND CODE GOVERN · NOT A ZONING VERIFICATION",
+  permits: "A PERMIT AS THE CITY PUBLISHES IT · PERMISSION TO BUILD, NOT PROOF WORK HAPPENED",
+  licences: "AS THE REGISTRY PUBLISHES IT · BY TRADE NAME, NOT A SOLE PROPRIETOR'S OWN NAME · APARTMENT AND UNIT ADDRESSES WITHHELD",
+  envpermits: "AS EPA ECHO OR THE CORPS PUBLISHES IT · COMPLIANCE IN ECHO'S OWN WORDS",
 };
 
 /**

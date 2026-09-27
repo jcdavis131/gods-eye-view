@@ -45,9 +45,16 @@ export function flyToSelection(sel: Selection, follow = false) {
   if (!viewer) return false;
   const C = getCesium();
   const r = getRenderer(sel.layer);
-  const pos = r?.getPosition(sel.id);
-  const feature = r?.getFeature(sel.id);
-  if (!pos || !feature) return false;
+  let pos = r?.getPosition(sel.id);
+  let feature = r?.getFeature(sel.id);
+  if (!pos || !feature) {
+    // A selection no layer draws (a zoning answer at a clicked point) flies to its own point.
+    const held = useGlobe.getState().selectedFeature;
+    if (follow || !held || held.properties.layer !== sel.layer || held.properties.id !== sel.id || held.geometry.type !== "Point") return false;
+    const [lon, lat] = held.geometry.coordinates;
+    pos = C.Cartesian3.fromDegrees(lon, lat, 0);
+    feature = held;
+  }
   useGlobe.getState().select(sel, feature);
   const range = FOLLOW_RANGE[sel.layer];
   const carto = C.Cartographic.fromCartesian(pos);

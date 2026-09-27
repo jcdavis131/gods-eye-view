@@ -16,6 +16,13 @@ describe("Explore presets", () => {
       "mitchell-lake",
       "government-canyon",
     ]);
+    expect(PRESET_GROUPS.find((g) => g.title === "Zoning & permits")?.presets.map((p) => p.id)).toEqual([
+      "seattle-zoning",
+      "chicago-loop-permits",
+      "denver-civic-zoning",
+      "houston-channel-permits",
+      "midtown-licences",
+    ]);
     expect(PRESET_GROUPS.find((g) => g.title === "Terrain & soils")?.presets.map((p) => p.id)).toEqual([
       "brackenridge-contours",
       "bexar-soils",
@@ -38,6 +45,15 @@ describe("Explore presets", () => {
       ...(AIRNOW_ENABLED ? ["us-air-quality"] : []),
       "world-events",
     ]);
+    expect(PRESET_GROUPS.find((g) => g.title === "Parcels & ownership")?.presets.map((p) => p.id)).toEqual(["alamo-parcel", "houston-city-hall", "helena-capitol"]);
+  });
+
+  it("open a parcel's dossier at the target, below the height lot lines draw at", () => {
+    for (const p of PRESETS.filter((x) => x.parcel)) {
+      expect(p.layers).toContain("parcels");
+      expect(p.height).toBeLessThanOrEqual(2_000);
+      expect(presetShare(p).parcel).toEqual({ lat: p.lat, lon: p.lon });
+    }
   });
 
   it("put each infrastructure preset below the height its first layer draws at", async () => {
@@ -68,6 +84,15 @@ describe("Explore presets", () => {
     expect(soils.layers).toContain("soils");
     expect(presetShare(PRESETS.find((p) => p.id === "front-range-whp")!).terrain).toBe(1.5);
     expect(presetShare(PRESETS.find((p) => p.id === "galveston-slr")!).slr).toBe(3);
+  });
+
+  it("land the civic layers below the heights they draw at", async () => {
+    const { ZONING_OUTLINE_MAX_M } = await import("@/lib/layers/zoning");
+    const { PERMITS_MAX_M } = await import("@/lib/layers/permits");
+    const { LICENCES_MAX_M } = await import("@/lib/layers/licences");
+    const { ENV_MAX_M } = await import("@/lib/layers/envpermits");
+    const max: Record<string, number> = { zoning: ZONING_OUTLINE_MAX_M, permits: PERMITS_MAX_M, licences: LICENCES_MAX_M, envpermits: ENV_MAX_M };
+    for (const p of PRESETS.filter((x) => x.group === "civic")) for (const l of p.layers) if (max[l]) expect(p.height, `${p.id} ${l}`).toBeLessThanOrEqual(max[l]);
   });
 });
 
