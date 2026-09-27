@@ -98,13 +98,29 @@ describe("watchStep", () => {
     expect(w.log).toHaveLength(2);
     expect(watchCsv(w.log).split("\r\n")[0]).toBe("time,event,layer,id,name");
   });
-  it("does not watch aircraft or ships", () => {
-    expect(WATCH_LAYERS.has("aircraft")).toBe(false);
-    expect(WATCH_LAYERS.has("ships")).toBe(false);
+  it("reports an aircraft and a ship arriving and leaving, by their stable ids", () => {
+    expect(WATCH_LAYERS.has("aircraft")).toBe(true);
+    expect(WATCH_LAYERS.has("ships")).toBe(true);
     const w = newWatch();
-    watchStep(w, [point("aircraft", "a1", 0.5, 0.5)], ring, modes({ aircraft: step() }), 1);
-    expect(watchStep(w, [point("aircraft", "a2", 0.5, 0.5)], ring, modes({ aircraft: step() }), 2)).toEqual([]);
-    expect(w.inside.size).toBe(0);
+    const m = modes({ aircraft: step("0.5,0.5,5|adsb.lol"), ships: step("static|Digitraffic") });
+    expect(watchStep(w, [], ring, m, 1)).toEqual([]);
+    const e2 = watchStep(w, [point("aircraft", "a1b2c3", 0.5, 0.5), point("ships", "230000001", 0.3, 0.3)], ring, m, 2);
+    expect(ids(e2)).toEqual(["arrived:230000001", "arrived:a1b2c3"]);
+    const e3 = watchStep(w, [point("aircraft", "a1b2c3", 1.5, 0.5), point("ships", "230000001", 0.3, -0.2)], ring, m, 3);
+    expect(ids(e3)).toEqual(["left:230000001", "left:a1b2c3"]);
+    expect(e3.map((e) => e.layer).sort()).toEqual(["aircraft", "ships"]);
+  });
+  it("logs nothing for a contact that moves within the area", () => {
+    const w = newWatch();
+    const m = modes({ aircraft: step("0.5,0.5,5|adsb.lol"), ships: step("static|Digitraffic") });
+    watchStep(w, [point("aircraft", "a1b2c3", 0.1, 0.1), point("ships", "230000001", 0.2, 0.8)], ring, m, 1);
+    // Same id, a new reported position every refresh.
+    for (let t = 2; t <= 5; t++) {
+      const d = t / 10;
+      expect(watchStep(w, [point("aircraft", "a1b2c3", 0.1 + d, 0.1 + d), point("ships", "230000001", 0.2 + d, 0.8)], ring, m, t)).toEqual([]);
+    }
+    expect(w.inside.size).toBe(2);
+    expect(w.log).toEqual([]);
   });
   it("never reports a layer switched off as everything leaving, nor its return as arrivals", () => {
     const w = newWatch();
@@ -149,10 +165,23 @@ describe("watchStep", () => {
 describe("watchModes", () => {
   const status = (x: Partial<LayerStatus>): LayerStatus => ({ count: 0, source: "t", fetchedAt: 1, loading: false, ...x });
   const info = (id: LayerId) => ({ fires: { viewDependent: true }, hazards: { dependsOn: ["earthquakes", "alerts"] as LayerId[] } })[id as "fires" | "hazards"];
-  it("steps a settled layer on the view key its answer was fetched for", () => {
+  it("steps a settled layer on the view key its answer was fetched for and the sources that answered", () => {
     const m = watchModes({ fires: true, earthquakes: true }, { fires: status({ viewKey: "12,4" }), earthquakes: status({ viewKey: "static" }) }, true, info);
-    expect(m.get("fires")).toEqual({ mode: "step", key: "12,4" });
-    expect(m.get("earthquakes")).toEqual({ mode: "step", key: "static" });
+    expect(m.get("fires")).toEqual({ mode: "step", key: "12,4|t" });
+    expect(m.get("earthquakes")).toEqual({ mode: "step", key: "static|t" });
+  });
+  it("retakes the baseline silently when the same view is answered from other sources", () => {
+    const ring = sq(0, 0, 1, 1);
+    const air = (id: LayerId) => (id === "aircraft" ? { viewDependent: true } : undefined);
+    const opensky = { aircraft: status({ viewKey: "0.5,0.5,12", source: "opensky (anon) + adsb.lol mil" }) };
+    const fallback = { aircraft: status({ viewKey: "0.5,0.5,12", source: "adsb.lol + adsb.lol mil" }) };
+    const w = newWatch();
+    watchStep(w, [point("aircraft", "a1", 0.5, 0.5), point("aircraft", "a2", 0.6, 0.6)], ring, watchModes({ aircraft: true }, opensky, true, air), 1);
+    // OpenSky did not answer and adsb.lol's 250 nm around the view does not reach a1: not a departure.
+    expect(watchStep(w, [point("aircraft", "a2", 0.6, 0.6)], ring, watchModes({ aircraft: true }, fallback, true, air), 2)).toEqual([]);
+    // Two answers from the same sources are compared again.
+    const e3 = watchStep(w, [], ring, watchModes({ aircraft: true }, fallback, true, air), 3);
+    expect(e3.map((e) => `${e.kind}:${e.id}`)).toEqual(["left:a2"]);
   });
   it("holds a layer that is loading, and forgets a view-dependent one while the area is out of view", () => {
     expect(watchModes({ earthquakes: true }, { earthquakes: status({ loading: true }) }, true, info).get("earthquakes")).toEqual({ mode: "hold" });

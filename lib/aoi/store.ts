@@ -71,8 +71,10 @@ export interface WatchLayerInfo {
  *         would vanish without leaving: it is left out of the watch while they are on
  *   hold  refetching; or view-dependent while the area is out of view (stale: its
  *         baseline is retaken silently when the area is back and the layer has settled)
- *   step  settled, keyed by the view its answer was fetched for (LayerStatus.viewKey), so
- *         an answer for another view sets a new baseline instead of being compared
+ *   step  settled, keyed by the view its answer was fetched for (LayerStatus.viewKey) and
+ *         the sources that answered (LayerStatus.source), so an answer for another view, or
+ *         one from other sources at the same view (Aircraft's OpenSky falling back to
+ *         adsb.lol, Ships without Digitraffic), sets a new baseline instead of being compared
  * Known gap: in the frame between a partner switching off and Hazard alerts re-running its
  * refine, a step could baseline without the events it takes back; they would then read as
  * arrivals. The window is one render, against a 5 s step.
@@ -91,7 +93,7 @@ export function watchModes(
     else if (def?.dependsOn?.some((d) => on[d])) out.set(id, { mode: "drop" });
     else if (def?.viewDependent && !inView) out.set(id, { mode: "hold", stale: true });
     else if (st.loading) out.set(id, { mode: "hold" });
-    else out.set(id, { mode: "step", key: st.viewKey ?? "static" });
+    else out.set(id, { mode: "step", key: `${st.viewKey ?? "static"}|${st.source}` });
   }
   return out;
 }

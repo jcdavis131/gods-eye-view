@@ -120,7 +120,7 @@ function Watch({ inView }: { inView: boolean }) {
         )}
       </div>
       <div className="mt-1 text-[9px] leading-snug text-muted-foreground">
-        Reports what arrives and what leaves among {watched.length ? watched.map((l) => labels[l] ?? l).join(", ") : "the layers that come and go (switch on earthquakes, active fires, wildfires, hazard alerts, live warnings or news events)"}. The first pass sets the baseline silently, and so does a layer&apos;s first answer after it reloads for another view; a layer switched off or still loading is not counted as leaving. Aircraft and ships are not watched.
+        Reports what arrives and what leaves among {watched.length ? watched.map((l) => labels[l] ?? l).join(", ") : "the layers that come and go (switch on aircraft, ships, earthquakes, active fires, wildfires, hazard alerts, live warnings or news events)"}. Aircraft and ships are logged by ICAO hex and MMSI, as each feed reports them. The first pass sets the baseline silently, and so does a layer&apos;s first answer after it reloads for another view or from other sources; a layer switched off or still loading is not counted as leaving.
         {on.hazards && handsOff.length > 0 && (
           <span className="block">
             {labels.hazards ?? "Hazard alerts"} is not watched while {handsOff.map((l) => labels[l] ?? l).join(" or ")} is on: it hands some events to {handsOff.length === 1 ? "that layer" : "those layers"}.

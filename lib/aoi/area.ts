@@ -42,12 +42,12 @@ export function featuresInside(features: Iterable<LayerFeature>, ring: Ring): In
 // ---------------------------------------------------------------- watch
 
 /**
- * Layers whose features come and go: the watch reports these. Aircraft and ships are
- * left out on purpose: a saved, timestamped log of which airframes and vessels came
- * and went over a drawn area (a home, a private strip) is a pattern-of-life record,
- * which waits on the operator's decision (and a LADD/PIA exclusion) before it exists.
+ * Layers whose features come and go: the watch reports these. That includes the moving
+ * contacts, aircraft and ships, by their stable id (ICAO hex, MMSI) and as each feed
+ * reports them: the operator's decision (Cam, 2026-09-27). No LADD/PIA filter is added;
+ * none was chosen.
  */
-export const WATCH_LAYERS: ReadonlySet<LayerId> = new Set<LayerId>(["earthquakes", "fires", "wildfire", "hazards", "alerts", "events"]);
+export const WATCH_LAYERS: ReadonlySet<LayerId> = new Set<LayerId>(["aircraft", "ships", "earthquakes", "fires", "wildfire", "hazards", "alerts", "events"]);
 
 export interface WatchEvent {
   at: number;
@@ -61,9 +61,10 @@ export interface WatchState {
   /** key "<layer>:<id>" -> what was inside at the last step. */
   inside: Map<string, { layer: LayerId; id: string; name: string }>;
   /**
-   * Layers whose baseline has been taken, with the view key of the answer it was taken
-   * from. A layer's first answer, and its first answer for another view, set a new
-   * baseline silently: only two answers for the same view are compared.
+   * Layers whose baseline has been taken, with the step key (view and sources) of the
+   * answer it was taken from. A layer's first answer, and its first answer for another
+   * view or from other sources, set a new baseline silently: only two answers for the
+   * same view from the same sources are compared.
    */
   seen: Map<LayerId, string>;
   log: WatchEvent[];
@@ -75,7 +76,8 @@ export function newWatch(): WatchState {
 
 /**
  * What one watch step does with a watched layer:
- *   step  its answer is settled: compare it with the baseline taken for the same view key
+ *   step  its answer is settled: compare it with the baseline taken for the same key (the
+ *         view the answer was fetched for and the sources that answered)
  *   hold  it is refetching, or its answer does not describe the area right now: skip it and
  *         keep its baseline; `stale` also forgets the baseline (the area left the view of a
  *         view-dependent layer), so it is retaken silently once the layer settles again
@@ -90,7 +92,7 @@ export const WATCH_LOG_MAX = 500;
 /**
  * One watch step. `features` are the loaded features now; `modes` says what to do with
  * each watched layer (see WatchMode, and watchModes in ./store.ts). Only a layer that
- * steps, on the same view key as its baseline, reports arrivals and departures. A held
+ * steps, on the same key as its baseline, reports arrivals and departures. A held
  * layer (refetching, or its answer kept on screen while another view loads) keeps what
  * was inside; a dropped layer (off, failed) is forgotten, so neither a layer switching
  * off nor its return reads as everything leaving or arriving.
@@ -104,7 +106,7 @@ export function watchStep(state: WatchState, features: Iterable<LayerFeature>, r
     if (!featureInside(f, ring, box)) continue;
     current.set(`${l}:${f.properties.id}`, { layer: l, id: f.properties.id, name: f.properties.name });
   }
-  // A layer compares only against a baseline taken from an answer for the same view.
+  // A layer compares only against a baseline taken from an answer for the same view, from the same sources.
   const compares = (l: LayerId) => {
     const m = modes.get(l);
     return m?.mode === "step" && state.seen.get(l) === m.key;
