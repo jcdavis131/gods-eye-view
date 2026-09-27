@@ -57,6 +57,14 @@
       "description": "Parcels and ownership as each county or state service publishes them, NAD address points and BLM PLSS; found only by a point or a box, never by a name."
     },
     {
+      "name": "zoning",
+      "description": "Zoning districts as city zoning GIS services publish them: Seattle, Denver, New York City (DCP districts and the Zoning Tax Lot Database), Chicago, Dallas, San Antonio, Austin, Los Angeles, San Francisco; Houston answers that it has no zoning ordinance. The city is picked by the Census TIGERweb incorporated place under the point."
+    },
+    {
+      "name": "permits",
+      "description": "Building permits (Chicago, Austin, Seattle, Denver residential, New York DOB NOW, Los Angeles, San Francisco), business licences (NY State Liquor Authority, Chicago, San Francisco, Los Angeles, NYC DCWP premises) and environmental permits (EPA ECHO Clean Water Act and Clean Air Act, U.S. Army Corps of Engineers ORM), each with a coverage list that says which sources answered and why the others did not."
+    },
+    {
       "name": "space",
       "description": "Space weather (GFZ Kp, NASA DONKI) and NASA's ISS live stream, checked through YouTube oEmbed."
     },
@@ -79,14 +87,6 @@
     {
       "name": "reserved",
       "description": "Routes other workstreams add in this build; documented in docs/*.md, schemas to be filled in by the integrator."
-    },
-    {
-      "name": "zoning",
-      "description": "Zoning districts as city zoning GIS services publish them: Seattle, Denver, New York City (DCP districts and the Zoning Tax Lot Database), Chicago, Dallas, San Antonio, Austin, Los Angeles, San Francisco; Houston answers that it has no zoning ordinance. The city is picked by the Census TIGERweb incorporated place under the point."
-    },
-    {
-      "name": "permits",
-      "description": "Building permits (Chicago, Austin, Seattle, Denver residential, New York DOB NOW, Los Angeles, San Francisco), business licences (NY State Liquor Authority, Chicago, San Francisco, Los Angeles, NYC DCWP premises) and environmental permits (EPA ECHO Clean Water Act and Clean Air Act, U.S. Army Corps of Engineers ORM), each with a coverage list that says which sources answered and why the others did not."
     }
   ],
   "paths": {

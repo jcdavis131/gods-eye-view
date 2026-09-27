@@ -372,8 +372,10 @@ export default function CesiumGlobe() {
         }
         // Zoning: a click on the ground, or on a district outline (it carries only its code),
         // asks for the zoning at that point. Any other object picked wins. With Parcels also
-        // on, a click on the bare ground below the parcels height is the parcel's (above); a
-        // district outline is still zoning's. Either comes before the ground-picture click below.
+        // on, a click on the bare ground below the parcels height is the parcel's (above), but
+        // a drawn district's fill picks as zoning (same id as its outline), so below the outline
+        // height a click inside a district is zoning's: Zoning must be off for the parcel there.
+        // Either comes before the ground-picture click below.
         if ((!isPickId(id) || id.layer === "zoning") && st.layers.zoning && st.view.height <= ZONING_IDENTIFY_MAX_M) {
           const ray = viewer!.camera.getPickRay(e.position);
           const hit = (ray && scene.globe.pick(ray, scene)) || viewer!.camera.pickEllipsoid(e.position, ellipsoid);
