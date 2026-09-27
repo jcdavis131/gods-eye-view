@@ -10,7 +10,10 @@
 //                             the district at that point (lib/zoning/pick.ts): overlays,
 //                             ordinance, effective date and the code link as the city
 //                             publishes them. Houston answers that it has no zoning
-//                             ordinance.
+//                             ordinance. With Parcels on, below PARCEL_IDENTIFY_MAX_M
+//                             (5 km) the click is the parcel's, inside a district too
+//                             (lib/globe/clickPrecedence.ts): zoning answers from 5 to
+//                             15 km, and with Parcels off everywhere below 15 km.
 //
 // Outside the covered cities the note says so; an empty map there is "not
 // covered", never "unzoned".
@@ -23,8 +26,10 @@ import { citiesInBox, coveredCityNames, ZONING_CITIES, type Bbox, type ZoningCit
 
 /** District outlines load below this camera height. */
 export const ZONING_OUTLINE_MAX_M = 4_000;
-/** A click on the ground asks for the zoning at that point below this height. */
+/** A click on the ground asks for the zoning at that point below this height (with Parcels on, above 5 km). */
 export const ZONING_IDENTIFY_MAX_M = 15_000;
+/** What the notes say about the click with Parcels also on (lib/globe/clickPrecedence.ts). */
+const PARCELS_FIRST = "with Parcels on, a click below 5 km opens the parcel: switch Parcels off to read zoning up close";
 /**
  * Half the box's height in degrees (~830 m). San Antonio maps zoning lot by lot: 2,258 districts in
  * 2 x 2 km of downtown, over its 2,000-record limit; this box holds about 1,300 there.
@@ -53,11 +58,11 @@ export function districtsNote(count: number, meta: DistrictsMeta, box: Bbox): st
   const parts: string[] = [];
   const cities = citiesInBox(box);
   if (!cities.length) {
-    return `no zoning source here. Covered: ${coveredCityNames()} (Houston: no zoning ordinance). Click the ground for the answer at a point`;
+    return `no zoning source here. Covered: ${coveredCityNames()} (Houston: no zoning ordinance). Click the ground for the answer at a point (${PARCELS_FIRST})`;
   }
   parts.push(`${count.toLocaleString("en-US")} district outlines in the dashed box (outside it: not loaded)`);
   if (meta.sources?.length) parts.push(`from ${meta.sources.map((s) => ZONING_CITIES[s.city].publisher).join(", ")}`);
-  parts.push("click the ground for overlays, ordinance and code link");
+  parts.push(`click the ground for overlays, ordinance and code link (${PARCELS_FIRST})`);
   if (meta.truncated) parts.push("record limit hit, zoom in for every district");
   for (const p of meta.pointOnly ?? []) parts.push(p.city === "houston" ? "Houston has no zoning ordinance" : `${p.name}: click for the district (no outlines)`);
   if (meta.failed?.length) parts.push(`did not answer: ${meta.failed.map((f) => f.name).join(", ")}`);
@@ -80,7 +85,7 @@ function outlineFeature(f: { id: string; geometry: GeoJSON.Polygon | GeoJSON.Mul
         zoning: p.code,
         "category (city's words)": p.category,
         city: city.name,
-        "for more": "click the ground inside the district for its overlays, ordinance and code link",
+        "for more": `click the ground inside the district for its overlays, ordinance and code link (${PARCELS_FIRST})`,
       },
       extra: p,
     },
@@ -97,7 +102,7 @@ async function fetchZoning(ctx: FetchContext): Promise<FetchResult> {
       note:
         h > ZONING_IDENTIFY_MAX_M
           ? `descend below ${ZONING_IDENTIFY_MAX_M / 1000} km and click the ground for the zoning at a point, below ${ZONING_OUTLINE_MAX_M / 1000} km for district outlines · ${coveredCityNames()}; Houston has none`
-          : `click the ground for the zoning at a point; district outlines draw below ${ZONING_OUTLINE_MAX_M / 1000} km`,
+          : `click the ground for the zoning at a point (${PARCELS_FIRST}); district outlines draw below ${ZONING_OUTLINE_MAX_M / 1000} km`,
       meta: { count: 0 },
     };
   }
@@ -131,7 +136,7 @@ export const zoningLayer: LayerDefinition = {
   id: "zoning",
   label: "Zoning",
   description:
-    "Zoning districts as ten city zoning services publish them: outlines below 4 km in Seattle, Denver, New York, Chicago, Dallas, San Antonio, Austin, Los Angeles and San Francisco, and a click on the ground below 15 km for the district at that point with its overlays, ordinance and code link (Houston answers that it has no zoning ordinance).",
+    "Zoning districts as ten city zoning services publish them: outlines below 4 km in Seattle, Denver, New York, Chicago, Dallas, San Antonio, Austin, Los Angeles and San Francisco, and a click on the ground below 15 km for the district at that point with its overlays, ordinance and code link (Houston answers that it has no zoning ordinance). With Parcels on, a click below 5 km opens the parcel instead, inside a district too: switch Parcels off to read zoning up close.",
   color: "#F0ABFC",
   updateIntervalMs: 6 * 60 * 60_000,
   defaultEnabled: false,

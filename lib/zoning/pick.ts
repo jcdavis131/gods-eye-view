@@ -2,7 +2,9 @@
 // The zoning at a clicked point. With the Zoning layer on and the camera
 // below ZONING_IDENTIFY_MAX_M, a click on the ground (or on a district
 // outline, which carries only its code) asks /api/zoning?op=point about that
-// spot and opens the answer as a dossier. The point is marked on the globe
+// spot and opens the answer as a dossier. With Parcels on, below 5 km the
+// click is the parcel's instead, inside a district too; zoning answers from
+// 5 to 15 km (lib/globe/clickPrecedence.ts). The point is marked on the globe
 // while its dossier is open, and travels in share links as `zoning=lat,lon`.
 
 import type * as CesiumNS from "cesium";

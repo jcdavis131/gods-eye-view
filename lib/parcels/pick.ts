@@ -1,7 +1,8 @@
 "use client";
 // Click-to-identify for the parcels layer. A click on the ground (or on a
-// lot line) below PARCEL_IDENTIFY_MAX_M asks /api/parcels for the parcel at
-// that point and opens its dossier. The identified parcel is not one of the
+// lot line, or on a zoning district) below PARCEL_IDENTIFY_MAX_M asks
+// /api/parcels for the parcel at that point and opens its dossier
+// (lib/globe/clickPrecedence.ts). The identified parcel is not one of the
 // layer's features (outlines carry no record), so the store holds it, the
 // dossier is fed from it, and startParcelOverlay draws its outline.
 
