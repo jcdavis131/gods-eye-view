@@ -22,6 +22,10 @@ export interface LayerStatus {
   picture?: boolean;
   /** The view key the drawn answer was fetched for ("static" when not view-dependent); see FetchResult.viewKey. */
   viewKey?: string;
+  /** The view the drawn answer was fetched with; see FetchResult.fetchView. */
+  fetchView?: ViewState;
+  /** The drawn answer is still filling in; see FetchResult.settling. */
+  settling?: boolean;
 }
 
 export interface LogEntry {

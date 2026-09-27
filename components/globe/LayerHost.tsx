@@ -152,7 +152,8 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
   const query = useQuery({
     queryKey: ["layer", def.id, vk, optionsKey, missionDay],
     // Each answer carries the view key it was fetched for, so one kept on screen while
-    // the next view loads (keepPreviousData) still says which view it describes.
+    // the next view loads (keepPreviousData) still says which view it describes, and the
+    // view itself: an interval refetch under the same key asks with the latest view.
     queryFn: ({ signal }): Promise<FetchResult> =>
       def
         .fetch({
@@ -163,7 +164,7 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
           signal,
           options: { ...prefs } as unknown as Record<string, unknown>,
         })
-        .then((r) => ({ ...r, viewKey: vk })),
+        .then((r) => ({ ...r, viewKey: vk, fetchView: view })),
     enabled,
     refetchInterval: def.updateIntervalMs,
     staleTime: Math.max(1000, def.updateIntervalMs / 2),
@@ -186,7 +187,7 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
       // store flips before the renderer's own effect catches up).
       holds: (layer, id) => deps.includes(layer) && !!getRenderer(layer)?.getFeature(id),
     });
-    return { ...refined, viewKey: fetched.viewKey };
+    return { ...refined, viewKey: fetched.viewKey, fetchView: fetched.fetchView, settling: fetched.settling };
     // depsKey is what the store reads above: re-run when it changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetched, def, depsKey]);
@@ -205,6 +206,8 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
       loading: false,
       picture: data.meta?.picture === true,
       viewKey: data.viewKey,
+      fetchView: data.fetchView,
+      settling: data.settling === true,
     });
   }, [data, def.id, def.simulated, setStatus]);
 

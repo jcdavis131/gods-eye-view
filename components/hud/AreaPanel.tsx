@@ -10,7 +10,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Binoculars, ClipboardCopy, Download, FileText, Link2, ScanSearch, X } from "lucide-react";
 import { useGlobe } from "@/lib/store/globe";
 import { useArea, areaRing, answeringLayers, areaInView, ringKey, watchModes } from "@/lib/aoi/store";
-import { featuresInside, insideCsv, insideGeoJson, watchCsv, watchStep, WATCH_LAYERS, type InsideGroup } from "@/lib/aoi/area";
+import { featuresInside, insideCsv, insideGeoJson, watchCsv, watchStep, WATCH_LAYERS, WATCH_LOG_MAX, type InsideGroup } from "@/lib/aoi/area";
+import { describeCoverage, WATCH_COVERAGE } from "@/lib/aoi/coverage";
+import type { Ring } from "@/lib/aoi/geometry";
 import { areaReport, reportText, type AreaReport } from "@/lib/aoi/report";
 import { measureShape, fmtArea } from "@/lib/globe/measure";
 import { allFeatures } from "@/lib/globe/registry";
@@ -90,18 +92,30 @@ function Inside({ groups }: { groups: InsideGroup[] }) {
   );
 }
 
-function Watch({ inView }: { inView: boolean }) {
+function Watch({ inView, ring }: { inView: boolean; ring: Ring }) {
   const watching = useArea((s) => s.watching);
   const since = useArea((s) => s.watchSince);
   const log = useArea((s) => s.watch.log);
+  const dropped = useArea((s) => s.watch.dropped);
+  const droppedThrough = useArea((s) => s.watch.droppedThrough);
   useArea((s) => s.tick);
   const start = useArea((s) => s.startWatch);
   const stop = useArea((s) => s.stopWatch);
   const on = useGlobe((s) => s.layers);
+  const status = useGlobe((s) => s.status);
   const watched = [...WATCH_LAYERS].filter((l) => on[l]);
   // Hazard alerts hands some events to these layers while they are on, so it sits out the watch then.
   const handsOff = (LAYER_BY_ID.hazards?.dependsOn ?? []).filter((l) => on[l]);
   const viewDependent = watched.filter((l) => LAYER_BY_ID[l]?.viewDependent);
+  // What the watch does with each layer right now, so the panel can say why one is paused.
+  const modes = watchModes(on, status, inView, (id) => LAYER_BY_ID[id], ring);
+  const heldFor = (reason: "coverage" | "settling") =>
+    watched.filter((l) => {
+      const m = modes.get(l);
+      return m?.mode === "hold" && m.reason === reason;
+    });
+  const uncovered = heldFor("coverage");
+  const settling = heldFor("settling");
   return (
     <div className="px-3 py-2">
       <div className="flex items-center gap-2">
@@ -114,13 +128,13 @@ function Watch({ inView }: { inView: boolean }) {
           {watching ? "Stop watching" : "Watch this area"}
         </button>
         {log.length > 0 && (
-          <button type="button" onClick={() => downloadText(`area-watch-${stamp()}.csv`, watchCsv(log), "text/csv")} className="flex items-center gap-1 text-[9px] uppercase tracking-widest text-muted-foreground hover:text-primary">
+          <button type="button" onClick={() => downloadText(`area-watch-${stamp()}.csv`, watchCsv(log, { count: dropped, through: droppedThrough }), "text/csv")} className="flex items-center gap-1 text-[9px] uppercase tracking-widest text-muted-foreground hover:text-primary">
             <Download className="size-3" /> CSV
           </button>
         )}
       </div>
       <div className="mt-1 text-[9px] leading-snug text-muted-foreground">
-        Reports what arrives and what leaves among {watched.length ? watched.map((l) => labels[l] ?? l).join(", ") : "the layers that come and go (switch on aircraft, ships, earthquakes, active fires, wildfires, hazard alerts, live warnings or news events)"}. Aircraft and ships are logged by ICAO hex and MMSI, as each feed reports them. The first pass sets the baseline silently, and so does a layer&apos;s first answer after it reloads for another view or from other sources; a layer switched off or still loading is not counted as leaving.
+        Reports what arrives and what leaves among {watched.length ? watched.map((l) => labels[l] ?? l).join(", ") : "the layers that come and go (switch on aircraft, ships, earthquakes, active fires, wildfires, hazard alerts, live warnings or news events)"}. Aircraft and ships are logged by ICAO hex and MMSI, with the callsign or registration and the vessel name as each feed reports them. The first pass sets the baseline silently, and so does a layer&apos;s first answer after it reloads for another view or from other sources; a layer switched off or still loading is not counted as leaving.
         {on.hazards && handsOff.length > 0 && (
           <span className="block">
             {labels.hazards ?? "Hazard alerts"} is not watched while {handsOff.map((l) => labels[l] ?? l).join(" or ")} is on: it hands some events to {handsOff.length === 1 ? "that layer" : "those layers"}.
@@ -128,6 +142,20 @@ function Watch({ inView }: { inView: boolean }) {
         )}
         {watching && !inView && viewDependent.length > 0 && (
           <span className="block text-warn">Paused for {viewDependent.map((l) => labels[l] ?? l).join(", ")}: bring the area into view, since {viewDependent.length === 1 ? "it loads" : "they load"} only what is near the camera.</span>
+        )}
+        {watching &&
+          uncovered.map((l) => (
+            <span key={l} className="block text-warn">
+              Paused for {labels[l] ?? l}: its last answer covers {describeCoverage(WATCH_COVERAGE[l]?.(status[l]?.source ?? "", status[l]?.fetchView) ?? { kind: "none" })}, not the whole area. Centre the view on the area, or draw a smaller one.
+            </span>
+          ))}
+        {watching && settling.length > 0 && (
+          <span className="block text-warn">Paused for {settling.map((l) => labels[l] ?? l).join(", ")}: still filling in after connecting, so a contact first heard now may have been there all along. The baseline is retaken silently once it has settled.</span>
+        )}
+        {dropped > 0 && (
+          <span className="block">
+            The log keeps the newest {WATCH_LOG_MAX} events: {dropped.toLocaleString("en-US")} earlier {dropped === 1 ? "one was" : "ones were"} dropped, and the CSV says so in its last row.
+          </span>
         )}
         {watching && since && <span className="block">Watching since {new Date(since).toLocaleTimeString()}.</span>}
       </div>
@@ -242,7 +270,7 @@ export default function AreaPanel() {
     const step = () => {
       const g = useGlobe.getState();
       const st = useArea.getState();
-      const modes = watchModes(g.layers, g.status, areaInView(ring, g.view), (id) => LAYER_BY_ID[id]);
+      const modes = watchModes(g.layers, g.status, areaInView(ring, g.view), (id) => LAYER_BY_ID[id], ring);
       watchStep(st.watch, allFeatures(), ring, modes, Date.now());
       st.bump();
     };
@@ -303,7 +331,7 @@ export default function AreaPanel() {
           </div>
         </>
       )}
-      {tab === "watch" && <Watch inView={inView} />}
+      {tab === "watch" && <Watch inView={inView} ring={ring} />}
       {tab === "report" && <Report report={report} onBuild={build} where={where} />}
     </div>
   );
