@@ -353,7 +353,9 @@ export default function CesiumGlobe() {
         const id = picked?.id;
         const st = useGlobe.getState();
         // Parcels: a click on the ground, or on a lot line (outlines carry no record),
-        // asks for the parcel at that point. Any other object picked wins.
+        // asks for the parcel at that point. Any other object picked wins. This comes
+        // before the ground-picture click below (groundClickWanted): with Parcels on and
+        // low enough, a click on the ground is a parcel question, not a soils/land cover one.
         if ((!isPickId(id) || id.layer === "parcels") && st.layers.parcels && st.view.height <= PARCEL_IDENTIFY_MAX_M) {
           const ray = viewer!.camera.getPickRay(e.position);
           const hit = (ray && scene.globe.pick(ray, scene)) || viewer!.camera.pickEllipsoid(e.position, ellipsoid);
