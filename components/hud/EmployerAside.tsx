@@ -62,7 +62,7 @@ function fmtEmployees(n: number): string {
 }
 
 export default function EmployerAside({ feature }: { feature: LayerFeature }) {
-  const props = feature.properties as Record<string, unknown>;
+  const props = feature.properties as unknown as Record<string, unknown>;
   const name = (props.name as string) ?? "";
   const q = useEmployerDossier(name || null);
   const d = q.data?.data?.[0];

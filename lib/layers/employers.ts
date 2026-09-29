@@ -43,7 +43,7 @@ async function fetchEmployers(ctx: FetchContext): Promise<FetchResult> {
 
   // Tag the layer id on each feature for InfoPanel
   for (const f of features) {
-    (f.properties as Record<string, unknown>).layer = "employers";
+    f.properties.layer = "employers";
   }
 
   const notes: string[] = [`${features.length} employer HQs in view`];

@@ -452,6 +452,7 @@ export const FOLLOW_RANGE: Record<LayerId, number> = {
   commerce: 150_000,
   realestate: 150_000,
   companies: 20_000,
+  employers: 20_000,
   banks: 20_000,
   spending: 150_000,
   occupations: 400_000,
