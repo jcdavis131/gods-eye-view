@@ -7,14 +7,14 @@
 // accepts.
 
 import { insightBySlug } from "@/lib/insights/build";
-import { CANVASES } from "@/lib/insights/render/canvas";
 import { PNG_WIDTH, toPng } from "@/lib/insights/render/raster";
 import { renderSvg } from "@/lib/insights/render/render";
 import { cacheControl } from "@/lib/server/respond";
 
 export const runtime = "nodejs";
 export const alt = "An Embedding Atlas insight chart card; the full data table and every source are on the page.";
-export const size = { width: CANVASES.og.width, height: CANVASES.og.height };
+/** A literal, as the metadata image convention documents it; the og canvas (lib/insights/render/canvas.ts) is the same 1200 x 630, and the route test checks the decoded PNG against this. */
+export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
 export default async function Image({ params }: { params: Promise<{ slug: string }> }): Promise<Response> {
