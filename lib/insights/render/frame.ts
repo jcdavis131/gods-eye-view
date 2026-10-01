@@ -38,7 +38,7 @@ import { stableHash } from "@/lib/feed/hash";
 import { CANVASES, type CanvasId, type CanvasPreset } from "./canvas";
 import { balancedWrap, capHeight, descent, fitsWidth, headlineAt, measureStyled, unmapped, wrapSource, type FittedHeadline, type TextStyle } from "./metrics";
 import { numericAxis, scaleLinear, type NumericAxis } from "./scale";
-import type { CircleNode, LineNode, PatternDef, RectNode, Scene, SceneNode, TextNode, TextRole } from "./scene";
+import { textSpan, type CircleNode, type LineNode, type PatternDef, type RectNode, type Scene, type SceneNode, type TextNode, type TextRole } from "./scene";
 import { byteCompare, canonicalJson, canonicalSpec, type ChartSpec } from "./spec";
 import { toSvg } from "./svg";
 import { describe, isPlotted } from "./table";
@@ -114,12 +114,30 @@ function hex(cp: number): string {
   return `U+${cp.toString(16).toUpperCase().padStart(4, "0")}`;
 }
 
-function textNode(role: TextRole, text: string, x: number, y: number, anchor: TextNode["anchor"], style: TextStyle, fill: string, extra: Partial<TextNode> = {}): TextNode {
+/** A measured text run; throws on any character the vendored font does not map. */
+export function textNode(role: TextRole, text: string, x: number, y: number, anchor: TextNode["anchor"], style: TextStyle, fill: string, extra: Partial<TextNode> = {}): TextNode {
   const bad = unmapped(text, style.weight);
   if (bad.length) throw new Error(`${role} text uses characters the vendored font does not map (${bad.map(hex).join(", ")}): "${text}"`);
   const node: TextNode = { type: "text", role, text, x, y, anchor, size: style.size, weight: style.weight, fill, width: measureStyled(text, style), ...extra };
   if (style.letterSpacing) node.letterSpacing = style.letterSpacing;
   return node;
+}
+
+/**
+ * The box a laid-out run occupies: cap top to descent, across its measured
+ * width. A run rotated -90 (the y title) reads bottom to top, so an
+ * end-anchored one runs down the page from its anchor: its box spans y to
+ * y + width, and from cap height left of x to the descent right of it.
+ */
+export function textBox(t: TextNode): Box {
+  const c = capHeight(t.size, t.weight);
+  const d = descent(t.size, t.weight);
+  if (t.rotate === -90) {
+    const y0 = t.anchor === "end" ? t.y : t.anchor === "middle" ? t.y - t.width / 2 : t.y - t.width;
+    return { x: t.x - c, y: y0, w: c + d, h: t.width };
+  }
+  const span = textSpan(t);
+  return { x: span.x0, y: t.y - c, w: t.width, h: c + d };
 }
 
 /** "a", "a and b", "a, b and c". */
