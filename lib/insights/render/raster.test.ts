@@ -3,8 +3,9 @@
 // so these tests assert properties of the decoded pixels, not bytes: the
 // signature and sizes, the subject's colour at its bubble's centre, enough
 // ink in the headline band to prove the fonts loaded (resvg given no fonts
-// draws no text at all), every text run's ink inside the box the layout
-// measured for it, clear space between legend items, and initialisation that
+// draws no text at all), weights 400, 700 and 900 drawn by three distinct
+// faces, every text run's ink inside the box the layout measured for it and
+// filling most of it, clear space between legend items, and initialisation that
 // survives a hot reload and retries after a failure.
 //
 // Preview PNGs for a visual review are written, not asserted, with:
@@ -23,6 +24,7 @@ import FIXTURE from "./fixtures/flagship-qcew-2019-2023.json";
 import type { CanvasId } from "./canvas";
 import { layoutBubble } from "./charts/bubble";
 import { textBox } from "./frame";
+import { measure } from "./metrics";
 import { FONT_FILES, PNG_WIDTH, WASM_FILE, ensureResvg, forgetResvgInit, toPng } from "./raster";
 import { renderChart, renderSvg } from "./render";
 import { textNodes, type TextNode } from "./scene";
@@ -221,6 +223,43 @@ describe("metrics against the font as rasterised", () => {
     return { svg, width };
   }
 
+  /** Left and right ink columns (right exclusive) of a run rasterised alone at `pad`. */
+  async function inkSpan(t: TextNode, pad: number): Promise<{ left: number; right: number }> {
+    const { svg, width } = runSvg(t, pad);
+    const d = decodePng(await toPng(svg, width));
+    const black: Rgb = [0, 0, 0];
+    let left = Infinity;
+    let right = -Infinity;
+    for (let y = 0; y < d.height; y++) {
+      for (let x = 0; x < d.width; x++) {
+        if (!isInk(pixel(d, x, y), black)) continue;
+        if (x < left) left = x;
+        if (x + 1 > right) right = x + 1;
+      }
+    }
+    return { left, right };
+  }
+
+  it("maps weights 400, 700 and 900 to three distinct faces, each inking 90-100 % of its own measured width", async () => {
+    const L = layoutBubble(SPEC, "social", "dark");
+    const samples = [L.frame.runs.find((r) => r.node.role === "headline")?.node, L.frame.runs.find((r) => r.node.role === "legend" && r.node.text.startsWith("Bubble size"))?.node, textNodes(L.nodes).find((t) => t.text === "Austin")] as TextNode[];
+    expect(samples.every(Boolean)).toBe(true);
+    for (const s of samples) {
+      const inks: number[] = [];
+      for (const weight of [400, 700, 900] as const) {
+        const t: TextNode = { ...s, weight, width: measure(s.text, s.size, weight, s.letterSpacing ?? 0) };
+        const { left, right } = await inkSpan(t, 16);
+        const ink = right - left;
+        expect(ink / t.width, `"${s.text}" at ${weight}`).toBeGreaterThan(0.9);
+        expect(ink / t.width, `"${s.text}" at ${weight}`).toBeLessThanOrEqual(1);
+        inks.push(ink);
+      }
+      // A weight that fell back to a neighbouring face would ink the same width as that face.
+      expect(inks[1], `"${s.text}" Bold wider than Regular`).toBeGreaterThan(inks[0]);
+      expect(inks[2], `"${s.text}" Black wider than Bold`).toBeGreaterThan(inks[1]);
+    }
+  });
+
   it("keeps every unrotated text run's ink inside its measured width (headline, legend, ticks, notes, labels)", async () => {
     const seen = new Set<string>();
     const runs: TextNode[] = [];
@@ -235,23 +274,14 @@ describe("metrics against the font as rasterised", () => {
     }
     expect(runs.map((t) => t.role)).toEqual(expect.arrayContaining(["headline", "legend", "tick", "source", "brand", "permalink", "label", "axis-title"]));
     const pad = 16;
-    const black: Rgb = [0, 0, 0];
     for (const t of runs) {
-      const { svg, width } = runSvg(t, pad);
-      const d = decodePng(await toPng(svg, width));
-      let left = Infinity;
-      let right = -Infinity;
-      for (let y = 0; y < d.height; y++) {
-        for (let x = 0; x < d.width; x++) {
-          if (!isInk(pixel(d, x, y), black)) continue;
-          if (x < left) left = x;
-          if (x > right) right = x;
-        }
-      }
+      const { left, right } = await inkSpan(t, pad);
       expect(right, `no ink for "${t.text}": the font did not load`).toBeGreaterThan(left);
       // Antialiasing may tint one pixel column past the outline.
-      expect(right + 1, `"${t.text}" ${t.size}/${t.weight} ink ends past its measured ${t.width.toFixed(2)} px`).toBeLessThanOrEqual(pad + t.width + 1);
+      expect(right, `"${t.text}" ${t.size}/${t.weight} ink ends past its measured ${t.width.toFixed(2)} px`).toBeLessThanOrEqual(pad + t.width + 1);
       expect(left, `"${t.text}" ink starts left of its anchor`).toBeGreaterThanOrEqual(pad - 2);
+      // Nor is a box measured much wider than its text: side bearings and the 3 % pad leave ink at 91-97 %.
+      expect((right - left) / t.width, `"${t.text}" ${t.size}/${t.weight} inks too little of its measured width`).toBeGreaterThan(0.88);
     }
   });
 
