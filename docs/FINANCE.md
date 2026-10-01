@@ -11,7 +11,7 @@ Both are about institutions: banks, offices, recipients (legal entities), agenci
 
 | id | what | cadence | terms |
 | --- | --- | --- | --- |
-| `fdic-bankfind` | [BankFind Suite API](https://banks.data.fdic.gov/docs/): `/institutions`, `/locations`, `/sod` (Summary of Deposits), `/financials`, `/failures` | financials quarterly; SOD annual as of June 30, published in the autumn | public domain |
+| `fdic-bankfind` | [BankFind Suite API](https://api.fdic.gov/banks/docs/): `/institutions`, `/locations`, `/sod` (Summary of Deposits), `/financials`, `/failures` | financials quarterly; SOD annual as of June 30, published in the autumn | public domain |
 | `usaspending` | [USAspending API v2](https://api.usaspending.gov/docs/endpoints): `spending_by_geography`, `spending_by_category/{recipient,awarding_agency,naics}`, `spending_over_time` | continuous; agencies report within about 45 days of a quarter's end | public domain; asks for a User-Agent and reasonable rates |
 | `bls-qcew` | covered employment (the per-job denominator) via `lib/economy/sources.ts` | quarterly | public domain |
 | `census-tigerweb` | county and state polygons via `lib/economy/sources.ts` | | public domain |
