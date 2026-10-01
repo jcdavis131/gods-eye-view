@@ -28,10 +28,10 @@ function peer(p: Partial<PeerStat>): PeerStat {
   };
 }
 
-/** A county scope with a hand-built ref, the shape the manifest returns after the pull. */
+/** A county scope from the manifest, with any field overridden by hand. */
 function countyScope(fips: string, extra: Partial<CountyRef> = {}): PlaceScope {
   const base = countyByFips(fips);
-  if (!base) throw new Error(`${fips} is missing from the seed manifest`);
+  if (!base) throw new Error(`${fips} is missing from the place manifest`);
   return { kind: "county", id: fips, ref: { ...base, ...extra }, provisional: false };
 }
 
@@ -97,8 +97,13 @@ const percentileFacts = () =>
 /** 3. Nothing published, but the bundled OEWS index knows what the metro does. */
 const occupationFacts = () => facts(travisWithMetro());
 
-/** 4. Not even a metro: identity and what the page covers. */
-const offlineFacts = () => facts(countyScope("48453", { cbsa: null }));
+/**
+ * 4. Not even a metro: identity and what the page covers. Blanco County, TX
+ * lies outside every CBSA in the pulled manifest, so no fallback can find a
+ * metro for it. A cbsa:null override on Travis no longer means "no metro",
+ * because the manifest itself now puts Travis in 12420.
+ */
+const offlineFacts = () => facts(countyScope("48031"));
 
 describe("placeSeo priority order", () => {
   it("leads with a triggered threshold when one fired", () => {
@@ -122,7 +127,17 @@ describe("placeSeo priority order", () => {
   it("falls to identity and coverage when the page has nothing else, and spells the state out", () => {
     const seo = placeSeo(offlineFacts());
     expect(seo.branch).toBe("offline");
-    expect(seo.title).toBe("Travis County, Texas — housing, jobs, water and federal spending");
+    expect(seo.title).toBe("Blanco County, Texas — housing, jobs, water and federal spending");
+  });
+
+  it("treats a micropolitan county as not a metro, even though it carries a CBSA code", () => {
+    // Anderson County, TX is in the Palestine micropolitan area (37300): a
+    // real CBSA with no OEWS table and no metro page.
+    const anderson = countyScope("48001");
+    expect(anderson.kind === "county" && anderson.ref?.cbsa).toBe("37300");
+    const seo = placeSeo(facts(anderson));
+    expect(seo.branch).toBe("offline");
+    expect(seo.title).toBe("Anderson County, Texas — housing, jobs, water and federal spending");
   });
 
   it("gives every branch a title inside the length cap and never an empty one", () => {

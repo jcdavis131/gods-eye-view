@@ -13,10 +13,11 @@
 // business paying for that.
 //
 // The tables are built by scripts/places-data.mjs. states.json and metros.json
-// are COMPLETE and derivable with zero network. counties.json ships as a seed
-// with complete:false until the script has been run on a host with egress, so
-// every consumer must treat a missing county as "not pulled yet", not as "does
-// not exist" - see MANIFEST.countiesComplete and lib/places/scope.ts.
+// are COMPLETE and derivable with zero network. counties.json is complete once
+// the script's network pull has run (it has: 3,222 county equivalents, the 50
+// states, DC and Puerto Rico), and while a build ever carries an incomplete
+// table, every consumer must treat a missing county as "not pulled yet", not
+// as "does not exist" - see MANIFEST.countiesComplete and lib/places/scope.ts.
 //
 // Ethics: places only. Names, states, Census internal points, CBSA membership
 // and neighbouring counties. No addresses, no parcels, no people.
@@ -33,7 +34,12 @@ export interface CountyRef {
   stateName: string;
   lon: number;
   lat: number;
-  /** CBSA the county's internal point falls in, null when unassigned or non-metropolitan. */
+  /**
+   * The county's CBSA in OMB's July 2023 delineation: a metropolitan OR a
+   * micropolitan code, null outside every CBSA. Only metropolitan codes have
+   * a MetroRef, so resolve a metro through metroForCounty (or metroByCbsa),
+   * never by assuming this code has a metro page.
+   */
   cbsa: string | null;
   /** Neighbouring county GEOIDs, symmetric and sorted; empty in a seed build. */
   adj: string[];
@@ -46,12 +52,19 @@ export interface MetroRef {
   /** "principal city|ST", the same key shape lib/economy/sources.ts metroShortKey builds. */
   short: string;
   states: string[];
-  /** Member county GEOIDs; empty until the full pull has run. */
+  /** Member county GEOIDs from OMB's July 2023 delineation; empty until the full pull has run. */
   counties: string[];
   lon: number;
   lat: number;
   zillowRegionId: string | null;
-  zillowMatchedBy: "exact" | "short" | null;
+  /**
+   * How zillowRegionId was found: "exact" (Zillow's RegionName is this title),
+   * "short" (first principal city and state, "Austin, TX"), or "counties"
+   * (the 2023 title no longer names Zillow's row, but Zillow's county file
+   * files exactly this metro's counties under it). Never a shared code:
+   * Zillow publishes none.
+   */
+  zillowMatchedBy: "exact" | "short" | "counties" | null;
 }
 
 export interface StateRef {
