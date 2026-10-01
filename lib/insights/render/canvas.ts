@@ -14,12 +14,19 @@
 // (svg.ts), because Next's font loader registers Geist under a hashed family
 // name.
 //
-// Headline ladders: the largest size that fits wins; nothing fits, it throws
-// (metrics.ts fitHeadline). The OG column gets its own ladder, 46/40/34 px up
-// to 5 lines: the flagship title is 5 lines at 46 px in 470 px, which the
-// first design's 4-line, single-size OG layout rejected.
+// Headline ladders: the largest size that fits wins. The OG column gets its
+// own ladder, 46/40/34 px up to 5 lines: the flagship title is 5 lines at
+// 46 px in 470 px, which the first design's 4-line, single-size OG layout
+// rejected. A ladder can only shrink a headline so far, so its last rung sets
+// how much text a canvas can hold at all. headlineMisfits checks a headline
+// against every canvas's last rung and spec.ts runs it at validation, so a
+// headline too long for the tightest canvas fails there, naming the canvas,
+// instead of when that canvas is first drawn. The frame (frame.ts) still
+// steps down the ladder for vertical room and throws past its end, because
+// that depends on the rest of the spec (the dek, the source lines), not on
+// the headline alone.
 
-import type { TextStyle, Weight } from "./metrics";
+import { headlineAt, type TextStyle, type Weight } from "./metrics";
 
 export type CanvasId = "social" | "og" | "inline-wide" | "inline-narrow";
 export const CANVAS_IDS: CanvasId[] = ["social", "og", "inline-wide", "inline-narrow"];
@@ -170,4 +177,34 @@ export const CANVASES: Record<CanvasId, CanvasPreset> = {
 
 export function canvas(id: CanvasId): CanvasPreset {
   return CANVASES[id];
+}
+
+/** A canvas whose headline ladder cannot set a headline even at its smallest size. */
+export interface HeadlineMisfit {
+  canvas: CanvasId;
+  /** The ladder's last (smallest) rung, px. */
+  size: number;
+  ladder: number[];
+  maxLines: number;
+  /** Width of the headline column, px. */
+  width: number;
+}
+
+/**
+ * The canvases on which `text` cannot be set as a headline: at the smallest
+ * size on the canvas's ladder it still needs more than maxLines lines of the
+ * headline column, or one of its words is wider than the column. Empty when
+ * every canvas that draws a headline can set it. Measured with the vendored
+ * Geist metrics, like the layout itself.
+ */
+export function headlineMisfits(text: string): HeadlineMisfit[] {
+  const out: HeadlineMisfit[] = [];
+  for (const id of CANVAS_IDS) {
+    const cv = CANVASES[id];
+    const hs = cv.headline;
+    if (!hs) continue;
+    const size = hs.ladder[hs.ladder.length - 1];
+    if (!headlineAt(text, size, hs.maxLines, cv.column, hs.weight, hs.lineHeight)) out.push({ canvas: id, size, ladder: hs.ladder, maxLines: hs.maxLines, width: cv.column });
+  }
+  return out;
 }

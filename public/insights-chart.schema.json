@@ -1256,5 +1256,5 @@
     }
   ],
   "title": "Embedding Atlas insight chart spec",
-  "description": "One chart for lib/insights/render: kind, axes, data rows with null for anything not published, and the provenance every row cites. Invariants beyond this schema (unique ids, subject and labels referencing data, every cited provenance key present and every record cited, an estimate always carrying its method) are enforced by lib/insights/render/spec.ts."
+  "description": "One chart for lib/insights/render: kind, axes, data rows with null for anything not published, and the provenance every row cites. Invariants beyond this schema (unique ids, subject and labels referencing data, every cited provenance key present and every record cited, an estimate always carrying its method, a headline that every canvas can set at the smallest size on its headline ladder) are enforced by lib/insights/render/spec.ts."
 }

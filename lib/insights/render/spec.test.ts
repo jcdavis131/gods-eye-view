@@ -47,6 +47,17 @@ describe("ChartSpec", () => {
     expect(issues(blank)).toContain('estimate "growth" has no method');
   });
 
+  it("rejects a headline the tightest canvas cannot set, at validation and naming the canvas", () => {
+    const s = fixture();
+    // 120 characters: inside the schema's coarse cap, over the measured capacity.
+    s.headline = "White-Collar and Blue-Collar Industry Job Growth in the 150 Largest US Metro Areas, 2019 to 2023, Ranked by Covered Jobs";
+    expect(s.headline.length).toBe(120);
+    const found = issues(s);
+    expect(found).toContain("headline does not fit the og canvas: even at 34 px, the smallest size on its 46/40/34 px ladder, it needs more than 5 lines of 470 px or has a word wider than 470 px; shorten it");
+    expect(found).toContain("headline does not fit the social canvas: even at 46 px, the smallest size on its 60/52/46 px ladder, it needs more than 3 lines of 952 px or has a word wider than 952 px; shorten it");
+    expect(() => parseChartSpec(s)).toThrow(/headline does not fit the og canvas/);
+  });
+
   it("rejects duplicate datum ids", () => {
     const s = fixture();
     s.data[1] = { ...s.data[1], id: s.data[0].id };

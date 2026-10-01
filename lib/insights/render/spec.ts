@@ -20,7 +20,13 @@
 //     numbers the chart does not show);
 //   - every `kind: "estimate"` record carries a non-empty `method`, so the
 //     arithmetic behind a computed number can never be left off the image;
-//   - an axis domain runs low to high.
+//   - an axis domain runs low to high;
+//   - the headline fits every canvas that draws one at the smallest size on
+//     that canvas's ladder (canvas.ts headlineMisfits). The renderer never
+//     truncates, so a headline over the tightest canvas's capacity used to
+//     surface as a throw the first time that canvas was drawn; it fails
+//     here instead, naming the canvas. The 120-character max is only the
+//     coarse bound a JSON Schema can state; capacity is measured in Geist.
 //
 // Objects are strict: an unknown key is an error in zod and in the JSON
 // Schema alike (z.toJSONSchema emits additionalProperties: false). Nothing
@@ -29,6 +35,7 @@
 
 import { z } from "zod";
 import type { Provenance, SourceRef } from "@/lib/provenance/types";
+import { headlineMisfits } from "./canvas";
 
 /** The only number formats a v1 spec may name; each maps to one function in lib/brief/format.ts. */
 export const FORMATS = ["pct", "signedPct", "num", "usd"] as const;
@@ -98,7 +105,7 @@ const Base = {
     .string()
     .max(64)
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
-  /** Template output; the renderer only wraps and steps the size down, never truncates. */
+  /** Template output; the renderer only wraps and steps the size down, never truncates. Must fit every canvas's smallest headline size (checkInvariants). */
   headline: Text.max(120),
   dek: Text.max(240).optional(),
   /** The date the numbers are as of; the renderer never reads a clock. */
@@ -183,6 +190,13 @@ function checkInvariants(s: AnySpec, ctx: z.RefinementCtx): void {
       if (!Object.hasOwn(s.provenance, key)) ctx.addIssue({ code: "custom", path: ["data", i, "provenance", j], message: `datum "${d.id}" cites unknown provenance "${key}"` });
     });
   });
+  for (const m of headlineMisfits(s.headline)) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["headline"],
+      message: `headline does not fit the ${m.canvas} canvas: even at ${m.size} px, the smallest size on its ${m.ladder.join("/")} px ladder, it needs more than ${m.maxLines} lines of ${m.width} px or has a word wider than ${m.width} px; shorten it`,
+    });
+  }
   if (s.subject !== undefined && !ids.has(s.subject)) ctx.addIssue({ code: "custom", path: ["subject"], message: `subject "${s.subject}" is not a datum id` });
   if (s.subjectNotes !== undefined && s.subject === undefined) ctx.addIssue({ code: "custom", path: ["subjectNotes"], message: "subjectNotes without a subject" });
   if (s.kind === "bubble") {
@@ -205,7 +219,7 @@ export const ChartSpec = z
   .meta({
     title: "Embedding Atlas insight chart spec",
     description:
-      "One chart for lib/insights/render: kind, axes, data rows with null for anything not published, and the provenance every row cites. Invariants beyond this schema (unique ids, subject and labels referencing data, every cited provenance key present and every record cited, an estimate always carrying its method) are enforced by lib/insights/render/spec.ts.",
+      "One chart for lib/insights/render: kind, axes, data rows with null for anything not published, and the provenance every row cites. Invariants beyond this schema (unique ids, subject and labels referencing data, every cited provenance key present and every record cited, an estimate always carrying its method, a headline that every canvas can set at the smallest size on its headline ladder) are enforced by lib/insights/render/spec.ts.",
   });
 
 export type ChartSpec = z.infer<typeof ChartSpec>;
