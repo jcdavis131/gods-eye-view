@@ -7,8 +7,8 @@ import { financeSection, financeSectionText } from "./report";
 import type { SodRow } from "./types";
 
 const AT = "2026-09-11T00:00:00Z";
-const sod = (cert: number, name: string, deposits: number): SodRow => ({ cert, name, brnum: 0, uninum: null, deposits, assets: null, fips: "48453", county: "Travis", state: "TX", year: 2025, lat: null, lon: null });
-const deposits = countyDeposits("48453", 2025, [sod(1, "Big Bank", 600_000), sod(2, "Mid Bank", 300_000), sod(3, "Small Bank", 100_000), sod(4, "Tiny Bank", 1)], "https://banks.data.fdic.gov/api/sod?x", AT);
+const sod = (cert: number, name: string, deposits: number): SodRow => ({ cert, name, brnum: 0, uninum: null, deposits, assets: null, fips: "48453", county: "Travis", state: "TX", year: 2025, lat: null, lon: null, cbsa: null, cbsaName: null });
+const deposits = countyDeposits("48453", 2025, [sod(1, "Big Bank", 600_000), sod(2, "Mid Bank", 300_000), sod(3, "Small Bank", 100_000), sod(4, "Tiny Bank", 1)], "https://api.fdic.gov/banks/sod?x", AT);
 const usa = provenance(source("usaspending"), { kind: "published", seriesId: "spending_by_geography:county:FY2025", period: "FY2025", retrievedAt: AT });
 const spending = {
   obligations: { fy: 2025, byGroup: { contracts: 1_000_000_000, grants: 250_000_000, loans: null, direct: 0 }, total: 1_250_000_000 },
