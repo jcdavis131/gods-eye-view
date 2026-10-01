@@ -123,6 +123,14 @@ export function cacheDelete(key: string): void {
   cooling.delete(key);
 }
 
+/**
+ * Whether a value is held for the key, fresh or expired. Expired counts on
+ * purpose: cached() still serves an expired value when its producer fails.
+ */
+export function cacheHas(key: string): boolean {
+  return store.has(key);
+}
+
 export function cacheStats() {
   return { entries: store.size, inflight: inflight.size, cooling: cooling.size };
 }

@@ -159,11 +159,19 @@ describe("relay", () => {
     expect(r.payload).toEqual(body);
   });
 
-  it("adds the not-deployed note on 404 and keeps the body", async () => {
-    const f = fake(404, { error: "not found" });
+  it("adds the not-deployed note when a 404 is the server's HTML page, and keeps the body", async () => {
+    const html = { error: "non-JSON reply", text: "<!DOCTYPE html><title>404: This page could not be found.</title>" };
+    const f = fake(404, html);
     const r = await relay({ fetchJson: f.fetchJson }, "/api/series?op=list");
     expect(r.status).toBe(404);
-    expect(r.payload).toEqual({ error: "not found", note: NOT_DEPLOYED_NOTE });
+    expect(r.payload).toEqual({ ...html, note: NOT_DEPLOYED_NOTE });
+  });
+
+  it("treats a route's own JSON 404 as an answer, not a missing route", async () => {
+    const f = fake(404, { error: "cik 1234567 is not a company in the SEC issuer universe" });
+    const r = await relay({ fetchJson: f.fetchJson }, "/api/companies?op=company&cik=1234567");
+    expect(r.status).toBe(404);
+    expect(r.payload.note).toBe("route answered HTTP 404");
   });
 
   it("notes other error statuses", async () => {

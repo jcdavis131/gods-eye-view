@@ -1558,7 +1558,14 @@
             }
           },
           "404": {
-            "description": "Unknown ticker, or a CIK that is not a company in the SEC issuer universe (individual filers are refused before anything is fetched into the cache)"
+            "description": "Unknown ticker, or a CIK that is not a company in the SEC issuer universe: an individual filer or a CIK SEC does not know. Refused before anything about it is cached.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }

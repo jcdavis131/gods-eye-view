@@ -111,7 +111,7 @@ describe("createServer over an in-memory transport", () => {
   });
 
   it("marks 404 replies as errors while keeping the payload and note", async () => {
-    const { client } = await connect(async () => ({ status: 404, body: { error: "not found" }, url: "" }));
+    const { client } = await connect(async () => ({ status: 404, body: { error: "non-JSON reply", text: "<!DOCTYPE html>" }, url: "" }));
     const r = await client.callTool({ name: "series_list", arguments: {} });
     expect(r.isError).toBe(true);
     expect((r.structuredContent as { note: string }).note).toMatch(/not deployed/);

@@ -3,7 +3,9 @@
 // API (one concept, one period, every filer). Keyless. The Commission's
 // fair-access policy asks for a descriptive User-Agent with a contact and at
 // most ten requests a second; the polite gate below keeps us at ~8/s and the
-// in-memory cache means a company is asked for once every twelve hours.
+// in-memory cache means a company is asked for once every twelve hours. The
+// one uncached read, submissionsUncached, vets a CIK that is not on the listed
+// universe; app/api/companies caches only its yes/no verdict.
 //
 // The contact address travels in the request header only; nothing here puts
 // it in a response body. Pure parsers are separated from the fetchers so
@@ -152,7 +154,7 @@ export function isOperatingIssuer(j: SubmissionsFile): boolean {
 }
 
 /** Forms the dossier shows: periodic reports and current reports, amendments included. Ownership forms (3/4/5) are excluded on purpose. */
-export const DOSSIER_FORMS = new Set(["10-K", "10-K/A", "10-Q", "10-Q/A", "8-K", "8-K/A", "20-F", "20-F/A", "40-F", "6-K"]);
+export const DOSSIER_FORMS = new Set(["10-K", "10-K/A", "10-Q", "10-Q/A", "8-K", "8-K/A", "8-K12B", "20-F", "20-F/A", "40-F", "6-K"]);
 
 /** Recent filings from a submissions file, newest first, filtered to `forms`, at most `limit`. */
 export function parseFilings(j: SubmissionsFile, limit = 20, forms: Set<string> = DOSSIER_FORMS): Filing[] {
