@@ -10,7 +10,7 @@
 //
 // Shapes mirror components/doc/FactTable.tsx (columns, rows of string cells,
 // a caption) without importing it, so this module stays free of React and
-// next/* and runs in plain Node. The CSV follows lib/server/csv.ts (RFC 4180,
+// Next.js and runs in plain Node. The CSV follows lib/server/csv.ts (RFC 4180,
 // `#` footer for provenance) but carries `as_of` from the spec instead of a
 // wall-clock generated_at, so the same spec writes the same bytes.
 

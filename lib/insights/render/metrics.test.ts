@@ -29,7 +29,7 @@ describe("metrics.json", () => {
     }
   });
 
-  it("is generated from Geist 1.7.2 (Regular hmtx count 975, not next/og's 973)", () => {
+  it("is generated from Geist 1.7.2 (Regular hmtx count 975, not the 973 of the copy bundled with Next's OG image package)", () => {
     expect(METRICS.version).toBe("1.7.2");
     expect(METRICS.weights["400"].numberOfHMetrics).toBe(975);
     expect(Object.keys(METRICS.weights)).toEqual(["400", "700", "900"]);

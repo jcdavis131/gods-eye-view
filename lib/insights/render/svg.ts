@@ -9,10 +9,10 @@
 //   - text is XML-escaped with lib/feed/hash.ts escapeXml.
 //
 // font-family is set once, on the root <svg>, and never on a <text>. Inline
-// variants use the page's stack (`var(--font-display)`: next/font registers
-// Geist under a hashed family name, and a per-element font-family="Geist"
-// would override the inherited stack and drop to the browser default, so the
-// measured label boxes would stop matching). The standalone SVG names Geist
+// variants use the page's stack (`var(--font-display)`: Next's font loader
+// registers Geist under a hashed family name, and a per-element
+// font-family="Geist" would override the inherited stack and drop to the
+// browser default, so the measured label boxes would stop matching). The standalone SVG names Geist
 // and embeds no font; layout fidelity is guaranteed only in the PNG, which is
 // rasterised with the vendored TTFs as its only fonts.
 

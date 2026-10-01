@@ -1,6 +1,7 @@
 // The serialiser's determinism rules, and the module boundary: nothing under
-// lib/insights/render may import next/*, so the renderer runs in plain Node
-// (vite-node scripts, the Actions runner) as well as in a route.
+// lib/insights/render may import from the Next.js package, so the renderer
+// runs in plain Node (vite-node scripts, the Actions runner) as well as in a
+// route.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -65,7 +66,7 @@ describe("toSvg", () => {
 });
 
 describe("module boundary", () => {
-  it("imports nothing from next/* anywhere under lib/insights/render", () => {
+  it("imports nothing from the Next.js package anywhere under lib/insights/render", () => {
     const files: string[] = [];
     const walk = (dir: string) => {
       for (const e of fs.readdirSync(dir, { withFileTypes: true })) {

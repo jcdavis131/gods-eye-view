@@ -11,7 +11,8 @@
 // media query, so a page ships no JavaScript for its chart; they omit the
 // headline and the brand row (the page's own heading and chrome carry them)
 // and set the font through the page's CSS variable on the root element only
-// (svg.ts), because next/font registers Geist under a hashed family name.
+// (svg.ts), because Next's font loader registers Geist under a hashed family
+// name.
 //
 // Headline ladders: the largest size that fits wins; nothing fits, it throws
 // (metrics.ts fitHeadline). The OG column gets its own ladder, 46/40/34 px up
