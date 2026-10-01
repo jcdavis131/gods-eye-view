@@ -109,8 +109,7 @@ describe("bubbles", () => {
     }
   });
 
-  it("draws the subject last, filled in the signal colour, with its own notes under its label", () => {
-    expect(L.marks[L.marks.length - 1].id).toBe("C1242");
+  it("draws the subject filled in the signal colour, with its own notes under its label", () => {
     const svg = renderSvg(SPEC, "social", "dark");
     const m = mark.get("C1242") as NonNullable<ReturnType<typeof mark.get>>;
     expect(svg).toContain(`<circle cx="${f2(m.cx)}" cy="${f2(m.cy)}" r="${f2(m.r)}" fill="${PALETTES.dark.signal}"/>`);
@@ -120,9 +119,27 @@ describe("bubbles", () => {
     expect(svg).toContain(`fill="${PALETTES.dark.signal}">${SPEC.subjectNotes?.[0]}</text>`);
   });
 
-  it("draws largest bubbles first so small ones stay visible on top", () => {
-    const rest = L.marks.slice(0, -1);
-    for (let i = 1; i < rest.length; i++) expect(rest[i].r).toBeLessThanOrEqual(rest[i - 1].r);
+  it.each(CANVAS_IDS)("draws bubbles by area, largest first, the subject in its place by size, on %s", (canvas) => {
+    const marks = layoutBubble(SPEC, canvas, "dark").marks;
+    for (let i = 1; i < marks.length; i++) {
+      const [a, b] = [marks[i - 1], marks[i]];
+      expect(b.r * b.r, `${a.id} before ${b.id}`).toBeLessThanOrEqual(a.r * a.r);
+      if (a.r === b.r) expect(a.id < b.id, `tie ${a.id} / ${b.id} by id`).toBe(true);
+    }
+    // Austin is not the largest bubble, so it is not drawn last: nothing smaller sits under its opaque fill.
+    const subject = marks.findIndex((m) => m.subject);
+    expect(subject).toBe(marks.filter((m) => m.r > (marks[subject] as (typeof marks)[number]).r).length);
+    expect(subject).toBeLessThan(marks.length - 1);
+  });
+
+  it("emits the bubbles into the SVG in that draw order", () => {
+    for (const [canvas, theme] of GOLDENS) {
+      const r = renderChart(SPEC, canvas, theme);
+      const lines = r.svg.split("\n");
+      const at = r.layout.marks.map((m) => lines.findIndex((l) => l.startsWith(`<circle cx="${f2(m.cx)}" cy="${f2(m.cy)}" r="${f2(m.r)}"`)));
+      expect(at.every((i) => i >= 0), `${canvas} ${theme}`).toBe(true);
+      for (let i = 1; i < at.length; i++) expect(at[i], `${canvas} ${theme} ${r.layout.marks[i].id}`).toBeGreaterThan(at[i - 1]);
+    }
   });
 });
 

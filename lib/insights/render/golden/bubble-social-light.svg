@@ -20,6 +20,7 @@
 <line x1="436.63" y1="360.97" x2="436.63" y2="936.53" stroke="#16202a" stroke-opacity="0.6" stroke-width="1.5"/>
 <line x1="160.53" y1="706.3" x2="988.83" y2="706.3" stroke="#16202a" stroke-opacity="0.6" stroke-width="1.5"/>
 <circle cx="654.84" cy="632.49" r="40" fill="#8a96a3" fill-opacity="0.42" stroke="#4a5563" stroke-width="1"/>
+<circle cx="928.75" cy="491.22" r="28.92" fill="#a64b00"/>
 <circle cx="443.62" cy="503.04" r="28.52" fill="#8a96a3" fill-opacity="0.42" stroke="#4a5563" stroke-width="1"/>
 <circle cx="538.39" cy="743.42" r="28.03" fill="#8a96a3" fill-opacity="0.42" stroke="#4a5563" stroke-width="1"/>
 <circle cx="591.6" cy="625.35" r="25.43" fill="#8a96a3" fill-opacity="0.42" stroke="#4a5563" stroke-width="1"/>
@@ -132,16 +133,14 @@
 <circle cx="341" cy="777.57" r="1.29" fill="none" stroke="#16202a" stroke-width="1.5"/>
 <circle cx="284.18" cy="560.56" r="1.22" fill="#8a96a3" fill-opacity="0.42" stroke="#4a5563" stroke-width="1"/>
 <circle cx="441.67" cy="741.95" r="0.8" fill="#8a96a3" fill-opacity="0.42" stroke="#4a5563" stroke-width="1"/>
-<circle cx="928.75" cy="491.22" r="28.92" fill="#a64b00"/>
 <line x1="641.98" y1="486.42" x2="641.98" y2="502.42" stroke="#16202a" stroke-opacity="0.6" stroke-width="1.5"/>
-<line x1="222.06" y1="661.41" x2="230.47" y2="641.08" stroke="#16202a" stroke-opacity="0.6" stroke-width="1.5"/>
-<line x1="601.33" y1="648.84" x2="612.05" y2="674.71" stroke="#16202a" stroke-opacity="0.6" stroke-width="1.5"/>
+<line x1="220.47" y1="661.09" x2="220.47" y2="639.09" stroke="#16202a" stroke-opacity="0.6" stroke-width="1.5"/>
+<line x1="591.6" y1="650.78" x2="591.6" y2="666.78" stroke="#16202a" stroke-opacity="0.6" stroke-width="1.5"/>
 <line x1="467.83" y1="717.16" x2="467.83" y2="775.16" stroke="#16202a" stroke-opacity="0.6" stroke-width="1.5"/>
-<line x1="656.59" y1="641.06" x2="702.59" y2="641.06" stroke="#16202a" stroke-opacity="0.6" stroke-width="1.5"/>
 <line x1="527.71" y1="543.92" x2="474.12" y2="566.11" stroke="#16202a" stroke-opacity="0.6" stroke-width="1.5"/>
 <line x1="569.44" y1="504.39" x2="583.22" y2="471.13" stroke="#16202a" stroke-opacity="0.6" stroke-width="1.5"/>
 <line x1="482.45" y1="613.88" x2="350.45" y2="613.88" stroke="#16202a" stroke-opacity="0.6" stroke-width="1.5"/>
-<line x1="543.4" y1="606.44" x2="584.73" y2="706.22" stroke="#16202a" stroke-opacity="0.6" stroke-width="1.5"/>
+<line x1="537.45" y1="607.62" x2="537.45" y2="635.62" stroke="#16202a" stroke-opacity="0.6" stroke-width="1.5"/>
 <line x1="384.35" y1="756.92" x2="333.44" y2="807.83" stroke="#16202a" stroke-opacity="0.6" stroke-width="1.5"/>
 <text x="894.83" y="486" font-size="26" font-weight="900" text-anchor="end" fill="none" stroke="#f4f6f8" stroke-opacity="0.85" stroke-width="4" stroke-linejoin="round">Austin</text>
 <text x="894.83" y="486" font-size="26" font-weight="900" text-anchor="end" fill="#a64b00">Austin</text>
@@ -155,8 +154,8 @@
 <text x="555.37" y="461.65" font-size="19" font-weight="700" text-anchor="end" fill="#16202a">Palm Bay</text>
 <text x="641.98" y="517.91" font-size="19" font-weight="700" text-anchor="middle" fill="none" stroke="#f4f6f8" stroke-opacity="0.85" stroke-width="4" stroke-linejoin="round">Tallahassee</text>
 <text x="641.98" y="517.91" font-size="19" font-weight="700" text-anchor="middle" fill="#16202a">Tallahassee</text>
-<text x="232.47" y="633.48" font-size="19" font-weight="700" fill="none" stroke="#f4f6f8" stroke-opacity="0.85" stroke-width="4" stroke-linejoin="round">Spartanburg</text>
-<text x="232.47" y="633.48" font-size="19" font-weight="700" fill="#16202a">Spartanburg</text>
+<text x="222.47" y="631.49" font-size="19" font-weight="700" fill="none" stroke="#f4f6f8" stroke-opacity="0.85" stroke-width="4" stroke-linejoin="round">Spartanburg</text>
+<text x="222.47" y="631.49" font-size="19" font-weight="700" fill="#16202a">Spartanburg</text>
 <text x="444.3" y="841.41" font-size="19" font-weight="700" fill="none" stroke="#f4f6f8" stroke-opacity="0.85" stroke-width="4" stroke-linejoin="round">Ann Arbor</text>
 <text x="444.3" y="841.41" font-size="19" font-weight="700" fill="#16202a">Ann Arbor</text>
 <text x="687.25" y="678.39" font-size="19" font-weight="700" fill="none" stroke="#f4f6f8" stroke-opacity="0.85" stroke-width="4" stroke-linejoin="round">Dallas</text>
@@ -165,14 +164,12 @@
 <text x="410.11" y="506.98" font-size="19" font-weight="700" text-anchor="end" fill="#16202a">Phoenix</text>
 <text x="571.42" y="747.36" font-size="19" font-weight="700" fill="none" stroke="#f4f6f8" stroke-opacity="0.85" stroke-width="4" stroke-linejoin="round">Houston</text>
 <text x="571.42" y="747.36" font-size="19" font-weight="700" fill="#16202a">Houston</text>
-<text x="614.05" y="690.2" font-size="19" font-weight="700" fill="none" stroke="#f4f6f8" stroke-opacity="0.85" stroke-width="4" stroke-linejoin="round">Miami</text>
-<text x="614.05" y="690.2" font-size="19" font-weight="700" fill="#16202a">Miami</text>
+<text x="591.6" y="682.27" font-size="19" font-weight="700" text-anchor="middle" fill="none" stroke="#f4f6f8" stroke-opacity="0.85" stroke-width="4" stroke-linejoin="round">Miami</text>
+<text x="591.6" y="682.27" font-size="19" font-weight="700" text-anchor="middle" fill="#16202a">Miami</text>
 <text x="465.83" y="790.65" font-size="19" font-weight="700" text-anchor="end" fill="none" stroke="#f4f6f8" stroke-opacity="0.85" stroke-width="4" stroke-linejoin="round">Riverside</text>
 <text x="465.83" y="790.65" font-size="19" font-weight="700" text-anchor="end" fill="#16202a">Riverside</text>
 <text x="617.29" y="568.73" font-size="19" font-weight="700" fill="none" stroke="#f4f6f8" stroke-opacity="0.85" stroke-width="4" stroke-linejoin="round">Tampa</text>
 <text x="617.29" y="568.73" font-size="19" font-weight="700" fill="#16202a">Tampa</text>
-<text x="704.59" y="645" font-size="19" font-weight="700" fill="none" stroke="#f4f6f8" stroke-opacity="0.85" stroke-width="4" stroke-linejoin="round">Orlando</text>
-<text x="704.59" y="645" font-size="19" font-weight="700" fill="#16202a">Orlando</text>
 <text x="702.07" y="610.53" font-size="19" font-weight="700" fill="none" stroke="#f4f6f8" stroke-opacity="0.85" stroke-width="4" stroke-linejoin="round">Raleigh</text>
 <text x="702.07" y="610.53" font-size="19" font-weight="700" fill="#16202a">Raleigh</text>
 <text x="472.12" y="581.6" font-size="19" font-weight="700" text-anchor="end" fill="none" stroke="#f4f6f8" stroke-opacity="0.85" stroke-width="4" stroke-linejoin="round">Las Vegas</text>
@@ -183,8 +180,8 @@
 <text x="307.96" y="791.6" font-size="19" font-weight="700" text-anchor="end" fill="#16202a">Pittsburgh</text>
 <text x="348.45" y="606.27" font-size="19" font-weight="700" text-anchor="end" fill="none" stroke="#f4f6f8" stroke-opacity="0.85" stroke-width="4" stroke-linejoin="round">Indianapolis</text>
 <text x="348.45" y="606.27" font-size="19" font-weight="700" text-anchor="end" fill="#16202a">Indianapolis</text>
-<text x="586.73" y="721.71" font-size="19" font-weight="700" fill="none" stroke="#f4f6f8" stroke-opacity="0.85" stroke-width="4" stroke-linejoin="round">Jacksonville</text>
-<text x="586.73" y="721.71" font-size="19" font-weight="700" fill="#16202a">Jacksonville</text>
+<text x="535.45" y="651.11" font-size="19" font-weight="700" text-anchor="end" fill="none" stroke="#f4f6f8" stroke-opacity="0.85" stroke-width="4" stroke-linejoin="round">Jacksonville</text>
+<text x="535.45" y="651.11" font-size="19" font-weight="700" text-anchor="end" fill="#16202a">Jacksonville</text>
 <text x="331.44" y="823.32" font-size="19" font-weight="700" text-anchor="end" fill="none" stroke="#f4f6f8" stroke-opacity="0.85" stroke-width="4" stroke-linejoin="round">Los Angeles</text>
 <text x="331.44" y="823.32" font-size="19" font-weight="700" text-anchor="end" fill="#16202a">Los Angeles</text>
 <text x="64" y="96.66" font-size="46" font-weight="900" fill="#0d1620">White-Collar and Blue-Collar Industry</text>
@@ -201,7 +198,6 @@
 <text x="850.78" y="960.73" font-size="20" font-weight="400" text-anchor="middle" fill="#4a5563">+30%</text>
 <text x="988.83" y="960.73" font-size="20" font-weight="400" text-anchor="middle" fill="#4a5563">+40%</text>
 <text x="988.83" y="990.83" font-size="20" font-weight="700" text-anchor="end" fill="#16202a">Finance and professional services jobs, change 2019 to 2023 →</text>
-<text x="150.53" y="943.63" font-size="20" font-weight="400" text-anchor="end" fill="#4a5563">-20%</text>
 <text x="150.53" y="828.51" font-size="20" font-weight="400" text-anchor="end" fill="#4a5563">-10%</text>
 <text x="150.53" y="713.4" font-size="20" font-weight="400" text-anchor="end" fill="#4a5563">0%</text>
 <text x="150.53" y="598.29" font-size="20" font-weight="400" text-anchor="end" fill="#4a5563">+10%</text>

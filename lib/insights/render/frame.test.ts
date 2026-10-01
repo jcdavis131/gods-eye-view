@@ -1,12 +1,16 @@
 // The frame on the committed QCEW fixture: every text run inside its column on
 // the social and OG canvases, the bottom-up stack in order, fixed-step
-// gridlines, the font set only on the root of an inline SVG, and the same
+// gridlines, the bottom-left corner's tick labels never crowding (one
+// dropped when they repeat, the y one lifted when they differ), the font set
+// only on the root of an inline SVG, and the same
 // bytes for the same spec in any input order.
 
 import { describe, expect, it } from "vitest";
 import FIXTURE from "./fixtures/qcew-metro-job-growth-2019-2023.json";
 import { CANVASES, type CanvasId } from "./canvas";
-import { BRAND, axesFor, frameSvg, layoutFrame, legendItems, permalink, sourceParagraphs, type Frame, type TextRun } from "./frame";
+import { BRAND, axesFor, frameSvg, layoutFrame, legendItems, permalink, sourceParagraphs, textBox, type Frame, type TextRun } from "./frame";
+import { capHeight } from "./metrics";
+import { boxesOverlap } from "./place";
 import { textSpan } from "./scene";
 import { parseChartSpec, type BubbleSpec } from "./spec";
 import { THEMES } from "./tokens";
@@ -120,6 +124,41 @@ describe("axes", () => {
     expect(f.sy?.(30)).toBeCloseTo(f.plot.y, 9);
     const grid = f.under.filter((n) => n.type === "line" && n.stroke.color === f.palette.grid.color && n.stroke.opacity === f.palette.grid.opacity);
     expect(grid.length).toBe(7 + 6);
+  });
+
+  it.each(["social", "og", "inline-wide", "inline-narrow"] as CanvasId[])("prints the corner value once where both axes start at the bottom-left corner (%s)", (id) => {
+    const f = layoutFrame(SPEC, id, "dark");
+    const ticks = runs(f, "tick").map((r) => r.node);
+    // Both axes start at -20%: the x row keeps its "-20%", the y column's repeat is dropped; its gridline stays.
+    expect(ticks.filter((t) => t.anchor === "middle").map((t) => t.text)).toEqual(["-20%", "-10%", "0%", "+10%", "+20%", "+30%", "+40%"]);
+    expect(ticks.filter((t) => t.anchor === "end").map((t) => t.text)).toEqual(["-10%", "0%", "+10%", "+20%", "+30%"]);
+    const grid = f.under.filter((n) => n.type === "line" && n.stroke.color === f.palette.grid.color && n.stroke.opacity === f.palette.grid.opacity);
+    expect(grid.length).toBe(7 + 6);
+    const sep = CANVASES[id].gaps.tick / 2;
+    for (let i = 0; i < ticks.length; i++) for (let j = i + 1; j < ticks.length; j++) expect(boxesOverlap(textBox(ticks[i]), textBox(ticks[j]), sep), `${ticks[i].text} / ${ticks[j].text}`).toBe(false);
+  });
+
+  it("lifts the lowest y label clear of the first x label when the two corner values differ", () => {
+    // An x domain from -30: the corner holds "-30%" on x and "-20%" on y. Every row is still plotted.
+    const s: BubbleSpec = { ...SPEC, x: { ...SPEC.x, domain: [-30, 40] } };
+    expect(SPEC.data.every((d) => d.x == null || (d.x >= -30 && d.x <= 40))).toBe(true);
+    for (const id of ["social", "og"] as CanvasId[]) {
+      const f = layoutFrame(s, id, "dark");
+      const cv = CANVASES[id];
+      const xs = runs(f, "tick").map((r) => r.node).filter((t) => t.anchor === "middle");
+      const ys = runs(f, "tick").map((r) => r.node).filter((t) => t.anchor === "end");
+      expect(xs[0].text).toBe("-30%");
+      expect(ys.map((t) => t.text)).toEqual(["-20%", "-10%", "0%", "+10%", "+20%", "+30%"]);
+      const low = ys[0];
+      const centred = (f.sy?.(-20) as number) + capHeight(cv.tick.size, cv.tick.weight) / 2;
+      expect(low.y).toBeLessThan(centred);
+      const xb = textBox(xs[0]);
+      const yb = textBox(low);
+      expect(boxesOverlap(xb, yb, cv.gaps.tick / 2)).toBe(false);
+      expect(yb.y + yb.h + cv.gaps.tick / 2).toBeCloseTo(xb.y, 9);
+      // The other y labels stay centred on their gridlines.
+      expect(ys[1].y).toBeCloseTo((f.sy?.(-10) as number) + capHeight(cv.tick.size, cv.tick.weight) / 2, 9);
+    }
   });
 
   it("turns a labelled reference line into a keep-out box inside the plot", () => {

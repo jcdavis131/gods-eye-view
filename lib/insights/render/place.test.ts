@@ -1,19 +1,20 @@
 // The label placer on the flagship fixture (real QCEW rows), on every canvas
-// in both themes: label boxes never meet, no leader crosses a label, an
-// unleadered label's nearest bubble edge is its own, keep-outs are left
+// in both themes: label boxes never meet, no leader crosses a label, every
+// leader starts on a visible part of its own bubble (inside no other disc),
+// an unleadered label's nearest bubble edge is its own, keep-outs are left
 // alone, the subject is always placed, every requested label is accounted
 // for as placed or dropped, and no two labels read the same. Then the placer
 // on its own, on real bubble geometry from the same layout: a keep-out on the
-// subject's first choice moves it, a bubble inside another needs a leader,
-// the cap drops from the bottom of the ranking, and a subject with nowhere to
+// subject's first choice moves it, a bubble whose centre lies inside another
+// is led from the visible part of its edge or dropped, the cap drops from the bottom of the ranking, and a subject with nowhere to
 // go throws rather than vanish.
 
 import { describe, expect, it } from "vitest";
 import FIXTURE from "./fixtures/flagship-qcew-2019-2023.json";
-import { CANVAS_IDS } from "./canvas";
-import { LABEL_CAP, displayLabels, layoutBubble, requestedLabels, type BubbleLayout } from "./charts/bubble";
+import { CANVASES, CANVAS_IDS } from "./canvas";
+import { LABEL_CAP, RINGS, displayLabels, layoutBubble, requestedLabels, type BubbleLayout } from "./charts/bubble";
 import { textBox, type Box } from "./frame";
-import { boxInside, boxesOverlap, circleOverlapsBox, edgeDistance, placeLabels, segmentHitsBox, segmentHitsCircle, segmentsCross, type Circle, type PlaceOptions } from "./place";
+import { boxInside, boxesOverlap, circleOverlapsBox, edgeDistance, placeLabels, segmentHitsBox, segmentHitsCircle, segmentsCross, startVisible, type Circle, type PlaceOptions } from "./place";
 import { textNodes } from "./scene";
 import { parseChartSpec, type BubbleSpec } from "./spec";
 import { THEMES } from "./tokens";
@@ -84,6 +85,22 @@ describe.each(CANVAS_IDS)("%s canvas", (id) => {
           if (p.leader && !covers) expect(segmentHitsCircle(p.leader, m), `${p.id} leader through ${m.id}`).toBe(false);
         }
         if (p.leader) expect(Math.sqrt((p.leader.x1 - own.cx) ** 2 + (p.leader.y1 - own.cy) ** 2)).toBeCloseTo(own.r, 9);
+      }
+    });
+
+    it("starts every leader on a visible part of its own bubble: inside no other disc, least of all a larger one drawn over it", () => {
+      const order = new Map(L.marks.map((m, i) => [m.id, i]));
+      const clear = 2 * Math.max(CANVASES[id].scale, 0.5);
+      for (const p of L.placed) {
+        if (!p.leader) continue;
+        const own = mark.get(p.id) as Circle;
+        for (const m of L.marks) {
+          if (m.id === p.id) continue;
+          const d = Math.sqrt((p.leader.x1 - m.cx) ** 2 + (p.leader.y1 - m.cy) ** 2);
+          const largerOver = m.r > own.r && (order.get(m.id) as number) > (order.get(p.id) as number);
+          expect(largerOver && d < m.r, `${L.text[p.id]} leader ends under the larger ${m.id}, drawn over it`).toBe(false);
+          expect(d, `${L.text[p.id]} leader starts inside ${m.id}`).toBeGreaterThanOrEqual(m.r + clear);
+        }
       }
     });
 
@@ -184,7 +201,7 @@ describe("placeLabels on the flagship's bubbles", () => {
   const L = layoutBubble(SPEC, "social", "dark");
   const bubbles = circles(L);
   const austin = L.placed.find((p) => p.id === SUBJECT) as BubbleLayout["placed"][number];
-  const opts: PlaceOptions = { bounds: L.frame.plot, keepOut: [], max: 30, required: [SUBJECT], gap: 3, margin: 4, separation: 1, rings: [16, 28, 42] };
+  const opts: PlaceOptions = { bounds: L.frame.plot, keepOut: [], max: 30, required: [SUBJECT], gap: 3, margin: 4, separation: 1, clear: 2, rings: [16, 28, 42] };
   const req = { id: SUBJECT, w: austin.box.w, h: austin.box.h };
 
   it("moves the subject off a keep-out laid over its first choice", () => {
@@ -199,14 +216,27 @@ describe("placeLabels on the flagship's bubbles", () => {
     expect(() => placeLabels([req], bubbles, { ...opts, keepOut: [L.frame.plot] })).toThrow(/required label "C1242"/);
   });
 
-  it("gives a bubble inside another's disc a leader: no box beside it can be nearer its own edge", () => {
-    // Orlando's bubble lies inside Dallas's.
+  it("leads a bubble whose centre lies inside another's from the visible part of its edge, or drops it", () => {
+    // Orlando's centre lies inside Dallas's disc; only an arc of its edge, facing away from Dallas, shows.
     const m = new Map(L.marks.map((x) => [x.id, x]));
     const dallas = m.get("C1910") as Circle;
     const orlando = m.get("C3674") as Circle;
     expect((orlando.cx - dallas.cx) ** 2 + (orlando.cy - dallas.cy) ** 2).toBeLessThan(dallas.r ** 2);
-    const p = L.placed.find((q) => q.id === "C3674");
-    expect(p?.leader).not.toBeNull();
+    const req = { id: "C3674", w: 82, h: 23 };
+    const full = { ...opts, required: [], keepOut: L.keepOut, rings: [...RINGS] };
+    // Alone on the plot it is placed, with a leader that starts outside Dallas.
+    const alone = placeLabels([req], bubbles, full).placed[0];
+    const lead = alone.leader as NonNullable<typeof alone.leader>;
+    expect(lead).not.toBeNull();
+    expect(startVisible(lead.x1, lead.y1, orlando, bubbles, opts.clear)).toBe(true);
+    expect(Math.sqrt((lead.x1 - dallas.cx) ** 2 + (lead.y1 - dallas.cy) ** 2)).toBeGreaterThanOrEqual(dallas.r + opts.clear);
+    // With no clearance rule (a clearance of minus the plot's width) the same request is led from inside Dallas.
+    const blind = placeLabels([req], bubbles, { ...full, clear: -L.frame.plot.w }).placed[0];
+    const start = blind.leader as NonNullable<typeof blind.leader>;
+    expect(Math.sqrt((start.x1 - dallas.cx) ** 2 + (start.y1 - dallas.cy) ** 2)).toBeLessThan(dallas.r);
+    // Among the flagship's other labels every visible start is blocked, so it is dropped, not led from inside Dallas.
+    expect(L.placed.map((p) => p.id)).not.toContain("C3674");
+    expect(L.dropped).toContainEqual({ id: "C3674", reason: "no room" });
   });
 
   it("caps from the bottom of the ranking and still places a required label listed last", () => {

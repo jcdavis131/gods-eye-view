@@ -2,8 +2,12 @@
 // proportional to |size|, so the radius goes with the square root and the
 // largest |size| on the chart gets MAX_RADIUS. A negative size is an outline
 // with no fill, never a filled circle; a plotted row whose size was not
-// published is a small dashed ring that claims no size at all. The subject is
-// drawn last, in the signal colour.
+// published is a small dashed ring that claims no size at all.
+//
+// Draw order is by area, largest first (ties by id), the subject included, so
+// a smaller bubble is never painted under a larger one. The subject stands
+// out by its signal colour, not by being on top: drawn last, its opaque fill
+// would hide every smaller bubble under it.
 //
 // Labels. Which rows get one is the spec's label policy, ranked: the subject,
 // then the ids the spec names (larger |size| first, then id), then the
@@ -37,7 +41,7 @@ export const UNSIZED_RADIUS = 5;
 /** The most labels a canvas draws, the subject included. */
 export const LABEL_CAP: Record<CanvasId, number> = { social: 24, og: 12, "inline-wide": 16, "inline-narrow": 7 };
 /** Leader lengths the placer tries at scale 1, px. */
-const RINGS = [16, 22, 28, 36, 46, 58, 72, 88, 108, 132, 162];
+export const RINGS = [16, 22, 28, 36, 46, 58, 72, 88, 108, 132, 162];
 
 export type MarkStyle = "fill" | "outline" | "dashed";
 
@@ -59,7 +63,7 @@ export type LabelDrop = DropReason | "not plotted";
 
 export interface BubbleLayout {
   frame: Frame;
-  /** In draw order: largest first, the subject last. */
+  /** In draw order: largest area first, ties by id; the subject takes its place by size. */
   marks: BubbleMark[];
   /** Every label the spec asks for, highest priority first. */
   requested: string[];
@@ -174,7 +178,7 @@ function marksFor(spec: BubbleSpec, frame: Frame): BubbleMark[] {
       subject: d.id === spec.subject,
     }),
   );
-  return marks.sort((a, b) => Number(a.subject) - Number(b.subject) || b.r - a.r || byteCompare(a.id, b.id));
+  return marks.sort((a, b) => b.r - a.r || byteCompare(a.id, b.id));
 }
 
 function circleNode(m: BubbleMark, pal: Palette, cv: CanvasPreset): CircleNode {
@@ -245,6 +249,7 @@ export function layoutBubble(input: BubbleSpec, canvasId: CanvasId, theme: Theme
     gap: 3 * s,
     margin: 4 * s,
     separation: 1,
+    clear: 2 * s,
     rings: RINGS.map((r) => r * Math.max(cv.scale, 0.6)),
   });
   const dropped: BubbleLayout["dropped"] = [...requested.filter((id) => !byId.has(id)).map((id) => ({ id, reason: "not plotted" as const })), ...placement.dropped];

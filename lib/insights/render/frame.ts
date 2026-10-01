@@ -18,7 +18,8 @@
 // Gutters are measured, never fixed: the left gutter is the rotated y title
 // plus the widest y tick label as formatted, so "+100%" or "$1,250,000" ticks
 // cannot collide with the title; the right edge gives the last x tick label
-// half its width.
+// half its width. Where both axes start at the bottom-left corner, their two
+// corner tick labels would crowd; the y one yields (cornerTicks).
 //
 // The headline steps down its ladder until the plot is at least minPlot tall
 // (stack) or the column holds headline and notes (split); past the ladder it
@@ -37,6 +38,7 @@ import { num } from "@/lib/brief/format";
 import { stableHash } from "@/lib/feed/hash";
 import { CANVASES, type CanvasId, type CanvasPreset } from "./canvas";
 import { balancedWrap, capHeight, descent, fitsWidth, headlineAt, measureStyled, unmapped, wrapSource, type FittedHeadline, type TextStyle } from "./metrics";
+import { boxesOverlap } from "./place";
 import { numericAxis, scaleLinear, type NumericAxis } from "./scale";
 import { textSpan, type CircleNode, type LineNode, type PatternDef, type RectNode, type Scene, type SceneNode, type TextNode, type TextRole } from "./scene";
 import { byteCompare, canonicalJson, canonicalSpec, type ChartSpec } from "./spec";
@@ -372,6 +374,27 @@ interface AxesLayout {
 const ARROW = " →";
 
 /**
+ * The bottom-left corner, where the first x tick label and the lowest y tick
+ * label meet. On a chart whose axes both start at the corner the two sit on
+ * the same point and crowd: the flagship's two "-20%" runs overlapped by
+ * 3 px at 20 px type. The x row never moves; the y label yields. When it
+ * repeats the x label's text it is dropped, so the corner value reads once
+ * for both axes (its gridline stays); otherwise it moves up until its box
+ * clears the x label's by `sep` px. Labels that do not crowd are left alone.
+ */
+function cornerTicks(xTicks: TextNode[], yTicks: TextNode[], sep: number): TextNode[] {
+  if (!xTicks.length || !yTicks.length) return yTicks;
+  const x = xTicks.reduce((a, b) => (b.x < a.x ? b : a));
+  const y = yTicks.reduce((a, b) => (b.y > a.y ? b : a));
+  const xb = textBox(x);
+  const yb = textBox(y);
+  if (!boxesOverlap(xb, yb, sep)) return yTicks;
+  if (x.text === y.text) return yTicks.filter((n) => n !== y);
+  const lift = yb.y + yb.h + sep - xb.y;
+  return yTicks.map((n) => (n === y ? { ...n, y: n.y - lift } : n));
+}
+
+/**
  * Axes inside a region: rotated y title and y ticks in a measured left gutter,
  * x ticks and the x title from the region's bottom up, gridlines at every
  * tick, reference lines over the grid. The y title's line count depends on
@@ -420,12 +443,14 @@ function layoutAxes(axes: FrameAxes, region: { x0: number; x1: number; y0: numbe
     runs.push({ node, limit });
   };
 
+  const xTicks = axes.x && sx ? axes.x.ticks.map((k) => textNode("tick", k.label, sx(k.value), plotBottom + g + cap(t), "middle", t, pal.muted)) : [];
+  const yTicks = axes.y && sy ? cornerTicks(xTicks, axes.y.ticks.map((k) => textNode("tick", k.label, plotLeft - g, sy(k.value) + cap(t) / 2, "end", t, pal.muted)), g / 2) : [];
   if (axes.x && sx) {
     for (const k of axes.x.ticks) {
       const x = sx(k.value);
       under.push({ type: "line", x1: x, y1: plotTop, x2: x, y2: plotBottom, stroke: pal.grid, strokeWidth: gridW });
-      push(textNode("tick", k.label, x, plotBottom + g + cap(t), "middle", t, pal.muted), { x0: region.x0, x1: region.x1 });
     }
+    for (const node of xTicks) push(node, { x0: region.x0, x1: region.x1 });
     const titleTop = region.y1 - blockHeight(xLines.length, at);
     xLines.forEach((l, i) => push(textNode("axis-title", l, plotRight, titleTop + cap(at) + i * lh(at), "end", at, pal.text), { x0: plotLeft, x1: plotRight }));
   }
@@ -433,8 +458,8 @@ function layoutAxes(axes: FrameAxes, region: { x0: number; x1: number; y0: numbe
     for (const k of axes.y.ticks) {
       const y = sy(k.value);
       under.push({ type: "line", x1: plotLeft, y1: y, x2: plotRight, y2: y, stroke: pal.grid, strokeWidth: gridW });
-      push(textNode("tick", k.label, plotLeft - g, y + cap(t) / 2, "end", t, pal.muted), { x0: region.x0, x1: plotLeft });
     }
+    for (const node of yTicks) push(node, { x0: region.x0, x1: plotLeft });
     yLines.forEach((l, i) => push(textNode("axis-title", l, region.x0 + cap(at) + i * lh(at), plotTop, "end", at, pal.text, { rotate: -90 }), null));
   }
 

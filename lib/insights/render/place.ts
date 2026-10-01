@@ -18,7 +18,15 @@
 //   - a leadered box never covers part of another labelled bubble, and its
 //     leader never passes through one, where either would read as belonging
 //     to that bubble; the one exception is a bubble that covers this one's
-//     centre, which no leader can get out of without crossing.
+//     centre, which no leader can get out of without crossing;
+//   - a leader starts on a visible part of its own bubble: its bubble end
+//     lies `clear` px outside every other bubble's disc. Bubbles overlap, and
+//     a leader ending inside another disc reads as pointing at that bubble
+//     (the first renders ended Orlando's leader inside Dallas, which covers
+//     Orlando's centre) or, under a bubble drawn over its own, is hidden.
+//     Leaders run straight out from the centre, so one that starts outside a
+//     bubble covering that centre never re-enters it (the disc is convex).
+//     A label with no visible start in any direction is dropped as "no room".
 //
 // What is left is ranked by cost: a box over an unlabelled bubble costs more
 // than any leader; a leader costs a fixed price plus its length, plus a
@@ -76,6 +84,8 @@ export interface PlaceOptions {
   margin: number;
   /** Px kept clear between two label boxes. */
   separation: number;
+  /** Px by which a leader's bubble end must lie outside every other bubble's disc. */
+  clear: number;
   /** Leader lengths to try, px, shortest first. */
   rings: number[];
 }
@@ -298,6 +308,18 @@ function throughLabelled(leader: Segment, own: Circle, st: State): boolean {
   return false;
 }
 
+/** Whether a leader's bubble end is a visible point of its own bubble: `clear` px outside every other bubble's disc. */
+export function startVisible(x: number, y: number, own: Circle, bubbles: Circle[], clear: number): boolean {
+  for (const c of bubbles) {
+    if (c.id === own.id) continue;
+    const dx = x - c.cx;
+    const dy = y - c.cy;
+    const lim = c.r + clear;
+    if (lim > 0 && dx * dx + dy * dy < lim * lim) return false;
+  }
+  return true;
+}
+
 function overCost(box: Box, own: Circle, st: State): number {
   let n = 0;
   for (const c of st.bubbles) if (c.id !== own.id && circleOverlapsBox(c, box)) n++;
@@ -323,8 +345,12 @@ function best(req: LabelRequest, own: Circle, st: State): PlacedLabel | null {
       found = { id: req.id, box, side, leader: null };
     }
   }
+  // A leader's bubble end depends only on its direction, so the directions
+  // whose end another bubble covers are ruled out once, for every ring.
+  const visible = AROUND.map(([k]) => startVisible(own.cx + DIRS[k][0] * own.r, own.cy + DIRS[k][1] * own.r, own, st.bubbles, st.opts.clear));
   for (const ring of st.opts.rings) {
     for (let rank = 0; rank < AROUND.length; rank++) {
+      if (!visible[rank]) continue;
       const u = DIRS[AROUND[rank][0]];
       const { box, side, px, py } = boxToward(own, AROUND[rank], own.r + ring, req.w, req.h);
       const leader: Segment = { x1: own.cx + u[0] * own.r, y1: own.cy + u[1] * own.r, x2: px, y2: py };
