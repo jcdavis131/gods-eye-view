@@ -42,6 +42,18 @@ Shown: the company's name, ticker, exchange, CIK, SIC code and description, regi
 
 Not shown, by design: nothing about people. No officer, director or insider names; ownership forms 3, 4 and 5 are filtered out of the filings list (`DOSSIER_FORMS` in `lib/companies/edgar.ts`); no shareholder names; no mailing addresses; no individual filers. The layer is about institutions, in line with the project's ethics guardrails.
 
+## People linked to a company (Cam, 2026-10-01)
+
+The paragraph above describes the dossier today, and it holds until the people roster ships. On 2026-10-01 Cam decided: "form 4 insiders should be counted as notable people construct associated with the specific business construct, etc." So the reporting owners on a company's Forms 3, 4 and 5 (officers, directors, 10% owners) are to be listed with that company, under these rules:
+
+- They are reached from the company only, by its CIK. No search by a person's name, no person on the map or on a place page, and no list of people that is not scoped to one company.
+- Identity is the owner's CIK. Names are never merged or joined.
+- No reporting owner's address, signature, footnote or remarks text is read. Each row links its SEC filing instead; EDGAR's page for the filing shows the filer's address, and this app does not copy it.
+- Funds and companies that file as owners are listed as institutions by filed name; trusts, estates and family vehicles by role only.
+- Forms 3, 4 and 5 stay out of the filings list; their filers arrive as the roster.
+
+Apart from the decision itself, these are proposed defaults rather than Cam's words. [docs/PEOPLE.md](PEOPLE.md) has the full list with which rule is whose, the columns read and never read, and the refresh plan.
+
 ## The sector and ETF bridge
 
 `lib/companies/sectors.ts` maps a SIC code to its SIC division and to one of eleven GICS-style sector names, and maps a county's NAICS employment sectors (BLS QCEW) to the same names; each sector carries the SPDR sector fund (XLK, XLF, XLE, XLV, XLI, XLY, XLP, XLU, XLB, XLRE, XLC) plus, for a few industries, an industry fund (ITB/XHB homebuilders, IYT transports, KRE regional banks, XOP/OIH oil and gas, SMH semiconductors, XRT retail). `countySectorExposure()` folds a county's NAICS rows into those sectors with the location quotient carried through as an employment-weighted mean, and stamps every row with provenance `kind: "estimate"` and the method.
