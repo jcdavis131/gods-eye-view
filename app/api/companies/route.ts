@@ -21,7 +21,7 @@ import { citation, provenance, type Enveloped, type Provenance } from "@/lib/pro
 import { source } from "@/lib/provenance/sources";
 import type { Series } from "@/lib/series/types";
 import { qcewSectors } from "@/lib/economy/sources";
-import { companyFacts, companyFactsUrl, parseFilings, parseProfile, submissions, submissionsUrl, tickers, tickersExchange } from "@/lib/companies/edgar";
+import { companyFacts, companyFactsUrl, isOperatingIssuer, parseFilings, parseProfile, submissions, submissionsUncached, submissionsUrl, tickers, tickersExchange } from "@/lib/companies/edgar";
 import { derivedRatios, factSeries, latestFacts } from "@/lib/companies/facts";
 import { BUNDLE, companiesCsv, companiesInBbox, companiesInCounty, findCompany, searchCompanies } from "@/lib/companies/features";
 import { BUNDLE_CAVEATS, bundleProvenance } from "@/lib/companies/section";
@@ -96,13 +96,29 @@ interface CompanyDossier {
   citation: string;
 }
 
-/** Ticker -> CIK through the bundle first, then EDGAR's ticker files. */
+/**
+ * Ticker -> CIK through EDGAR's live ticker files first, then the bundle.
+ * Live first because a ticker can move to a new CIK (XOM is 2115436 in the
+ * 2026-09-29 list; the bundle fixture still has 34088), and the bundle is a
+ * snapshot. The bundle answers when SEC does not.
+ */
 async function resolveCik(ticker: string): Promise<number | null> {
-  const local = findCompany({ ticker });
-  if (local) return local.cik;
   const listed = await tickersExchange().catch(() => null);
   const hit = listed?.find((l) => l.ticker === ticker) ?? (await tickers().catch(() => null))?.find((l) => l.ticker === ticker);
-  return hit?.cik ?? null;
+  return hit?.cik ?? findCompany({ ticker })?.cik ?? null;
+}
+
+/**
+ * Whether op=company may serve this CIK: a listed issuer, a company in the
+ * bundle, or an operating company with an SIC code. Runs before the dossier
+ * cache, and vets an unlisted CIK with an uncached fetch, so an individual
+ * filer's name and address never enter the cache or a response.
+ */
+async function admitCik(cik: number): Promise<boolean> {
+  if (findCompany({ cik })) return true;
+  const listed = await tickersExchange().catch(() => null);
+  if (listed?.some((l) => l.cik === cik)) return true;
+  return isOperatingIssuer(await submissionsUncached(cik));
 }
 
 async function opCompany(cik: number): Promise<OpResult<CompanyDossier>> {
@@ -220,6 +236,7 @@ export async function GET(req: NextRequest) {
           cik = await resolveCik(ticker);
           if (cik == null) return NextResponse.json({ error: `unknown ticker ${ticker}` }, { status: 404, headers: CORS });
         }
+        if (!(await admitCik(cik))) return NextResponse.json({ error: `cik ${cik} is not a company in the SEC issuer universe` }, { status: 404, headers: CORS });
         return respond(await opCompany(cik));
       }
       case "sectors": {

@@ -12,7 +12,7 @@
 // shape per https://www.sec.gov/search-filings/edgar-application-programming-interfaces; unverified in sandbox
 
 import { cached } from "@/lib/server/cache";
-import { polite, USER_AGENT, upstreamJson } from "@/lib/server/upstream";
+import { polite, upstreamJson } from "@/lib/server/upstream";
 import type { CompanyFactsFile, CompanyListing, CompanyProfile, FactPoint, Filing, FrameFile, SubmissionsFile, TickersExchangeFile, TickersFile } from "./types";
 
 export const EDGAR_BASE = "https://data.sec.gov";
@@ -25,9 +25,18 @@ export const SEC_BACKOFF_MS = 60_000;
 
 const H = 3600_000;
 
+/**
+ * The User-Agent SEC calls send. It is deliberately not USER_AGENT plus a
+ * contact: SEC answers 403 ("Undeclared Automated Tool" on data.sec.gov,
+ * "Request Rate Threshold Exceeded" on www.sec.gov) to any UA carrying the
+ * "(+https://github.com/...)" token, measured 2026-09-30, and 200 to this
+ * one. Keep a contact and no URL here.
+ */
+export const SEC_USER_AGENT = "embedding-atlas/0.1 contact: jcdavis131@gmail.com";
+
 const SEC_HEADERS = {
   // Fair-access policy: identify the app and give a way to reach its operator.
-  "user-agent": `${USER_AGENT} contact: jcdavis131@gmail.com`,
+  "user-agent": SEC_USER_AGENT,
   "accept-encoding": "gzip, deflate",
   accept: "application/json",
 };
@@ -131,6 +140,17 @@ export function parseProfile(j: SubmissionsFile): CompanyProfile {
   };
 }
 
+/**
+ * Whether a submissions file belongs to an operating company with an SIC
+ * code. EDGAR gives individuals (insiders who file Forms 3/4/5) a CIK too;
+ * their files say entityType "other" and carry no SIC. The dossier serves
+ * institutions only, so a CIK that is not on the listed universe must pass
+ * this before anything about it is cached or returned.
+ */
+export function isOperatingIssuer(j: SubmissionsFile): boolean {
+  return str(j.entityType) === "operating" && str(j.sic) != null;
+}
+
 /** Forms the dossier shows: periodic reports and current reports, amendments included. Ownership forms (3/4/5) are excluded on purpose. */
 export const DOSSIER_FORMS = new Set(["10-K", "10-K/A", "10-Q", "10-Q/A", "8-K", "8-K/A", "20-F", "20-F/A", "40-F", "6-K"]);
 
@@ -194,6 +214,15 @@ export function tickers(): Promise<CompanyListing[]> {
 /** A filer's submissions file: profile, addresses and the recent filings window. Cached 12 h. */
 export function submissions(cik: number | string): Promise<SubmissionsFile> {
   return cached(`sec:submissions:${padCik(cik)}`, 12 * H, () => secJson<SubmissionsFile>(submissionsUrl(cik))).then((c) => c.value);
+}
+
+/**
+ * The same file, never cached. Used to vet a CIK that is not on the listed
+ * universe: if it turns out to be an individual, nothing about them may sit
+ * in the cache.
+ */
+export function submissionsUncached(cik: number | string): Promise<SubmissionsFile> {
+  return secJson<SubmissionsFile>(submissionsUrl(cik));
 }
 
 /** A filer's XBRL facts (every concept, every period). Large (MBs for big filers); cached 12 h. */

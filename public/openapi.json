@@ -1558,7 +1558,91 @@
             }
           },
           "404": {
-            "description": "Unknown ticker"
+            "description": "Unknown ticker, or a CIK that is not a company in the SEC issuer universe (individual filers are refused before anything is fetched into the cache)"
+          }
+        }
+      }
+    },
+    "/api/employers": {
+      "get": {
+        "summary": "Ranked US employers by organization-wide headcount at their HQ city (Forbes, DBpedia, Wikidata)",
+        "tags": [
+          "companies"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "top",
+                "zip",
+                "metro",
+                "search",
+                "placed"
+              ],
+              "default": "top"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2000
+            },
+            "description": "op=top: 1..2000, default 100; op=search: 1..200, default 50"
+          },
+          {
+            "name": "zip",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{5}$"
+            },
+            "description": "op=zip"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "op=metro (metro name) or op=search (employer name)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{ data, provenance[], generatedAt, caveats[], meta } with route fields nested under meta (op, count, ...). data is an array of employer records, or GeoJSON Features for op=placed. Headcounts are organization-wide as each source reports them, not US-only.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployersEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad parameter or unknown op",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -3353,6 +3437,55 @@
             "items": {
               "type": "string"
             }
+          }
+        }
+      },
+      "EmployersEnvelope": {
+        "type": "object",
+        "description": "The /api/employers envelope. Unlike Envelope, route fields sit under meta rather than beside data. Record fields are not pinned: they follow lib/companies/employers.ts.",
+        "required": [
+          "data",
+          "provenance",
+          "generatedAt",
+          "caveats",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "provenance": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "caveats": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "op": {
+                "type": "string"
+              },
+              "count": {
+                "type": "integer"
+              }
+            },
+            "additionalProperties": true
           }
         }
       },

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cikId, companyFactsUrl, DOSSIER_FORMS, edgarCompanyUrl, factPoints, filingUrl, frameUrl, padCik, parseFilings, parseFrame, parseProfile, parseTickers, parseTickersExchange, submissionsUrl } from "./edgar";
+import { cikId, companyFactsUrl, DOSSIER_FORMS, edgarCompanyUrl, factPoints, filingUrl, frameUrl, isOperatingIssuer, padCik, parseFilings, parseFrame, parseProfile, parseTickers, parseTickersExchange, submissionsUrl } from "./edgar";
 import type { CompanyFactsFile, FrameFile, SubmissionsFile, TickersExchangeFile, TickersFile } from "./types";
 
 // shape per https://www.sec.gov/search-filings/edgar-application-programming-interfaces; unverified in sandbox
@@ -101,6 +101,19 @@ describe("parseProfile", () => {
     expect(p.sic).toBeNull();
     expect(p.business).toBeNull();
     expect(p.tickers).toEqual([]);
+  });
+});
+
+describe("isOperatingIssuer", () => {
+  it("admits an operating company with an SIC code", () => {
+    expect(isOperatingIssuer(SUBMISSIONS)).toBe(true);
+  });
+  it("refuses an individual filer (entityType other, no SIC)", () => {
+    expect(isOperatingIssuer({ cik: 1234567, name: "DOE JANE Q", entityType: "other", sic: "" })).toBe(false);
+  });
+  it("refuses an operating entity without an SIC code, and a missing entityType", () => {
+    expect(isOperatingIssuer({ ...SUBMISSIONS, sic: "  " })).toBe(false);
+    expect(isOperatingIssuer({ cik: 1, name: "X", sic: "3312" })).toBe(false);
   });
 });
 
