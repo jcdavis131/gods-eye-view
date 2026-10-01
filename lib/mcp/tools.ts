@@ -138,11 +138,23 @@ interface RelayOptions {
   dropGeometry?: boolean;
 }
 
+/**
+ * Whether a reply came from a route handler. Routes answer JSON with an error
+ * string, including their own 404s (an unknown ticker, a CIK that is not a
+ * company). A path the server does not have answers Next's HTML not-found
+ * page, which httpFetchJson turns into { error: "non-JSON reply", text }.
+ */
+function isRouteAnswer(body: unknown): boolean {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return false;
+  const error = (body as JsonObject).error;
+  return typeof error === "string" && error !== "non-JSON reply";
+}
+
 /** Fetch a route and normalise its answer into a ToolReply. */
 export async function relay(ctx: ToolCtx, path: string, opts: RelayOptions = {}): Promise<ToolReply> {
   const r = await ctx.fetchJson(path);
   let payload = asObject(r.body);
-  if (r.status === 404) payload = addNote(payload, NOT_DEPLOYED_NOTE);
+  if (r.status === 404 && !isRouteAnswer(r.body)) payload = addNote(payload, NOT_DEPLOYED_NOTE);
   else if (r.status >= 400) payload = addNote(payload, `route answered HTTP ${r.status}`);
   if (opts.dropGeometry) payload = stripGeometry(payload);
   payload = boundPayload(payload);

@@ -30,7 +30,8 @@ import fs from "node:fs";
 import path from "node:path";
 
 const CONTACT = process.env.CONTACT || "jcdavis131@gmail.com";
-const UA = `embedding-atlas/0.1 (+https://github.com/jcdavis131/gods-eye-view; open-source globe) contact: ${CONTACT}`;
+// No URL token: SEC answers 403 to a UA carrying "(+https://...)" (measured 2026-09-30); see SEC_USER_AGENT in lib/companies/edgar.ts.
+const UA = `embedding-atlas/0.1 contact: ${CONTACT}`;
 const OUT_DIR = path.resolve("lib/companies/data");
 const OUT = path.join(OUT_DIR, "companies.json");
 const PARTIAL = path.join(OUT_DIR, "companies.partial.json");

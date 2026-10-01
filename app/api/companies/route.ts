@@ -15,19 +15,19 @@
 
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { cached } from "@/lib/server/cache";
-import { jsonError } from "@/lib/server/upstream";
+import { cached, cacheHas } from "@/lib/server/cache";
+import { jsonError, UpstreamError } from "@/lib/server/upstream";
 import { citation, provenance, type Enveloped, type Provenance } from "@/lib/provenance/types";
 import { source } from "@/lib/provenance/sources";
 import type { Series } from "@/lib/series/types";
 import { qcewSectors } from "@/lib/economy/sources";
-import { companyFacts, companyFactsUrl, parseFilings, parseProfile, submissions, submissionsUrl, tickers, tickersExchange } from "@/lib/companies/edgar";
+import { companyFacts, companyFactsUrl, isOperatingIssuer, parseFilings, parseProfile, submissions, submissionsUncached, submissionsUrl, tickers, tickersExchange } from "@/lib/companies/edgar";
 import { derivedRatios, factSeries, latestFacts } from "@/lib/companies/facts";
 import { BUNDLE, companiesCsv, companiesInBbox, companiesInCounty, findCompany, searchCompanies } from "@/lib/companies/features";
 import { BUNDLE_CAVEATS, bundleProvenance } from "@/lib/companies/section";
 import { parseBbox, parseCik, parseFips, parseFormat, parseLimit, parseQuery, parseTicker, DEFAULT_SEARCH_LIMIT, MAX_FEATURES } from "@/lib/companies/params";
 import { countySectorExposure, sicToSector } from "@/lib/companies/sectors";
-import type { CompanyProfile, ConceptKey, DerivedRatio, FactValue, Filing, SectorExposure } from "@/lib/companies/types";
+import type { CompanyProfile, ConceptKey, DerivedRatio, FactValue, Filing, SectorExposure, SubmissionsFile } from "@/lib/companies/types";
 import type { LayerFeature } from "@/lib/layers/types";
 
 export const maxDuration = 60;
@@ -96,19 +96,58 @@ interface CompanyDossier {
   citation: string;
 }
 
-/** Ticker -> CIK through the bundle first, then EDGAR's ticker files. */
+/**
+ * Ticker -> CIK through EDGAR's live ticker files first, then the bundle.
+ * Live first because a ticker can move to a new CIK (XOM is 2115436 in the
+ * 2026-09-29 list; the bundle fixture still has 34088), and the bundle is a
+ * snapshot. The bundle answers when SEC does not.
+ */
 async function resolveCik(ticker: string): Promise<number | null> {
-  const local = findCompany({ ticker });
-  if (local) return local.cik;
   const listed = await tickersExchange().catch(() => null);
   const hit = listed?.find((l) => l.ticker === ticker) ?? (await tickers().catch(() => null))?.find((l) => l.ticker === ticker);
-  return hit?.cik ?? null;
+  return hit?.cik ?? findCompany({ ticker })?.cik ?? null;
 }
 
-async function opCompany(cik: number): Promise<OpResult<CompanyDossier>> {
+/**
+ * Whether op=company may serve this CIK: a company in the bundle, one whose
+ * dossier is already held (it was admitted before, and a held dossier stays
+ * servable through an SEC outage), a listed issuer, or an operating company
+ * with an SIC code. Runs before the dossier cache. An unlisted CIK is vetted
+ * with an uncached fetch and only the yes/no verdict is cached, so an
+ * individual filer's name and address never enter the cache or a response,
+ * and a repeat request costs SEC nothing. A CIK SEC does not know is refused
+ * like an individual. The vetted file comes back with the verdict so the
+ * dossier does not fetch it a second time.
+ */
+async function admitCik(cik: number): Promise<{ ok: boolean; sub?: SubmissionsFile }> {
+  if (findCompany({ cik }) || cacheHas(`companies:dossier:${cik}`)) return { ok: true };
+  const listed = await tickersExchange().catch(() => null);
+  if (listed?.some((l) => l.cik === cik)) return { ok: true };
+  let sub: SubmissionsFile | undefined;
+  const verdict = await cached(`companies:admit:${cik}`, 12 * H, async () => {
+    try {
+      const file = await submissionsUncached(cik);
+      const ok = isOperatingIssuer(file);
+      if (ok) sub = file;
+      return ok;
+    } catch (err) {
+      if (err instanceof UpstreamError && err.status === 404) return false;
+      throw err;
+    }
+  });
+  return { ok: verdict.value, sub };
+}
+
+/** The bundle's CIK for a ticker the live list now gives to a different CIK (XOM: 34088 vs 2115436). */
+interface Predecessor {
+  ticker: string;
+  cik: number;
+}
+
+async function opCompany(cik: number, opts: { sub?: SubmissionsFile; predecessor?: Predecessor } = {}): Promise<OpResult<CompanyDossier>> {
   const r = await cached(`companies:dossier:${cik}`, 12 * H, async () => {
     const retrievedAt = new Date().toISOString();
-    const [sub, facts] = await Promise.all([submissions(cik), companyFacts(cik).catch(() => null)]);
+    const [sub, facts] = await Promise.all([opts.sub ? Promise.resolve(opts.sub) : submissions(cik), companyFacts(cik).catch(() => null)]);
     const profile = parseProfile(sub);
     const filings = parseFilings(sub, 20);
     const local = findCompany({ cik });
@@ -137,10 +176,16 @@ async function opCompany(cik: number): Promise<OpResult<CompanyDossier>> {
     };
     return { dossier, prov, caveats };
   });
+  // Outside the cache: it depends on how the CIK was reached, not on the CIK.
+  const caveats = [...r.value.caveats];
+  const p = opts.predecessor;
+  if (p && Object.values(r.value.dossier.facts).every((v) => v == null)) {
+    caveats.push(`SEC's current ticker list gives ${p.ticker} to CIK ${cik}, which has no annual XBRL facts yet. The bundled snapshot has ${p.ticker} under CIK ${p.cik}; its annual reports are at op=company&cik=${p.cik}.`);
+  }
   return {
     data: r.value.dossier,
     provenance: r.value.prov,
-    caveats: r.value.caveats.length ? r.value.caveats : undefined,
+    caveats: caveats.length ? caveats : undefined,
     meta: { source: "SEC EDGAR", cik, cacheAge: r.age, filings: r.value.dossier.filings.length, series: r.value.dossier.series.length },
     ttlS: 12 * 3600,
   };
@@ -214,13 +259,18 @@ export async function GET(req: NextRequest) {
       case "company": {
         if (format === "csv") return bad("op=company is JSON only");
         let cik = parseCik(q.get("cik"));
+        let predecessor: Predecessor | undefined;
         if (cik == null) {
           const ticker = parseTicker(q.get("ticker"));
           if (!ticker) return bad("ticker=AAPL or cik=320193 required");
           cik = await resolveCik(ticker);
           if (cik == null) return NextResponse.json({ error: `unknown ticker ${ticker}` }, { status: 404, headers: CORS });
+          const bundled = findCompany({ ticker })?.cik;
+          if (bundled != null && bundled !== cik) predecessor = { ticker, cik: bundled };
         }
-        return respond(await opCompany(cik));
+        const admit = await admitCik(cik);
+        if (!admit.ok) return NextResponse.json({ error: `cik ${cik} is not a company in the SEC issuer universe` }, { status: 404, headers: CORS });
+        return respond(await opCompany(cik, { sub: admit.sub, predecessor }));
       }
       case "sectors": {
         if (format === "csv") return bad("op=sectors is JSON only");

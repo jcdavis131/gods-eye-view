@@ -7,7 +7,7 @@ Listed companies from SEC EDGAR, placed at the business address they register wi
 | What | Where | Cadence / cache |
 | --- | --- | --- |
 | Universe: CIK, name, ticker, exchange | `https://www.sec.gov/files/company_tickers_exchange.json` (fallback `company_tickers.json`) | daily file; cached 24 h |
-| Profile, SIC, business address, recent filings | `https://data.sec.gov/submissions/CIK##########.json` | cached 12 h per company |
+| Profile, SIC, business address, recent filings | `https://data.sec.gov/submissions/CIK##########.json` | cached 12 h per company; a CIK that is neither bundled nor listed is first vetted with one uncached read whose yes/no verdict (no name, no address) is cached 12 h |
 | Every XBRL fact a filer tagged | `https://data.sec.gov/api/xbrl/companyfacts/CIK##########.json` | cached 12 h per company |
 | One concept, one period, every filer | `https://data.sec.gov/api/xbrl/frames/us-gaap/<Concept>/USD/CY2024.json` (instants: `CY2024Q4I`) | cached 24 h; used by the build script |
 | Filing documents | `https://www.sec.gov/Archives/edgar/data/<cik>/<accession-no-dashes>/<primaryDocument>` | linked, never fetched |
@@ -19,7 +19,7 @@ Response shapes for the EDGAR endpoints follow https://www.sec.gov/search-filing
 
 ## Fair-access policy
 
-The SEC asks automated clients to send a descriptive `User-Agent` with a contact address and to stay at or under ten requests a second. `lib/companies/edgar.ts` sends `embedding-atlas/0.1 (...) contact: <address>` in the header only (it never appears in a response body) and routes every call through `polite("sec", 120, 60_000, ...)`: at most one request every 120 ms (about 8/s), and a 60 s cool-down after any 429. The build script uses the same limits and additionally retries 429/5xx with back-off. Set `CONTACT=you@example.com` when running the script under your own name.
+The SEC asks automated clients to send a descriptive `User-Agent` with a contact address and to stay at or under ten requests a second. `lib/companies/edgar.ts` sends `embedding-atlas/0.1 contact: <address>` (`SEC_USER_AGENT`) in the header only (it never appears in a response body) and routes every call through `polite("sec", 120, 60_000, ...)`: at most one request every 120 ms (about 8/s), and a 60 s cool-down after any 429. The build script uses the same limits and additionally retries 429/5xx with back-off. Set `CONTACT=you@example.com` when running the script under your own name.
 
 ## The bundle and how to refresh it
 
@@ -55,6 +55,6 @@ This is a convention, kept as one editable table, not a classification service: 
 - `op=near&bbox=w,s,e,n` HQs in the box from the bundle, largest by revenue first, cap 2,000
 - `op=county&fips=48029` HQs in a county, or a state as `48000`
 - `op=search&q=nucor&limit=25` ticker / name search (exact ticker, ticker prefix, name prefix, name contains)
-- `op=company&ticker=NUE` or `&cik=73309` live dossier: profile, sector, HQ, last 20 periodic/current filings, latest facts, ratios, annual fact series as `lib/series` Series (`edgar:CIK0000073309:Revenues`, provenance `seriesId` `CIK0000073309:Revenues`)
+- `op=company&ticker=NUE` or `&cik=73309` live dossier: profile, sector, HQ, last 20 periodic/current filings, latest facts, ratios, annual fact series as `lib/series` Series (`edgar:CIK0000073309:Revenues`, provenance `seriesId` `CIK0000073309:Revenues`). A ticker resolves through SEC's live ticker list first, then the bundle; when the two disagree and the live CIK has no annual facts yet, a caveat names the bundled CIK. Only companies are served: a CIK in the bundle, on the listed universe, or an operating filer with an SIC code. Any other CIK (an individual who files ownership forms, or one SEC does not know) gets a 404 that names nothing, and nothing about it is cached.
 - `op=sectors&fips=48029` the county's QCEW mix bridged to GICS sectors and ETFs
 - `&format=csv` on near / county / search
