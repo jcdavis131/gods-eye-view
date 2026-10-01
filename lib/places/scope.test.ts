@@ -12,6 +12,7 @@ import {
   scopeName,
   scopePath,
   scopeShortName,
+  type PlaceScope,
 } from "./scope";
 
 // lib/series/collect.ts SERIES_ID_RE, copied rather than imported so a change
@@ -44,19 +45,27 @@ describe("parseCountyParam", () => {
     expect(parseCountyParam("03001")).toBeNull();
   });
 
-  it("accepts an unknown but structurally valid county while the manifest is a seed", () => {
-    const s = parseCountyParam("48001");
-    if (MANIFEST.countiesComplete) {
-      // After the pull the manifest is the authority, so this is either a real
-      // county with a ref or an exact 404.
-      expect(s === null || (s.kind === "county" && s.provisional === false)).toBe(true);
-      return;
-    }
-    expect(s).not.toBeNull();
-    expect(s?.kind === "county" && s.provisional).toBe(true);
-    expect(s?.kind === "county" && s.ref).toBeNull();
-    expect(scopeCentroid(s!)).toBeNull();
-    expect(scopeName(s!)).toBe("FIPS 48001, TX");
+  it("is exact once the manifest is complete: a real county resolves, an unknown code 404s", () => {
+    expect(MANIFEST.countiesComplete).toBe(true);
+    const anderson = parseCountyParam("48001");
+    expect(anderson?.kind === "county" && anderson.provisional).toBe(false);
+    expect(anderson?.kind === "county" && anderson.ref?.name).toBe("Anderson County");
+    // Structurally valid with a known state prefix, and no such county.
+    expect(parseCountyParam("48999")).toBeNull();
+    // Connecticut is its nine planning regions; the eight old counties are gone.
+    expect(parseCountyParam("09190")?.kind === "county" && parseCountyParam("09190")?.id).toBe("09190");
+    expect(parseCountyParam("09001")).toBeNull();
+    // Puerto Rico municipios are county equivalents.
+    expect(parseCountyParam("72127")?.kind === "county" && scopeName(parseCountyParam("72127")!)).toBe("San Juan Municipio, PR");
+  });
+
+  it("names a provisional scope by its FIPS and gives it no centroid", () => {
+    // The provisional branch only fires while counties.json is incomplete; a
+    // hand-built scope keeps scopeName and scopeCentroid honest for it.
+    const s: PlaceScope = { kind: "county", id: "48999", ref: null, provisional: true };
+    expect(scopeCentroid(s)).toBeNull();
+    expect(scopeName(s)).toBe("FIPS 48999, TX");
+    expect(scopeShortName(s)).toBe("FIPS 48999");
   });
 });
 
@@ -128,7 +137,8 @@ describe("scope identity and paths", () => {
     expect(scopeShortName(county)).toBe("Travis County");
     expect(scopeName(state)).toBe("Texas");
     expect(scopeShortName(metro)).toBe("San Antonio, TX");
-    expect(scopeCentroid(county)).toEqual({ lon: -97.78, lat: 30.33 });
+    // The Census internal point (INTPTLON/INTPTLAT) to four decimals.
+    expect(scopeCentroid(county)).toEqual({ lon: -97.6913, lat: 30.2395 });
     expect(scopeCentroid(state)?.lon).toBeLessThan(0);
   });
 });
