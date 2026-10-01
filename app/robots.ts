@@ -41,6 +41,7 @@ export default function robots(): MetadataRoute.Robots {
       absoluteUrl("/sitemap.xml"),
       absoluteUrl("/metro/sitemap.xml"),
       absoluteUrl("/state/sitemap.xml"),
+      absoluteUrl("/insights/sitemap.xml"),
       ...Array.from({ length: shards }, (_, i) => absoluteUrl(`/place/sitemap/${i}.xml`)),
     ],
   };
