@@ -2,7 +2,7 @@
 // the repository (Vercel, a container built before the last snapshot commit).
 // Point it at the raw view of data/series on the branch the cron commits to:
 //
-//   GEV_SERIES_RAW_BASE=https://raw.githubusercontent.com/jcdavis131/gods-eye-view/master/data/series
+//   GEV_SERIES_RAW_BASE=https://raw.githubusercontent.com/jcdavis131/gods-eye-view/series/data/series
 //
 // get() fetches `${base}/<fileNameFor(id)>`; list() fetches `${base}/index.json`,
 // an array of SeriesMeta the snapshot script writes after every run. Both
