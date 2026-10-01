@@ -166,8 +166,8 @@ function temporalCoverage(f: PlaceFacts): string | undefined {
   return from === to ? from : `${from}/${to}`;
 }
 
-/** The upstreams this page actually read, as Dataset nodes with their own licences. */
-function isBasedOn(provenance: Provenance[]): Array<Record<string, unknown>> {
+/** The upstreams a page actually read, as Dataset nodes with their own licences. Shared with the insight pages (lib/insights/jsonld.ts). */
+export function isBasedOn(provenance: Provenance[]): Array<Record<string, unknown>> {
   const seen = new Set<string>();
   const out: Array<Record<string, unknown>> = [];
   for (const p of provenance) {
