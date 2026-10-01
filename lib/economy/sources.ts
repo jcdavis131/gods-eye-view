@@ -15,6 +15,8 @@ import { bboxAround } from "@/lib/globe/geo";
 import { cached } from "@/lib/server/cache";
 import { polite, upstream, upstreamJson } from "@/lib/server/upstream";
 import { cellNum, parseCsv } from "./csv";
+import { parseQcewAreaTotal, qcewColumns, qcewLevels, type QcewQtr, type QcewTotalRow } from "./history/qcewCsv";
+import { isWithheld } from "./qcewDisclosure";
 import {
   NAICS_SECTOR,
   type AreaLevel,
@@ -179,24 +181,35 @@ export interface QcewTable {
   counties: Map<string, JobsRow>;
   /** Two-digit state FIPS -> row. */
   states: Map<string, JobsRow>;
+  /**
+   * Metropolitan statistical areas (agglvl 40) by QCEW C-code, C + the first
+   * four digits of the CBSA code ("C1242" is Austin, CBSA 12420). These rows
+   * follow the delineation in force for their period, so a series across
+   * years can change boundaries under it.
+   */
+  metros: Map<string, JobsRow>;
+  /** Micropolitan statistical areas (agglvl 80) by C-code, same keying as `metros`. */
+  micros: Map<string, JobsRow>;
   national?: JobsRow;
 }
 
-function qcewRow(r: Record<string, string>, period: string): JobsRow {
-  const suppressed = (r.disclosure_code ?? "").trim() === "N";
+/** One QCEW row as a JobsRow; a withheld row (any non-blank disclosure code) keeps its shape with every value null. */
+export function qcewRow(r: Record<string, string>, period: string): JobsRow {
+  const suppressed = isWithheld(r.disclosure_code);
+  const c = qcewColumns(Object.keys(r));
   const n = (k: string) => (suppressed ? null : cellNum(r[k]));
   return {
     area: r.area_fips,
     period,
-    estabs: n("qtrly_estabs"),
-    emp: n("month3_emplvl"),
-    wages: n("total_qtrly_wages"),
-    avgWeeklyWage: n("avg_wkly_wage"),
+    estabs: n(c.estabs),
+    emp: n(c.emp),
+    wages: n(c.wages),
+    avgWeeklyWage: n(c.avgWeeklyWage),
     yoy: {
-      estabs: n("oty_qtrly_estabs_pct_chg"),
-      emp: n("oty_month3_emplvl_pct_chg"),
-      wages: n("oty_total_qtrly_wages_pct_chg"),
-      avgWeeklyWage: n("oty_avg_wkly_wage_pct_chg"),
+      estabs: n(c.otyEstabsPct),
+      emp: n(c.otyEmpPct),
+      wages: n(c.otyWagesPct),
+      avgWeeklyWage: n(c.otyAvgWeeklyWagePct),
     },
     suppressed,
   };
@@ -206,6 +219,29 @@ function objects(csv: string): Record<string, string>[] {
   const rows = parseCsv(csv);
   const h = rows[0];
   return rows.slice(1).filter((r) => r.length >= h.length - 1).map((r) => Object.fromEntries(h.map((k, i) => [k, r[i] ?? ""])));
+}
+
+/**
+ * The all-ownership total rows (own_code 0) of one industry/10 slice: counties
+ * (agglvl 70), states (50), metropolitan (40) and micropolitan (80) areas, and
+ * the nation (10). Pure.
+ */
+export function parseQcewLatest(csv: string, year: number, qtr: number): QcewTable {
+  const period = `${year} Q${qtr}`;
+  const counties = new Map<string, JobsRow>();
+  const states = new Map<string, JobsRow>();
+  const metros = new Map<string, JobsRow>();
+  const micros = new Map<string, JobsRow>();
+  let national: JobsRow | undefined;
+  for (const r of objects(csv)) {
+    if (r.own_code !== "0") continue;
+    if (r.agglvl_code === "70") counties.set(r.area_fips, qcewRow(r, period));
+    else if (r.agglvl_code === "50") states.set(r.area_fips.slice(0, 2), qcewRow(r, period));
+    else if (r.agglvl_code === "40") metros.set(r.area_fips, qcewRow(r, period));
+    else if (r.agglvl_code === "80") micros.set(r.area_fips, qcewRow(r, period));
+    else if (r.agglvl_code === "10") national = qcewRow(r, period);
+  }
+  return { year, qtr, period, counties, states, metros, micros, national };
 }
 
 /** Newest quarter BLS has published: walk back from the current quarter until a file answers. */
@@ -218,17 +254,8 @@ export function qcewLatest(): Promise<QcewTable> {
     for (let k = 0; k < 8; k++) {
       try {
         const csv = await polite("bls", 300, 60_000, () => text("bls-qcew", `${QCEW}/${y}/${q}/industry/10.csv`));
-        const period = `${y} Q${q}`;
-        const counties = new Map<string, JobsRow>();
-        const states = new Map<string, JobsRow>();
-        let national: JobsRow | undefined;
-        for (const r of objects(csv)) {
-          if (r.own_code !== "0") continue;
-          if (r.agglvl_code === "70") counties.set(r.area_fips, qcewRow(r, period));
-          else if (r.agglvl_code === "50") states.set(r.area_fips.slice(0, 2), qcewRow(r, period));
-          else if (r.agglvl_code === "10") national = qcewRow(r, period);
-        }
-        if (counties.size > 100) return { year: y, qtr: q, period, counties, states, national };
+        const table = parseQcewLatest(csv, y, q);
+        if (table.counties.size > 100) return table;
       } catch (err) {
         lastErr = err;
       }
@@ -242,32 +269,43 @@ export function qcewLatest(): Promise<QcewTable> {
   }).then((c) => c.value);
 }
 
-/** Private-sector NAICS sector rows for one county (or state) from the same quarter. */
+/**
+ * The total row and the private-sector NAICS sector rows of one area slice:
+ * county SSCCC (sectors at agglvl 74), state SS000 (54), US000 (14) or a
+ * metropolitan C-code (44). Micropolitan C-codes and CS-codes publish a total
+ * only, so their sector list is empty. Pure.
+ */
+export function parseQcewSectors(csv: string, fips: string, period: string): { total?: JobsRow; sectors: SectorRow[] } {
+  const levels = qcewLevels(fips);
+  const sectors: SectorRow[] = [];
+  let total: JobsRow | undefined;
+  for (const r of objects(csv)) {
+    if (r.own_code === "0" && r.industry_code === "10" && levels.total.includes(r.agglvl_code)) total = qcewRow(r, period);
+    if (r.own_code !== "5" || levels.sector == null || r.agglvl_code !== levels.sector) continue;
+    const suppressed = isWithheld(r.disclosure_code);
+    const c = qcewColumns(Object.keys(r));
+    const n = (k: string) => (suppressed ? null : cellNum(r[k]));
+    sectors.push({
+      code: r.industry_code,
+      title: NAICS_SECTOR[r.industry_code] ?? r.industry_code,
+      estabs: n(c.estabs),
+      emp: n(c.emp),
+      avgWeeklyWage: n(c.avgWeeklyWage),
+      lq: n(c.lqEmp),
+      yoyEmp: n(c.otyEmpPct),
+      suppressed,
+    });
+  }
+  sectors.sort((a, b) => (b.emp ?? -1) - (a.emp ?? -1));
+  return { total, sectors };
+}
+
+/** Private-sector NAICS sector rows for one county, state, the nation or a metro C-code, from the same quarter as qcewLatest. */
 export async function qcewSectors(fips: string): Promise<{ period: string; total?: JobsRow; sectors: SectorRow[] }> {
   const table = await qcewLatest();
   return cached("qcew:area:" + fips, 12 * H, async () => {
     const csv = await polite("bls", 300, 60_000, () => text("bls-qcew", `${QCEW}/${table.year}/${table.qtr}/area/${fips}.csv`));
-    const level = fips.endsWith("000") ? (fips === "US000" ? "14" : "54") : "74";
-    const sectors: SectorRow[] = [];
-    let total: JobsRow | undefined;
-    for (const r of objects(csv)) {
-      if (r.own_code === "0" && (r.agglvl_code === "70" || r.agglvl_code === "50" || r.agglvl_code === "10")) total = qcewRow(r, table.period);
-      if (r.own_code !== "5" || r.agglvl_code !== level) continue;
-      const suppressed = (r.disclosure_code ?? "").trim() === "N";
-      const n = (k: string) => (suppressed ? null : cellNum(r[k]));
-      sectors.push({
-        code: r.industry_code,
-        title: NAICS_SECTOR[r.industry_code] ?? r.industry_code,
-        estabs: n("qtrly_estabs"),
-        emp: n("month3_emplvl"),
-        avgWeeklyWage: n("avg_wkly_wage"),
-        lq: n("lq_month3_emplvl"),
-        yoyEmp: n("oty_month3_emplvl_pct_chg"),
-        suppressed,
-      });
-    }
-    sectors.sort((a, b) => (b.emp ?? -1) - (a.emp ?? -1));
-    return { period: table.period, total, sectors };
+    return { period: table.period, ...parseQcewSectors(csv, fips, table.period) };
   }).then((c) => c.value);
 }
 
@@ -827,7 +865,6 @@ export function witsPartners(iso3: string): Promise<Partners | null> {
 // Parsers live in lib/economy/history so they can be tested on fixtures.
 
 import { parseZillowHistory, type ZillowHistoryTable } from "./history/zillowCsv";
-import { parseQcewAreaTotal, type QcewTotalRow } from "./history/qcewCsv";
 
 /** Full monthly history of one Zillow file (every region, every month column). Cached 6 h. */
 export function zillowHistory(kind: ZillowKind): Promise<ZillowHistoryTable> {
@@ -836,21 +873,25 @@ export function zillowHistory(kind: ZillowKind): Promise<ZillowHistoryTable> {
   );
 }
 
-/** Where a QCEW area slice lives; exported so provenance can cite the exact file. */
-export function qcewAreaUrl(fips: string, year: number, qtr: number): string {
+/** Where a QCEW area slice lives (`qtr` "a" is the annual-average slice); exported so provenance can cite the exact file. */
+export function qcewAreaUrl(fips: string, year: number, qtr: QcewQtr): string {
   return `${QCEW}/${year}/${qtr}/area/${fips}.csv`;
 }
 
 /**
- * Total covered employment row (industry 10, ownership 0) for one area and
- * quarter from the per-area BLS slice. Null when the file has no such row.
- * One BLS request per county-quarter, gated to about three per second and
- * cached 12 h; a quarter BLS has not published yet raises an UpstreamError.
+ * Industry 10 row for one area and period from the per-area BLS slice:
+ * all covered employment (ownership 0) unless `own` names another ownership
+ * ("5" is private). Areas: county SSCCC, state SS000, US000, a metropolitan
+ * or micropolitan C-code, or a CS-code. `qtr` "a" reads the annual averages.
+ * Null when the file has no such row. One BLS request per area-period, gated
+ * to about three per second and cached 12 h; a period BLS has not published
+ * yet raises an UpstreamError.
  */
-export function qcewAreaTotal(fips: string, year: number, qtr: number): Promise<QcewTotalRow | null> {
-  return cached(`qcew:area-total:${fips}:${year}:${qtr}`, 12 * H, async () => {
+export function qcewAreaTotal(fips: string, year: number, qtr: QcewQtr, opts: { own?: string } = {}): Promise<QcewTotalRow | null> {
+  const own = opts.own ?? "0";
+  return cached(`qcew:area-total:${fips}:${year}:${qtr}:${own}`, 12 * H, async () => {
     const csv = await polite("bls", 300, 60_000, () => text("bls-qcew", qcewAreaUrl(fips, year, qtr)));
-    return parseQcewAreaTotal(csv, fips, year, qtr);
+    return parseQcewAreaTotal(csv, fips, year, qtr, { own });
   }).then((c) => c.value);
 }
 

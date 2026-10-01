@@ -47,7 +47,7 @@ const series: Series = {
 };
 
 function fetchers(over: Partial<Fetchers> = {}): Fetchers {
-  const qcew: QcewTable = { year: 2026, qtr: 1, period: "2026 Q1", counties: new Map([["48453", jobs("48453", 700_000)], ["48001", jobs("48001", null, true)]]), states: new Map([["48", jobs("48000", 13_000_000)]]) };
+  const qcew: QcewTable = { year: 2026, qtr: 1, period: "2026 Q1", counties: new Map([["48453", jobs("48453", 700_000)], ["48001", jobs("48001", null, true)]]), states: new Map([["48", jobs("48000", 13_000_000)]]), metros: new Map(), micros: new Map() };
   return {
     zillow: async (kind) => {
       if (kind === "zhviCounty") return zillowTable(kind, [home("48453", "Travis County", 520_000, 3.4, "Austin-Round Rock-San Marcos, TX")]);
