@@ -1,0 +1,1518 @@
+{
+ "_doc": "The methods page's content for places-v0.1 (SPEC 2), written by bin/py -m places.export. Every number here names its entry in evidence/C1-raw.json (numbers), which carries its provenance.",
+ "panel_a": {
+  "chart": "charts/C1-raw.sidecar.json",
+  "evidence": "evidence/C1-raw.json",
+  "finding": "C1-raw",
+  "is": [
+   "Raw growth of office-industry and goods-and-logistics jobs from 2019 to 2025, from published CES SM annual averages (M13, not seasonally adjusted), for the 150 largest metros by 2019 CES total nonfarm jobs.",
+   "Each axis ranked among the metros that publish every component, as competition ranks (1 = fastest).",
+   "Descriptive: metro scans carry no test (SPEC 8)."
+  ],
+  "is_not": [
+   "Not adjusted for where each metro started: twins and the twin-adjusted panel B are pending.",
+   "Not occupations: jobs are counted by employer industry and place of work.",
+   "Not a causal estimate and not a forecast."
+  ],
+  "method_line": "Industry groups standing in for white- and blue-collar work: office = information, finance, professional and business services; goods and logistics = mining, logging, construction, manufacturing, transportation, warehousing and utilities. Industries, not occupations: BLS counts jobs by employer industry. Annual averages, not seasonally adjusted.",
+  "universe": {
+   "fail_closed": [
+    {
+     "cbsa": "25540",
+     "members_without_2019_weight": [
+      "09110",
+      "09130"
+     ],
+     "qcew_code": "C2554",
+     "title": "Hartford-West Hartford-East Hartford, CT"
+    },
+    {
+     "cbsa": "14860",
+     "members_without_2019_weight": [
+      "09120",
+      "09190"
+     ],
+     "qcew_code": "C1486",
+     "title": "Bridgeport-Stamford-Danbury, CT"
+    },
+    {
+     "cbsa": "35300",
+     "members_without_2019_weight": [
+      "09170"
+     ],
+     "qcew_code": "C3530",
+     "title": "New Haven, CT"
+    },
+    {
+     "cbsa": "47930",
+     "members_without_2019_weight": [
+      "09140"
+     ],
+     "qcew_code": "C4793",
+     "title": "Waterbury-Shelton, CT"
+    }
+   ],
+   "n": {
+    "number": "main.universe.n",
+    "value": 150
+   },
+   "not_published": [
+    {
+     "cbsa": "45300",
+     "label": "Tampa",
+     "reason": "mlc_not_published: CES publishes neither 15 nor both 10 and 20",
+     "title": "Tampa-St. Petersburg-Clearwater, FL"
+    }
+   ],
+   "publishable": {
+    "number": "main:2019->2025.publishable",
+    "value": 149
+   }
+  }
+ },
+ "panel_b": {
+  "_why": {
+   "bar_result": "no rung has been through the bar",
+   "shipped_rung": "M7-M9 (the frozen baselines, R3/R4 training and the bar) have not run; they wait on RAM (docs/DECISIONS.md). Under rules_version 3 the release ships on the frozen best baseline B* once they do (rules_history, version 3)."
+  },
+  "bar_result": null,
+  "gate": [
+   {
+    "name": "bar_result_recorded",
+    "rule": "The shipped rung's bar result is recorded. If the MTNN did not clear, the footer says \"twins chosen by {B*}; the learned model did not beat this\".",
+    "status": "pending"
+   },
+   {
+    "name": "beats_naive_and_geography_peers",
+    "rule": "The shipped rung beat naive peers (R0n: same division, ±25% size) and geography-only peers (R0g) on val PS, each with CI lower bound > 0. Otherwise panel B does not ship, and the flagship publishes panel A with the methods note.",
+    "status": "pending"
+   },
+   {
+    "name": "stage0_passed",
+    "rule": "Stage-0 passed.",
+    "status": "pending"
+   }
+  ],
+  "registered": {
+   "_source": "registry/prereg.json flagship (twins, robustness, headlines): the rules panel B runs under",
+   "headlines": {
+    "H0": {
+     "over": "the robustness grid",
+     "spearman_raw_vs_twin_rank_at_least": 0.9,
+     "suppresses": [
+      "H1",
+      "H2"
+     ]
+    },
+    "H1": {
+     "min_frac_of_grid": 0.8,
+     "min_stable_twins": 6,
+     "n_stable_within": 2
+    },
+    "H2": {
+     "min_ablation_jaccard": 0.5,
+     "min_climb_ranks": 20,
+     "top_climber_min_frac_of_grid": 0.8
+    },
+    "H3": {
+     "descriptive_only": true,
+     "numbers": "CES SM published cells",
+     "wording": "each axis's rank, never a superlative: the rules_version 1 'led all {N} metros on both' claims more than either source shows (FLAGSHIP.md HEADLINES)"
+    }
+   },
+   "robustness": {
+    "k_grid": [
+     5,
+     10,
+     20
+    ],
+    "rungs": [
+     "shipped",
+     "R1b"
+    ],
+    "variants": [
+     "no same-state twins",
+     "drop each tower in turn and report the Jaccard overlap"
+    ]
+   },
+   "twins": {
+    "csa_sheet": "msa_jul2023",
+    "exclude": [
+     "self",
+     "same_csa"
+    ],
+    "fail_closed": "a metro with a Jul 2023 member county that has no 2019 weight or no 2019 vector under the shipped rung gets no pooled vector and no twins; it stays in panel A from its published CES cells, is left out of the twin pool and panel B, and is counted and named (S0.13)",
+    "k": 10,
+    "pool": "publishable metros (every component at both endpoints) with a pooled vector, restricted before selection",
+    "pooling": "employment-weighted mean of 2019 county vectors, re-normalized, w_c = the county's 2019 QCEW total covered employment; composition from the Jul 2023 sheet, the one in force for the outcome year 2025 (SPEC 4.2) and the delineation CES uses; the same rule for every rung",
+    "pooling_composition": "msa_jul2023"
+   }
+  },
+  "shipped_rung": null,
+  "status": "pending",
+  "text": "Twin-adjusted panel B is pending the place-model bar: no rung has been through it, so no rung has shipped and no twin exists."
+ },
+ "release": "v0.1",
+ "robustness": {
+  "_doc": "From the insights design 4.1, plus the QCEW cross-source row. Each row recomputes raw growth, twins where it has them, residuals and both ranks, and goes in the evidence file and on the methods page; a row that is null for a named metro says so. They are reported, never gates: H0-H3 keep their preconditions, evaluated on the main specification's robustness grid.",
+  "gates": false,
+  "rows": {
+   "D1": {
+    "definitions": {
+     "goods_logistics": [
+      "MLC",
+      "30",
+      "40"
+     ],
+     "office": [
+      "50",
+      "55",
+      "60"
+     ]
+    },
+    "gates_no_metro_beat_both": true,
+    "kind": "definition",
+    "registered": {
+     "goods_logistics": [
+      "MLC",
+      "30",
+      "40"
+     ],
+     "kind": "definition",
+     "rule": "all of 40 (trade, transportation and utilities) in place of 43",
+     "source_ids": [
+      "bls_ces_sm_data",
+      "bls_ces_sm_data_alt"
+     ]
+    },
+    "universe": {
+     "fail_closed": [
+      "25540",
+      "14860",
+      "35300",
+      "47930"
+     ],
+     "n": 150,
+     "ranked_by": "CES total nonfarm (00), 2019 M13 annual average: the base year, so membership can't depend on the outcome",
+     "vs_main": {
+      "added": [],
+      "dropped": []
+     }
+    },
+    "windows": {
+     "2019->2025": {
+      "axes": {
+       "goods_logistics": {
+        "growth_pct": {
+         "number": "D1:2019->2025.12420.goods_logistics.growth_pct",
+         "value": 26.778783958602848
+        },
+        "rank": {
+         "number": "D1:2019->2025.12420.goods_logistics.rank",
+         "value": 2
+        }
+       },
+       "office": {
+        "growth_pct": {
+         "number": "D1:2019->2025.12420.office.growth_pct",
+         "value": 35.956493921944976
+        },
+        "rank": {
+         "number": "D1:2019->2025.12420.office.rank",
+         "value": 1
+        }
+       }
+      },
+      "beat_on_both": {
+       "metros": [],
+       "number": "D1:2019->2025.12420.beat_on_both",
+       "value": 0
+      },
+      "beat_on_either": {
+       "metros": [
+        {
+         "id": "42340",
+         "title": "Savannah, GA"
+        }
+       ],
+       "number": "D1:2019->2025.12420.beat_on_either",
+       "value": 1
+      },
+      "n": 150,
+      "publishable": {
+       "number": "D1:2019->2025.publishable",
+       "value": 149
+      },
+      "rank_min": {
+       "number": "D1:2019->2025.12420.rank_min",
+       "value": 1
+      },
+      "subject": "12420"
+     }
+    }
+   },
+   "D2": {
+    "definitions": {
+     "goods_logistics": [
+      "MLC",
+      "30",
+      "43"
+     ],
+     "office": [
+      "50",
+      "55",
+      "60",
+      "65"
+     ]
+    },
+    "gates_no_metro_beat_both": true,
+    "kind": "definition",
+    "registered": {
+     "kind": "definition",
+     "office": [
+      "50",
+      "55",
+      "60",
+      "65"
+     ],
+     "rule": "office-industry plus 65 private education and health",
+     "source_ids": [
+      "bls_ces_sm_data",
+      "bls_ces_sm_data_alt"
+     ]
+    },
+    "universe": {
+     "fail_closed": [
+      "25540",
+      "14860",
+      "35300",
+      "47930"
+     ],
+     "n": 150,
+     "ranked_by": "CES total nonfarm (00), 2019 M13 annual average: the base year, so membership can't depend on the outcome",
+     "vs_main": {
+      "added": [],
+      "dropped": []
+     }
+    },
+    "windows": {
+     "2019->2025": {
+      "axes": {
+       "goods_logistics": {
+        "growth_pct": {
+         "number": "D2:2019->2025.12420.goods_logistics.growth_pct",
+         "value": 38.5557704706641
+        },
+        "rank": {
+         "number": "D2:2019->2025.12420.goods_logistics.rank",
+         "value": 2
+        }
+       },
+       "office": {
+        "growth_pct": {
+         "number": "D2:2019->2025.12420.office.growth_pct",
+         "value": 34.29023508137434
+        },
+        "rank": {
+         "number": "D2:2019->2025.12420.office.rank",
+         "value": 3
+        }
+       }
+      },
+      "beat_on_both": {
+       "metros": [],
+       "number": "D2:2019->2025.12420.beat_on_both",
+       "value": 0
+      },
+      "beat_on_either": {
+       "metros": [
+        {
+         "id": "15980",
+         "title": "Cape Coral-Fort Myers, FL"
+        },
+        {
+         "id": "48900",
+         "title": "Wilmington, NC"
+        },
+        {
+         "id": "42340",
+         "title": "Savannah, GA"
+        }
+       ],
+       "number": "D2:2019->2025.12420.beat_on_either",
+       "value": 3
+      },
+      "n": 150,
+      "publishable": {
+       "number": "D2:2019->2025.publishable",
+       "value": 149
+      },
+      "rank_min": {
+       "number": "D2:2019->2025.12420.rank_min",
+       "value": 1
+      },
+      "subject": "12420"
+     }
+    }
+   },
+   "D3": {
+    "definitions": {
+     "goods_logistics": [
+      "MLC",
+      "30",
+      "40"
+     ],
+     "office": [
+      "50",
+      "55",
+      "60",
+      "65"
+     ]
+    },
+    "gates_no_metro_beat_both": true,
+    "kind": "definition",
+    "registered": {
+     "goods_logistics": [
+      "MLC",
+      "30",
+      "40"
+     ],
+     "kind": "definition",
+     "office": [
+      "50",
+      "55",
+      "60",
+      "65"
+     ],
+     "rule": "D1 and D2 together",
+     "source_ids": [
+      "bls_ces_sm_data",
+      "bls_ces_sm_data_alt"
+     ]
+    },
+    "universe": {
+     "fail_closed": [
+      "25540",
+      "14860",
+      "35300",
+      "47930"
+     ],
+     "n": 150,
+     "ranked_by": "CES total nonfarm (00), 2019 M13 annual average: the base year, so membership can't depend on the outcome",
+     "vs_main": {
+      "added": [],
+      "dropped": []
+     }
+    },
+    "windows": {
+     "2019->2025": {
+      "axes": {
+       "goods_logistics": {
+        "growth_pct": {
+         "number": "D3:2019->2025.12420.goods_logistics.growth_pct",
+         "value": 26.778783958602848
+        },
+        "rank": {
+         "number": "D3:2019->2025.12420.goods_logistics.rank",
+         "value": 2
+        }
+       },
+       "office": {
+        "growth_pct": {
+         "number": "D3:2019->2025.12420.office.growth_pct",
+         "value": 34.29023508137434
+        },
+        "rank": {
+         "number": "D3:2019->2025.12420.office.rank",
+         "value": 3
+        }
+       }
+      },
+      "beat_on_both": {
+       "metros": [],
+       "number": "D3:2019->2025.12420.beat_on_both",
+       "value": 0
+      },
+      "beat_on_either": {
+       "metros": [
+        {
+         "id": "15980",
+         "title": "Cape Coral-Fort Myers, FL"
+        },
+        {
+         "id": "48900",
+         "title": "Wilmington, NC"
+        },
+        {
+         "id": "42340",
+         "title": "Savannah, GA"
+        }
+       ],
+       "number": "D3:2019->2025.12420.beat_on_either",
+       "value": 3
+      },
+      "n": 150,
+      "publishable": {
+       "number": "D3:2019->2025.publishable",
+       "value": 149
+      },
+      "rank_min": {
+       "number": "D3:2019->2025.12420.rank_min",
+       "value": 1
+      },
+      "subject": "12420"
+     }
+    }
+   },
+   "E1": {
+    "definitions": {
+     "goods_logistics": [
+      "MLC",
+      "30",
+      "43"
+     ],
+     "office": [
+      "50",
+      "55",
+      "60"
+     ]
+    },
+    "gates_no_metro_beat_both": true,
+    "kind": "end_year",
+    "registered": {
+     "kind": "end_year",
+     "source_ids": [
+      "bls_ces_sm_data"
+     ],
+     "window": {
+      "t0": 2019,
+      "t1": 2024
+     }
+    },
+    "universe": {
+     "fail_closed": [
+      "25540",
+      "14860",
+      "35300",
+      "47930"
+     ],
+     "n": 150,
+     "ranked_by": "CES total nonfarm (00), 2019 M13 annual average: the base year, so membership can't depend on the outcome",
+     "vs_main": {
+      "added": [],
+      "dropped": []
+     }
+    },
+    "windows": {
+     "2019->2024": {
+      "axes": {
+       "goods_logistics": {
+        "growth_pct": {
+         "number": "E1:2019->2024.12420.goods_logistics.growth_pct",
+         "value": 36.686009026434576
+        },
+        "rank": {
+         "number": "E1:2019->2024.12420.goods_logistics.rank",
+         "value": 2
+        }
+       },
+       "office": {
+        "growth_pct": {
+         "number": "E1:2019->2024.12420.office.growth_pct",
+         "value": 32.853486884197046
+        },
+        "rank": {
+         "number": "E1:2019->2024.12420.office.rank",
+         "value": 2
+        }
+       }
+      },
+      "beat_on_both": {
+       "metros": [],
+       "number": "E1:2019->2024.12420.beat_on_both",
+       "value": 0
+      },
+      "beat_on_either": {
+       "metros": [
+        {
+         "id": "32580",
+         "title": "McAllen-Edinburg-Mission, TX"
+        },
+        {
+         "id": "42340",
+         "title": "Savannah, GA"
+        }
+       ],
+       "number": "E1:2019->2024.12420.beat_on_either",
+       "value": 2
+      },
+      "n": 150,
+      "publishable": {
+       "number": "E1:2019->2024.publishable",
+       "value": 149
+      },
+      "rank_min": {
+       "number": "E1:2019->2024.12420.rank_min",
+       "value": 1
+      },
+      "subject": "12420"
+     }
+    }
+   },
+   "E2": {
+    "definitions": {
+     "goods_logistics": [
+      "MLC",
+      "30",
+      "43"
+     ],
+     "office": [
+      "50",
+      "55",
+      "60"
+     ]
+    },
+    "gates_no_metro_beat_both": true,
+    "kind": "end_year",
+    "registered": {
+     "kind": "end_year",
+     "preliminary": "Aug 2026 carries footnote P",
+     "source_ids": [
+      "bls_ces_sm_data"
+     ],
+     "window": {
+      "t0": 2019,
+      "t1": "the mean of the 12 monthly values Sep 2025-Aug 2026"
+     }
+    },
+    "universe": {
+     "fail_closed": [
+      "25540",
+      "14860",
+      "35300",
+      "47930"
+     ],
+     "n": 150,
+     "ranked_by": "CES total nonfarm (00), 2019 M13 annual average: the base year, so membership can't depend on the outcome",
+     "vs_main": {
+      "added": [],
+      "dropped": []
+     }
+    },
+    "windows": {
+     "2019->mean(Sep 2025-Aug 2026)": {
+      "axes": {
+       "goods_logistics": {
+        "growth_pct": {
+         "number": "E2:2019->mean(Sep 2025-Aug 2026).12420.goods_logistics.growth_pct",
+         "value": 40.95207393079734
+        },
+        "rank": {
+         "number": "E2:2019->mean(Sep 2025-Aug 2026).12420.goods_logistics.rank",
+         "value": 2
+        }
+       },
+       "office": {
+        "growth_pct": {
+         "number": "E2:2019->mean(Sep 2025-Aug 2026).12420.office.growth_pct",
+         "value": 37.13744934954146
+        },
+        "rank": {
+         "number": "E2:2019->mean(Sep 2025-Aug 2026).12420.office.rank",
+         "value": 1
+        }
+       }
+      },
+      "beat_on_both": {
+       "metros": [],
+       "number": "E2:2019->mean(Sep 2025-Aug 2026).12420.beat_on_both",
+       "value": 0
+      },
+      "beat_on_either": {
+       "metros": [
+        {
+         "id": "42340",
+         "title": "Savannah, GA"
+        }
+       ],
+       "number": "E2:2019->mean(Sep 2025-Aug 2026).12420.beat_on_either",
+       "value": 1
+      },
+      "n": 150,
+      "publishable": {
+       "number": "E2:2019->mean(Sep 2025-Aug 2026).publishable",
+       "value": 149
+      },
+      "rank_min": {
+       "number": "E2:2019->mean(Sep 2025-Aug 2026).12420.rank_min",
+       "value": 1
+      },
+      "subject": "12420"
+     }
+    }
+   },
+   "E3": {
+    "definitions": {
+     "goods_logistics": [
+      "MLC",
+      "30",
+      "43"
+     ],
+     "office": [
+      "50",
+      "55",
+      "60"
+     ]
+    },
+    "gates_no_metro_beat_both": true,
+    "kind": "end_year",
+    "registered": {
+     "kind": "end_year",
+     "source_ids": [
+      "bls_ces_sm_data"
+     ],
+     "window": {
+      "t0": 2019,
+      "t1": 2023
+     }
+    },
+    "universe": {
+     "fail_closed": [
+      "25540",
+      "14860",
+      "35300",
+      "47930"
+     ],
+     "n": 150,
+     "ranked_by": "CES total nonfarm (00), 2019 M13 annual average: the base year, so membership can't depend on the outcome",
+     "vs_main": {
+      "added": [],
+      "dropped": []
+     }
+    },
+    "windows": {
+     "2019->2023": {
+      "axes": {
+       "goods_logistics": {
+        "growth_pct": {
+         "number": "E3:2019->2023.12420.goods_logistics.growth_pct",
+         "value": 31.334622823984514
+        },
+        "rank": {
+         "number": "E3:2019->2023.12420.goods_logistics.rank",
+         "value": 2
+        }
+       },
+       "office": {
+        "growth_pct": {
+         "number": "E3:2019->2023.12420.office.growth_pct",
+         "value": 33.30134357005756
+        },
+        "rank": {
+         "number": "E3:2019->2023.12420.office.rank",
+         "value": 1
+        }
+       }
+      },
+      "beat_on_both": {
+       "metros": [],
+       "number": "E3:2019->2023.12420.beat_on_both",
+       "value": 0
+      },
+      "beat_on_either": {
+       "metros": [
+        {
+         "id": "26620",
+         "title": "Huntsville, AL"
+        }
+       ],
+       "number": "E3:2019->2023.12420.beat_on_either",
+       "value": 1
+      },
+      "n": 150,
+      "publishable": {
+       "number": "E3:2019->2023.publishable",
+       "value": 149
+      },
+      "rank_min": {
+       "number": "E3:2019->2023.12420.rank_min",
+       "value": 1
+      },
+      "subject": "12420"
+     }
+    }
+   },
+   "P1": {
+    "definitions": {
+     "goods_logistics": [
+      "MLC",
+      "30",
+      "43"
+     ],
+     "office": [
+      "50",
+      "55",
+      "60"
+     ]
+    },
+    "gates_no_metro_beat_both": true,
+    "kind": "peers",
+    "registered": {
+     "kind": "peers",
+     "largest_n": 150,
+     "note": "selects partly on the outcome; differs by 11 metros each way in the design probe [A]",
+     "ranked_by": "Census 2025 population (POPESTIMATE2025)",
+     "source_ids": [
+      "census_cbsa_est2025"
+     ]
+    },
+    "universe": {
+     "fail_closed": [
+      "25540",
+      "14860",
+      "35300",
+      "47930"
+     ],
+     "n": 150,
+     "ranked_by": "Census 2025 population (POPESTIMATE2025)",
+     "vs_main": {
+      "added": [
+       "15180",
+       "22180",
+       "22420",
+       "24540",
+       "28660",
+       "34820",
+       "34940",
+       "36100",
+       "41500",
+       "46700",
+       "47300"
+      ],
+      "dropped": [
+       "11460",
+       "12100",
+       "14500",
+       "23540",
+       "24580",
+       "25860",
+       "30700",
+       "31180",
+       "37900",
+       "40220",
+       "43620"
+      ]
+     }
+    },
+    "windows": {
+     "2019->2025": {
+      "axes": {
+       "goods_logistics": {
+        "growth_pct": {
+         "number": "P1:2019->2025.12420.goods_logistics.growth_pct",
+         "value": 38.5557704706641
+        },
+        "rank": {
+         "number": "P1:2019->2025.12420.goods_logistics.rank",
+         "value": 2
+        }
+       },
+       "office": {
+        "growth_pct": {
+         "number": "P1:2019->2025.12420.office.growth_pct",
+         "value": 35.956493921944976
+        },
+        "rank": {
+         "number": "P1:2019->2025.12420.office.rank",
+         "value": 1
+        }
+       }
+      },
+      "beat_on_both": {
+       "metros": [],
+       "number": "P1:2019->2025.12420.beat_on_both",
+       "value": 0
+      },
+      "beat_on_either": {
+       "metros": [
+        {
+         "id": "42340",
+         "title": "Savannah, GA"
+        }
+       ],
+       "number": "P1:2019->2025.12420.beat_on_either",
+       "value": 1
+      },
+      "n": 150,
+      "publishable": {
+       "number": "P1:2019->2025.publishable",
+       "value": 149
+      },
+      "rank_min": {
+       "number": "P1:2019->2025.12420.rank_min",
+       "value": 1
+      },
+      "subject": "12420"
+     }
+    }
+   },
+   "P2": {
+    "definitions": {
+     "goods_logistics": [
+      "MLC",
+      "30",
+      "43"
+     ],
+     "office": [
+      "50",
+      "55",
+      "60"
+     ]
+    },
+    "gates_no_metro_beat_both": true,
+    "kind": "peers",
+    "registered": {
+     "kind": "peers",
+     "largest_n": 100,
+     "ranked_by": "CES total nonfarm, 2019 annual average",
+     "source_ids": [
+      "bls_ces_sm_data"
+     ]
+    },
+    "universe": {
+     "fail_closed": [
+      "25540",
+      "14860",
+      "35300"
+     ],
+     "n": 100,
+     "ranked_by": "CES total nonfarm, 2019 annual average",
+     "vs_main": {
+      "added": [],
+      "dropped": [
+       "11260",
+       "11460",
+       "11700",
+       "12100",
+       "12260",
+       "13140",
+       "14500",
+       "15940",
+       "18580",
+       "19340",
+       "19660",
+       "21660",
+       "22660",
+       "23060",
+       "23540",
+       "24580",
+       "25060",
+       "25860",
+       "26620",
+       "29180",
+       "29460",
+       "29620",
+       "30700",
+       "31180",
+       "31700",
+       "33660",
+       "33700",
+       "33860",
+       "36260",
+       "37340",
+       "37860",
+       "37900",
+       "38940",
+       "39740",
+       "40220",
+       "41420",
+       "42200",
+       "42220",
+       "42340",
+       "43340",
+       "43620",
+       "43900",
+       "44140",
+       "44180",
+       "44700",
+       "45220",
+       "47930",
+       "48900",
+       "49620",
+       "49660"
+      ]
+     }
+    },
+    "windows": {
+     "2019->2025": {
+      "axes": {
+       "goods_logistics": {
+        "growth_pct": {
+         "number": "P2:2019->2025.12420.goods_logistics.growth_pct",
+         "value": 38.5557704706641
+        },
+        "rank": {
+         "number": "P2:2019->2025.12420.goods_logistics.rank",
+         "value": 1
+        }
+       },
+       "office": {
+        "growth_pct": {
+         "number": "P2:2019->2025.12420.office.growth_pct",
+         "value": 35.956493921944976
+        },
+        "rank": {
+         "number": "P2:2019->2025.12420.office.rank",
+         "value": 1
+        }
+       }
+      },
+      "beat_on_both": {
+       "metros": [],
+       "number": "P2:2019->2025.12420.beat_on_both",
+       "value": 0
+      },
+      "beat_on_either": {
+       "metros": [],
+       "number": "P2:2019->2025.12420.beat_on_either",
+       "value": 0
+      },
+      "n": 100,
+      "publishable": {
+       "number": "P2:2019->2025.publishable",
+       "value": 99
+      },
+      "rank_min": {
+       "number": "P2:2019->2025.12420.rank_min",
+       "value": 1
+      },
+      "subject": "12420"
+     }
+    }
+   },
+   "P3": {
+    "definitions": {
+     "goods_logistics": [
+      "MLC",
+      "30",
+      "43"
+     ],
+     "office": [
+      "50",
+      "55",
+      "60"
+     ]
+    },
+    "gates_no_metro_beat_both": true,
+    "kind": "peers",
+    "registered": {
+     "kind": "peers",
+     "largest_n": 200,
+     "ranked_by": "CES total nonfarm, 2019 annual average",
+     "source_ids": [
+      "bls_ces_sm_data"
+     ]
+    },
+    "universe": {
+     "fail_closed": [
+      "25540",
+      "14860",
+      "35300",
+      "47930",
+      "35980"
+     ],
+     "n": 200,
+     "ranked_by": "CES total nonfarm, 2019 annual average",
+     "vs_main": {
+      "added": [
+       "11100",
+       "11540",
+       "15180",
+       "15540",
+       "16300",
+       "16580",
+       "16620",
+       "16820",
+       "17780",
+       "17860",
+       "17980",
+       "18880",
+       "20260",
+       "21140",
+       "21500",
+       "21780",
+       "22020",
+       "22180",
+       "22420",
+       "24540",
+       "25180",
+       "26580",
+       "28020",
+       "28420",
+       "28660",
+       "28700",
+       "29340",
+       "29700",
+       "30980",
+       "31340",
+       "33260",
+       "34820",
+       "34940",
+       "35980",
+       "36100",
+       "36500",
+       "40340",
+       "40420",
+       "41060",
+       "41500",
+       "42020",
+       "43780",
+       "44100",
+       "45820",
+       "46220",
+       "46340",
+       "46540",
+       "46700",
+       "47300",
+       "47380"
+      ],
+      "dropped": []
+     }
+    },
+    "windows": {
+     "2019->2025": {
+      "axes": {
+       "goods_logistics": {
+        "growth_pct": {
+         "number": "P3:2019->2025.12420.goods_logistics.growth_pct",
+         "value": 38.5557704706641
+        },
+        "rank": {
+         "number": "P3:2019->2025.12420.goods_logistics.rank",
+         "value": 2
+        }
+       },
+       "office": {
+        "growth_pct": {
+         "number": "P3:2019->2025.12420.office.growth_pct",
+         "value": 35.956493921944976
+        },
+        "rank": {
+         "number": "P3:2019->2025.12420.office.rank",
+         "value": 2
+        }
+       }
+      },
+      "beat_on_both": {
+       "metros": [],
+       "number": "P3:2019->2025.12420.beat_on_both",
+       "value": 0
+      },
+      "beat_on_either": {
+       "metros": [
+        {
+         "id": "17780",
+         "title": "College Station-Bryan, TX"
+        },
+        {
+         "id": "42340",
+         "title": "Savannah, GA"
+        }
+       ],
+       "number": "P3:2019->2025.12420.beat_on_either",
+       "value": 2
+      },
+      "n": 200,
+      "publishable": {
+       "number": "P3:2019->2025.publishable",
+       "value": 199
+      },
+      "rank_min": {
+       "number": "P3:2019->2025.12420.rank_min",
+       "value": 1
+      },
+      "subject": "12420"
+     }
+    }
+   },
+   "R": {
+    "definitions": {
+     "goods_logistics": [
+      "MLC",
+      "30",
+      "43"
+     ],
+     "office": [
+      "50",
+      "55",
+      "60"
+     ]
+    },
+    "gates_no_metro_beat_both": false,
+    "kind": "disclosure",
+    "registered": {
+     "kind": "disclosure",
+     "rule": "each named metro's ranks are printed",
+     "source_ids": [
+      "bls_ces_sm_data"
+     ],
+     "windows": [
+      {
+       "t0": 2019,
+       "t1": 2022
+      },
+      {
+       "t0": 2022,
+       "t1": 2025
+      }
+     ]
+    },
+    "universe": {
+     "fail_closed": [
+      "25540",
+      "14860",
+      "35300",
+      "47930"
+     ],
+     "n": 150,
+     "ranked_by": "CES total nonfarm (00), 2019 M13 annual average: the base year, so membership can't depend on the outcome",
+     "vs_main": {
+      "added": [],
+      "dropped": []
+     }
+    },
+    "windows": {
+     "2019->2022": {
+      "axes": {
+       "goods_logistics": {
+        "growth_pct": {
+         "number": "R:2019->2022.12420.goods_logistics.growth_pct",
+         "value": 21.727917472598346
+        },
+        "rank": {
+         "number": "R:2019->2022.12420.goods_logistics.rank",
+         "value": 3
+        }
+       },
+       "office": {
+        "growth_pct": {
+         "number": "R:2019->2022.12420.office.growth_pct",
+         "value": 29.52655150351886
+        },
+        "rank": {
+         "number": "R:2019->2022.12420.office.rank",
+         "value": 1
+        }
+       }
+      },
+      "beat_on_both": {
+       "metros": [],
+       "number": "R:2019->2022.12420.beat_on_both",
+       "value": 0
+      },
+      "beat_on_either": {
+       "metros": [
+        {
+         "id": "44700",
+         "title": "Stockton-Lodi, CA"
+        },
+        {
+         "id": "26620",
+         "title": "Huntsville, AL"
+        }
+       ],
+       "number": "R:2019->2022.12420.beat_on_either",
+       "value": 2
+      },
+      "n": 150,
+      "publishable": {
+       "number": "R:2019->2022.publishable",
+       "value": 149
+      },
+      "rank_min": {
+       "number": "R:2019->2022.12420.rank_min",
+       "value": 1
+      },
+      "subject": "12420"
+     },
+     "2022->2025": {
+      "axes": {
+       "goods_logistics": {
+        "growth_pct": {
+         "number": "R:2022->2025.12420.goods_logistics.growth_pct",
+         "value": 13.82415254237288
+        },
+        "rank": {
+         "number": "R:2022->2025.12420.goods_logistics.rank",
+         "value": 5
+        }
+       },
+       "office": {
+        "growth_pct": {
+         "number": "R:2022->2025.12420.office.growth_pct",
+         "value": 4.964188688565074
+        },
+        "rank": {
+         "number": "R:2022->2025.12420.office.rank",
+         "value": 17
+        }
+       }
+      },
+      "beat_on_both": {
+       "metros": [
+        {
+         "id": "13140",
+         "title": "Beaumont-Port Arthur, TX"
+        },
+        {
+         "id": "45220",
+         "title": "Tallahassee, FL"
+        }
+       ],
+       "number": "R:2022->2025.12420.beat_on_both",
+       "value": 2
+      },
+      "beat_on_either": {
+       "metros": [
+        {
+         "id": "13140",
+         "title": "Beaumont-Port Arthur, TX"
+        },
+        {
+         "id": "16700",
+         "title": "Charleston-North Charleston, SC"
+        },
+        {
+         "id": "35840",
+         "title": "North Port-Bradenton-Sarasota, FL"
+        },
+        {
+         "id": "45220",
+         "title": "Tallahassee, FL"
+        },
+        {
+         "id": "26620",
+         "title": "Huntsville, AL"
+        },
+        {
+         "id": "21340",
+         "title": "El Paso, TX"
+        },
+        {
+         "id": "32580",
+         "title": "McAllen-Edinburg-Mission, TX"
+        },
+        {
+         "id": "16860",
+         "title": "Chattanooga, TN-GA"
+        },
+        {
+         "id": "29820",
+         "title": "Las Vegas-Henderson-North Las Vegas, NV"
+        },
+        {
+         "id": "22220",
+         "title": "Fayetteville-Springdale-Rogers, AR"
+        },
+        {
+         "id": "30460",
+         "title": "Lexington-Fayette, KY"
+        },
+        {
+         "id": "45060",
+         "title": "Syracuse, NY"
+        },
+        {
+         "id": "41420",
+         "title": "Salem, OR"
+        },
+        {
+         "id": "25060",
+         "title": "Gulfport-Biloxi, MS"
+        },
+        {
+         "id": "18580",
+         "title": "Corpus Christi, TX"
+        },
+        {
+         "id": "12260",
+         "title": "Augusta-Richmond County, GA-SC"
+        },
+        {
+         "id": "10900",
+         "title": "Allentown-Bethlehem-Easton, PA-NJ"
+        },
+        {
+         "id": "42340",
+         "title": "Savannah, GA"
+        }
+       ],
+       "number": "R:2022->2025.12420.beat_on_either",
+       "value": 18
+      },
+      "n": 150,
+      "publishable": {
+       "number": "R:2022->2025.publishable",
+       "value": 149
+      },
+      "rank_min": {
+       "number": "R:2022->2025.12420.rank_min",
+       "value": 6
+      },
+      "subject": "12420"
+     }
+    }
+   },
+   "X1": {
+    "definitions": {
+     "bc": [
+      "1011",
+      "1012",
+      "1013"
+     ],
+     "wc": [
+      "1023",
+      "1024"
+     ]
+    },
+    "gates_no_metro_beat_both": false,
+    "kind": "cross_source",
+    "registered": {
+     "_doc": "The rules_version 1 flagship definition, unchanged except that it is now a robustness row.",
+     "bc": [
+      "1011",
+      "1012",
+      "1013"
+     ],
+     "excluded_industries": {
+      "1022": "Austin's 2019 metro cell is withheld"
+     },
+     "growth": "(L2023 - L2019) / L2019 x 100, from published annual-average levels",
+     "kind": "cross_source",
+     "masking": "any withheld component cell at either endpoint masks the metro; never filled from county sums",
+     "pool": "the row's publishable metros, restricted before selection",
+     "pooling_composition": "msa_feb2013",
+     "rows": {
+      "agglvl": 43,
+      "own": 5
+     },
+     "source_ids": [
+      "qcew_msa_area"
+     ],
+     "universe": {
+      "largest_n": 150,
+      "measured_publishable": 114,
+      "ranked_by": "2019 total covered employment (own 0, ind 10, agglvl 40)"
+     },
+     "wc": [
+      "1023",
+      "1024"
+     ],
+     "window": {
+      "t0": 2019,
+      "t1": 2023
+     }
+    },
+    "universe": {
+     "fail_closed": [],
+     "n": 150,
+     "ranked_by": "2019 total covered employment (own 0, ind 10, agglvl 40)"
+    },
+    "windows": {
+     "2019->2023": {
+      "axes": {
+       "bc": {
+        "growth_pct": {
+         "number": "X1:2019->2023.C1242.bc.growth_pct",
+         "value": 18.684712716794017
+        },
+        "rank": {
+         "number": "X1:2019->2023.C1242.bc.rank",
+         "value": 5
+        }
+       },
+       "wc": {
+        "growth_pct": {
+         "number": "X1:2019->2023.C1242.wc.growth_pct",
+         "value": 35.64808677312444
+        },
+        "rank": {
+         "number": "X1:2019->2023.C1242.wc.rank",
+         "value": 1
+        }
+       }
+      },
+      "beat_on_both": {
+       "metros": [],
+       "number": "X1:2019->2023.C1242.beat_on_both",
+       "value": 0
+      },
+      "beat_on_either": {
+       "metros": [
+        {
+         "id": "C4522",
+         "title": "Tallahassee, FL MSA"
+        },
+        {
+         "id": "C1598",
+         "title": "Cape Coral-Fort Myers, FL MSA"
+        },
+        {
+         "id": "C3734",
+         "title": "Palm Bay-Melbourne-Titusville, FL MSA"
+        },
+        {
+         "id": "C2662",
+         "title": "Huntsville, AL MSA"
+        }
+       ],
+       "number": "X1:2019->2023.C1242.beat_on_either",
+       "value": 4
+      },
+      "n": 150,
+      "publishable": {
+       "number": "X1:2019->2023.publishable",
+       "value": 114
+      },
+      "rank_min": {
+       "number": "X1:2019->2023.C1242.rank_min",
+       "value": 1
+      },
+      "subject": "C1242"
+     }
+    }
+   }
+  },
+  "subject": {
+   "ces": "12420",
+   "x1": "C1242"
+  }
+ },
+ "rules_history": [
+  {
+   "change": "first lock, copied from SPEC.md and FLAGSHIP.md",
+   "date": "2026-09-30",
+   "version": 1
+  },
+  {
+   "change": "Cam chose option A for the flagship (D3 with D2): CES SM for 2019->2025 across the 150 largest metros by CES total nonfarm 2019; twins pooled under the Jul 2023 composition, failing closed for metros with no 2019 vector; H3 prints each axis's rank; the QCEW native MSA rows for 2019->2023 become registered row X1. Decided before any twin result was computed (docs/DECISIONS.md).",
+   "date": "2026-10-01",
+   "version": 2
+  },
+  {
+   "change": "The orchestrating agent fixed mtnn.epochs = 200 for R3 and R4 (same objective and sampler): the last epoch is kept, with no early stopping and no checkpoint chosen on any scored split; the count comes from compute and the vector-realty recipe, never from a val score. S0.5(b) stays as registered (option (a)): the MTNN is still trained and reported in M8, but gates_passed (SPEC 6.3 step 5(d)) reads reports/stage0_model.json S0.5b.pass = false, so it can't be kept in v0 and the release ships on B*. Decided before any R3 or R4 had been trained to a registered epoch count and before any trained-model PS existed on val; the MDE lock is regenerated under rules_version 3 with M5's MDE and eval-set hash. Cam can overrule (docs/DECISIONS.md).",
+   "date": "2026-10-01",
+   "version": 3
+  }
+ ],
+ "rules_version": 3,
+ "status": "twins_pending",
+ "status_line": {
+  "id": "C1.methods.status",
+  "slots": {
+   "panel_a": "shipped",
+   "panel_b": "pending",
+   "status": "twins_pending"
+  }
+ }
+}
