@@ -1,23 +1,38 @@
-// Imports a vector-places model bundle (bundles/places-v0.1 and later) into
+// Imports a vector-places model bundle (bundles/places-v0.1.1 and later) into
 // lib/insights/data/<bundle>/, where the /insights pages read it at render
 // time with no network. The bundle is copied byte for byte, and only after
 // every hash in it has been checked:
 //
-//   node scripts/places-model-import.mjs --bundle ../vector-places/bundles/places-v0.1
+//   node scripts/places-model-import.mjs --bundle ../vector-places/bundles/places-v0.1.1           a pinned release
+//   node scripts/places-model-import.mjs --bundle <dir> --pin <sha256>  a new release: pin its manifest.json
 //   node scripts/places-model-import.mjs --bundle <dir> --check        verify only, write nothing
 //   node scripts/places-model-import.mjs --bundle <dir> --out <dir>    copy somewhere else (tests)
 //   node scripts/places-model-import.mjs --bundle <dir> --lock <file>  a different lock (tests)
+//
+// Paths. --bundle is read relative to the working directory, like any input
+// path. The lock and the output are never cwd-relative: by default they are
+// lib/insights/data/bundles.lock.json and lib/insights/data/<bundle> under
+// the repo this script lives in (found from import.meta.url), and a relative
+// --lock or --out is resolved against that same repo root. Run from any
+// directory, the importer checks a bundle against the committed lock. (It
+// used to resolve the lock against the cwd: run from elsewhere it found no
+// lock, so a bundle edited and re-hashed throughout passed every check.)
 //
 // What is verified, and why each check exists:
 //
 //   1. The manifest itself, against lib/insights/data/bundles.lock.json. A
 //      manifest cannot carry its own hash (its _doc says so), so without an
 //      anchor on this side a changed byte in manifest.json - in a source's
-//      sha256, say - would pass every other check. The rule is that a
-//      release name is immutable: the first import of a name records the
-//      manifest's sha256 and bytes in the lock and prints them, and every
-//      later import of that name must match, byte for byte. A re-export that
-//      changes anything is a new release (v0.2), not a quiet overwrite.
+//      sha256, say, or in the files table after the files were edited - would
+//      pass every other check. So a manifest whose sha256 the lock does not
+//      hold is refused. A new release is pinned on import with
+//      --pin <sha256>, the hash of the manifest.json the producer committed
+//      (git -C ../vector-places show <commit>:bundles/<name>/manifest.json |
+//      sha256sum); the import goes ahead only if the bundle's manifest has
+//      that hash, and then writes it to the lock. A release name is
+//      immutable: once pinned, every later import of that name must match,
+//      byte for byte, and a re-export that changes anything is a new release
+//      (v0.2), not a quiet overwrite.
 //   2. manifest.files: the sha256 and size of every other file, and that the
 //      bundle holds exactly those files (a stray or a missing file refuses).
 //   3. Every sha256 the manifest carries (files, inputs, sources, code) is 64
@@ -32,7 +47,8 @@
 //      to the same value and footnote in the evidence's cells table. So every
 //      number the pages print traces to a hashed upstream file.
 //   5. The chart sidecar's upstream URLs are manifest sources, and the
-//      "sha256 ..." note on each record is that source's hash.
+//      "sha256 ...", "Last-Modified ..." and "N bytes" notes on each record
+//      are that source's hash, Last-Modified and size.
 //
 // Any failure exits 1 and writes nothing. Node built-ins only, no network.
 
@@ -41,6 +57,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+/** The repo this script belongs to, from its own location: never the working directory. */
+export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 /** Where the committed bundles live, relative to the repo root. */
 export const DATA_DIR = "lib/insights/data";
 /** The manifest hash of every imported release, relative to the repo root. */
@@ -111,25 +129,35 @@ function checkHex(where, h) {
 
 /**
  * Check one bundle. `files` is relative path -> bytes, `name` the release
- * name (the directory name), `lock` the parsed lock file or null. Returns the
- * parsed manifest, its own hash and size, and counts of what was checked;
- * throws BundleError naming the first thing that does not hold.
+ * name (the directory name), `lock` the parsed lock file or null, and
+ * `opts.pin` the manifest sha256 the operator expects for a release the lock
+ * does not hold yet. Returns the parsed manifest, its own hash and size,
+ * whether the lock already pinned it, and counts of what was checked; throws
+ * BundleError naming the first thing that does not hold.
  */
-export function verifyBundle(name, files, lock) {
-  if (!BUNDLE_NAME.test(name)) fail(`bundle name ${JSON.stringify(name)} is not a release name like places-v0.1`);
+export function verifyBundle(name, files, lock, opts = {}) {
+  if (!BUNDLE_NAME.test(name)) fail(`bundle name ${JSON.stringify(name)} is not a release name like places-v0.1.1`);
   const manifestBuf = files.get("manifest.json");
   if (!manifestBuf) fail("manifest.json is missing");
   const manifestSha256 = sha256(manifestBuf);
   const manifestBytes = manifestBuf.length;
 
-  // 1. The manifest against the lock, on its raw bytes, before anything in it is believed.
+  // 1. The manifest against the lock (or the operator's pin), on its raw bytes, before anything in it is believed.
   const pinned = lock?.bundles?.[name];
+  if (opts.pin != null) checkHex("--pin", opts.pin);
   if (pinned) {
     if (pinned.manifest_sha256 !== manifestSha256 || pinned.manifest_bytes !== manifestBytes) {
       fail(
         `manifest.json is sha256 ${manifestSha256} (${manifestBytes} bytes), but the lock pins ${name} at ${pinned.manifest_sha256} (${pinned.manifest_bytes} bytes); a release is immutable, so a changed export needs a new release name`,
       );
     }
+    if (opts.pin != null && opts.pin !== manifestSha256) fail(`--pin ${opts.pin} is not the pinned manifest.json sha256 ${manifestSha256} of ${name}`);
+  } else if (opts.pin == null) {
+    fail(
+      `manifest.json is sha256 ${manifestSha256} (${manifestBytes} bytes), which the lock does not pin for ${name}; check it against the manifest.json the producer committed and import with --pin <that sha256>`,
+    );
+  } else if (opts.pin !== manifestSha256) {
+    fail(`manifest.json is sha256 ${manifestSha256} (${manifestBytes} bytes), not the --pin ${opts.pin}`);
   }
   const manifest = parseJson("manifest.json", manifestBuf);
   if (manifest.bundle !== name) fail(`manifest.json names bundle ${JSON.stringify(manifest.bundle)}, but the directory is ${name}`);
@@ -218,6 +246,10 @@ export function verifyBundle(name, files, lock) {
       for (const note of p.notes ?? []) {
         const m = /^sha256 ([0-9a-f]+)$/.exec(note);
         if (m && m[1] !== src.sha256) fail(`${f.chart}: provenance ${key} notes sha256 ${m[1]}, the manifest has ${src.sha256} for ${p.upstreamUrl}`);
+        const lm = /^Last-Modified (.+)$/.exec(note);
+        if (lm && lm[1] !== src.last_modified) fail(`${f.chart}: provenance ${key} notes Last-Modified ${lm[1]}, the manifest has ${src.last_modified} for ${p.upstreamUrl}`);
+        const b = /^(\d+) bytes$/.exec(note);
+        if (b && Number(b[1]) !== src.bytes) fail(`${f.chart}: provenance ${key} notes ${b[1]} bytes, the manifest has ${src.bytes} for ${p.upstreamUrl}`);
       }
     }
   }
@@ -232,7 +264,7 @@ function readLock(file) {
 
 function writeLock(file, lock, name, v) {
   const next = {
-    _doc: "The manifest.json of every imported places bundle, by release name, written by scripts/places-model-import.mjs. A manifest can't carry its own hash, so this pins it: a release name is immutable, and a later import or a page load of that name refuses a manifest that differs.",
+    _doc: "The manifest.json of every imported places bundle, by release name, written by scripts/places-model-import.mjs. A manifest can't carry its own hash, so this pins it: the importer refuses a manifest whose sha256 is not here (a new release is pinned with --pin, the sha256 of the manifest.json the producer committed), a release name is immutable, and a later import or a page load of that name refuses a manifest that differs.",
     bundles: { ...(lock?.bundles ?? {}), [name]: { manifest_bytes: v.manifestBytes, manifest_sha256: v.manifestSha256, release: v.manifest.release } },
   };
   next.bundles = Object.fromEntries(Object.keys(next.bundles).sort(byteOrder).map((k) => [k, next.bundles[k]]));
@@ -256,7 +288,7 @@ function copyBundle(files, out) {
 }
 
 function parseArgs(argv) {
-  const opts = { bundle: null, out: null, lock: null, check: false };
+  const opts = { bundle: null, out: null, lock: null, pin: null, check: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const value = () => {
@@ -267,29 +299,41 @@ function parseArgs(argv) {
     if (a === "--bundle") opts.bundle = value();
     else if (a === "--out") opts.out = value();
     else if (a === "--lock") opts.lock = value();
+    else if (a === "--pin") opts.pin = value();
     else if (a === "--check") opts.check = true;
-    else fail(`unknown argument ${a}; usage: --bundle <dir> [--out <dir>] [--lock <file>] [--check]`);
+    else fail(`unknown argument ${a}; usage: --bundle <dir> [--pin <sha256>] [--out <dir>] [--lock <file>] [--check]`);
   }
   if (!opts.bundle) fail("--bundle <dir> is required");
   return opts;
 }
 
-export function main(argv, root = process.cwd()) {
+/** A path for the log: relative to the repo when it is inside it, absolute otherwise. */
+function shown(p) {
+  const rel = path.relative(REPO_ROOT, p);
+  return rel && !rel.startsWith("..") && !path.isAbsolute(rel) ? rel.split(path.sep).join("/") : p;
+}
+
+/**
+ * Run the importer. `cwd` resolves --bundle only; the lock and the output
+ * resolve against REPO_ROOT, so the committed lock is the anchor wherever
+ * this runs from.
+ */
+export function main(argv, cwd = process.cwd()) {
   const opts = parseArgs(argv);
-  const bundleDir = path.resolve(root, opts.bundle);
+  const bundleDir = path.resolve(cwd, opts.bundle);
   if (!fs.existsSync(bundleDir) || !fs.statSync(bundleDir).isDirectory()) fail(`${bundleDir} is not a directory`);
   const name = path.basename(bundleDir);
-  const lockFile = path.resolve(root, opts.lock ?? LOCK_FILE);
-  const out = path.resolve(root, opts.out ?? path.join(DATA_DIR, name));
+  const lockFile = path.resolve(REPO_ROOT, opts.lock ?? LOCK_FILE);
+  const out = path.resolve(REPO_ROOT, opts.out ?? path.join(DATA_DIR, name));
   if (out === bundleDir) fail("--out is the bundle itself");
 
   const files = readBundle(bundleDir);
   const lock = readLock(lockFile);
-  const v = verifyBundle(name, files, lock);
+  const v = verifyBundle(name, files, lock, { pin: opts.pin });
   const c = v.counts;
   const lines = [
     `verified ${name} (release ${v.manifest.release}, rules_version ${v.manifest.rules_version}, status ${v.manifest.status})`,
-    `  manifest.json sha256 ${v.manifestSha256} (${v.manifestBytes} bytes): ${v.pinned ? "matches the lock" : "not yet in the lock"}`,
+    `  manifest.json sha256 ${v.manifestSha256} (${v.manifestBytes} bytes): ${v.pinned ? `matches the lock ${shown(lockFile)}` : "equals --pin; not yet in the lock"}`,
     `  ${c.files} files, ${c.findings} finding(s), ${c.sources} manifest sources, ${c.tuples} provenance tuples resolved to cells, ${c.registered} registered numbers matched to inputs`,
   ];
   if (opts.check) {
@@ -297,10 +341,10 @@ export function main(argv, root = process.cwd()) {
     return lines;
   }
   copyBundle(files, out);
-  lines.push(`  copied to ${path.relative(root, out) || out}`);
+  lines.push(`  copied to ${shown(out)}`);
   if (!v.pinned) {
     writeLock(lockFile, lock, name, v);
-    lines.push(`  pinned in ${path.relative(root, lockFile) || lockFile}; compare the sha256 above with the producer's before committing`);
+    lines.push(`  pinned in ${shown(lockFile)}`);
   }
   return lines;
 }

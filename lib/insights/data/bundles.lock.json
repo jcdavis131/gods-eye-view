@@ -1,10 +1,15 @@
 {
-  "_doc": "The manifest.json of every imported places bundle, by release name, written by scripts/places-model-import.mjs. A manifest can't carry its own hash, so this pins it: a release name is immutable, and a later import or a page load of that name refuses a manifest that differs.",
+  "_doc": "The manifest.json of every imported places bundle, by release name, written by scripts/places-model-import.mjs. A manifest can't carry its own hash, so this pins it: the importer refuses a manifest whose sha256 is not here (a new release is pinned with --pin, the sha256 of the manifest.json the producer committed), a release name is immutable, and a later import or a page load of that name refuses a manifest that differs.",
   "bundles": {
     "places-v0.1": {
       "manifest_bytes": 150855,
       "manifest_sha256": "5e0e71d07eed8ad02d090b50e1922b4533ee48fc215446055d447bb23d89fe62",
       "release": "v0.1"
+    },
+    "places-v0.1.1": {
+      "manifest_bytes": 151146,
+      "manifest_sha256": "c837b9945d38bbbc8c58abb142055617f46880a50c4fab633b35356d41d2736e",
+      "release": "v0.1.1"
     }
   }
 }
