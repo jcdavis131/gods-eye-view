@@ -11,9 +11,14 @@
 // The always-on cases are A2's leak list: the 44 places the harness found
 // printing a canary before A3 (metro labels and titles, the headline's
 // connectives, the chart's source records, the source entries' dates and
-// hashes, the registered numbers' citations, the precondition fields). With
-// INSIGHTS_TAINT=1 the harness runs over every string pattern of the bundle
-// and every object key (about 1,200 builds, minutes, not for every run).
+// hashes, the registered numbers' citations, the precondition fields); and
+// the A3 verifier's consistent-edit leaks, where the canary is appended to a
+// value at every place it occurs in all four documents, substrings included,
+// so every equality between two copies still holds: the pre-registration's
+// sha256 and three CES file names. With INSIGHTS_TAINT=1 the harness runs
+// over every string pattern of the bundle and every object key, one place at
+// a time, and over every distinct string value, consistently (about 1,500
+// builds, minutes, not for every run).
 
 import { describe, expect, it } from "vitest";
 import { buildInsight } from "./build";
@@ -24,7 +29,7 @@ import type { LoadedBundle } from "./load";
 import { CANVAS_IDS } from "./render/canvas";
 import { renderSvg } from "./render/render";
 import { chartTable } from "./render/table";
-import { BASE } from "./testFixtures";
+import { BASE, substitutedEverywhere } from "./testFixtures";
 import type { Insight } from "./types";
 
 const CANARY = "QZXQ";
@@ -121,6 +126,18 @@ describe("no producer text reaches a printed surface", () => {
     expect(outcome(canaried(["evidence", "preconditions", 4, "rule"]))).toBe("clean");
   });
 
+  it("prints no canary appended consistently, through the whole bundle, to a value of the A3 verifier's leak list", () => {
+    const values = [
+      BASE.manifest.inputs["registry/prereg.json"].sha256,
+      "sm.data.54.TotalNonFarm.All",
+      "sm.data.60.MiningAndLogging.Current",
+      "sm.data.61.MiningLoggingConstr.Current",
+    ];
+    expect(values[0]).toMatch(/^[0-9a-f]{64}$/);
+    // Each one printed before, so each must now refuse: an edit nothing else can see is not one to build quietly.
+    expect(values.map((v) => [v, outcome(substitutedEverywhere(v, `${v}${CANARY}`))])).toEqual(values.map((v) => [v, "refused"]));
+  });
+
   it.runIf(process.env.INSIGHTS_TAINT === "1")(
     "prints no canary from any string or any key of the bundle (INSIGHTS_TAINT=1)",
     async () => {
@@ -162,5 +179,37 @@ describe("no producer text reaches a printed surface", () => {
       expect(leaks).toEqual([]);
     },
     1_800_000,
+  );
+
+  it.runIf(process.env.INSIGHTS_TAINT === "1")(
+    "prints no canary appended to a value of every string pattern at every place it occurs, substrings included (INSIGHTS_TAINT=1)",
+    async () => {
+      const breathe = () => new Promise<void>((resolve) => setImmediate(resolve));
+      // The values of each string pattern (the path with its ids and numbers folded) at its first three places and
+      // its last, as the one-place sweep picks them: about 500 distinct values of the bundle's 13,864.
+      const norm = (seg: string | number) => (typeof seg === "number" ? "[]" : /[0-9:|/.>]/.test(seg) ? "*" : seg);
+      const byPattern = new Map<string, string[]>();
+      const walk = (v: unknown, p: Path) => {
+        if (typeof v === "string") {
+          const k = p.map(norm).join(".");
+          byPattern.set(k, [...(byPattern.get(k) ?? []), v]);
+        } else if (Array.isArray(v)) v.forEach((x, i) => walk(x, [...p, i]));
+        else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) walk(x, [...p, k]);
+      };
+      walk(docs(), []);
+      const values = new Set([...byPattern.values()].flatMap((vs) => [...vs.slice(0, 3), vs[vs.length - 1]]));
+      const counts = { refused: 0, clean: 0, LEAK: 0 };
+      const leaks: string[] = [];
+      // An empty value occurs between every two characters; it is no edit of a value.
+      for (const v of [...values].filter((x) => x.length > 0)) {
+        const o = outcome(substitutedEverywhere(v, `${v}${CANARY}`));
+        counts[o]++;
+        if (o === "LEAK") leaks.push(v.length > 80 ? `${v.slice(0, 80)}...` : v);
+        await breathe();
+      }
+      console.log(`consistent-edit sweep over ${values.size} distinct string values: ${JSON.stringify(counts)}`);
+      expect(leaks).toEqual([]);
+    },
+    3_600_000,
   );
 });

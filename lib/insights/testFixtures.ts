@@ -42,7 +42,15 @@ export function variant(change: (p: Parts) => void): LoadedBundle {
  */
 export function substitutedEverywhere(from: string, to: string): LoadedBundle {
   const f = BASE.findings[0];
-  const doc = <T>(v: T): T => JSON.parse(JSON.stringify(v).split(from).join(to)) as T;
+  // In every string and every key, never in a number: "30" is edited in "sm.data.30" and left alone in 130.5.
+  const sub = (s: string) => s.split(from).join(to);
+  const walk = (v: unknown): unknown => {
+    if (typeof v === "string") return sub(v);
+    if (Array.isArray(v)) return v.map(walk);
+    if (v !== null && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [sub(k), walk(x)]));
+    return v;
+  };
+  const doc = <T>(v: T): T => walk(v) as T;
   return { ...BASE, manifest: doc(BASE.manifest), methods: doc(BASE.methods), findings: [{ ...f, evidence: doc(f.evidence), chart: doc(f.chart) }] };
 }
 
