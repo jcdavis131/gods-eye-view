@@ -55,6 +55,11 @@
 //      are that source's hash, Last-Modified and size.
 //
 // Any failure exits 1 and writes nothing. Node built-ins only, no network.
+//
+// Run as a script through any path, a junction or a symlink to the repo
+// included, it verifies: whether it is the main module is decided on real
+// paths (isMainModule). It used to compare the path as typed with the real
+// path node loads, so through a link it did nothing at all and exited 0.
 
 import { createHash } from "node:crypto";
 import fs from "node:fs";
@@ -370,8 +375,28 @@ export function main(argv, cwd = process.cwd()) {
   return lines;
 }
 
-const invoked = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
-if (invoked) {
+/** A path with every link, junction and drive-letter case resolved; the path itself when it cannot be (it does not exist). */
+function realPath(p) {
+  try {
+    return fs.realpathSync.native(p);
+  } catch {
+    return path.resolve(p);
+  }
+}
+
+/**
+ * Whether this module is the script node was asked to run. Both sides are
+ * real paths: node resolves the main module through links before it builds
+ * import.meta.url, while process.argv[1] keeps the path as typed, so through a
+ * junction or a symlink a plain comparison never matched, the script did
+ * nothing and exited 0, and an edited bundle "passed" unverified.
+ */
+export function isMainModule(argv1, moduleUrl = import.meta.url) {
+  if (!argv1) return false;
+  return samePath(realPath(path.resolve(argv1)), realPath(fileURLToPath(moduleUrl)));
+}
+
+if (isMainModule(process.argv[1])) {
   try {
     for (const l of main(process.argv.slice(2))) console.log(l);
   } catch (e) {

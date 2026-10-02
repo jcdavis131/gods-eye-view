@@ -8,17 +8,18 @@
 // CLI must import a scratch copy, exit 0 and copy the bytes unchanged, then
 // exit 1 and write nothing once one byte of that copy is flipped, or once
 // one number is edited and the manifest re-hashed to match, run from a
-// directory that is not the repo.
+// directory that is not the repo, and run through a junction to the repo.
 //
 // Every CLI run here passes --check or a scratch --out and --lock: a run with
 // the defaults would write into lib/insights/data, which is committed.
 
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
-import { BundleError, LOCK_FILE, REPO_ROOT, readBundle, sha256, verifyBundle } from "./places-model-import.mjs";
+import { BundleError, LOCK_FILE, REPO_ROOT, isMainModule, readBundle, sha256, verifyBundle } from "./places-model-import.mjs";
 
 const ROOT = path.resolve(__dirname, "..");
 const NAME = "places-v0.1.1";
@@ -163,6 +164,42 @@ describe("the CLI on a scratch copy", () => {
     expect(r.status).toBe(0);
     expect(r.stdout).toContain("matches the lock lib/insights/data/bundles.lock.json");
     for (const [rel, buf] of files) expect(readFileSync(path.join(out, rel)).equals(buf), rel).toBe(true);
+  });
+
+  it("verifies when run through a junction (or symlink) to the repo, and refuses a flipped byte there", () => {
+    // A link to the repo: node runs the script by its real path, so import.meta.url is not the path typed.
+    const link = path.join(tmp, "repo-link");
+    symlinkSync(ROOT, link, "junction");
+    try {
+      const script = path.join(link, "scripts", "places-model-import.mjs");
+      expect(existsSync(script)).toBe(true);
+      expect(realpathSync.native(script)).not.toBe(script);
+      expect(isMainModule(script, pathToFileURL(SCRIPT).href)).toBe(true);
+      expect(isMainModule(path.join(link, "scripts", "places-model-import.test.ts"), pathToFileURL(SCRIPT).href)).toBe(false);
+      expect(isMainModule(undefined, pathToFileURL(SCRIPT).href)).toBe(false);
+
+      const src = path.join(tmp, "via-link", NAME);
+      cpSync(COMMITTED, src, { recursive: true });
+      const ok = spawnSync(process.execPath, [script, "--bundle", src, "--check"], { cwd: elsewhere, encoding: "utf8" });
+      expect(ok.stderr).toBe("");
+      expect(ok.status).toBe(0);
+      expect(ok.stdout).toContain(`verified ${NAME}`);
+      expect(ok.stdout).toContain("matches the lock lib/insights/data/bundles.lock.json");
+
+      const bad = path.join(tmp, "via-link-bad", NAME);
+      cpSync(COMMITTED, bad, { recursive: true });
+      const file = path.join(bad, "evidence/C1-raw.json");
+      const buf = readFileSync(file);
+      buf[1000] = (buf[1000] + 1) & 0xff;
+      writeFileSync(file, buf);
+      const r = spawnSync(process.execPath, [script, "--bundle", bad, "--check"], { cwd: elsewhere, encoding: "utf8" });
+      expect(r.status).toBe(1);
+      expect(r.stderr).toMatch(/^refused: evidence\/C1-raw\.json: sha256 /);
+    } finally {
+      // The link alone; never what it points at.
+      rmSync(link, { recursive: true, force: true });
+      expect(existsSync(path.join(ROOT, "scripts", "places-model-import.mjs"))).toBe(true);
+    }
   });
 
   it("checks against the committed lock when run from another directory", () => {
