@@ -94,7 +94,13 @@
 //   - every growth, change and cell the evidence holds, and every set
 //     member's growth, is recomputed from the published cells it reads
 //     (recompute.ts recomputeFromCells), and the peer rows ranked like the
-//     universe are its largest metros (recomputePeers).
+//     universe are its largest metros (recomputePeers);
+//   - who each robustness row compares is registered here (sentence.ts
+//     robustnessRegistered): a row that keeps the main peers (the
+//     definition, end-year and sub-period rows, the gating rows and the
+//     recency caveat's row R among them) covers exactly the main universe's
+//     metros (recomputeCoverage), and a row that picks its own covers the
+//     largest_n registered here, not methods.json's.
 //
 // Timestamps are the bundle's own: asOf from the sidecar, retrievedAt the
 // latest retrieval among the chart's provenance records.
@@ -166,6 +172,7 @@ import {
   monthsBetween,
   partOf,
   publishedCell,
+  recomputeCoverage,
   recomputeFromCells,
   recomputeMedian,
   recomputePeers,
@@ -294,8 +301,18 @@ export function h3bGate(ev: Evidence, methods: Methods): string[] {
     // The counts are not taken on trust: recomputed from the window's sets and the metros' own numbers, they must say the same.
     const key = pre(`h3b.no_metro_beat_both.${spec}`)?.number;
     const suffix = `.${ev.subject}.beat_on_both`;
-    if (key?.endsWith(suffix) && key.startsWith(`${spec}:`)) problems.push(...recomputeSpec(ev, key.slice(0, -suffix.length), ev.subject));
+    const prefix = key?.endsWith(suffix) && key.startsWith(`${spec}:`) ? key.slice(0, -suffix.length) : undefined;
+    if (prefix !== undefined) problems.push(...recomputeSpec(ev, prefix, ev.subject));
     if (spec === "main") continue;
+    // A gating row that keeps the main peers holds its zero over all of them: none dropped from both its sets.
+    let universe: string;
+    try {
+      universe = robustnessRegistered(spec).universe;
+    } catch (e) {
+      problems.push((e as Error).message);
+      continue;
+    }
+    if (universe === "main" && prefix !== undefined) problems.push(...recomputeCoverage(ev, prefix));
     const row = methods.robustness.rows[spec];
     const p = pre(`h3b.no_metro_beat_both.${spec}`);
     const win = row && p?.window ? row.windows[p.window] : undefined;
@@ -327,7 +344,9 @@ export function h3bGate(ev: Evidence, methods: Methods): string[] {
       if (!s || !("number" in s) || s.number !== key) problems.push(`the recency caveat's {${name}} is not ${key}`);
     }
     if (caveat.row !== "R") problems.push(`the recency caveat reads row ${JSON.stringify(caveat.row)}, not R`);
-    problems.push(...recomputeSpec(ev, prefix, ev.subject));
+    // Over the main universe's metros, every one: a metro that beats the subject cannot be dropped from the list by
+    // dropping it from both of R's sets.
+    problems.push(...recomputeSpec(ev, prefix, ev.subject), ...recomputeCoverage(ev, prefix));
   }
   return problems;
 }
@@ -1073,6 +1092,11 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
     if (c.printed && id === RECENCY && (c.row !== "R" || c.window !== recencyWindow)) {
       refuse(`the recency caveat reads row ${JSON.stringify(c.row ?? null)}'s ${JSON.stringify(c.window ?? null)} window, not row R's registered window ${RECENCY_R_WINDOW} (${JSON.stringify(recencyWindow ?? null)})`);
     }
+    if (c.printed && id === RECENCY) {
+      // Its ranks and its list are over every metro of the main universe (row R keeps the main peers).
+      const covered = recomputeCoverage(ev, `R:${recencyWindow}`);
+      if (covered.length) refuse(`the recency caveat prints, but ${covered.join("; ")}`);
+    }
     if (c.printed && id === "C1.caveat.ces_manufacturing") {
       // "CES shows": both cells published, without a footnote.
       for (const key of manufacturing ?? []) {
@@ -1685,6 +1709,19 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
       if (universes.some((u) => canonicalJson(u) !== canonicalJson(universes[0]))) refuse(`robustness ${rid} ${w}: the sets ${over.join(" and ")} cover different metros`);
       const n = universes[0].length;
       if (n !== win.n) refuse(`robustness ${rid} ${w}: the methods page counts ${win.n} metros, the evidence sets ${n}`);
+      // Who the row compares is registered here (sentence.ts robustnessRegistered): a row that keeps the main peers
+      // covers exactly the main universe's metros; a row that picks its own covers its registered largest_n
+      // (robustnessChange), and P2 and P3, ranked as the universe is, its largest (recomputePeers, below).
+      let registeredRow: ReturnType<typeof robustnessRegistered>;
+      try {
+        registeredRow = robustnessRegistered(rid);
+      } catch (e) {
+        return refuse((e as Error).message);
+      }
+      if (registeredRow.universe === "main") {
+        const covered = recomputeCoverage(ev, prefix);
+        if (covered.length) refuse(`robustness ${rid} ${w}: ${covered.join("; ")}`);
+      }
       let change: string;
       try {
         change = robustnessChange(rid, row, n);
@@ -1703,8 +1740,8 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
           return refuse(`robustness row ${rid}'s ranking: ${(e as Error).message}`);
         }
         if (words.ranked_by !== want) refuse(`robustness row ${rid} is ranked by ${JSON.stringify(words.ranked_by)}, but the universe ranks on ${JSON.stringify(want)}`);
-        // Ranked as the universe is, its metros are pinned to that ranking: as many as it registers, the largest of it.
-        const peers = recomputePeers(ev, prefix, row.registered.largest_n ?? Number.NaN);
+        // Ranked as the universe is, its metros are pinned to that ranking: as many as this side registers, the largest of it.
+        const peers = recomputePeers(ev, prefix, registeredRow.universe === "ranked" ? registeredRow.largest_n : Number.NaN);
         if (peers.length) refuse(`robustness ${rid} ${w}: ${peers.join("; ")}`);
       }
       if (row.kind === "end_year" && typeof row.registered.window?.t1 === "string") {

@@ -23,7 +23,7 @@ import { parseChartSpec, type BubbleSpec } from "./render/spec";
 import { METHODS_IS, METHODS_IS_NOT, fill, formatSlot, formulaText, templateText, type TemplateId } from "./sentence";
 import { THEMES } from "./render/tokens";
 import { metroName } from "./metros";
-import { recomputeFromCells, recomputePeers } from "./recompute";
+import { beatOnBoth, recomputeCoverage, recomputeFromCells, recomputePeers, recomputeSpec } from "./recompute";
 import { CES_SM, CES_SM_FILES } from "./sources";
 import { BASE, NAME, ROOT, substitutedEverywhere, suppressH3b, suppressedPath, variant, type Parts } from "./testFixtures";
 import type { Insight, MetroRef } from "./types";
@@ -519,7 +519,8 @@ describe("refusals", () => {
     // The robustness rows' rules, rankings and sizes.
     expect(refusal(variant((p) => void (p.methods.robustness.rows.D1.registered.rule = "all of 40 in place of 43")))).toMatch(/robustness row D1's rule reads "all of 40 in place of 43", not the registered/);
     expect(refusal(variant((p) => void (p.methods.robustness.rows.P1.registered.ranked_by = "Census 2024 population")))).toMatch(/robustness row P1's ranking reads "Census 2024 population"/);
-    expect(refusal(variant((p) => void (p.methods.robustness.rows.P2.registered.largest_n = 99)))).toMatch(/robustness row P2 registers the 99 largest metros, but its sets cover 100/);
+    // A size is compared with this side's registered one before the sets are counted.
+    expect(refusal(variant((p) => void (p.methods.robustness.rows.P2.registered.largest_n = 99)))).toMatch(/robustness row P2's size reads 99, not the registered 100/);
     // Why a clause or a caveat does not print.
     expect(refusal(variant((p) => void (p.evidence.suppressed[0].reason = "twins_pending: no twin yet")))).toMatch(/suppressed clause C1\.H3\.twins gives the reason "twins_pending: no twin yet", which is none of its registered forms/);
     const qcew = variant((p) => {
@@ -1212,6 +1213,16 @@ describe("the peer rows pinned to their ranking", () => {
       win.n = 99;
     });
     expect(refusal(consistent)).toMatch(/robustness row P2 registers the 100 largest metros, but its sets cover 99/);
+    // The A3 verifier's variant: methods.json's registered size moved to 99 as well. The size is this side's.
+    const sized = variant((p) => {
+      move(p, P2, "26420", null);
+      p.evidence.numbers[`${P2}.publishable`].value = 98;
+      const win = p.methods.robustness.rows.P2.windows["2019->2025"];
+      win.publishable.value = 98;
+      win.n = 99;
+      p.methods.robustness.rows.P2.registered.largest_n = 99;
+    });
+    expect(refusal(sized)).toMatch(/robustness row P2's size reads 99, not the registered 100/);
     const ev = structuredClone(EV);
     for (const a of ["office", "goods_logistics"]) delete ev.sets[`${P2}:${a}`].members["26420"];
     expect(recomputePeers(ev, P2, 100)).toEqual([`${P2}: its sets cover 99 metros, but it registers the 100 largest`]);
@@ -1224,6 +1235,117 @@ describe("the peer rows pinned to their ranking", () => {
   it("refuses P3 without the universe's first metro out, or without a metro of the universe", () => {
     expect(refusal(variant((p) => move(p, "P3:2019->2025", "34940", "99990")))).toMatch(/P3:2019->2025: it registers the 200 largest but leaves out the universe's first metro out, rank_151 \(34940\)/);
     expect(refusal(variant((p) => move(p, "P3:2019->2025", "26420", "99990")))).toMatch(/P3:2019->2025: it registers the 200 largest but leaves out 26420, of the universe's 150 largest/);
+  });
+});
+
+describe("the rows that keep the main peers, pinned to the main universe", () => {
+  const E1 = "E1:2019->2024";
+  const R = "R:2022->2025";
+  const MAIN_ROWS = ["D1:2019->2025", "D2:2019->2025", "D3:2019->2025", E1, "E2:2019->mean(Sep 2025-Aug 2026)", "E3:2019->2023", "R:2019->2022", R];
+  /** A metro taken out of both of a window's sets, members and the excluded alike, and its own numbers there. */
+  const dropBoth = (p: Parts, prefix: string, cbsa: string) => {
+    for (const a of ["office", "goods_logistics"]) {
+      const set = p.evidence.sets[`${prefix}:${a}`];
+      delete set.members[cbsa];
+      if (set.excluded) delete set.excluded[cbsa];
+    }
+    for (const k of Object.keys(p.evidence.numbers)) if (k.startsWith(`${prefix}.${cbsa}.`)) delete p.evidence.numbers[k];
+  };
+  /** E1 without Houston, which beats Austin on neither axis there: only the publishable count and the methods row's sizes move. */
+  const e1WithoutHouston = (p: Parts) => {
+    dropBoth(p, E1, "26420");
+    p.evidence.numbers[`${E1}.publishable`].value = 148;
+    const win = p.methods.robustness.rows.E1.windows["2019->2024"];
+    win.publishable.value = 148;
+    win.n = 149;
+  };
+  /**
+   * R 2022->2025 without Tallahassee, which beats Austin on both there, with everything moved to match, as the A3
+   * verifier moved it: the counts, the ranks, the methods row, the recency caveat's and the subtitle's slots, and the
+   * sidecar's subtitle. Austin is then 16th and 4th, and Beaumont alone beats it on both.
+   */
+  const rWithoutTallahassee = (p: Parts) => {
+    dropBoth(p, R, "45220");
+    const n = p.evidence.numbers;
+    n[`${R}.publishable`].value = 148;
+    n[`${R}.12420.office.rank`].value = 16;
+    n[`${R}.12420.goods_logistics.rank`].value = 4;
+    n[`${R}.12420.rank_min`].value = 5;
+    n[`${R}.12420.beat_on_both`].value = 1;
+    n[`${R}.12420.beat_on_both`].metros = ["13140"];
+    n[`${R}.12420.beat_on_either`].metros = n[`${R}.12420.beat_on_either`].metros!.filter((c) => c !== "45220");
+    n[`${R}.12420.beat_on_either`].value = n[`${R}.12420.beat_on_either`].metros!.length;
+    const recency = p.evidence.caveats.find((c) => c.id === "C1.caveat.recency")!;
+    for (const slots of [recency.slots!, p.evidence.chart.dek.slots]) {
+      (slots.r_a as { value: number }).value = 16;
+      (slots.r_b as { value: number }).value = 4;
+      const list = slots.beat_both as { metros: MetroRef[] };
+      list.metros = list.metros.filter((m) => m.cbsa !== "45220");
+    }
+    p.chart.dek = fill(p.evidence.chart.dek.id as TemplateId, p.evidence.chart.dek.slots);
+    const win = p.methods.robustness.rows.R.windows["2022->2025"];
+    win.n = 149;
+    win.publishable.value = 148;
+    win.axes!.office.rank.value = 16;
+    win.axes!.goods_logistics.rank.value = 4;
+    win.beat_on_both = { ...win.beat_on_both!, value: 1, metros: win.beat_on_both!.metros.filter((m) => m.id !== "45220") };
+  };
+  const evOf = (b: LoadedBundle) => b.findings[0].evidence;
+
+  it("holds on the committed bundle: every definition, end-year and sub-period window covers exactly main:universe", () => {
+    for (const prefix of MAIN_ROWS) expect(recomputeCoverage(EV, prefix), prefix).toEqual([]);
+    // The rows that pick their own peers do not: P2 is the 100 largest, P3 the 200, P1 and X1 their own rankings.
+    expect(recomputeCoverage(EV, "P2:2019->2025")[0]).toMatch(/P2:2019->2025: its office set covers 100 metros, not the 150 of the main universe it keeps: .* left out$/);
+    expect(recomputeCoverage(EV, "P1:2019->2025")[0]).toMatch(/left out; .* not in it$/);
+  });
+
+  it("refuses E1 without Houston, every count moved to match: the H3b gate held over 149 metros", () => {
+    const b = variant(e1WithoutHouston);
+    // The edit is consistent: the row's counts agree with its sets, so only the coverage can tell.
+    expect(recomputeSpec(evOf(b), E1, "12420")).toEqual([]);
+    expect(refusal(b)).toMatch(/the H3b clause prints but its gate does not hold: E1:2019->2024: its office set covers 149 metros, not the 150 of the main universe it keeps: 26420 left out; E1:2019->2024: its goods_logistics set covers 149 metros/);
+    // With the clause suppressed, the robustness table would still have printed "Publishable 148 of 149".
+    const suppressed = variant((p) => {
+      suppressedPath(p);
+      e1WithoutHouston(p);
+    });
+    expect(refusal(suppressed)).toMatch(/robustness E1 2019->2024: E1:2019->2024: its office set covers 149 metros, not the 150 of the main universe it keeps: 26420 left out/);
+  });
+
+  it("refuses R 2022->2025 without Tallahassee, which beats Austin on both, every count, slot and line moved to match", () => {
+    const b = variant(rWithoutTallahassee);
+    expect(recomputeSpec(evOf(b), R, "12420")).toEqual([]);
+    expect(beatOnBoth(evOf(b), R, "12420")).toEqual(["13140"]);
+    expect(refusal(b)).toMatch(/the H3b clause prints but its gate does not hold: .*R:2022->2025: its office set covers 149 metros, not the 150 of the main universe it keeps: 45220 left out/);
+    // Without the H3b clause the recency caveat still prints, and would have said "Beaumont beat it on both".
+    const suppressed = variant((p) => {
+      suppressedPath(p);
+      rWithoutTallahassee(p);
+    });
+    expect(refusal(suppressed)).toMatch(/the recency caveat prints, but R:2022->2025: its office set covers 149 metros, not the 150 of the main universe it keeps: 45220 left out/);
+    // The committed recency caveat names both.
+    expect(I.caveats.find((c) => c.id === "C1.caveat.recency")!.text).toMatch(/ranks 17th on office-industry and 5th on goods-and-logistics growth, and Beaumont and Tallahassee beat it on both/);
+  });
+
+  it("refuses a metro of no row's universe added to a definition row's sets", () => {
+    const b = variant((p) => {
+      for (const a of ["office", "goods_logistics"]) {
+        const set = p.evidence.sets[`D2:2019->2025:${a}`];
+        set.excluded = { ...(set.excluded ?? {}), "99990": "no_value:SMU01999906000000001|2019|M13" };
+      }
+    });
+    expect(refusal(b)).toMatch(/D2:2019->2025: its office set covers 151 metros, not the 150 of the main universe it keeps: 99990 not in it|the methods page counts 150 metros, the evidence sets 151/);
+  });
+
+  it("takes a peer row's size from this side's registry, not methods.json's", () => {
+    expect(refusal(variant((p) => void (p.methods.robustness.rows.P2.registered.largest_n = 99)))).toMatch(/robustness row P2's size reads 99, not the registered 100/);
+    expect(refusal(variant((p) => void (p.methods.robustness.rows.P1.registered.largest_n = 149)))).toMatch(/robustness row P1's size reads 149, not the registered 150/);
+    expect(refusal(variant((p) => void ((p.methods.robustness.rows.X1.registered.universe as { largest_n: number }).largest_n = 149)))).toMatch(/robustness row X1's universe size reads 149, not the registered 150/);
+    expect(I.robustness.filter((r) => r.kind === "peers").map((r) => r.change)).toEqual([
+      "the 150 largest metros by Census 2025 population (POPESTIMATE2025)",
+      "the 100 largest metros by CES total nonfarm, 2019 annual average",
+      "the 200 largest metros by CES total nonfarm, 2019 annual average",
+    ]);
   });
 });
 

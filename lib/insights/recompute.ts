@@ -50,6 +50,10 @@
 // with the cells it cites left alone, is a refusal however consistently the
 // rest of the evidence was moved with it (the A3 verifier's Dallas +4).
 //
+// recomputeCoverage checks a row that keeps the main peers (the definition,
+// end-year and sub-period rows) against the main universe: its sets cover
+// exactly main:universe's metros.
+//
 // recomputePeers checks a peers row ranked like the universe (P2, P3) against
 // that ranking: as many metros as it registers, and for a row no larger than
 // the universe, exactly the largest of it; for a larger row (P3), the whole
@@ -216,6 +220,39 @@ export function recomputeSpec(ev: Evidence, prefix: string, subject: string): st
     const named = sorted(np.metros ?? []);
     if (np.value !== could.length || canonicalJson(named) !== canonicalJson(could)) {
       problems.push(`${prefix}: not_publishable_could_beat_both is ${listed(np.value, named)} in the evidence, ${listed(could.length, could)} recomputed from the sets and the metros' own numbers`);
+    }
+  }
+  return problems;
+}
+
+/**
+ * A row that keeps the main specification's peers (sentence.ts
+ * robustnessRegistered, universe "main": the definition, end-year and
+ * sub-period rows) against the main universe: each of its window's two sets
+ * covers, members and the excluded alike, exactly the metros of
+ * main:universe. Its counts are recomputed from its own sets
+ * (recomputeSpec), so without this a metro dropped from both sets, with
+ * every count moved to match, built: the A3 verifier's R 2022->2025 without
+ * Tallahassee, which beats the subject on both, printed a recency caveat
+ * naming Beaumont alone, and E1 without Houston held the H3b gate over 149
+ * metros.
+ */
+export function recomputeCoverage(ev: Evidence, prefix: string): string[] {
+  const w = windowSets(ev, prefix);
+  if (typeof w === "string") return [w];
+  const u = ev.sets["main:universe"];
+  if (!u) return [`${prefix}: the evidence has no main:universe to check its metros against`];
+  const want = sorted(Object.keys(u.members));
+  const wanted = new Set(want);
+  const problems: string[] = [];
+  for (const [i, set] of w.sets.entries()) {
+    const covered = sorted(new Set([...Object.keys(set.members), ...Object.keys(set.excluded ?? {})]));
+    const has = new Set(covered);
+    const out = want.filter((c) => !has.has(c));
+    const extra = covered.filter((c) => !wanted.has(c));
+    if (out.length || extra.length) {
+      const said = [out.length ? `${out.join(", ")} left out` : "", extra.length ? `${extra.join(", ")} not in it` : ""].filter(Boolean).join("; ");
+      problems.push(`${prefix}: its ${w.axes[i]} set covers ${covered.length} metros, not the ${want.length} of the main universe it keeps: ${said}`);
     }
   }
   return problems;

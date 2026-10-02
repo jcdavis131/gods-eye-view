@@ -952,34 +952,50 @@ export function robustnessKind(kind: RobustnessRow["kind"]): string {
 }
 
 /**
+ * Which metros a robustness row compares. "main": the row changes the
+ * definition, the end year or the window, never the peers, so its sets cover
+ * exactly the main specification's universe (the evidence's main:universe),
+ * which recompute.ts recomputeCoverage checks member by member. "ranked": the
+ * row picks its own peers, the registered largest_n by its own ranking (P1
+ * by the Census estimates, P2 and P3 by the universe's CES ranking, X1 by
+ * 2019 QCEW covered employment over QCEW's own metro rows).
+ */
+export type RowUniverse = { universe: "main" } | { universe: "ranked"; largest_n: number };
+
+/**
  * The producer's words for what each registered robustness row changes
  * (methods.json robustness.rows[id].registered: a definition or disclosure
  * row's rule, a peers row's ranking, an end-year row's end when it is not a
- * year, a cross-source row's QCEW industries), word for word. A total switch
- * over the registered rows: a row this side has no words for refuses.
+ * year, a cross-source row's QCEW industries), word for word, and the metros
+ * it compares (RowUniverse), with a ranked row's size: the pre-registration's
+ * (vector-places registry/prereg.json flagship.registered_rows), this side's,
+ * so a size moved in the bundle is a refusal, not a printed "the 99 largest".
+ * A total switch over the registered rows: a row this side has no words for
+ * refuses.
  */
-export function robustnessRegistered(id: string): { kind: RobustnessRow["kind"]; rule?: string; ranked_by?: string; t1?: string; wc?: string[]; bc?: string[] } {
+export function robustnessRegistered(id: string): { kind: RobustnessRow["kind"]; rule?: string; ranked_by?: string; t1?: string; wc?: string[]; bc?: string[] } & RowUniverse {
   switch (id) {
     case "D1":
-      return { kind: "definition", rule: "all of 40 (trade, transportation and utilities) in place of 43" };
+      return { kind: "definition", rule: "all of 40 (trade, transportation and utilities) in place of 43", universe: "main" };
     case "D2":
-      return { kind: "definition", rule: "office-industry plus 65 private education and health" };
+      return { kind: "definition", rule: "office-industry plus 65 private education and health", universe: "main" };
     case "D3":
-      return { kind: "definition", rule: "D1 and D2 together" };
+      return { kind: "definition", rule: "D1 and D2 together", universe: "main" };
     case "E1":
     case "E3":
-      return { kind: "end_year" };
+      return { kind: "end_year", universe: "main" };
     case "E2":
-      return { kind: "end_year", t1: "the mean of the 12 monthly values Sep 2025-Aug 2026" };
+      return { kind: "end_year", t1: "the mean of the 12 monthly values Sep 2025-Aug 2026", universe: "main" };
     case "P1":
-      return { kind: "peers", ranked_by: "Census 2025 population (POPESTIMATE2025)" };
+      return { kind: "peers", ranked_by: "Census 2025 population (POPESTIMATE2025)", universe: "ranked", largest_n: 150 };
     case "P2":
+      return { kind: "peers", ranked_by: "CES total nonfarm, 2019 annual average", universe: "ranked", largest_n: 100 };
     case "P3":
-      return { kind: "peers", ranked_by: "CES total nonfarm, 2019 annual average" };
+      return { kind: "peers", ranked_by: "CES total nonfarm, 2019 annual average", universe: "ranked", largest_n: 200 };
     case "R":
-      return { kind: "disclosure", rule: "each named metro's ranks are printed" };
+      return { kind: "disclosure", rule: "each named metro's ranks are printed", universe: "main" };
     case "X1":
-      return { kind: "cross_source", wc: ["1023", "1024"], bc: ["1011", "1012", "1013"] };
+      return { kind: "cross_source", wc: ["1023", "1024"], bc: ["1011", "1012", "1013"], universe: "ranked", largest_n: 150 };
     default:
       throw new Error(`no registered words for robustness row ${JSON.stringify(id)}`);
   }
@@ -987,9 +1003,10 @@ export function robustnessRegistered(id: string): { kind: RobustnessRow["kind"];
 
 /**
  * What the row changes, from its registered entry, each producer text in it
- * required to be the registered one. A peers row's size is the evidence's
- * count of the metros its sets cover (`n`), which must be the registered
- * largest_n; an end-year row's numeric end is the registered window's.
+ * required to be the registered one. A peers row's (and the QCEW row's)
+ * size is the evidence's count of the metros its sets cover (`n`), which
+ * must be the largest_n registered here, as must methods.json's; an
+ * end-year row's numeric end is the registered window's.
  */
 export function robustnessChange(id: string, row: RobustnessRow, n: number): string {
   const r = row.registered;
@@ -1012,14 +1029,21 @@ export function robustnessChange(id: string, row: RobustnessRow, n: number): str
       if (reg.t1 !== undefined) same("end", r.window.t1, reg.t1);
       return `ends at ${r.window.t1}`;
     }
-    case "peers":
+    case "peers": {
       same("ranking", r.ranked_by, reg.ranked_by);
-      if (r.largest_n !== n) throw new Error(`robustness row ${id} registers the ${r.largest_n} largest metros, but its sets cover ${n}`);
+      const size = reg.universe === "ranked" ? reg.largest_n : undefined;
+      same("size", r.largest_n, size);
+      if (size !== n) throw new Error(`robustness row ${id} registers the ${size} largest metros, but its sets cover ${n}`);
       return `the ${num(n)} largest metros by ${reg.ranked_by}`;
-    case "cross_source":
+    }
+    case "cross_source": {
       same("white-collar industries", r.wc, reg.wc);
       same("blue-collar industries", r.bc, reg.bc);
+      const size = reg.universe === "ranked" ? reg.largest_n : undefined;
+      same("universe size", (r.universe as { largest_n?: unknown } | undefined)?.largest_n, size);
+      if (size !== n) throw new Error(`robustness row ${id} registers the ${size} largest QCEW metros, but its sets cover ${n}`);
       return `QCEW native metro rows; white-collar = QCEW industries ${(reg.wc as string[]).join(" + ")}; blue-collar = ${(reg.bc as string[]).join(" + ")}`;
+    }
   }
 }
 
