@@ -87,6 +87,13 @@ function SectionHead({ id, title }: { id: string; title: string }) {
   );
 }
 
+/** What each kind of printed number is, as the arithmetic labels it. */
+const CATEGORY: Record<ArithmeticRow["category"], string> = {
+  cell: "a published cell",
+  estimate: "an estimate computed from published cells",
+  registered: "a registered value, read from the pre-registration: not a published cell and not an estimate",
+};
+
 function Arithmetic({ rows }: { rows: ArithmeticRow[] }) {
   return (
     <ol className="mt-3 space-y-4">
@@ -98,7 +105,8 @@ function Arithmetic({ rows }: { rows: ArithmeticRow[] }) {
             {"}"} prints <span className="tabular-nums">{r.printed}</span>
           </div>
           <div className="text-muted-foreground">
-            <code className="text-[12px]">{r.number}</code> ({r.kind}): {r.formula}
+            <code className="text-[12px]">{r.number}</code> is {CATEGORY[r.category]}
+            {r.category === "registered" ? "." : <> ({r.kind}): {r.formula}</>}
             {r.over.length ? <> Over the sets {r.over.join(" and ")}.</> : null}
           </div>
           {r.arithmetic ? <div className="tabular-nums text-muted-foreground break-words">Exactly: {r.arithmetic}.</div> : null}
@@ -274,7 +282,7 @@ export default async function InsightPage({ params }: Params) {
       <section className="mt-8 border-t border-border pt-5">
         <SectionHead id="arithmetic" title="The arithmetic" />
         <p className="mt-2 max-w-[48rem] text-[14px] leading-relaxed text-muted-foreground">
-          Every number printed above is a published cell or an estimate computed from published cells. For each: where it prints, the evidence entry it is read from, that entry&rsquo;s formula, and each published cell it reads, cited to its upstream file with the file&rsquo;s sha256 and Last-Modified header.
+          Every number printed above is one of three things, and each is labelled as such: a published cell; an estimate computed from published cells; or a registered value (the start and end years of the registered windows, the random-peer draw count k), read from the pre-registration, which is neither a cell nor an estimate. For each: where it prints, the evidence entry it is read from, and for a cell or an estimate that entry&rsquo;s formula and each published cell it reads, cited to its upstream file with the file&rsquo;s sha256 and Last-Modified header; for a registered value, the pre-registration file and path it is read from.
         </p>
         <Arithmetic rows={i.arithmetic} />
         {i.randomPeerGrid.length ? (
@@ -384,7 +392,7 @@ export default async function InsightPage({ params }: Params) {
           ))}
         </ul>
         <p className="mt-4 max-w-[48rem] text-[13px] leading-relaxed text-muted-foreground">
-          Built from bundle {i.bundle} (release {i.release}, rules_version {i.rulesVersion}), finding {i.id}. sha256: manifest.json {i.hashes.manifest}; chart sidecar {i.hashes.chart}; evidence {i.hashes.evidence}; methods {i.hashes.methods}. Every sentence on this page is a fixed template filled from that evidence; no language model wrote any of it. Its numbers are published cells and estimates computed from them, with the formulas printed under The arithmetic.
+          Built from bundle {i.bundle} (release {i.release}, rules_version {i.rulesVersion}), finding {i.id}. sha256: manifest.json {i.hashes.manifest}; chart sidecar {i.hashes.chart}; evidence {i.hashes.evidence}; methods {i.hashes.methods}. Every sentence on this page is a fixed template filled from that evidence, and every metro is named from this site&rsquo;s own registry; no language model wrote any of it. Its numbers are published cells and estimates computed from them, with the formulas printed under The arithmetic, and the registered values it labels as such there.
         </p>
       </footer>
     </article>

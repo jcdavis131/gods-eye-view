@@ -7,8 +7,8 @@
 //
 // Preview PNGs for a visual review are written, not asserted, with:
 //   INSIGHTS_PNG_OUT=<dir> npx vitest run "app/(docs)/insights"
-// (flagship-a2-social.png and flagship-a2-og.png, the routes' own bytes, and
-// flagship-a2-light.png, the social card in the light theme).
+// (flagship-a3-social.png and flagship-a3-og.png, the routes' own bytes, and
+// flagship-a3-light.png, the social card in the light theme).
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -104,6 +104,14 @@ describe("the insight page", () => {
     // Not every number is a published cell, and the page does not say so.
     expect(t).toContain("published cells and estimates computed from them");
     expect(t).not.toMatch(/every number (in it )?is a published cell/i);
+    // The arithmetic labels each number for what it is: the window's years and k as registered values, apart from cells and estimates.
+    expect(t).toContain("or a registered value (the start and end years of the registered windows, the random-peer draw count k), read from the pre-registration, which is neither a cell nor an estimate.");
+    for (const key of ["window.t0", "window.t1", "random_peer.k", "R.windows.1.t0"]) {
+      expect(t).toContain(`${key} is a registered value, read from the pre-registration: not a published cell and not an estimate. Registered in registry/prereg.json`);
+    }
+    expect(t).toContain("cell.SMU48124203000000001|2022|M13 is a published cell (cell): the published value");
+    expect(t).toContain("main:2019->2025.12420.office.growth_pct is an estimate computed from published cells (growth): (X_t1 / X_t0 - 1) x 100");
+    expect(t).not.toContain("(registered): a registered value");
     expect(html).toContain(`href="/insights/${SLUG}/data.csv?all=1"`);
     // The card's size as the social route draws it (checked against the decoded PNG below).
     expect(t).toContain("card (PNG, 1080 × 1350)");
@@ -170,9 +178,9 @@ describe("the routes", () => {
     if (out) {
       const i = insightBySlug(SLUG)!;
       mkdirSync(out, { recursive: true });
-      writeFileSync(path.join(out, "flagship-a2-social.png"), social);
-      writeFileSync(path.join(out, "flagship-a2-og.png"), og);
-      writeFileSync(path.join(out, "flagship-a2-light.png"), await toPng(renderSvg(i.spec, "social", "light"), PNG_WIDTH.social));
+      writeFileSync(path.join(out, "flagship-a3-social.png"), social);
+      writeFileSync(path.join(out, "flagship-a3-og.png"), og);
+      writeFileSync(path.join(out, "flagship-a3-light.png"), await toPng(renderSvg(i.spec, "social", "light"), PNG_WIDTH.social));
     }
   });
 });
