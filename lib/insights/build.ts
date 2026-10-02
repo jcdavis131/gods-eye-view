@@ -1036,7 +1036,8 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
           ? value === true
           : form.threshold === "C1.threshold.universe_n"
             ? value === universeN.registered_n
-            : // Named-metro rows: the metros it names are the chart's (checked above), which is what its threshold asks.
+            : // Named-metro rows: the metros it names are the chart's, and the chart's are every row it leaves out (both
+              // checked above, refusing otherwise), which is what its threshold asks.
               form.threshold === "C1.threshold.nulls_named" || form.threshold === "C1.threshold.fail_closed_named";
     if (p.value !== value) refuse(`precondition ${p.name} prints ${JSON.stringify(p.value)}, but the evidence gives ${JSON.stringify(value)}`);
     if (p.threshold !== threshold) refuse(`precondition ${p.name} states the threshold ${JSON.stringify(p.threshold)}, not ${JSON.stringify(threshold)}`);
@@ -1293,6 +1294,17 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
   };
   const plotted = bubble.data.filter((d) => isPlotted(bubble, d)).length;
   if (plotted !== ch.plotted) refuse(`the chart plots ${plotted} rows, the evidence says ${ch.plotted}`);
+  // The converse of the loop below: every row the chart does not plot is named as not published, with its caveat
+  // and its precondition row, so a metro cannot drop out of the caveats while the chart still leaves it out.
+  {
+    const unplotted = bubble.data.filter((d) => !isPlotted(bubble, d)).map((d) => d.id).sort(byteCompare);
+    const named = ch.not_published.map((m) => m.cbsa).sort(byteCompare);
+    if (canonicalJson(unplotted) !== canonicalJson(named)) refuse(`the chart leaves out ${unplotted.join(", ") || "no rows"}, but names ${named.join(", ") || "none"} as not published`);
+    if (unplotted.length > 0) {
+      if (!ev.caveats.some((c) => c.printed && (c.id === "C1.caveat.not_published" || c.id === "C1.caveat.not_published.plural"))) refuse(`the chart leaves out ${unplotted.join(", ")}, but no not-published caveat prints`);
+      if (!ev.preconditions.some((p) => p.name === "universe.nulls_named")) refuse(`the chart leaves out ${unplotted.join(", ")}, but the evidence records no universe.nulls_named precondition`);
+    }
+  }
   for (const m of ch.not_published) {
     const d = bubble.data.find((x) => x.id === m.cbsa) ?? refuse(`${m.title} is named as not published but is not a chart row`);
     if (isPlotted(bubble, d)) refuse(`${m.title} is named as not published but is plotted`);

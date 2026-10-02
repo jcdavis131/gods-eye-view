@@ -917,6 +917,23 @@ describe("every printed slot reads its registered evidence (A3's attacks)", () =
     expect(insightCsv(I)).toContain("rules_version 4)");
   });
 
+  it("refuses a chart that leaves a metro out without naming it, its caveat or its precondition row (A3)", () => {
+    const notPublished = (id: string) => id === "C1.caveat.not_published" || id === "C1.caveat.not_published.plural";
+    // A3's attack: Tampa dropped from the named list, its caveat deleted, and the row emptied to match.
+    const dropAll = variant((p) => {
+      p.evidence.chart.not_published = p.evidence.chart.not_published.filter((m) => m.cbsa !== "45300");
+      p.evidence.caveats = p.evidence.caveats.filter((c) => !notPublished(c.id));
+      const row = p.evidence.preconditions.find((x) => x.name === "universe.nulls_named")!;
+      row.value = 0;
+      row.metros = [];
+    });
+    expect(refusal(dropAll)).toMatch(/the chart leaves out 45300, but names none as not published/);
+    const noCaveat = variant((p) => void (p.evidence.caveats = p.evidence.caveats.filter((c) => !notPublished(c.id))));
+    expect(refusal(noCaveat)).toMatch(/the chart leaves out 45300, but no not-published caveat prints/);
+    const noRow = variant((p) => void (p.evidence.preconditions = p.evidence.preconditions.filter((x) => x.name !== "universe.nulls_named")));
+    expect(refusal(noRow)).toMatch(/the chart leaves out 45300, but the evidence records no universe\.nulls_named precondition/);
+  });
+
   it("refuses free text or an untied number in the precondition table, a name twice, and a passing row for a clause that does not print (F2)", () => {
     const text = variant((p) => void p.evidence.preconditions.push({ ...structuredClone(p.evidence.preconditions.find((x) => x.name === "universe.nulls_named")!), value: FREE as never }));
     expect(refusal(text)).toMatch(/precondition universe\.nulls_named's value "no other large metro outgrew Austin on both" is not a number or true or false/);
