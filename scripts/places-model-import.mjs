@@ -21,10 +21,24 @@
 // lib/insights/data: with any other --lock (a scratch one in the tests, or
 // a forged one that pins an edited manifest) the import must name an --out
 // outside it, or it is refused before anything is read. "Under" is decided
-// on real paths (realPathDeep): an --out through a junction or a symlink
-// into lib/insights/data is under it, an --out that is itself a link is
-// refused, and so is an --out that is lib/insights/data or holds it, which
-// the copy (it removes what the bundle does not hold) would empty.
+// twice, and either says so: on real paths (realPathDeep), so an --out
+// through a junction or a symlink into lib/insights/data is under it; and
+// on file identity (underByIdentity: the file id of each directory on the
+// way down, which stat reads the same however the path is spelled), because
+// a real path is still a name. Windows hands back a loopback share
+// (\\localhost\c$\..., \\127.0.0.1\c$\..., \\?\UNC\...) or a mapped drive
+// as typed, so compared by name the committed data directory reached that
+// way was "outside" it, and a forged lock wrote a bundle there, or with the
+// committed lock an --out of the data directory itself was emptied. An
+// --out that is itself a link is refused, and so is an --out that is
+// lib/insights/data or holds it, which the copy (it removes what the bundle
+// does not hold) would empty. A write also refuses an --out or a --lock
+// spelled as a UNC or device path (\\host\share, \\?\, \\.\): nothing this
+// script writes lives on a share. Every file it writes, the bundle's and the
+// lock, is written beside its target and renamed over it, so a hard link in
+// --out (or a --lock hard-linked to the committed lock) is replaced, never
+// written through to the file it shares with the committed tree, and the
+// lock is written at its real path.
 //
 // What is verified, and why each check exists:
 //
@@ -282,7 +296,23 @@ function writeLock(file, lock, name, v) {
   };
   next.bundles = Object.fromEntries(Object.keys(next.bundles).sort(byteOrder).map((k) => [k, next.bundles[k]]));
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, JSON.stringify(next, null, 2) + "\n");
+  replaceFile(file, Buffer.from(JSON.stringify(next, null, 2) + "\n", "utf8"));
+}
+
+/**
+ * Write `buf` as the file `dest`: into a new file beside it, then renamed over it. A rename replaces the directory
+ * entry, so a `dest` that is a hard link to another file (one of the committed tree's, say) is replaced, and the
+ * file it shared is left as it was; writing into `dest` would have written that file too.
+ */
+function replaceFile(dest, buf) {
+  const tmp = `${dest}.import-${process.pid}.tmp`;
+  fs.writeFileSync(tmp, buf, { flag: "wx" });
+  try {
+    fs.renameSync(tmp, dest);
+  } catch (e) {
+    fs.rmSync(tmp, { force: true });
+    throw e;
+  }
 }
 
 /** Copy the verified bytes into `out`, removing anything there the bundle does not hold. */
@@ -290,13 +320,14 @@ function copyBundle(files, out) {
   fs.mkdirSync(out, { recursive: true });
   const keep = new Set(files.keys());
   if (fs.existsSync(out)) {
+    // listFiles refuses a link anywhere under --out, so every write below lands in --out itself.
     for (const rel of listFiles(out)) if (!keep.has(rel)) fs.rmSync(path.join(out, rel));
   }
   for (const [rel, buf] of files) {
     const dest = path.join(out, rel);
     fs.mkdirSync(path.dirname(dest), { recursive: true });
-    if (fs.existsSync(dest) && fs.readFileSync(dest).equals(buf)) continue;
-    fs.writeFileSync(dest, buf);
+    if (fs.existsSync(dest) && fs.statSync(dest).nlink === 1 && fs.readFileSync(dest).equals(buf)) continue;
+    replaceFile(dest, buf);
   }
 }
 
@@ -354,6 +385,51 @@ export function realPathDeep(p) {
   return path.join(real, ...tail);
 }
 
+/**
+ * The file id of a path that exists, following every link and junction on the way (stat, not lstat): the NTFS file
+ * index or the inode, which is the same however the path is spelled, a loopback share's included. The volume is not
+ * part of it: Windows gives a drive's volume and the same volume reached through a share different dev numbers.
+ * Null when nothing is there, when it cannot be read (the bare "\\?\UNC" prefix of a device path, say), or when the
+ * filesystem gives no id (0).
+ */
+function fileId(p) {
+  let s;
+  try {
+    s = fs.statSync(p, { bigint: true, throwIfNoEntry: false });
+  } catch {
+    return null;
+  }
+  return s && s.ino !== BigInt(0) ? s.ino : null;
+}
+
+/** The file ids of `p` and of each directory above it that exists, `p` first, walked on the path as resolved. */
+function idsUp(p) {
+  const out = [];
+  let cur = path.resolve(p);
+  for (;;) {
+    const id = fileId(cur);
+    if (id !== null) out.push(id);
+    const parent = path.dirname(cur);
+    if (parent === cur) return out;
+    cur = parent;
+  }
+}
+
+/**
+ * `p` is `dir` or under it by file identity: `p`, or a directory above it, is the very directory `dir` is, whatever
+ * either path's spelling (a drive letter, a loopback share, a mapped drive, a junction). Used only to refuse: two
+ * different directories that shared an id would refuse a write that was safe, never allow one that was not.
+ */
+export function underByIdentity(p, dir) {
+  const id = fileId(dir);
+  return id !== null && idsUp(p).includes(id);
+}
+
+/** A UNC or Win32 device-namespace spelling (\\host\share\..., \\?\..., \\.\...), as path.resolve leaves it. */
+export function isSharePath(p) {
+  return /^[\\/]{2}/.test(path.resolve(p));
+}
+
 /** A path for the log: relative to the repo when it is inside it, absolute otherwise. */
 function shown(p) {
   const rel = path.relative(REPO_ROOT, p);
@@ -375,17 +451,26 @@ export function main(argv, cwd = process.cwd()) {
   // Every comparison below is on real paths: a junction or a symlink to lib/insights/data (or to the lock) is
   // that directory (or that file), however the path was spelled.
   const realOut = realPathDeep(out);
-  const realData = realPathDeep(path.resolve(REPO_ROOT, DATA_DIR));
-  if (samePath(realOut, realPathDeep(bundleDir))) fail("--out is the bundle itself");
+  const dataDir = path.resolve(REPO_ROOT, DATA_DIR);
+  const realData = realPathDeep(dataDir);
+  if (samePath(realOut, realPathDeep(bundleDir)) || (fileId(out) !== null && fileId(out) === fileId(bundleDir))) fail("--out is the bundle itself");
   if (!opts.check) {
+    // Nothing this script writes lives on a share: a UNC or device spelling of --out or --lock is refused outright
+    // (the identity checks below hold without this, for a mapped drive too).
+    for (const [what, p] of [["--out", out], ["--lock", lockFile]]) {
+      if (isSharePath(p)) fail(`${what} ${p} is a UNC or device path; name it by its drive letter`);
+    }
     // The copy writes into --out and removes what the bundle does not hold, so it is a real directory, never a link
-    // to one, and never lib/insights/data itself or a directory above it, which it would empty.
+    // to one, and never lib/insights/data itself or a directory above it, which it would empty. Decided on real
+    // paths and on file identity: either one saying so refuses.
     if (fs.lstatSync(out, { throwIfNoEntry: false })?.isSymbolicLink()) fail(`--out ${out} is a link (a symlink or a junction); name the directory itself`);
-    if (inside(realData, realOut)) fail(`${shown(out)} is ${DATA_DIR} or holds it; a copy there would remove every file the bundle does not hold`);
+    if (inside(realData, realOut) || underByIdentity(dataDir, out)) fail(`${shown(out)} is ${DATA_DIR} or holds it; a copy there would remove every file the bundle does not hold`);
     // The committed bundles are checked against the committed lock and nothing else: a --lock
     // elsewhere (a scratch lock, or a forged one pinning an edited manifest) may verify or pin into
-    // a scratch --out, never write into lib/insights/data.
-    if (inside(realOut, realData) && !samePath(realPathDeep(lockFile), realPathDeep(path.resolve(REPO_ROOT, LOCK_FILE)))) {
+    // a scratch --out, never write into lib/insights/data. Which lock is the committed one is decided
+    // on real paths alone: a lock wrongly taken for it would let a forged pin write the committed tree.
+    const underData = inside(realOut, realData) || underByIdentity(out, dataDir);
+    if (underData && !samePath(realPathDeep(lockFile), realPathDeep(path.resolve(REPO_ROOT, LOCK_FILE)))) {
       fail(`${shown(out)} is under ${DATA_DIR}, which only an import checked against ${LOCK_FILE} may write; with --lock ${opts.lock}, pass an --out outside ${DATA_DIR}`);
     }
   }
@@ -406,7 +491,9 @@ export function main(argv, cwd = process.cwd()) {
   copyBundle(files, out);
   lines.push(`  copied to ${shown(out)}`);
   if (!v.pinned) {
-    writeLock(lockFile, lock, name, v);
+    // At its real path: a --lock that links to a lock file updates that file, and the rename replaces the file
+    // itself, so a --lock hard-linked to the committed lock never writes the committed one.
+    writeLock(realPathDeep(lockFile), lock, name, v);
     lines.push(`  pinned in ${shown(lockFile)}`);
   }
   return lines;

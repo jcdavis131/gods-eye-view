@@ -10,16 +10,20 @@
 // one number is edited and the manifest re-hashed to match, run from a
 // directory that is not the repo, and run through a junction to the repo.
 //
-// Every CLI run here passes --check or a scratch --out and --lock: a run with
-// the defaults would write into lib/insights/data, which is committed.
+// Every CLI run on the repo passes --check or a scratch --out and --lock: a
+// run with the defaults would write into lib/insights/data, which is
+// committed. The write guard's attacks by another spelling of the same
+// directory (a loopback share, a mapped drive, hard links) run on a fake
+// repo, a scratch copy of the script and of lib/insights/data, so a guard
+// that let one through would damage the copy only.
 
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, rmdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, rmdirSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
-import { BundleError, LOCK_FILE, REPO_ROOT, isMainModule, readBundle, sha256, verifyBundle } from "./places-model-import.mjs";
+import { BundleError, LOCK_FILE, REPO_ROOT, isMainModule, isSharePath, readBundle, sha256, underByIdentity, verifyBundle } from "./places-model-import.mjs";
 
 const ROOT = path.resolve(__dirname, "..");
 const NAME = "places-v0.1.1";
@@ -364,5 +368,197 @@ describe("the CLI on a scratch copy", () => {
       expect(existsSync(path.join(DATA, "bundles.lock.json"))).toBe(true);
       expect(existsSync(path.join(COMMITTED, "manifest.json"))).toBe(true);
     }
+  });
+});
+
+describe("the write guard on file identity, on a fake repo", () => {
+  // A copy of the script and of lib/insights/data in a scratch tree: the script finds its repo from its own location,
+  // so REPO_ROOT is that tree. An attack the guard let through would damage the copy, never the committed files.
+  const tmp = mkdtempSync(path.join(os.tmpdir(), "gev-places-guard-"));
+  const fake = path.join(tmp, "fakerepo");
+  const fakeScript = path.join(fake, "scripts", "places-model-import.mjs");
+  const fakeData = path.join(fake, "lib", "insights", "data");
+  const fakeLock = path.join(fakeData, "bundles.lock.json");
+  mkdirSync(path.dirname(fakeScript), { recursive: true });
+  cpSync(SCRIPT, fakeScript);
+  cpSync(path.join(ROOT, "lib", "insights", "data"), fakeData, { recursive: true });
+  const elsewhere = path.join(tmp, "elsewhere");
+  mkdirSync(elsewhere, { recursive: true });
+  const committedLock = readFileSync(LOCK_PATH);
+  afterAll(() => {
+    rmSync(tmp, { recursive: true, force: true });
+    expect(readFileSync(LOCK_PATH).equals(committedLock)).toBe(true);
+  });
+
+  const run = (args: string[]) => spawnSync(process.execPath, [fakeScript, ...args], { cwd: elsewhere, encoding: "utf8" });
+  const snapshot = () => [...readBundle(fakeData)].map(([rel, buf]) => `${rel} ${sha256(buf)}`);
+  const before = snapshot();
+  /** The loopback-share spelling of a local path, C:\x -> \\localhost\c$\x (null off Windows). */
+  const share = (p: string, prefix = "\\\\localhost\\"): string | null => {
+    const m = /^([A-Za-z]):\\(.*)$/.exec(path.resolve(p));
+    return m ? `${prefix}${m[1].toLowerCase()}$\\${m[2]}` : null;
+  };
+  // The administrative share has to answer for the share cases to mean anything; on this box it does.
+  const shareUp = process.platform === "win32" && existsSync(share(fakeData) ?? "");
+
+  /** A forged release: Austin's office growth moved 10 points, the manifest re-hashed and renamed, and a lock pinning it. */
+  const forge = (name: string): { src: string; lock: string; manifest: Buffer } => {
+    const tampered = tamperedAndRehashed();
+    const manifest = Buffer.from(tampered.get("manifest.json")!.toString("utf8").replace(`"bundle": "${NAME}"`, `"bundle": "${name}"`), "utf8");
+    const src = path.join(tmp, `src-${name}`, name);
+    writeBundle(src, new Map(tampered).set("manifest.json", manifest));
+    const lock = path.join(tmp, `${name}.lock.json`);
+    writeFileSync(lock, JSON.stringify({ bundles: { ...LOCK.bundles, [name]: { manifest_bytes: manifest.length, manifest_sha256: sha256(manifest), release: "v0.1.1" } } }));
+    return { src, lock, manifest };
+  };
+
+  it("finds the fake tree as its repo, and imports into it against its own lock", () => {
+    const src = path.join(tmp, "intact", NAME);
+    cpSync(COMMITTED, src, { recursive: true });
+    const r = run(["--bundle", src]);
+    expect(r.stderr).toBe("");
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("matches the lock lib/insights/data/bundles.lock.json");
+    expect(r.stdout).toContain(`copied to lib/insights/data/${NAME}`);
+    expect(snapshot()).toEqual(before);
+  });
+
+  it.runIf(shareUp)("sees the data directory through its share spellings, where its real path is another name", () => {
+    const spellings = [share(fakeData)!, share(fakeData, "\\\\127.0.0.1\\")!, share(fakeData, "\\\\?\\UNC\\localhost\\")!];
+    for (const s of spellings) {
+      // By name the share is not the drive path, real path included: that was the bypass.
+      expect(realpathSync.native(s).toLowerCase()).not.toBe(fakeData.toLowerCase());
+      expect(isSharePath(s)).toBe(true);
+      expect(underByIdentity(s, fakeData), s).toBe(true);
+      expect(underByIdentity(path.join(s, "places-v0.1.7", "evidence"), fakeData), s).toBe(true);
+      expect(underByIdentity(fakeData, s), s).toBe(true);
+      // The directory that holds it, by its share spelling, holds it.
+      expect(underByIdentity(fakeData, path.dirname(s)), s).toBe(true);
+    }
+    expect(underByIdentity(share(elsewhere)!, fakeData)).toBe(false);
+    expect(underByIdentity(fakeData, share(elsewhere)!)).toBe(false);
+    expect(isSharePath(fakeData)).toBe(false);
+  });
+
+  it.runIf(shareUp)("refuses a forged lock writing under the data directory spelled as a share, and writes nothing", () => {
+    const name = "places-v0.1.7";
+    const { src, lock } = forge(name);
+    for (const prefix of ["\\\\localhost\\", "\\\\127.0.0.1\\", "\\\\?\\UNC\\localhost\\"]) {
+      const out = share(path.join(fakeData, name), prefix)!;
+      const r = run(["--bundle", src, "--lock", lock, "--out", out]);
+      expect(r.status, out).toBe(1);
+      expect(r.stderr).toMatch(/^refused: --out .* is a UNC or device path; name it by its drive letter/);
+    }
+    // The same import into a scratch --out by its drive letter goes ahead: the forged lock verifies, it only may not write the tree.
+    const ok = run(["--bundle", src, "--lock", lock, "--out", path.join(tmp, "forged-out")]);
+    expect(ok.stderr).toBe("");
+    expect(ok.status).toBe(0);
+    expect(existsSync(path.join(fakeData, name))).toBe(false);
+    expect(snapshot()).toEqual(before);
+  });
+
+  it.runIf(shareUp)("refuses, against the committed lock, an --out that is the data directory or holds it spelled as a share", () => {
+    const src = path.join(tmp, "intact-share", NAME);
+    cpSync(COMMITTED, src, { recursive: true });
+    for (const out of [share(fakeData)!, share(path.dirname(fakeData))!, share(fakeData, "\\\\?\\UNC\\localhost\\")!]) {
+      const r = run(["--bundle", src, "--out", out]);
+      expect(r.status, out).toBe(1);
+      expect(r.stderr).toMatch(/^refused: --out .* is a UNC or device path/);
+    }
+    // A --lock spelled as a share is refused for a write as well; --check reads it and writes nothing.
+    const viaShareLock = run(["--bundle", src, "--lock", share(fakeLock)!, "--out", path.join(tmp, "share-lock-out")]);
+    expect(viaShareLock.status).toBe(1);
+    expect(viaShareLock.stderr).toMatch(/^refused: --lock .* is a UNC or device path/);
+    const check = run(["--bundle", src, "--lock", share(fakeLock)!, "--check"]);
+    expect(check.stderr).toBe("");
+    expect(check.status).toBe(0);
+    expect(snapshot()).toEqual(before);
+  });
+
+  // A drive mapped to the loopback share is a drive-letter path, so the UNC refusal does not see it, and its real path
+  // is the share's name: only file identity holds here. It maps a drive for the session, so it runs on request only.
+  it.runIf(shareUp && process.env.INSIGHTS_NET_USE === "1")("refuses the data directory reached through a drive mapped to the share, on file identity alone (INSIGHTS_NET_USE=1)", () => {
+    const letter = ["Z", "Y", "X", "W", "V"].find((l) => !existsSync(`${l}:\\`));
+    expect(letter).toBeDefined();
+    const drive = `${letter}:`;
+    const m = /^([A-Za-z]):\\/.exec(fakeData)!;
+    const mapped = spawnSync("net", ["use", drive, `\\\\localhost\\${m[1].toLowerCase()}$`, "/persistent:no"], { encoding: "utf8" });
+    expect(mapped.status, mapped.stderr).toBe(0);
+    try {
+      const onDrive = (p: string) => `${drive}${path.resolve(p).slice(2)}`;
+      expect(isSharePath(onDrive(fakeData))).toBe(false);
+      expect(realpathSync.native(onDrive(fakeData)).toLowerCase()).not.toBe(fakeData.toLowerCase());
+      const name = "places-v0.1.3";
+      const { src, lock } = forge(name);
+      const under = run(["--bundle", src, "--lock", lock, "--out", onDrive(path.join(fakeData, name))]);
+      expect(under.status).toBe(1);
+      expect(under.stderr).toMatch(/^refused: .* is under lib\/insights\/data, which only an import checked against lib\/insights\/data\/bundles\.lock\.json may write/);
+      const intact = path.join(tmp, "intact-mapped", NAME);
+      cpSync(COMMITTED, intact, { recursive: true });
+      for (const out of [onDrive(fakeData), onDrive(path.dirname(fakeData))]) {
+        const r = run(["--bundle", intact, "--out", out]);
+        expect(r.status, out).toBe(1);
+        expect(r.stderr).toMatch(/^refused: .* is lib\/insights\/data or holds it; a copy there would remove every file the bundle does not hold/);
+      }
+      expect(existsSync(path.join(fakeData, name))).toBe(false);
+      expect(snapshot()).toEqual(before);
+    } finally {
+      spawnSync("net", ["use", drive, "/delete", "/y"], { encoding: "utf8" });
+      expect(existsSync(`${drive}\\`)).toBe(false);
+    }
+  });
+
+  it("replaces a hard link in --out instead of writing through it to the committed file it shares", () => {
+    // --out filled with hard links to the fake tree's committed bundle files, then a forged release imported there.
+    const name = "places-v0.1.6";
+    const { src, lock } = forge(name);
+    const out = path.join(tmp, "hardlinked-out");
+    for (const rel of files.keys()) {
+      mkdirSync(path.dirname(path.join(out, rel)), { recursive: true });
+      linkSync(path.join(fakeData, NAME, rel), path.join(out, rel));
+    }
+    expect(statSync(path.join(fakeData, NAME, "evidence/C1-raw.json")).nlink).toBe(2);
+    const r = run(["--bundle", src, "--lock", lock, "--out", out]);
+    expect(r.stderr).toBe("");
+    expect(r.status).toBe(0);
+    // The forged bytes are in --out; the committed files are as they were, and no longer linked to it.
+    const forged = readBundle(src);
+    for (const [rel, buf] of forged) expect(readFileSync(path.join(out, rel)).equals(buf), rel).toBe(true);
+    expect(readFileSync(path.join(out, "evidence/C1-raw.json")).equals(files.get("evidence/C1-raw.json")!)).toBe(false);
+    expect(statSync(path.join(fakeData, NAME, "evidence/C1-raw.json")).nlink).toBe(1);
+    expect(snapshot()).toEqual(before);
+  });
+
+  it("pins into a --lock hard-linked to the committed lock without writing the committed lock", () => {
+    const name = "places-v0.1.5";
+    const { src, manifest } = forge(name);
+    const linked = path.join(tmp, "linked.lock.json");
+    linkSync(fakeLock, linked);
+    const r = run(["--bundle", src, "--lock", linked, "--pin", sha256(manifest), "--out", path.join(tmp, "pinned-out")]);
+    expect(r.stderr).toBe("");
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain("equals --pin; not yet in the lock");
+    // The scratch lock now pins the release; the committed one does not, byte for byte as before.
+    expect(JSON.parse(readFileSync(linked, "utf8")).bundles[name].manifest_sha256).toBe(sha256(manifest));
+    expect(readFileSync(fakeLock).equals(committedLock)).toBe(true);
+    expect(statSync(fakeLock).nlink).toBe(1);
+    expect(snapshot()).toEqual(before);
+  });
+
+  it("pins a new release into the tree it belongs to, against the committed lock, by rename", () => {
+    // The ordinary path for a new release still works: --pin with the default lock writes the bundle and the lock.
+    const name = "places-v0.1.4";
+    const manifest = Buffer.from(files.get("manifest.json")!.toString("utf8").replace(`"bundle": "${NAME}"`, `"bundle": "${name}"`), "utf8");
+    const src = path.join(tmp, "new-release", name);
+    writeBundle(src, new Map(files).set("manifest.json", manifest));
+    const r = run(["--bundle", src, "--pin", sha256(manifest)]);
+    expect(r.stderr).toBe("");
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain(`pinned in lib/insights/data/bundles.lock.json`);
+    const lock = JSON.parse(readFileSync(fakeLock, "utf8"));
+    expect(lock.bundles[name].manifest_sha256).toBe(sha256(manifest));
+    expect(lock.bundles[NAME]).toEqual(LOCK.bundles[NAME]);
+    expect(readFileSync(path.join(fakeData, name, "manifest.json")).equals(manifest)).toBe(true);
+    expect(readdirSync(fakeData).filter((f) => f.endsWith(".tmp"))).toEqual([]);
   });
 });
