@@ -20,7 +20,7 @@ import { CANVAS_IDS } from "./render/canvas";
 import { LABEL_CAP, layoutBubble } from "./render/charts/bubble";
 import { renderSvg } from "./render/render";
 import { parseChartSpec, type BubbleSpec } from "./render/spec";
-import { fill, formatSlot, templateText } from "./sentence";
+import { METHODS_IS, METHODS_IS_NOT, fill, formatSlot, templateText, type TemplateId } from "./sentence";
 import { THEMES } from "./render/tokens";
 import type { BundleManifest, Evidence, Methods } from "./types";
 
@@ -121,7 +121,49 @@ describe("the published finding", () => {
       expect(EV.numbers[r.number], r.number).toBeDefined();
       expect(r.formula.length).toBeGreaterThan(0);
     }
-    expect(new Set(I.arithmetic.map((r) => r.where))).toEqual(new Set(["Headline", "Random peer", "Caveat: recency", "Caveat: ces_manufacturing", "Caveat: benchmarked", "Chart title", "Chart subtitle", "Subject label", "Universe line", "Status note"]));
+    expect(new Set(I.arithmetic.map((r) => r.where))).toEqual(
+      new Set(["Headline", "Random peer", "Caveat: recency", "Caveat: ces_manufacturing", "Caveat: benchmarked", "Chart title", "Chart subtitle", "Subject label", "Universe line", "Status note", "Method: what this is"]),
+    );
+  });
+
+  it("lists the numbers the methods lines print, {t0}, {t1} and {N}, where they print", () => {
+    const rows = I.arithmetic.filter((r) => r.where === "Method: what this is");
+    expect(rows.map((r) => `${r.slot} ${r.printed} ${r.number}`)).toEqual(["t0 2019 window.t0", "t1 2025 window.t1", "N 150 main.universe.n"]);
+    // Every number a line prints that its registered text does not already hold ("1 = the largest growth", "SPEC 8").
+    const numbers = (t: string) => (t.match(/\b\d[\d,.]*/g) ?? []).map((n) => n.replace(/[.,]$/, ""));
+    for (const [id, line] of [...METHODS_IS.map((x, k) => [x, I.is[k]]), ...METHODS_IS_NOT.map((x, k) => [x, I.isNot[k]])] as Array<[TemplateId, string]>) {
+      const constants = numbers(templateText(id));
+      for (const n of numbers(line).filter((x) => !constants.includes(x))) expect(rows.map((r) => r.printed), `${n} in ${line}`).toContain(n);
+    }
+  });
+
+  it("words what the delineation, the weights and the Census estimates decide from the bundle, with no number of its own", () => {
+    const by = Object.fromEntries(I.shaping.map((s) => [s.id, s]));
+    expect(by.omb_list1_2023.role).toBe(
+      "Which metros there are and what they are called: a metro is a metropolitan statistical area of OMB's July 2023 delineation, the geography CES rebuilds metro history on, and its member counties are the ones the fail-closed check reads.",
+    );
+    expect(by.omb_list1_2023.coverage).toBe("2023-07");
+    expect(by.qcew_county_total.role).toBe("The fail-closed check's weights: each member county's 2019 QCEW total covered employment; a metro with a member county that has none fails closed for twins.");
+    expect(by.qcew_county_total.coverage).toBe("2019");
+    expect(by.census_cbsa_est2025.role).toBe("Row P1's peer set: the 150 largest metros by Census 2025 population (POPESTIMATE2025).");
+    expect(by.census_cbsa_est2025.coverage).toBe("2025");
+    for (const s of I.shaping) expect(s.role).not.toMatch(/50 states/);
+  });
+
+  it("refuses a shaping file whose year disagrees with what the evidence says of it", () => {
+    const census = variant((p) => {
+      const e = Object.values(p.manifest.sources).find((s) => s.source === "census_cbsa_est2025")!;
+      e.url = e.url.replace(/2025/g, "2024");
+    });
+    expect(refusal(census)).toMatch(/the census_cbsa_est2025 file .*cbsa-est2024-alldata\.csv is for 2024, its registry id says 2025/);
+    const omb = variant((p) => void ((p.methods.panel_b as unknown as { registered: { twins: { pooling_composition: string } } }).registered.twins.pooling_composition = "msa_feb2013"));
+    expect(refusal(omb)).toMatch(/the delineation composition "msa_feb2013" is not a month of 2023/);
+    const weights = variant((p) => {
+      const fc = p.evidence.chart.fail_closed[0] as unknown as Record<string, unknown>;
+      fc.members_without_2020_weight = fc.members_without_2019_weight;
+      delete fc.members_without_2019_weight;
+    });
+    expect(refusal(weights)).toMatch(/fails closed, but the evidence does not name its members without a 2019 weight/);
   });
 
   it("cites every published cell behind a printed number with its file's sha256 and Last-Modified", () => {

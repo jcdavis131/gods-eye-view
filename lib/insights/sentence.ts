@@ -92,6 +92,9 @@ export const TEMPLATE_IDS = [
   "C1.threshold.universe_n",
   "C1.threshold.nulls_named",
   "C1.threshold.fail_closed_named",
+  "C1.shaping.omb",
+  "C1.shaping.qcew_county",
+  "C1.shaping.census_p1",
 ] as const;
 
 export type TemplateId = (typeof TEMPLATE_IDS)[number];
@@ -220,7 +223,33 @@ export function templateText(id: TemplateId): string {
       return "every metro without a value on both axes is named with its reason";
     case "C1.threshold.fail_closed_named":
       return "every metro that fails closed for twins is named (no twins, still in panel A)";
+    // What each file that shapes the comparison decides (lib/insights/sources.ts SHAPING), printed in the Universe
+    // and Sources sections. These are this side's sentences; build.ts fills them with fillWords from the bundle: the
+    // delineation's month and year, the weights' year and the peer set's size and ranking.
+    case "C1.shaping.omb":
+      return "Which metros there are and what they are called: a metro is a metropolitan statistical area of OMB's {month} {year} delineation, the geography CES rebuilds metro history on, and its member counties are the ones the fail-closed check reads.";
+    case "C1.shaping.qcew_county":
+      return "The fail-closed check's weights: each member county's {year} QCEW total covered employment; a metro with a member county that has none fails closed for twins.";
+    case "C1.shaping.census_p1":
+      return "Row P1's peer set: the {n} largest metros by {ranked_by}.";
   }
+}
+
+/**
+ * A template filled with words rather than evidence slots: for this side's
+ * own sentences whose values are read from the bundle's structure (a file's
+ * year, a set's size), not from an evidence number. A placeholder without a
+ * word throws, and so does a word that is not used.
+ */
+export function fillWords(id: TemplateId, words: Record<string, string>): string {
+  const text = templateText(id);
+  const used = placeholders(text);
+  for (const k of Object.keys(words)) if (!used.includes(k)) throw new Error(`template ${id} has no {${k}}`);
+  return text.replace(PLACEHOLDER, (_m: string, name: string) => {
+    const w = words[name];
+    if (w === undefined || w === "") throw new Error(`template ${id} needs {${name}}`);
+    return w;
+  });
 }
 
 /** The registered template of panel B's gate rule `name`, or null when none is registered (a refusal at build time). */

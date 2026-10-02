@@ -64,6 +64,7 @@ import {
   asSentence,
   axisCopy,
   fill,
+  fillWords,
   formatSlot,
   headlineSentence,
   isTemplateId,
@@ -72,6 +73,7 @@ import {
   placeholders,
   registeredFormula,
   robustnessChange,
+  robustnessRegistered,
   statusNote,
   statusTemplate,
   templateText,
@@ -79,7 +81,7 @@ import {
   type TemplateId,
 } from "./sentence";
 import { anchorMainToChart, recomputeMedian, recomputeRandomPeer, recomputeSpec } from "./recompute";
-import { SHAPING, sourceRefById } from "./sources";
+import { MONTHS, SHAPING, sourceRefById } from "./sources";
 import type {
   ArithmeticRow,
   CellCitation,
@@ -680,10 +682,57 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
     .map((p) => citation(toProvenance(p)));
 
   // The files that decide who is compared: the delineation (the universe), the fail-closed weights, P1's peers.
+  // What each covers and the words of its role are read from the bundle, never written here: the year from the
+  // file's own URL (and the registry id's year where it has one), checked against what the evidence says of it.
   const shaping: ShapingSource[] = SHAPING.map((rule) => {
-    const entry = Object.values(manifest.sources).find((s) => s.source === rule.id) ?? refuse(`manifest.json records no ${rule.id} file`);
-    const provenance = fileCite(entry, rule.ref, rule.coverage);
-    return { id: rule.id, role: rule.role, url: entry.url, coverage: rule.coverage, chart: rule.chart, provenance, citation: withFile(citation(provenance), entry.sha256, entry.last_modified, entry.bytes) };
+    const entries = Object.values(manifest.sources).filter((s) => s.source === rule.id);
+    if (entries.length !== 1) refuse(`manifest.json records ${entries.length} ${rule.id} files, not one`);
+    const entry = entries[0];
+    const year = rule.url.exec(entry.url)?.[1] ?? refuse(`the ${rule.id} file ${entry.url} is not a URL this side can read a year from`);
+    const idYear = /(\d{4})$/.exec(rule.id)?.[1];
+    if (idYear !== undefined && idYear !== year) refuse(`the ${rule.id} file ${entry.url} is for ${year}, its registry id says ${idYear}`);
+    let coverage: string;
+    let words: Record<string, string>;
+    switch (rule.role) {
+      case "C1.shaping.omb": {
+        // The delineation sheet the producer composes metros from, as its pre-registration names it ("msa_jul2023").
+        const composition = (methods.panel_b as { registered?: { twins?: { pooling_composition?: unknown } } }).registered?.twins?.pooling_composition;
+        const m = typeof composition === "string" ? /^msa_([a-z]{3})(\d{4})$/.exec(composition) : null;
+        const month = m ? MONTHS[m[1]] : undefined;
+        if (!m || !month || m[2] !== year) refuse(`the delineation composition ${JSON.stringify(composition ?? null)} is not a month of ${year}, the year of ${entry.url}`);
+        coverage = `${year}-${(month as { iso: string }).iso}`;
+        words = { month: (month as { name: string }).name, year };
+        break;
+      }
+      case "C1.shaping.qcew_county": {
+        for (const fc of ch.fail_closed) {
+          if (!Object.hasOwn(fc, `members_without_${year}_weight`)) refuse(`${fc.title} fails closed, but the evidence does not name its members without a ${year} weight`);
+        }
+        coverage = year;
+        words = { year };
+        break;
+      }
+      case "C1.shaping.census_p1": {
+        const row = methods.robustness.rows.P1;
+        const wins = row ? Object.values(row.windows) : [];
+        if (!row || row.kind !== "peers" || !(row.registered.source_ids ?? []).includes(rule.id) || wins.length !== 1) refuse(`row P1 is not one peer set chosen by ${rule.id}`);
+        const rankedBy = robustnessRegistered("P1").ranked_by as string;
+        if (!rankedBy.includes(`POPESTIMATE${year}`)) refuse(`row P1 is ranked by ${JSON.stringify(rankedBy)}, not the ${year} estimates in ${entry.url}`);
+        coverage = year;
+        words = { n: num(wins[0].n), ranked_by: rankedBy };
+        break;
+      }
+      default:
+        return refuse(`no words for the file ${rule.id}`);
+    }
+    const provenance = fileCite(entry, rule.ref, coverage);
+    let role: string;
+    try {
+      role = fillWords(rule.role, words);
+    } catch (e) {
+      return refuse((e as Error).message);
+    }
+    return { id: rule.id, role, url: entry.url, coverage, chart: rule.chart, provenance, citation: withFile(citation(provenance), entry.sha256, entry.last_modified, entry.bytes) };
   });
   const citations = [...new Set([...files.map((x) => x.citation), ...estimates, ...shaping.filter((s) => s.chart).map((s) => s.citation)])];
 
@@ -722,6 +771,8 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
   const methodSlots: Record<string, Slot> = { t0, t1, N: ch.universe_line.slots.N };
   const is = METHODS_IS.map((id) => fill(id, methodSlots));
   const isNot = METHODS_IS_NOT.map((id) => fill(id, methodSlots));
+  for (const id of METHODS_IS) addRows("Method: what this is", id, methodSlots);
+  for (const id of METHODS_IS_NOT) addRows("Method: what this is not", id, methodSlots);
   if (canonicalJson(is) !== canonicalJson(methods.panel_a.is)) refuse("the methods page's \"is\" lines are not the registered ones");
   if (canonicalJson(isNot) !== canonicalJson(methods.panel_a.is_not)) refuse("the methods page's \"is not\" lines are not the registered ones");
   if (methods.panel_a.method_line !== methodLine) refuse("the methods page's method line is not the registered one");

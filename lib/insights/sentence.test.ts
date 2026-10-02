@@ -17,6 +17,7 @@ import {
   TITLE_LADDER_H3B,
   asSentence,
   fill,
+  fillWords,
   formatSlot,
   formulaText,
   headlineSentence,
@@ -188,6 +189,13 @@ describe("registered texts", () => {
       else expect(registeredFormula(n.kind, key, n.formula), key).toBe(n.formula);
     }
     expect(new Set(Object.values(EV.numbers).flatMap((n) => (n.formula ? [n.formula] : [])))).toEqual(new Set(FORMULA_IDS.map(formulaText)));
+  });
+  it("fill this side's own sentences with words read from the bundle, every placeholder and no stray word", () => {
+    expect(fillWords("C1.shaping.census_p1", { n: "150", ranked_by: "Census 2025 population (POPESTIMATE2025)" })).toBe("Row P1's peer set: the 150 largest metros by Census 2025 population (POPESTIMATE2025).");
+    expect(() => fillWords("C1.shaping.census_p1", { n: "150" })).toThrow(/needs \{ranked_by\}/);
+    expect(() => fillWords("C1.shaping.qcew_county", { year: "2019", n: "1" })).toThrow(/has no \{n\}/);
+    // No number of their own: each number they print is a word filled from the bundle (a row id like P1 is a name).
+    for (const id of ["C1.shaping.omb", "C1.shaping.qcew_county", "C1.shaping.census_p1"] as const) expect(templateText(id), id).not.toMatch(/\b\d/);
   });
   it("read a reason form's slots back out of the text, and nothing that is not the form", () => {
     expect(matchTemplate("C1.reason.precondition_fails", "a precondition fails: h3b.no_metro_beat_both.P2, h3b.no_metro_beat_both.P3")).toEqual({ names: "h3b.no_metro_beat_both.P2, h3b.no_metro_beat_both.P3" });
