@@ -159,6 +159,16 @@ export function templateText(id: TemplateId): string {
 export const METHODS_IS: TemplateId[] = ["C1.methods.is.raw", "C1.methods.is.ranks", "C1.methods.is.descriptive"];
 export const METHODS_IS_NOT: TemplateId[] = ["C1.methods.is_not.twins", "C1.methods.is_not.occupations", "C1.methods.is_not.causal"];
 
+/**
+ * The robustness rows the H3b clause is gated on, as docs/FLAGSHIP.md
+ * PRECONDITIONS (H3b, b) registers them: the end years, the definitions and
+ * the peer sets. The bundle states the list four times (the evidence's rule,
+ * methods.json's gating list, the methods page's gate table and each row's
+ * own gates) and build.ts h3bGate requires every one of them to be exactly
+ * this set, so a row dropped from all four at once is still a refusal here.
+ */
+export const GATING_ROWS_H3B: readonly string[] = ["E1", "E2", "E3", "D1", "D2", "D3", "P1", "P2", "P3"];
+
 /** The chart title when the H3b clause prints: the first rung every canvas can set wins (render/canvas.ts headlineMisfits). */
 export const TITLE_LADDER_H3B: TemplateId[] = ["C1.chart_title.h3b.1", "C1.chart_title.h3b.2"];
 /** The chart subtitle when the recency caveat prints: the first rung that fills to at most DEK_LIMIT characters wins. */

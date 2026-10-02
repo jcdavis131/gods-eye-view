@@ -13,9 +13,15 @@
 //     print is listed as suppressed with a reason;
 //   - the H3b clause ("no major metro beat {subject} on both") prints only
 //     when its own precondition table holds row by row (h3bGate): the main
-//     specification and every gating row methods.json names, each present,
-//     evaluated and at zero, the metros that are not publishable checked, the
-//     subject publishable and the recency caveat printed with it;
+//     specification and every gating row, each present, evaluated and at
+//     zero, the metros that are not publishable checked, the subject
+//     publishable and the recency caveat printed with it. The gating rows are
+//     the ones sentence.ts registers (GATING_ROWS_H3B), not only the ones the
+//     bundle lists, and no count is taken on trust: each is recomputed from
+//     its window's sets (recompute.ts) and must agree;
+//   - the main specification's sets are the chart's rows, and its counts, the
+//     subject's ranks, the medians and the random peer's m and n are what
+//     those sets give; so is every count and rank of every robustness row;
 //   - every template text in the evidence equals the registered text in
 //     sentence.ts, each ladder is the registered ladder and the chosen rung
 //     is the one its rule picks (the title: the first that every canvas can
@@ -49,6 +55,7 @@ import { byteCompare, canonicalJson, parseChartSpec, toProvenance, type BubbleSp
 import {
   DEK_LADDER_RECENCY,
   DEK_LIMIT,
+  GATING_ROWS_H3B,
   METHODS_IS,
   METHODS_IS_NOT,
   TITLE_LADDER_H3B,
@@ -65,6 +72,7 @@ import {
   windowLabel,
   type TemplateId,
 } from "./sentence";
+import { anchorMainToChart, recomputeMedian, recomputeRandomPeer, recomputeSpec } from "./recompute";
 import { SHAPING, sourceRefById } from "./sources";
 import type {
   ArithmeticRow,
@@ -131,6 +139,10 @@ export function h3bGate(ev: Evidence, methods: Methods): string[] {
   const problems: string[] = [];
   const rows = methods.robustness.gating?.[H3B] ?? [];
   if (rows.length === 0) problems.push("methods.json names no robustness row that gates it");
+  // The gating rows are registered here, not only in the bundle: a row dropped from every list the bundle keeps still fails.
+  if (canonicalJson([...rows].sort(byteCompare)) !== canonicalJson([...GATING_ROWS_H3B].sort(byteCompare))) {
+    problems.push(`methods.json gates it on ${JSON.stringify(rows)}, not the registered rows ${JSON.stringify(GATING_ROWS_H3B)}`);
+  }
   const registeredRows = ev.headline.rule?.H3b?.gating_rows;
   if (!registeredRows || canonicalJson([...registeredRows].sort(byteCompare)) !== canonicalJson([...rows].sort(byteCompare))) {
     problems.push(`methods.json gates it on ${JSON.stringify(rows)}, the evidence's registered rule on ${JSON.stringify(registeredRows ?? null)}`);
@@ -160,9 +172,13 @@ export function h3bGate(ev: Evidence, methods: Methods): string[] {
     if (!p.number.startsWith(`${spec}:`) || !p.number.endsWith(`.${ev.subject}.${suffix}`)) problems.push(`precondition ${name} reads ${p.number}, not ${spec}'s ${suffix} for ${ev.subject}`);
     if (n.value !== 0 || (n.metros ?? []).length !== 0) problems.push(`evidence number ${p.number} is ${JSON.stringify(n.value)} (${(n.metros ?? []).join(", ")}), not 0`);
   };
-  for (const spec of ["main", ...rows]) {
+  for (const spec of ["main", ...new Set([...rows, ...GATING_ROWS_H3B])]) {
     zero(`h3b.no_metro_beat_both.${spec}`, spec, "beat_on_both");
     zero(`h3b.not_publishable_cannot_beat_both.${spec}`, spec, "not_publishable_could_beat_both");
+    // The counts are not taken on trust: recomputed from the window's sets and the metros' own numbers, they must say the same.
+    const key = pre(`h3b.no_metro_beat_both.${spec}`)?.number;
+    const suffix = `.${ev.subject}.beat_on_both`;
+    if (key?.endsWith(suffix) && key.startsWith(`${spec}:`)) problems.push(...recomputeSpec(ev, key.slice(0, -suffix.length), ev.subject));
     if (spec === "main") continue;
     const row = methods.robustness.rows[spec];
     const p = pre(`h3b.no_metro_beat_both.${spec}`);
@@ -186,6 +202,17 @@ export function h3bGate(ev: Evidence, methods: Methods): string[] {
   const caveat = ev.caveats.find((c) => c.id === RECENCY);
   const list = caveat?.slots?.beat_both;
   if (!caveat?.printed || !list || list.format !== "list" || list.metros.length === 0) problems.push("the recency caveat does not print with a non-empty list of the metros that beat the subject on both");
+  else {
+    // Its ranks and its list are row R's own numbers for the subject, recomputed from that window's sets.
+    const prefix = `${caveat.row}:${caveat.window}`;
+    const want: Record<string, string> = { r_a: `${prefix}.${ev.subject}.office.rank`, r_b: `${prefix}.${ev.subject}.goods_logistics.rank`, beat_both: `${prefix}.${ev.subject}.beat_on_both` };
+    for (const [name, key] of Object.entries(want)) {
+      const s = caveat.slots?.[name];
+      if (!s || !("number" in s) || s.number !== key) problems.push(`the recency caveat's {${name}} is not ${key}`);
+    }
+    if (caveat.row !== "R") problems.push(`the recency caveat reads row ${JSON.stringify(caveat.row)}, not R`);
+    problems.push(...recomputeSpec(ev, prefix, ev.subject));
+  }
   return problems;
 }
 
@@ -316,6 +343,24 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
   }
   const windowSlots: Record<string, Slot> = { t0, t1 };
   const window = { t0: (t0 as { value: number }).value, t1: (t1 as { value: number }).value };
+
+  // The main specification, recomputed from its sets: the chart's rows are its universe and read its numbers, and
+  // the subject's ranks, the publishable count, the beat-on-both and not-publishable counts, the medians and the
+  // random peer's m and n are what the sets say, not only what the evidence numbers say.
+  const nSlot = h.slots.N;
+  const mainPrefix = nSlot && hasNumber(nSlot) && nSlot.number.endsWith(".publishable") ? nSlot.number.slice(0, -".publishable".length) : refuse("the headline's {N} is not a publishable count");
+  if (mainPrefix !== `main:${window.t0}->${window.t1}`) refuse(`the headline's {N} counts ${mainPrefix}, not the main specification over the registered window`);
+  const mainProblems = [
+    ...anchorMainToChart(ev, mainPrefix, "office", "goods_logistics"),
+    ...recomputeSpec(ev, mainPrefix, ev.subject),
+    ...Object.values(ev.chart.medians).flatMap((m) => recomputeMedian(ev, m.number)),
+    ...Object.values(ev.random_peer.grid).flatMap((g) => recomputeRandomPeer(ev, g.number, mainPrefix, ev.subject)),
+  ];
+  if (mainProblems.length) refuse(`the evidence's counts disagree with its sets: ${mainProblems.join("; ")}`);
+  for (const [name, axis, what] of [["a", "office", "growth_pct"], ["b", "goods_logistics", "growth_pct"], ["r_a", "office", "rank"], ["r_b", "goods_logistics", "rank"]] as const) {
+    const r = h.slots[name];
+    if (!r || !hasNumber(r) || r.number !== `${mainPrefix}.${ev.subject}.${axis}.${what}`) refuse(`the headline's {${name}} is not the subject's ${axis} ${what} in ${mainPrefix}`);
+  }
 
   // Caveats: printed ones are filled from registered templates; the rest say why not.
   const caveats: Insight["caveats"] = [];
@@ -612,6 +657,15 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
         }
         return n;
       };
+      // Every count and rank of the window, recomputed from its sets.
+      if (!win.publishable.number.endsWith(".publishable")) refuse(`robustness ${rid} ${w}: ${win.publishable.number} is not a publishable count`);
+      const prefix = win.publishable.number.slice(0, -".publishable".length);
+      const recomputed = recomputeSpec(ev, prefix, win.subject);
+      if (recomputed.length) refuse(`robustness ${rid} ${w}: the evidence's counts disagree with its sets: ${recomputed.join("; ")}`);
+      for (const [axis, a] of Object.entries(win.axes ?? {})) {
+        if (a.growth_pct.number !== `${prefix}.${win.subject}.${axis}.growth_pct` || a.rank.number !== `${prefix}.${win.subject}.${axis}.rank`) refuse(`robustness ${rid} ${w}: its ${axis} numbers are not the subject's in ${prefix}`);
+      }
+      if (win.beat_on_both && win.beat_on_both.number !== `${prefix}.${win.subject}.beat_on_both`) refuse(`robustness ${rid} ${w}: its beat-on-both count is not the subject's in ${prefix}`);
       // The denominator: how many metros the row's sets cover, members and the excluded alike, read from the evidence sets.
       const pub = check("Publishable", win.publishable.number, win.publishable.value);
       const over = pub.over ?? [];

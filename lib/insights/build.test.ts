@@ -240,6 +240,101 @@ describe("the H3b gate", () => {
     );
   });
 
+  /** A metro's main-specification growth moved on one axis in the evidence number and the chart sidecar, and in the main set when `sets` is true. */
+  const moveMain = (p: Parts, cbsa: string, axis: "office" | "goods_logistics", value: number, sets: boolean) => {
+    p.evidence.numbers[`main:2019->2025.${cbsa}.${axis}.growth_pct`].value = value;
+    const d = p.chart.data.find((x) => x.id === cbsa)!;
+    if (axis === "office") d.x = value;
+    else d.y = value;
+    if (sets) (p.evidence.sets[`main:2019->2025:${axis}`].members[cbsa] as { growth_pct: number }).growth_pct = value;
+  };
+
+  it("refuses a metro that beats the subject on both in the values while every count still says 0", () => {
+    // Savannah at 40 / 40 against Austin's 35.96 / 38.56, consistently in the numbers, the sidecar and the main sets.
+    const b = variant((p) => {
+      moveMain(p, "42340", "office", 40, true);
+      moveMain(p, "42340", "goods_logistics", 40, true);
+    });
+    expect(b.findings[0].evidence.numbers["main:2019->2025.12420.beat_on_both"].value).toBe(0);
+    const message = refusal(b);
+    expect(message).toMatch(/gate does not hold: .*main:2019->2025: 12420\.beat_on_both is 0 in the evidence, 1 \(42340\) recomputed from the sets/);
+    expect(message).toMatch(/the subject's office rank is 1 in the evidence, 2 recomputed from its set/);
+    // In the numbers and the sidecar only, the sets give the metro away.
+    const unsynced = variant((p) => {
+      moveMain(p, "42340", "office", 40, false);
+      moveMain(p, "42340", "goods_logistics", 40, false);
+    });
+    expect(refusal(unsynced)).toMatch(/main:2019->2025: 42340's office growth is 40 in the evidence numbers, [-\d.]+ in its set/);
+  });
+
+  it("refuses a metro that is not publishable but beats the subject on the one axis it has, while its count says 0", () => {
+    // Tampa's office growth at 50 (Austin 35.96) in its number, the sidecar and its own check, which still says could_beat_both: false.
+    const b = variant((p) => {
+      moveMain(p, "45300", "office", 50, false);
+      const np = p.evidence.numbers["main:2019->2025.12420.not_publishable_could_beat_both"] as unknown as { checks: Array<{ has: { office: { value: number } } }> };
+      np.checks[0].has.office.value = 50;
+    });
+    const message = refusal(b);
+    expect(message).toMatch(/main:2019->2025: the not-publishable check of 45300 says .*"could_beat_both":false.*, the evidence numbers it names say .*"could_beat_both":true/);
+    expect(message).toMatch(/main:2019->2025: not_publishable_could_beat_both is 0 in the evidence, 1 \(45300\) recomputed from the sets and the metros' own numbers/);
+  });
+
+  it("refuses a gating row whose sets have a metro beating the subject on both while its count says 0", () => {
+    // Houston (26420), one of P2's 100, at 40 / 40 in both of P2's sets only: P2 carries no number of its own for it.
+    const b = variant((p) => {
+      for (const axis of ["office", "goods_logistics"]) (p.evidence.sets[`P2:2019->2025:${axis}`].members["26420"] as { growth_pct: number }).growth_pct = 40;
+    });
+    expect(BASE.findings[0].evidence.numbers["P2:2019->2025.26420.office.growth_pct"]).toBeUndefined();
+    expect(refusal(b)).toMatch(/gate does not hold: .*P2:2019->2025: 12420\.beat_on_both is 0 in the evidence, 1 \(26420\) recomputed from the sets/);
+  });
+
+  it("refuses when the recency caveat's list is not what row R's sets say", () => {
+    const b = variant((p) => {
+      // Beaumont no longer beats Austin on office growth in row R's 2022->2025 sets; the caveat and the count still name it.
+      const set = p.evidence.sets["R:2022->2025:office"];
+      const beaumont = Object.keys(set.members).find((c) => p.evidence.numbers["R:2022->2025.12420.beat_on_both"].metros!.includes(c))!;
+      (set.members[beaumont] as { growth_pct: number }).growth_pct = -50;
+    });
+    expect(refusal(b)).toMatch(/gate does not hold: .*R:2022->2025: 12420\.beat_on_both is 2 \(\d+, \d+\) in the evidence, 1 \(\d+\) recomputed from the sets/);
+  });
+
+  it("refuses a gating row dropped from every list the bundle keeps, against the registered rows", () => {
+    const b = variant((p) => {
+      p.evidence.headline.rule!.H3b!.gating_rows = p.evidence.headline.rule!.H3b!.gating_rows!.filter((r) => r !== "P2");
+      p.methods.robustness.gating["C1.H3b"] = p.methods.robustness.gating["C1.H3b"].filter((r) => r !== "P2");
+      p.methods.panel_a.headline.h3b_gates.rows = p.methods.panel_a.headline.h3b_gates.rows.filter((r) => r !== "P2");
+      p.methods.robustness.rows.P2.gates = [];
+      p.evidence.preconditions = p.evidence.preconditions.filter((x) => !x.name.endsWith(".P2"));
+    });
+    const message = refusal(b);
+    expect(message).toMatch(/methods\.json gates it on \["E1","E2","E3","D1","D2","D3","P1","P3"\], not the registered rows \["E1","E2","E3","D1","D2","D3","P1","P2","P3"\]/);
+    expect(message).toMatch(/precondition h3b\.no_metro_beat_both\.P2 is missing/);
+  });
+
+  it("recomputes the headline's ranks from the main sets even when the clause does not print", () => {
+    const b = variant((p) => {
+      moveMain(p, "42340", "office", 40, true);
+      moveMain(p, "42340", "goods_logistics", 40, true);
+      p.evidence.headline.clauses.find((c) => c.id === "C1.H3b")!.printed = false;
+      p.evidence.suppressed.push({ clause: "C1.H3b", reason: "a precondition fails: h3b.no_metro_beat_both.main", preconditions: [] });
+      p.methods.panel_a.headline.clauses["C1.H3b"] = false;
+    });
+    expect(refusal(b)).toMatch(/the evidence's counts disagree with its sets: .*the subject's office rank is 1 in the evidence, 2 recomputed from its set/);
+  });
+
+  it("refuses a median or a random-peer m that its set does not give", () => {
+    const median = variant((p) => {
+      const key = p.evidence.chart.medians.office.number;
+      const m = p.evidence.numbers[key].metros![0];
+      (p.evidence.sets["main:2019->2025:office"].members[m] as { growth_pct: number }).growth_pct += 0.5;
+      p.evidence.numbers[`main:2019->2025.${m}.office.growth_pct`].value = (p.evidence.sets["main:2019->2025:office"].members[m] as { growth_pct: number }).growth_pct;
+      p.chart.data.find((d) => d.id === m)!.x = p.evidence.numbers[`main:2019->2025.${m}.office.growth_pct`].value;
+    });
+    expect(refusal(median)).toMatch(/main:2019->2025\.office\.median is [\d.]+ in the evidence, [\d.]+ recomputed from main:2019->2025:office/);
+    const peer = variant((p) => void p.evidence.numbers["main:2019->2025.12420.random_peer.k10"].not_beaten!.push("10420"));
+    expect(refusal(peer)).toMatch(/random_peer\.k10: m = 147 of n = 148, not beaten \["10420","42340"\] in the evidence; the sets give m = 147 of n = 148, not beaten \["42340"\]/);
+  });
+
   it("refuses when the recency caveat does not print with it", () => {
     const b = variant((p) => {
       const c = p.evidence.caveats.find((x) => x.id === "C1.caveat.recency")!;
