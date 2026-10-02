@@ -310,7 +310,7 @@ export default async function InsightPage({ params }: Params) {
             { key: "pass", label: "Result" },
           ]}
           rows={preconditionRows}
-          caption={`Every precondition recorded in the evidence for ${i.id}, with the evidence's own thresholds. The finding is published only because each one passes${
+          caption={`Every precondition recorded in the evidence for ${i.id}: each value recomputed here or read from the one evidence number its name registers, against the threshold registered on this side, which the evidence's must equal. The finding is published only because each one passes${
             i.h3bPrinted ? `, and the clause that no major metro beat ${i.subject.label} on both prints only because each of its rows does` : `; clause C1.H3b does not print, and why is under Caveats`
           }.`}
         />

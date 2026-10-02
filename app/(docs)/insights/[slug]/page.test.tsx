@@ -95,6 +95,9 @@ describe("the insight page", () => {
     // The clause prints, so the captions and the robustness table may quote it (page.suppressed.test.tsx: when it does not, they name it by id).
     expect(i.h3bPrinted).toBe(true);
     expect(t).toContain("and the clause that no major metro beat Austin on both prints only because each of its rows does.");
+    // The table prints this side's thresholds; the evidence's only have to equal them.
+    expect(t).toContain("against the threshold registered on this side, which the evidence's must equal.");
+    expect(t).not.toContain("with the evidence's own thresholds");
     expect(t).toContain('yes: the clause "no major metro beat it on both"');
     for (const f of i.robustnessFormulas) expect(t).toContain(f.formula);
     // The universe and P1 cite the files that pick the metros: OMB's delineation and the Census estimates.
@@ -134,6 +137,7 @@ describe("the insight page", () => {
     const html = renderToStaticMarkup(InsightsIndex());
     expect(html).toContain(`href="/insights/${SLUG}"`);
     expect(text(html)).toContain("published cells and estimates computed from them (formulas printed)");
+    expect(text(html)).toContain("registered values read from the pre-registration (the window's start and end years, the random-peer draw count k), which are neither.");
     expect(text(html)).not.toMatch(/every number (in it )?is a published cell/i);
     expect(sitemap().map((e) => e.url)).toEqual(["https://eye.jcamd.com/insights", `https://eye.jcamd.com/insights/${SLUG}`]);
   });

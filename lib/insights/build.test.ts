@@ -1591,6 +1591,8 @@ describe("JSON-LD and the feed", () => {
     expect(doc.entries[0].published).toBe("2026-10-01T21:26:39Z");
     expect(doc.generatedAt).toBe("2026-10-01T21:26:39Z");
     expect(doc.description).toContain("published cells and estimates computed from them (formulas printed)");
+    // The registered values, apart from both, as the page's arithmetic labels them.
+    expect(doc.description).toContain("and registered values read from the pre-registration (the window's start and end years, the random-peer draw count k), which are neither.");
     expect(doc.description).not.toMatch(/every number in it is a published cell/);
     expect(renderRss(doc)).toBe(renderRss(insightsFeedDoc([buildInsight(BASE, "C1-raw")], { self: doc.selfUrl, home: doc.homeUrl })));
     const otherEvidence = { ...BASE, hashes: { ...BASE.hashes, "evidence/C1-raw.json": "0".repeat(64) } };

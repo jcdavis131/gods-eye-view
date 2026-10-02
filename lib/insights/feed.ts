@@ -25,10 +25,12 @@ export const INSIGHTS_GENERATOR = "Embedding Atlas insights";
 /**
  * What an insight is, for the index page and the feeds. Not every number is
  * a published cell: growth, ranks, medians and probabilities are computed
- * from published cells, and each page prints how.
+ * from published cells, and each page prints how; the window's years and the
+ * random peer's k are registered values, read from the pre-registration,
+ * which are neither (the page's arithmetic labels the three apart).
  */
 export const INSIGHTS_DESCRIPTION =
-  "Findings about US places from published public data. Every sentence is a fixed template filled from a hash-verified bundle, and its numbers are published cells and estimates computed from them (formulas printed), each cell cited to its source file.";
+  "Findings about US places from published public data. Every sentence is a fixed template filled from a hash-verified bundle. Its numbers are published cells and estimates computed from them (formulas printed), each cell cited to its source file, and registered values read from the pre-registration (the window's start and end years, the random-peer draw count k), which are neither.";
 
 export function insightPath(i: Pick<Insight, "slug">): string {
   return `/insights/${i.slug}`;
