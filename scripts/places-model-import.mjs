@@ -84,8 +84,16 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-/** The repo this script belongs to, from its own location: never the working directory. */
-export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+/**
+ * The repo this script belongs to, from its own location: never the working
+ * directory. Real-pathed, because under --preserve-symlinks-main (as a flag or
+ * in NODE_OPTIONS) import.meta.url keeps the junction or link it was run
+ * through, which would move the anchor, and the committed lock with it, to the
+ * link's parent. The script's own directory is real-pathed before going up:
+ * path.resolve collapses ".." as text, so real-pathing after it would land on
+ * the link's parent all the same.
+ */
+export const REPO_ROOT = path.resolve(fs.realpathSync.native(path.dirname(fileURLToPath(import.meta.url))), "..");
 /** Where the committed bundles live, relative to the repo root. */
 export const DATA_DIR = "lib/insights/data";
 /** The manifest hash of every imported release, relative to the repo root. */

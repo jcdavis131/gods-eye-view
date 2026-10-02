@@ -206,6 +206,44 @@ describe("the CLI on a scratch copy", () => {
     }
   });
 
+  it("keeps the committed lock as its anchor under --preserve-symlinks-main through a junction (A3)", () => {
+    // A3's attack, on a scratch copy of the repo so a regression cannot reach the real data: a junction to scripts/,
+    // run with the flag (or NODE_OPTIONS), kept the junction in import.meta.url, so the anchor became the junction's
+    // parent, where no lock exists; a forged bundle pinned with --pin then replaced the copy's committed data.
+    const repo = path.join(tmp, "psm-repo");
+    mkdirSync(path.join(repo, "scripts"), { recursive: true });
+    cpSync(SCRIPT, path.join(repo, "scripts", "places-model-import.mjs"));
+    cpSync(path.join(ROOT, "lib/insights/data"), path.join(repo, "lib/insights/data"), { recursive: true });
+    const outer = path.join(tmp, "psm-outer");
+    mkdirSync(outer, { recursive: true });
+    const link = path.join(outer, "scripts-link");
+    symlinkSync(path.join(repo, "scripts"), link, "junction");
+    try {
+      const script = path.join(link, "places-model-import.mjs");
+      const src = path.join(tmp, "psm-forged", NAME);
+      writeBundle(src, tamperedAndRehashed());
+      const pin = sha256(readFileSync(path.join(src, "manifest.json")));
+      const target = path.join(repo, "lib", "insights", "data", NAME);
+      const committed = readFileSync(path.join(target, "manifest.json"));
+      const ways: Array<{ args: string[]; env: NodeJS.ProcessEnv }> = [
+        { args: ["--preserve-symlinks-main"], env: process.env },
+        { args: [], env: { ...process.env, NODE_OPTIONS: "--preserve-symlinks-main" } },
+      ];
+      for (const w of ways) {
+        for (const args of [["--bundle", src, "--check"], ["--bundle", src, "--pin", pin, "--out", target]]) {
+          const r = spawnSync(process.execPath, [...w.args, script, ...args], { cwd: elsewhere, encoding: "utf8", env: w.env });
+          expect(r.status, `${w.args.join(" ") || "NODE_OPTIONS"} ${args.join(" ")}`).toBe(1);
+          expect(r.stderr).toMatch(/^refused: manifest\.json is sha256 [0-9a-f]{64} \(\d+ bytes\), but the lock pins places-v0\.1\.1 at c837b994/);
+        }
+      }
+      expect(readFileSync(path.join(target, "manifest.json")).equals(committed)).toBe(true);
+      expect(existsSync(path.join(outer, "lib"))).toBe(false);
+    } finally {
+      rmdirSync(link);
+      expect(existsSync(path.join(repo, "scripts", "places-model-import.mjs"))).toBe(true);
+    }
+  });
+
   it("checks against the committed lock when run from another directory", () => {
     const src = path.join(tmp, "ok-elsewhere", NAME);
     cpSync(COMMITTED, src, { recursive: true });
