@@ -10,13 +10,17 @@
 // would hide every smaller bubble under it.
 //
 // Labels. Which rows get one is the spec's label policy, ranked: the subject,
-// then the ids the spec names (larger |size| first, then id), then the
+// then the ids the spec names, in the order it names them (labels.ids is a
+// request in priority order, like a bundle's registered label rule), then the
 // extremes (highest x, lowest x, highest y, lowest y), then the largest
-// |size|. Every rank is derived from values and ids, never from array
-// position, so a reordered spec labels the same rows in the same order. The
-// canvas caps how many are drawn (LABEL_CAP); place.ts places them, and the
-// layout reports what was requested, placed and dropped, with the reason for
-// each drop.
+// |size|. The extremes and the size ranking are derived from values and ids,
+// never from array position. The canvas caps how many are drawn (LABEL_CAP:
+// 16 or more wherever a headline-sized chart is drawn, 7 on the narrow inline
+// one); place.ts places them greedily in that order, so what a canvas cannot
+// fit is dropped from the end of the request, and the layout reports what was
+// requested, placed and dropped, with the reason for each drop. The subject's
+// label carries its note lines (spec.subjectNotes: its values) on every
+// canvas.
 //
 // A short label that two rows share ("Springfield", "Portland") is not drawn
 // as is: displayLabels qualifies every row in the collision with the state
@@ -38,8 +42,8 @@ type Datum = BubbleSpec["data"][number];
 export const MAX_RADIUS = 40;
 /** Radius of the dashed ring for a plotted row whose size is not published, at scale 1, px. */
 export const UNSIZED_RADIUS = 5;
-/** The most labels a canvas draws, the subject included. */
-export const LABEL_CAP: Record<CanvasId, number> = { social: 24, og: 12, "inline-wide": 16, "inline-narrow": 7 };
+/** The most labels a canvas draws, the subject included; the placer still drops what does not fit. */
+export const LABEL_CAP: Record<CanvasId, number> = { social: 24, og: 16, "inline-wide": 16, "inline-narrow": 7 };
 /** Leader lengths the placer tries at scale 1, px. */
 export const RINGS = [16, 22, 28, 36, 46, 58, 72, 88, 108, 132, 162];
 
@@ -136,11 +140,7 @@ export function requestedLabels(spec: BubbleSpec): string[] {
     if (!out.includes(id)) out.push(id);
   };
   if (spec.subject !== undefined) add(spec.subject);
-  const named = new Set(spec.labels?.ids ?? []);
-  spec.data
-    .filter((d) => named.has(d.id))
-    .sort(bySize)
-    .forEach((d) => add(d.id));
+  (spec.labels?.ids ?? []).forEach(add);
   if ((spec.labels?.extremes ?? defaults.extremes) && plotted.length) {
     const pick = (better: (a: Datum, b: Datum) => boolean): string => plotted.reduce((m, d) => (better(d, m) || (!better(m, d) && byteCompare(d.id, m.id) < 0) ? d : m)).id;
     add(pick((a, b) => (a.x as number) > (b.x as number)));

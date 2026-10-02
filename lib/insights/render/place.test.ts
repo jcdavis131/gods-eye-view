@@ -143,7 +143,7 @@ describe("label policy", () => {
     const names = displayLabels(SPEC.data);
     expect(requestedLabels(SPEC).map((id) => names[id])).toEqual([
       "Austin",
-      // labels.ids, the four plotted metros that beat Austin on either axis, by |size|
+      // labels.ids in the order it names them: the four plotted metros that beat Austin on either axis, larger |size| first
       "Huntsville",
       "Cape Coral",
       "Palm Bay",
