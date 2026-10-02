@@ -14,7 +14,7 @@
 // the defaults would write into lib/insights/data, which is committed.
 
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, rmdirSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -196,8 +196,8 @@ describe("the CLI on a scratch copy", () => {
       expect(r.status).toBe(1);
       expect(r.stderr).toMatch(/^refused: evidence\/C1-raw\.json: sha256 /);
     } finally {
-      // The link alone; never what it points at.
-      rmSync(link, { recursive: true, force: true });
+      // The link alone (rmdir removes a junction, never what it points at).
+      rmdirSync(link);
       expect(existsSync(path.join(ROOT, "scripts", "places-model-import.mjs"))).toBe(true);
     }
   });
@@ -303,6 +303,66 @@ describe("the CLI on a scratch copy", () => {
       expect(ok.status).toBe(0);
     } finally {
       rmSync(target, { recursive: true, force: true });
+    }
+  });
+
+  it("decides where --out is on real paths: a junction into lib/insights/data is under it, a linked --out or one that holds it is refused", () => {
+    // A3's attack: a forged lock pinning an edited manifest, and --out a junction into the committed data directory.
+    // Compared on the paths as typed, the junction was "outside", and the import replaced the committed files.
+    const name = "places-v0.1.7";
+    const DATA = path.join(ROOT, "lib/insights/data");
+    const target = path.join(DATA, name);
+    expect(existsSync(target)).toBe(false);
+    const snapshot = () => [...readBundle(DATA)].map(([rel, buf]) => `${rel} ${sha256(buf)}`);
+    const before = snapshot();
+    const manifest = Buffer.from(files.get("manifest.json")!.toString("utf8").replace(`"bundle": "${NAME}"`, `"bundle": "${name}"`), "utf8");
+    const src = path.join(tmp, "junction-forged", name);
+    writeBundle(src, new Map(files).set("manifest.json", manifest));
+    const forged = path.join(tmp, "junction-forged.lock.json");
+    writeFileSync(forged, JSON.stringify({ bundles: { ...LOCK.bundles, [name]: { manifest_bytes: manifest.length, manifest_sha256: sha256(manifest), release: "v0.1.1" } } }));
+    const dataLink = path.join(tmp, "data-link");
+    const insightsLink = path.join(tmp, "insights-link");
+    const scratch = path.join(tmp, "linked-scratch");
+    const outLink = path.join(tmp, "out-link");
+    mkdirSync(scratch, { recursive: true });
+    symlinkSync(DATA, dataLink, "junction");
+    symlinkSync(path.join(ROOT, "lib/insights"), insightsLink, "junction");
+    symlinkSync(scratch, outLink, "junction");
+    try {
+      expect(realpathSync.native(dataLink)).not.toBe(dataLink);
+      // Through a junction to the data directory, against a forged lock: under lib/insights/data, refused.
+      const under = run(["--bundle", src, "--lock", forged, "--out", path.join(dataLink, name)], elsewhere);
+      expect(under.status).toBe(1);
+      expect(under.stderr).toMatch(/^refused: .* is under lib\/insights\/data, which only an import checked against lib\/insights\/data\/bundles\.lock\.json may write/);
+      // An --out that is lib/insights/data or holds it, spelled directly or through a junction to lib/insights: the
+      // copy would remove the lock and every other bundle. Refused against any lock, the committed one included.
+      for (const out of [DATA, path.join(ROOT, "lib/insights"), path.join(insightsLink, "data")]) {
+        for (const lock of [[], ["--lock", forged]]) {
+          const r = run(["--bundle", src, ...lock, "--out", out], elsewhere);
+          expect(r.status, `${out} ${lock.join(" ")}`).toBe(1);
+          expect(r.stderr).toMatch(/^refused: .* is lib\/insights\/data or holds it; a copy there would remove every file the bundle does not hold/);
+        }
+      }
+      // An --out that is itself a link, even to a scratch directory, and a link into the data directory: refused.
+      for (const out of [outLink, dataLink, insightsLink]) {
+        const r = run(["--bundle", src, "--lock", forged, "--out", out], elsewhere);
+        expect(r.status, out).toBe(1);
+        expect(r.stderr).toMatch(/^refused: --out .* is a link \(a symlink or a junction\); name the directory itself/);
+      }
+      expect(readdirSync(scratch)).toEqual([]);
+      // --check through the junction writes nothing and verifies against the lock it is given.
+      const check = run(["--bundle", src, "--lock", forged, "--out", path.join(dataLink, name), "--check"], elsewhere);
+      expect(check.stderr).toBe("");
+      expect(check.status).toBe(0);
+      // Nothing under lib/insights/data changed: no new bundle, the lock and the committed bundle byte for byte.
+      expect(existsSync(target)).toBe(false);
+      expect(snapshot()).toEqual(before);
+    } finally {
+      // The links alone (rmdir removes a junction, never what it points at), then anything a failed guard wrote.
+      for (const l of [dataLink, insightsLink, outLink]) rmdirSync(l);
+      rmSync(target, { recursive: true, force: true });
+      expect(existsSync(path.join(DATA, "bundles.lock.json"))).toBe(true);
+      expect(existsSync(path.join(COMMITTED, "manifest.json"))).toBe(true);
     }
   });
 });

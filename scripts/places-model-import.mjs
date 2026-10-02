@@ -20,7 +20,11 @@
 // Only an import checked against that committed lock may write under
 // lib/insights/data: with any other --lock (a scratch one in the tests, or
 // a forged one that pins an edited manifest) the import must name an --out
-// outside it, or it is refused before anything is read.
+// outside it, or it is refused before anything is read. "Under" is decided
+// on real paths (realPathDeep): an --out through a junction or a symlink
+// into lib/insights/data is under it, an --out that is itself a link is
+// refused, and so is an --out that is lib/insights/data or holds it, which
+// the copy (it removes what the bundle does not hold) would empty.
 //
 // What is verified, and why each check exists:
 //
@@ -327,6 +331,29 @@ function inside(p, dir) {
   return rel === "" || (rel !== ".." && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel));
 }
 
+/**
+ * Where a path really is: its longest prefix that exists, with every link, junction and drive-letter case in it
+ * resolved, and the rest as typed (an --out that does not exist yet). A prefix that exists but resolves nowhere (a
+ * dangling link) is refused. The write guard compares these, so a junction to lib/insights/data is that directory.
+ */
+export function realPathDeep(p) {
+  let head = path.resolve(p);
+  const tail = [];
+  while (!fs.lstatSync(head, { throwIfNoEntry: false })) {
+    const parent = path.dirname(head);
+    if (parent === head) return path.resolve(p);
+    tail.unshift(path.basename(head));
+    head = parent;
+  }
+  let real;
+  try {
+    real = fs.realpathSync.native(head);
+  } catch {
+    fail(`${head} is a link that resolves to nothing`);
+  }
+  return path.join(real, ...tail);
+}
+
 /** A path for the log: relative to the repo when it is inside it, absolute otherwise. */
 function shown(p) {
   const rel = path.relative(REPO_ROOT, p);
@@ -345,12 +372,22 @@ export function main(argv, cwd = process.cwd()) {
   const name = path.basename(bundleDir);
   const lockFile = path.resolve(REPO_ROOT, opts.lock ?? LOCK_FILE);
   const out = path.resolve(REPO_ROOT, opts.out ?? path.join(DATA_DIR, name));
-  if (samePath(out, bundleDir)) fail("--out is the bundle itself");
-  // The committed bundles are checked against the committed lock and nothing else: a --lock
-  // elsewhere (a scratch lock, or a forged one pinning an edited manifest) may verify or pin into
-  // a scratch --out, never write into lib/insights/data.
-  if (!opts.check && inside(out, path.resolve(REPO_ROOT, DATA_DIR)) && !samePath(lockFile, path.resolve(REPO_ROOT, LOCK_FILE))) {
-    fail(`${shown(out)} is under ${DATA_DIR}, which only an import checked against ${LOCK_FILE} may write; with --lock ${opts.lock}, pass an --out outside ${DATA_DIR}`);
+  // Every comparison below is on real paths: a junction or a symlink to lib/insights/data (or to the lock) is
+  // that directory (or that file), however the path was spelled.
+  const realOut = realPathDeep(out);
+  const realData = realPathDeep(path.resolve(REPO_ROOT, DATA_DIR));
+  if (samePath(realOut, realPathDeep(bundleDir))) fail("--out is the bundle itself");
+  if (!opts.check) {
+    // The copy writes into --out and removes what the bundle does not hold, so it is a real directory, never a link
+    // to one, and never lib/insights/data itself or a directory above it, which it would empty.
+    if (fs.lstatSync(out, { throwIfNoEntry: false })?.isSymbolicLink()) fail(`--out ${out} is a link (a symlink or a junction); name the directory itself`);
+    if (inside(realData, realOut)) fail(`${shown(out)} is ${DATA_DIR} or holds it; a copy there would remove every file the bundle does not hold`);
+    // The committed bundles are checked against the committed lock and nothing else: a --lock
+    // elsewhere (a scratch lock, or a forged one pinning an edited manifest) may verify or pin into
+    // a scratch --out, never write into lib/insights/data.
+    if (inside(realOut, realData) && !samePath(realPathDeep(lockFile), realPathDeep(path.resolve(REPO_ROOT, LOCK_FILE)))) {
+      fail(`${shown(out)} is under ${DATA_DIR}, which only an import checked against ${LOCK_FILE} may write; with --lock ${opts.lock}, pass an --out outside ${DATA_DIR}`);
+    }
   }
 
   const files = readBundle(bundleDir);
