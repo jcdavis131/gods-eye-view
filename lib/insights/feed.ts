@@ -16,10 +16,19 @@
 
 import type { FeedDoc, FeedEntry } from "@/lib/feed/render";
 import { absoluteUrl } from "@/lib/seo/base";
+import { ALL_ROWS_QUERY } from "./downloads";
 import type { Insight } from "./types";
 
 /** The generator string the insights feeds carry; not the place briefs' one. */
 export const INSIGHTS_GENERATOR = "Embedding Atlas insights";
+
+/**
+ * What an insight is, for the index page and the feeds. Not every number is
+ * a published cell: growth, ranks, medians and probabilities are computed
+ * from published cells, and each page prints how.
+ */
+export const INSIGHTS_DESCRIPTION =
+  "Findings about US places from published public data. Every sentence is a fixed template filled from a hash-verified bundle, and its numbers are published cells and estimates computed from them (formulas printed), each cell cited to its source file.";
 
 export function insightPath(i: Pick<Insight, "slug">): string {
   return `/insights/${i.slug}`;
@@ -29,9 +38,10 @@ function entryFor(i: Insight): FeedEntry {
   const lines = [
     i.headline,
     i.dek,
+    ...(i.randomPeer ? [i.randomPeer] : []),
     ...i.caveats.map((c) => c.text),
     ...i.methodNote,
-    `Numbers as of ${i.asOf}. Data: ${absoluteUrl(`${insightPath(i)}/data.csv`)}`,
+    `Numbers as of ${i.asOf}. Data (the plotted rows; ?${ALL_ROWS_QUERY} for every row): ${absoluteUrl(`${insightPath(i)}/data.csv`)}`,
     "Sources:",
     ...i.citations,
   ];
@@ -51,7 +61,7 @@ export function insightsFeedDoc(insights: Insight[], urls: { self: string; home:
   return {
     id: "insights",
     title: "Embedding Atlas insights",
-    description: "Findings about US places from the Embedding Atlas places model. Each sentence is a fixed template filled from a hash-verified bundle, and every number in it is a published cell with its source.",
+    description: INSIGHTS_DESCRIPTION,
     homeUrl: urls.home,
     selfUrl: urls.self,
     generatedAt: insights.map((i) => i.retrievedAt).reduce((a, b) => (b > a ? b : a)),

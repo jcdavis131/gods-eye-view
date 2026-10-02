@@ -2,17 +2,20 @@
 //
 // Everything on this page comes from a committed, hash-verified places
 // bundle (lib/insights/load.ts) through lib/insights/build.ts, which refuses
-// a finding unless every precondition passed. The headline and every caveat
-// are registered templates (lib/insights/sentence.ts) filled with evidence
-// numbers; no language model wrote a word of it. Each printed number is
-// listed under "The arithmetic" with its formula and the published cells it
-// reads, each cell cited with lib/provenance citation().
+// a finding unless every precondition passed. The headline, the random-peer
+// sentence and every caveat are registered templates
+// (lib/insights/sentence.ts) filled with evidence numbers; no language model
+// wrote a word of it. Each printed number is a published cell or an estimate
+// computed from published cells, and "The arithmetic" lists every one with
+// its formula and the published cells it reads, each cell cited with its
+// file's sha256 and Last-Modified header.
 //
 // The chart is the renderer's SVG, inline, twice: the 760-wide variant above
 // the phone breakpoint and the 400-wide one below it, toggled by CSS, so the
 // page ships no JavaScript for it. Each SVG is role="img" with a <title> and
 // a <desc> (lib/insights/render). The data table under it holds every row of
-// the chart, plotted or not, and is the chart's text alternative.
+// the chart, plotted or not, and is the chart's text alternative; the
+// downloads carry the plotted rows, or every row with ?all=1.
 //
 // Statically generated from the committed bundle: no request-time data, no
 // network. An unknown slug is a 404.
@@ -26,11 +29,12 @@ import FactTable, { type FactRow } from "@/components/doc/FactTable";
 import JsonLd from "@/components/doc/JsonLd";
 import { MISSING, num } from "@/lib/brief/format";
 import { insightBySlug, publishedInsights } from "@/lib/insights/build";
+import { ALL_ROWS_QUERY } from "@/lib/insights/downloads";
 import { insightPath } from "@/lib/insights/feed";
 import { insightJsonLd, insightTrail } from "@/lib/insights/jsonld";
 import { renderSvg } from "@/lib/insights/render/render";
 import { chartTable } from "@/lib/insights/render/table";
-import { robustnessKind } from "@/lib/insights/sentence";
+import { gatesCopy, robustnessKind } from "@/lib/insights/sentence";
 import type { ArithmeticRow, Insight } from "@/lib/insights/types";
 import { absoluteUrl } from "@/lib/seo/base";
 
@@ -81,17 +85,13 @@ function SectionHead({ id, title }: { id: string; title: string }) {
   );
 }
 
-function where(r: ArithmeticRow): string {
-  return r.where === "headline" ? "Headline" : `Caveat ${r.where.replace(/^C1\.caveat\./, "")}`;
-}
-
 function Arithmetic({ rows }: { rows: ArithmeticRow[] }) {
   return (
     <ol className="mt-3 space-y-4">
       {rows.map((r) => (
-        <li key={`${r.where}|${r.slot}|${r.number}`} id={`n-${r.where}-${r.slot}`} className="border-l-2 border-border pl-3 text-[14px] leading-relaxed">
+        <li key={`${r.where}|${r.slot}|${r.number}`} className="border-l-2 border-border pl-3 text-[14px] leading-relaxed">
           <div className="font-semibold text-foreground">
-            {where(r)}, {"{"}
+            {r.where}, {"{"}
             {r.slot}
             {"}"} prints <span className="tabular-nums">{r.printed}</span>
           </div>
@@ -99,6 +99,7 @@ function Arithmetic({ rows }: { rows: ArithmeticRow[] }) {
             <code className="text-[12px]">{r.number}</code> ({r.kind}): {r.formula}
             {r.over.length ? <> Over the sets {r.over.join(" and ")}.</> : null}
           </div>
+          {r.arithmetic ? <div className="tabular-nums text-muted-foreground break-words">Exactly: {r.arithmetic}.</div> : null}
           {r.registered ? <div className="text-muted-foreground">Registered in {r.registered}.</div> : null}
           {r.cells.length ? (
             <ul className="mt-1 space-y-1">
@@ -128,6 +129,7 @@ export default async function InsightPage({ params }: Params) {
   const wide = renderSvg(i.spec, "inline-wide", "light");
   const narrow = renderSvg(i.spec, "inline-narrow", "light");
   const base = insightPath(i);
+  const plotted = table.rows.length - table.missing.length;
 
   const preconditionRows: FactRow[] = i.preconditions.map((p, k) => ({
     key: `${p.name}|${k}`,
@@ -142,11 +144,12 @@ export default async function InsightPage({ params }: Params) {
       ...[0, 1].map((k) => (r.axes[k] ? `${r.axes[k].label} ${r.axes[k].growth}, ${r.axes[k].rank}` : MISSING)),
       r.beatOnBoth ? (r.beatOnBoth.names.length ? `${r.beatOnBoth.count}: ${r.beatOnBoth.names.join("; ")}` : r.beatOnBoth.count) : MISSING,
       r.publishable,
-      r.gates ? "yes" : "no",
+      gatesCopy(r.gates),
     ],
   }));
   const robustnessSources = [...new Set(i.robustness.flatMap((r) => r.sources))];
   const sizeLabel = i.spec.kind === "bubble" ? i.spec.size.label : null;
+  const otherSources = i.shaping.filter((s) => !s.chart);
 
   return (
     <article>
@@ -159,6 +162,14 @@ export default async function InsightPage({ params }: Params) {
         </p>
         <h1 className="mt-2 max-w-[48rem] text-[26px] font-semibold leading-tight text-foreground">{i.headline}</h1>
         <p className="mt-3 max-w-[48rem] text-[15px] leading-relaxed text-muted-foreground">{i.dek}</p>
+        {i.randomPeer ? (
+          <p className="mt-2 max-w-[48rem] text-[15px] leading-relaxed text-foreground">
+            {i.randomPeer}{" "}
+            <a href="#arithmetic" className="text-[13px] text-primary underline">
+              How
+            </a>
+          </p>
+        ) : null}
         <p className="mt-2 text-[14px] text-muted-foreground">
           Subject:{" "}
           <Link href={`/metro/${i.subject.cbsa}`} className="text-primary underline">
@@ -186,10 +197,21 @@ export default async function InsightPage({ params }: Params) {
           <a href={`${base}/data.json`} className="text-primary underline">
             data.json
           </a>
+          {" · all rows: "}
+          <a href={`${base}/data.csv?${ALL_ROWS_QUERY}`} className="text-primary underline">
+            data.csv?{ALL_ROWS_QUERY}
+          </a>
+          {" · "}
+          <a href={`${base}/data.json?${ALL_ROWS_QUERY}`} className="text-primary underline">
+            data.json?{ALL_ROWS_QUERY}
+          </a>
           {" · "}
           <a href={`${base}/social.png`} className="text-primary underline">
             card (PNG, 1080 × 1350)
           </a>
+        </p>
+        <p className="mt-1 max-w-[48rem] text-[13px] leading-relaxed text-muted-foreground">
+          The downloads carry the {num(plotted)} rows the chart plots; with ?{ALL_ROWS_QUERY} they carry all {num(table.rows.length)}, the ones it does not plot included. A value that was not published reads &ldquo;{MISSING}&rdquo;, never 0. Each file ends with its sources and the bundle&rsquo;s hashes.
         </p>
         <details className="mt-3">
           <summary className="cursor-pointer text-[14px] text-foreground">Data table: all {num(table.rows.length)} metros in the chart</summary>
@@ -206,7 +228,7 @@ export default async function InsightPage({ params }: Params) {
         </ul>
         {i.notPrinted.length ? (
           <>
-            <p className="mt-4 text-[14px] font-semibold text-foreground">Not printed, and why</p>
+            <p className="mt-4 text-[14px] font-semibold text-foreground">Not printed, and why (the evidence&rsquo;s reasons)</p>
             <ul className="mt-1 max-w-[48rem] list-disc space-y-1 pl-5 text-[13px] leading-relaxed text-muted-foreground">
               {i.notPrinted.map((n) => (
                 <li key={n.id}>
@@ -250,9 +272,21 @@ export default async function InsightPage({ params }: Params) {
       <section className="mt-8 border-t border-border pt-5">
         <SectionHead id="arithmetic" title="The arithmetic" />
         <p className="mt-2 max-w-[48rem] text-[14px] leading-relaxed text-muted-foreground">
-          Every number printed above, the evidence entry it is read from, how that entry is computed, and each published cell it reads.
+          Every number printed above is a published cell or an estimate computed from published cells. For each: where it prints, the evidence entry it is read from, that entry&rsquo;s formula, and each published cell it reads, cited to its upstream file with the file&rsquo;s sha256 and Last-Modified header.
         </p>
         <Arithmetic rows={i.arithmetic} />
+        {i.randomPeerGrid.length ? (
+          <>
+            <p className="mt-5 text-[14px] font-semibold text-foreground">The random-peer probability at each registered k</p>
+            <ul className="mt-1 max-w-[48rem] list-disc space-y-1 pl-5 text-[13px] leading-relaxed text-muted-foreground">
+              {i.randomPeerGrid.map((g) => (
+                <li key={g.k} className="break-words">
+                  k = {num(g.k)}: <span className="tabular-nums text-foreground">{g.printed}</span>, exactly {g.arithmetic} (<code className="text-[12px]">{g.number}</code>)
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
       </section>
 
       <section className="mt-8 border-t border-border pt-5">
@@ -266,7 +300,7 @@ export default async function InsightPage({ params }: Params) {
             { key: "pass", label: "Result" },
           ]}
           rows={preconditionRows}
-          caption={`Every precondition recorded in the evidence for ${i.id}. The finding is published only because each one passes.`}
+          caption={`Every precondition recorded in the evidence for ${i.id}, with the evidence's own thresholds. The finding is published only because each one passes, and the clause that no major metro beat ${i.subject.label} on both prints only because each of its rows does.`}
         />
       </section>
 
@@ -284,7 +318,7 @@ export default async function InsightPage({ params }: Params) {
             { key: "gates", label: "Gates the headline" },
           ]}
           rows={robustnessRows}
-          caption={`The registered robustness rows, recomputed for ${i.subject.title}. A row marked "yes" is a precondition of the clause that no major metro beat it on both; the others are reported only.`}
+          caption={`The registered robustness rows, recomputed for ${i.subject.title}. Publishable: the evidence's count of the row's metros with a value on both axes, of all the metros its two sets cover (their members and the ones each leaves out with a reason), both read from the evidence. A row that gates the headline is a precondition of its clause that no major metro beat it on both; the others are reported only.`}
         />
         <ul className="mt-3 space-y-1 text-[13px] leading-relaxed text-muted-foreground">
           {robustnessSources.map((s) => (
@@ -308,6 +342,14 @@ export default async function InsightPage({ params }: Params) {
             <li key={m.cbsa}>{m.title}: fails closed for twins; still in panel A.</li>
           ))}
         </ul>
+        <ul className="mt-3 max-w-[48rem] space-y-2 text-[13px] leading-relaxed">
+          {i.shaping.map((s) => (
+            <li key={s.id}>
+              <span className="text-foreground">{s.role}</span>
+              <span className="block break-words text-muted-foreground">{s.citation}</span>
+            </li>
+          ))}
+        </ul>
       </section>
 
       <footer className="mt-10 border-t border-border pt-5">
@@ -318,9 +360,14 @@ export default async function InsightPage({ params }: Params) {
               {c}
             </li>
           ))}
+          {otherSources.map((s) => (
+            <li key={s.id} className="break-words">
+              {s.citation} <span className="text-muted-foreground">({s.role})</span>
+            </li>
+          ))}
         </ul>
         <p className="mt-4 max-w-[48rem] text-[13px] leading-relaxed text-muted-foreground">
-          Built from bundle {i.bundle} (release {i.release}, rules_version {i.rulesVersion}), finding {i.id}. sha256: manifest.json {i.hashes.manifest}; chart sidecar {i.hashes.chart}; evidence {i.hashes.evidence}; methods {i.hashes.methods}. Every sentence on this page is a fixed template filled from that evidence; no language model wrote any of it.
+          Built from bundle {i.bundle} (release {i.release}, rules_version {i.rulesVersion}), finding {i.id}. sha256: manifest.json {i.hashes.manifest}; chart sidecar {i.hashes.chart}; evidence {i.hashes.evidence}; methods {i.hashes.methods}. Every sentence on this page is a fixed template filled from that evidence; no language model wrote any of it. Its numbers are published cells and estimates computed from them, with the formulas printed under The arithmetic.
         </p>
       </footer>
     </article>

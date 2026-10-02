@@ -7,7 +7,8 @@
 //
 // Preview PNGs for a visual review are written, not asserted, with:
 //   INSIGHTS_PNG_OUT=<dir> npx vitest run "app/(docs)/insights"
-// (flagship-a-social.png and flagship-a-og.png).
+// (flagship-a2-social.png and flagship-a2-og.png, the routes' own bytes, and
+// flagship-a2-light.png, the social card in the light theme).
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -15,6 +16,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { insightBySlug } from "@/lib/insights/build";
 import { insightCsv, insightJson } from "@/lib/insights/downloads";
+import { PNG_WIDTH, toPng } from "@/lib/insights/render/raster";
+import { renderSvg } from "@/lib/insights/render/render";
 import { GET as csvGET } from "./data.csv/route";
 import { GET as jsonGET } from "./data.json/route";
 import OgImage, { contentType as ogType, size as ogSize } from "./opengraph-image";
@@ -26,6 +29,7 @@ import InsightsIndex from "../page";
 import sitemap from "../sitemap";
 
 const SLUG = "c1-raw-office-goods-job-growth-2019-2025";
+const TITLE = "No Major Metro Beat Austin on Both Office and Goods-and-Logistics Job Growth, 2019 to 2025";
 const ctx = (slug: string) => ({ params: Promise.resolve({ slug }) });
 const req = (p: string) => new Request(`https://eye.jcamd.com${p}`);
 
@@ -78,9 +82,24 @@ describe("the insight page", () => {
     expect(t).toContain(i.headline);
     expect(t).toMatch(/industries, not occupations/i);
     expect(t).toMatch(/twin-adjusted panel pending/i);
-    expect(t).toContain("U.S. Bureau of Labor Statistics. Current Employment Statistics, State and Metro Area. series SMU48124205000000001. period 2019 M13. https://download.bls.gov/pub/time.series/sm/sm.data.70.Information.Current. accessed 2026-10-01.");
+    expect(t).toContain(
+      "U.S. Bureau of Labor Statistics. Current Employment Statistics, State and Metro Area. series SMU48124205000000001. period 2019 M13. https://download.bls.gov/pub/time.series/sm/sm.data.70.Information.Current. accessed 2026-10-01. sha256 69515f5fad06d6ecd74ac056ca7bf0c52011ccbda992d8ea91046117533fc493. Last-Modified Fri, 18 Sep 2026 14:00:00 GMT.",
+    );
     expect(t).toContain("X1: Second source: BLS QCEW");
     expect(t).toContain("From 2022 to 2025 Austin ranks 17th on office-industry and 5th on goods-and-logistics growth, and Beaumont and Tallahassee beat it on both.");
+    expect(t).toContain(i.randomPeer!);
+    expect(t).toContain("Exactly: (147 / 148)^10 = 4711653532607691047049 / 5042166166892418433024.");
+    expect(t).toContain("not against each metro's 2019 twins.");
+    expect(t).toContain("P2: Peer set");
+    expect(t).toContain("99 of 100");
+    // The universe and P1 cite the files that pick the metros: OMB's delineation and the Census estimates.
+    for (const s of i.shaping) expect(t).toContain(s.citation);
+    expect(t).toContain("list1_2023.xlsx");
+    expect(t).toContain("cbsa-est2025-alldata.csv");
+    // Not every number is a published cell, and the page does not say so.
+    expect(t).toContain("published cells and estimates computed from them");
+    expect(t).not.toMatch(/every number (in it )?is a published cell/i);
+    expect(html).toContain(`href="/insights/${SLUG}/data.csv?all=1"`);
     expect(html).toContain('<script type="application/ld+json">');
     expect(html).toContain('"isBasedOn"');
   });
@@ -89,26 +108,37 @@ describe("the insight page", () => {
     expect(generateStaticParams()).toEqual([{ slug: SLUG }]);
     await expect(InsightPage(ctx("no-such-insight"))).rejects.toThrow();
     const meta = await generateMetadata(ctx(SLUG));
-    expect(meta.title).toBe("Job Growth in Office and Goods-and-Logistics Industries, 150 Largest US Metros, 2019 to 2025");
+    expect(meta.title).toBe(TITLE);
     expect(meta.alternates?.canonical).toBe(`https://eye.jcamd.com/insights/${SLUG}`);
   });
 
   it("is listed on the index and in the sitemap", () => {
     const html = renderToStaticMarkup(InsightsIndex());
     expect(html).toContain(`href="/insights/${SLUG}"`);
+    expect(text(html)).toContain("published cells and estimates computed from them (formulas printed)");
+    expect(text(html)).not.toMatch(/every number (in it )?is a published cell/i);
     expect(sitemap().map((e) => e.url)).toEqual(["https://eye.jcamd.com/insights", `https://eye.jcamd.com/insights/${SLUG}`]);
   });
 });
 
 describe("the routes", () => {
-  it("serves data.csv and data.json from the bundle, and 404s an unknown slug", async () => {
+  it("serves data.csv and data.json from the bundle, the plotted rows by default and every row with ?all=1, and 404s an unknown slug", async () => {
     const i = insightBySlug(SLUG)!;
     const csv = await csvGET(req(`/insights/${SLUG}/data.csv`), ctx(SLUG));
     expect(csv.status).toBe(200);
     expect(csv.headers.get("content-type")).toBe("text/csv; charset=utf-8");
-    expect(await csv.text()).toBe(insightCsv(i));
+    const plotted = await csv.text();
+    expect(plotted).toBe(insightCsv(i));
+    expect(plotted).not.toMatch(/^45300,/m);
+    const all = await csvGET(req(`/insights/${SLUG}/data.csv?all=1`), ctx(SLUG));
+    expect(all.headers.get("content-disposition")).toBe(`inline; filename="${SLUG}-all.csv"`);
+    const allText = await all.text();
+    expect(allText).toBe(insightCsv(i, { all: true }));
+    expect(allText).toContain("45300,\"Tampa-St. Petersburg-Clearwater, FL\",15.884293326566844,not published,165.7");
     const json = await jsonGET(req(`/insights/${SLUG}/data.json`), ctx(SLUG));
     expect(JSON.parse(await json.text())).toEqual(JSON.parse(JSON.stringify(insightJson(i))));
+    const jsonAll = await jsonGET(req(`/insights/${SLUG}/data.json?all=1`), ctx(SLUG));
+    expect(JSON.parse(await jsonAll.text())).toEqual(JSON.parse(JSON.stringify(insightJson(i, { all: true }))));
     expect((await csvGET(req("/insights/x/data.csv"), ctx("x"))).status).toBe(404);
   });
 
@@ -128,9 +158,11 @@ describe("the routes", () => {
     expect(pngSize(og)).toEqual(ogSize);
     const out = process.env.INSIGHTS_PNG_OUT;
     if (out) {
+      const i = insightBySlug(SLUG)!;
       mkdirSync(out, { recursive: true });
-      writeFileSync(path.join(out, "flagship-a-social.png"), social);
-      writeFileSync(path.join(out, "flagship-a-og.png"), og);
+      writeFileSync(path.join(out, "flagship-a2-social.png"), social);
+      writeFileSync(path.join(out, "flagship-a2-og.png"), og);
+      writeFileSync(path.join(out, "flagship-a2-light.png"), await toPng(renderSvg(i.spec, "social", "light"), PNG_WIDTH.social));
     }
   });
 });

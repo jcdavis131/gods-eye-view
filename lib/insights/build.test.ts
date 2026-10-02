@@ -10,9 +10,11 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { renderRss } from "@/lib/feed/render";
 import { InsightRefused, buildInsight, h3bGate, insightBySlug, publishedInsights } from "./build";
 import { insightCsv, insightJson } from "./downloads";
-import { insightJsonLd } from "./jsonld";
+import { insightsFeedDoc } from "./feed";
+import { HEADLINE_MAX, insightJsonLd, reportHeadline } from "./jsonld";
 import { loadBundle, readBundle, type LoadedBundle } from "./load";
 import { CANVAS_IDS } from "./render/canvas";
 import { LABEL_CAP, layoutBubble } from "./render/charts/bubble";
@@ -344,7 +346,9 @@ describe("drawn from the bundle alone", () => {
     const i = buildInsight(fresh, "C1-raw");
     for (const canvas of CANVAS_IDS) for (const theme of THEMES) expect(renderSvg(i.spec, canvas, theme)).toMatch(/^<svg /);
     insightCsv(i);
+    insightCsv(i, { all: true });
     insightJson(i);
+    insightJson(i, { all: true });
     insightJsonLd(i);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
@@ -373,5 +377,129 @@ describe("drawn from the bundle alone", () => {
       }
       expect(renderSvg(I.spec, canvas, "dark")).toContain(">+36.0% / +38.6%</text>");
     }
+  });
+});
+
+/** RFC 4180 cells of one record (no embedded newlines in these files). */
+function csvCells(line: string): string[] {
+  const out: string[] = [];
+  let cur = "";
+  let quoted = false;
+  for (let k = 0; k < line.length; k++) {
+    const ch = line[k];
+    if (quoted) {
+      if (ch === '"' && line[k + 1] === '"') {
+        cur += '"';
+        k++;
+      } else if (ch === '"') quoted = false;
+      else cur += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ",") {
+      out.push(cur);
+      cur = "";
+    } else cur += ch;
+  }
+  out.push(cur);
+  return out;
+}
+
+describe("downloads", () => {
+  const parse = (csv: string) => {
+    const lines = csv.split("\r\n");
+    return { header: csvCells(lines[0]), records: lines.slice(1).filter((l) => l !== "" && !l.startsWith("#")).map(csvCells), footer: lines.filter((l) => l.startsWith("# ")) };
+  };
+  const cell = (v: number | null) => (v === null ? "not published" : String(v));
+  const plotted = SIDECAR.data.filter((d) => d.x !== null && d.y !== null);
+
+  it("CSV carries the plotted rows by default, values as published and a missing one as 'not published'", () => {
+    const { header, records, footer } = parse(insightCsv(I));
+    expect(header).toEqual(["id", "Name", SIDECAR.x.label, SIDECAR.y.label, SIDECAR.size.label]);
+    expect(records).toHaveLength(149);
+    expect(records.map((r) => r[0]).sort()).toEqual(plotted.map((d) => d.id).sort());
+    expect(records.some((r) => r[0] === "45300")).toBe(false);
+    const byId = new Map(records.map((c) => [c[0], c]));
+    for (const d of plotted) expect(byId.get(d.id), d.id).toEqual([d.id, d.fullLabel, cell(d.x), cell(d.y), cell(d.size)]);
+    for (const r of records) for (const v of r) expect(v).not.toBe("");
+    expect(footer[0]).toBe("# rows: the 149 rows the chart plots; ?all=1 adds the 1 of its 150 it does not plot");
+  });
+
+  it("CSV with { all: true } (?all=1) carries every row, Tampa's missing value as 'not published'", () => {
+    const { records, footer } = parse(insightCsv(I, { all: true }));
+    expect(records).toHaveLength(150);
+    const tampa = records.find((r) => r[0] === "45300")!;
+    expect(tampa).toEqual(["45300", "Tampa-St. Petersburg-Clearwater, FL", "15.884293326566844", "not published", "165.7"]);
+    for (const r of records) for (const v of r) expect(v).not.toBe("");
+    expect(footer[0]).toBe("# rows: all 150 rows of the chart's universe, the 1 it does not plot included; without ?all=1, only the 149 plotted rows");
+  });
+
+  it("CSV footer carries the as-of date, every file's citation, the unpublished row and the bundle hashes", () => {
+    const csv = insightCsv(I);
+    const { footer } = parse(csv);
+    expect(footer).toContain("# as_of: 2026-09-18");
+    expect(footer).toContain('# missing values: "not published", never 0 and never empty');
+    for (const c of I.citations) expect(footer).toContain(`# source: ${c}`);
+    expect(footer.filter((l) => l.startsWith("# source: "))).toHaveLength(I.citations.length);
+    expect(footer).toContain("# not published: Tampa-St. Petersburg-Clearwater, FL");
+    expect(footer.join("\n")).toContain(I.hashes.evidence);
+    expect(footer).toContain("# read with pandas: pd.read_csv(url, comment='#', na_values=['not published'])");
+    expect(csv).not.toMatch(/generated_at/);
+  });
+
+  it("JSON carries the plotted rows by default and every row with { all: true }, 'not published' for a missing value, and only the records they cite", () => {
+    const j = insightJson(I) as { rows: Array<Record<string, unknown>>; provenance: Record<string, unknown>; selection: Record<string, unknown> };
+    expect(j.selection).toMatchObject({ rows: "plotted", count: 149, plotted: 149, total: 150 });
+    expect(j.rows.map((r) => r.id)).toEqual(plotted.map((d) => d.id).sort());
+    const cited = new Set(plotted.flatMap((d) => d.provenance));
+    expect(Object.keys(j.provenance).sort()).toEqual([...cited].sort());
+    const all = insightJson(I, { all: true }) as { rows: Array<Record<string, unknown>>; provenance: Record<string, unknown>; selection: Record<string, unknown> };
+    expect(all.selection).toMatchObject({ rows: "all", count: 150 });
+    expect(all.rows.find((r) => r.id === "45300")).toMatchObject({ x: 15.884293326566844, y: "not published", size: 165.7 });
+    expect(Object.keys(all.provenance).sort()).toEqual(Object.keys(SIDECAR.provenance).sort());
+    for (const r of all.rows) for (const k of ["x", "y", "size"]) expect(r[k] === null).toBe(false);
+  });
+});
+
+describe("JSON-LD and the feed", () => {
+  const [report, dataset] = insightJsonLd(I) as Array<Record<string, unknown>>;
+  const ISO = /^\d{4}(-\d{2})?(\/\d{4}(-\d{2})?)?$/;
+
+  it("heads the Report with the chart title, within 110 characters, and puts the sentence in its description", () => {
+    expect(report["@type"]).toBe("Report");
+    expect(report.headline).toBe(TITLE);
+    expect((report.headline as string).length).toBeLessThanOrEqual(HEADLINE_MAX);
+    expect(HEADLINE_MAX).toBe(110);
+    expect(report.description).toBe(I.headline);
+    expect((report.about as { url: string }).url).toMatch(/\/metro\/12420$/);
+    expect(() => reportHeadline({ id: "x", chartTitle: "A".repeat(111) })).toThrow(/111 characters, over the 110/);
+  });
+
+  it("gives every file its own ISO 8601 coverage, the years actually read from it", () => {
+    expect(dataset.temporalCoverage).toBe("2019/2025");
+    expect(report.temporalCoverage).toBe("2019/2025");
+    const based = dataset.isBasedOn as Array<{ url: string; temporalCoverage: string }>;
+    expect(based.map((d) => d.url)).toEqual([...I.files.map((f) => f.url), I.shaping.find((s) => s.id === "omb_list1_2023")!.url]);
+    expect(based.find((d) => d.url.endsWith("sm.data.54.TotalNonFarm.All"))?.temporalCoverage).toBe("2019/2025");
+    expect(based.find((d) => d.url.endsWith("list1_2023.xlsx"))?.temporalCoverage).toBe("2023-07");
+    const reportBased = (report.isBasedOn as Array<{ url?: string; temporalCoverage?: string }>).filter((d) => d.url);
+    expect(reportBased.find((d) => d.url!.endsWith("cbsa-est2025-alldata.csv"))?.temporalCoverage).toBe("2025");
+    for (const d of [...based, ...reportBased]) expect(d.temporalCoverage, d.url).toMatch(ISO);
+    expect(JSON.stringify([report, dataset])).not.toMatch(/annual average/);
+  });
+
+  it("lists the four downloads the routes serve", () => {
+    const urls = (dataset.distribution as Array<{ contentUrl: string }>).map((d) => d.contentUrl.replace(/^https:\/\/[^/]+/, ""));
+    expect(urls).toEqual([`/insights/${SLUG}/data.csv`, `/insights/${SLUG}/data.csv?all=1`, `/insights/${SLUG}/data.json`, `/insights/${SLUG}/data.json?all=1`]);
+  });
+
+  it("gives each insight a content-addressed entry id and the bundle's own dates", () => {
+    const doc = insightsFeedDoc([I], { self: "https://eye.jcamd.com/insights/feed.xml", home: "https://eye.jcamd.com/insights" });
+    expect(doc.entries[0].id).toBe(`gev-insight-${SLUG}-${I.contentId}`);
+    expect(doc.entries[0].published).toBe("2026-10-01T21:26:39Z");
+    expect(doc.generatedAt).toBe("2026-10-01T21:26:39Z");
+    expect(doc.description).toContain("published cells and estimates computed from them (formulas printed)");
+    expect(doc.description).not.toMatch(/every number in it is a published cell/);
+    expect(renderRss(doc)).toBe(renderRss(insightsFeedDoc([buildInsight(BASE, "C1-raw")], { self: doc.selfUrl, home: doc.homeUrl })));
+    const otherEvidence = { ...BASE, hashes: { ...BASE.hashes, "evidence/C1-raw.json": "0".repeat(64) } };
+    expect(buildInsight(otherEvidence, "C1-raw").contentId).not.toBe(I.contentId);
   });
 });

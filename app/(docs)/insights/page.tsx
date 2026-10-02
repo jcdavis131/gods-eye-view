@@ -11,13 +11,12 @@ import Link from "next/link";
 import Breadcrumbs from "@/components/doc/Breadcrumbs";
 import JsonLd from "@/components/doc/JsonLd";
 import { publishedInsights } from "@/lib/insights/build";
-import { insightPath } from "@/lib/insights/feed";
+import { INSIGHTS_DESCRIPTION, insightPath } from "@/lib/insights/feed";
 import { insightTrail } from "@/lib/insights/jsonld";
 import { breadcrumbJsonLd } from "@/lib/places/jsonld";
 import { absoluteUrl } from "@/lib/seo/base";
 
-const DESCRIPTION =
-  "Findings about US places from published public data. Every sentence is a fixed template filled from a hash-verified bundle, and every number in it is a published cell with its source.";
+const DESCRIPTION = INSIGHTS_DESCRIPTION;
 
 export const metadata: Metadata = {
   title: "Insights",
@@ -64,6 +63,7 @@ export default function InsightsIndex() {
             </h2>
             <p className="mt-2 max-w-[48rem] text-[15px] leading-relaxed text-foreground">{i.headline}</p>
             <p className="mt-2 max-w-[48rem] text-[13px] leading-relaxed text-muted-foreground">{i.dek}</p>
+            {i.randomPeer ? <p className="mt-2 max-w-[48rem] text-[13px] leading-relaxed text-foreground">{i.randomPeer}</p> : null}
             <p className="mt-2 text-[13px]">
               <a href={`${insightPath(i)}/data.csv`} className="text-primary underline">
                 data.csv
