@@ -7,7 +7,7 @@
 //   node scripts/places-model-import.mjs --bundle <dir> --pin <sha256>  a new release: pin its manifest.json
 //   node scripts/places-model-import.mjs --bundle <dir> --check        verify only, write nothing
 //   node scripts/places-model-import.mjs --bundle <dir> --out <dir>    copy somewhere else (tests)
-//   node scripts/places-model-import.mjs --bundle <dir> --lock <file>  a different lock (tests)
+//   node scripts/places-model-import.mjs --bundle <dir> --lock <file> --out <dir>  a different lock (tests); never into lib/insights/data
 //
 // Paths. --bundle is read relative to the working directory, like any input
 // path. The lock and the output are never cwd-relative: by default they are
@@ -17,6 +17,10 @@
 // directory, the importer checks a bundle against the committed lock. (It
 // used to resolve the lock against the cwd: run from elsewhere it found no
 // lock, so a bundle edited and re-hashed throughout passed every check.)
+// Only an import checked against that committed lock may write under
+// lib/insights/data: with any other --lock (a scratch one in the tests, or
+// a forged one that pins an edited manifest) the import must name an --out
+// outside it, or it is refused before anything is read.
 //
 // What is verified, and why each check exists:
 //
@@ -307,6 +311,17 @@ function parseArgs(argv) {
   return opts;
 }
 
+/** The same file or directory, as the platform compares paths (case-insensitively on Windows). */
+function samePath(a, b) {
+  return path.relative(a, b) === "";
+}
+
+/** `p` is `dir` or under it. */
+function inside(p, dir) {
+  const rel = path.relative(dir, p);
+  return rel === "" || (rel !== ".." && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel));
+}
+
 /** A path for the log: relative to the repo when it is inside it, absolute otherwise. */
 function shown(p) {
   const rel = path.relative(REPO_ROOT, p);
@@ -325,7 +340,13 @@ export function main(argv, cwd = process.cwd()) {
   const name = path.basename(bundleDir);
   const lockFile = path.resolve(REPO_ROOT, opts.lock ?? LOCK_FILE);
   const out = path.resolve(REPO_ROOT, opts.out ?? path.join(DATA_DIR, name));
-  if (out === bundleDir) fail("--out is the bundle itself");
+  if (samePath(out, bundleDir)) fail("--out is the bundle itself");
+  // The committed bundles are checked against the committed lock and nothing else: a --lock
+  // elsewhere (a scratch lock, or a forged one pinning an edited manifest) may verify or pin into
+  // a scratch --out, never write into lib/insights/data.
+  if (!opts.check && inside(out, path.resolve(REPO_ROOT, DATA_DIR)) && !samePath(lockFile, path.resolve(REPO_ROOT, LOCK_FILE))) {
+    fail(`${shown(out)} is under ${DATA_DIR}, which only an import checked against ${LOCK_FILE} may write; with --lock ${opts.lock}, pass an --out outside ${DATA_DIR}`);
+  }
 
   const files = readBundle(bundleDir);
   const lock = readLock(lockFile);

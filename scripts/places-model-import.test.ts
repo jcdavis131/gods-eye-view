@@ -228,4 +228,44 @@ describe("the CLI on a scratch copy", () => {
     expect(written.bundles[name]).toEqual({ manifest_bytes: manifest.length, manifest_sha256: sha256(manifest), release: "v0.1.1" });
     expect(written.bundles[NAME]).toEqual(LOCK.bundles[NAME]);
   });
+
+  it("never writes into lib/insights/data when checked against any lock but the committed one", () => {
+    // A release the committed lock does not hold, pinned by a forged lock outside the repo (or by
+    // --pin into a scratch lock): verifying against it is allowed, writing the committed tree is not.
+    const name = "places-v0.1.8";
+    const target = path.join(ROOT, "lib/insights/data", name);
+    expect(existsSync(target)).toBe(false);
+    const manifest = Buffer.from(files.get("manifest.json")!.toString("utf8").replace(`"bundle": "${NAME}"`, `"bundle": "${name}"`), "utf8");
+    const src = path.join(tmp, "forged", name);
+    writeBundle(src, new Map(files).set("manifest.json", manifest));
+    const forged = path.join(tmp, "forged.lock.json");
+    writeFileSync(forged, JSON.stringify({ bundles: { ...LOCK.bundles, [name]: { manifest_bytes: manifest.length, manifest_sha256: sha256(manifest), release: "v0.1.1" } } }));
+    const empty = path.join(tmp, "empty.lock.json");
+    writeFileSync(empty, JSON.stringify({ bundles: {} }));
+    try {
+      const check = run(["--bundle", src, "--lock", forged, "--check"], elsewhere);
+      expect(check.stderr).toBe("");
+      expect(check.status).toBe(0);
+      for (const args of [
+        ["--bundle", src, "--lock", forged],
+        ["--bundle", src, "--lock", forged, "--out", `lib/insights/data/${name}`],
+        // Windows compares paths without case: the same directory spelled in capitals is still the committed tree.
+        ...(process.platform === "win32" ? [["--bundle", src, "--lock", forged, "--out", target.toUpperCase()]] : []),
+        ["--bundle", src, "--lock", empty, "--pin", sha256(manifest)],
+      ]) {
+        const r = run(args, elsewhere);
+        expect(r.status, args.join(" ")).toBe(1);
+        expect(r.stderr).toMatch(/^refused: .* is under lib\/insights\/data, which only an import checked against lib\/insights\/data\/bundles\.lock\.json may write/);
+        expect(existsSync(target), args.join(" ")).toBe(false);
+      }
+      expect(JSON.parse(readFileSync(empty, "utf8"))).toEqual({ bundles: {} });
+      // The same import with a scratch --out goes ahead.
+      const out = path.join(tmp, "forged-out");
+      const ok = run(["--bundle", src, "--lock", forged, "--out", out], elsewhere);
+      expect(ok.stderr).toBe("");
+      expect(ok.status).toBe(0);
+    } finally {
+      rmSync(target, { recursive: true, force: true });
+    }
+  });
 });
