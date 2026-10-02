@@ -17,12 +17,16 @@ import {
   THRESHOLDS,
   TITLE_LADDER_H3B,
   asSentence,
+  axisParts,
+  cellNote,
   fill,
   fillWords,
   formatSlot,
   gatesCopy,
   h3bWordingPatterns,
   headlineSentence,
+  isNumberKey,
+  isSetKey,
   isTemplateId,
   matchFormula,
   matchTemplate,
@@ -30,7 +34,9 @@ import {
   panelBGateTemplate,
   periodLabel,
   placeholders,
+  preconditionForm,
   registeredFormula,
+  registeredPath,
   robustnessRegistered,
   statusNote,
   templateText,
@@ -53,15 +59,21 @@ function producerText(text: string, slots: Record<string, Slot>): string {
 
 describe("the C1 headline (golden)", () => {
   const clauses = H.clauses.map((c) => ({ id: c.id as TemplateId, printed: c.printed }));
-  const sentence = headlineSentence(clauses, H.slots, H.join, H.end);
+  const sentence = headlineSentence(clauses, H.slots);
 
   it("equals the pinned sentence for the bundle's slots", () => {
     expect(sentence).toBe(GOLDEN_HEADLINE);
   });
 
-  it("equals the bundle's own clause texts filled with the same slots", () => {
+  it("equals the bundle's own clause texts filled with the same slots, joined and ended as the bundle says", () => {
     const printed = H.clauses.filter((c) => c.printed).map((c) => producerText(c.text, H.slots));
     expect(printed.join(H.join) + H.end).toBe(sentence);
+  });
+
+  it("joins and ends with the registered connectives, never the bundle's", () => {
+    expect([templateText("C1.headline.join"), templateText("C1.headline.end")]).toEqual([H.join, H.end]);
+    expect(headlineSentence(clauses, H.slots)).toBe(sentence);
+    expect(sentence.endsWith(`on both${templateText("C1.headline.end")}`)).toBe(true);
   });
 
   it("prints the H3 ranks and the H3b clause, and leaves out the twins clause (twins pending)", () => {
@@ -97,7 +109,7 @@ describe("one % per number", () => {
 
   it("never prints %% in any sentence the bundle fills", () => {
     const filled = [
-      headlineSentence(H.clauses.map((c) => ({ id: c.id as TemplateId, printed: c.printed })), H.slots, H.join, H.end),
+      headlineSentence(H.clauses.map((c) => ({ id: c.id as TemplateId, printed: c.printed })), H.slots),
       fill(EV.random_peer.id as TemplateId, EV.random_peer.slots),
       ...EV.caveats.filter((c) => c.printed).map((c) => fill(c.id as TemplateId, c.slots ?? {})),
       fill(EV.chart.title.id as TemplateId, EV.chart.title.slots),
@@ -229,6 +241,46 @@ describe("registered texts", () => {
   });
 });
 
+describe("registered names, keys and parts", () => {
+  it("know every precondition the bundle records, with its gate and its threshold, and no other", () => {
+    for (const p of [...EV.preconditions, ...EV.suppressed.flatMap((s) => s.preconditions)]) {
+      const form = preconditionForm(p.name);
+      expect(form, p.name).not.toBeNull();
+      expect(form!.gates === "finding" ? "C1-raw" : form!.gates, p.name).toBe(p.gates);
+      expect(matchTemplate(form!.threshold, p.threshold), p.name).not.toBeNull();
+    }
+    expect(preconditionForm("h3b.no_metro_beat_both.P4")).toBeNull();
+    expect(preconditionForm("h3b.no_metro_beat_both.R")).toBeNull();
+    expect(preconditionForm("no major metro beat Austin on both")).toBeNull();
+  });
+  it("know every evidence key and set key the arithmetic prints, and nothing that says something", () => {
+    for (const k of ["window.t0", "R.windows.1.t1", "random_peer.k", "main.universe.n", "cell.SMU48124203000000001|2022|M13", "main:2019->2025.12420.random_peer.k10", "X1:2019->2023.C1242.wc.rank", "E2:2019->mean(Sep 2025-Aug 2026).12420.office.growth_pct", "main:2019->2025.office.median"]) {
+      expect(isNumberKey(k), k).toBe(true);
+    }
+    for (const k of ["main:2019->2025.Austin unbeaten.office.rank", "window.t0 (unbeaten)", "P4:2019->2025.publishable", "main:2019->2025.12420.office.growth_pct; no major metro beat Austin on both"]) expect(isNumberKey(k), k).toBe(false);
+    expect(isSetKey("main:universe")).toBe(true);
+    expect(isSetKey("R:2022->2025:goods_logistics")).toBe(true);
+    expect(isSetKey("main:2019->2025:everyone")).toBe(false);
+    for (const [key, n] of Object.entries(EV.numbers)) {
+      expect(isNumberKey(key), key).toBe(true);
+      for (const s of n.over ?? []) expect(isSetKey(s), s).toBe(true);
+    }
+  });
+  it("place every registered number in the pre-registration", () => {
+    for (const [key, n] of Object.entries(EV.numbers)) if (n.kind === "registered") expect(n.registered!.path, key).toBe(registeredPath(key));
+    expect(registeredPath("window.t2")).toBeNull();
+  });
+  it("name each CES series a chart cell reads, and the parts each specification sums", () => {
+    expect(cellNote("SMU48124203000000001")).toBe("supersector 30 Manufacturing, all employees, not seasonally adjusted, thousands");
+    expect(() => cellNote("SMU48124206500000001")).toThrow(/no name for CES supersector "65"/);
+    expect(() => cellNote("SMU48124203000000002")).toThrow(/all-employees/);
+    for (const [id, row] of Object.entries(METHODS.robustness.rows)) {
+      for (const [axis, parts] of Object.entries((row as unknown as { definitions: Record<string, string[]> }).definitions)) expect(axisParts(id, axis), `${id} ${axis}`).toEqual(parts);
+    }
+    expect(() => axisParts("P4", "office")).toThrow(/no registered parts/);
+  });
+});
+
 describe("where each template may print", () => {
   const roles = Object.keys(ROLE_TEMPLATES) as Array<keyof typeof ROLE_TEMPLATES>;
   it("gives no template two places, and the H3b clause the headline alone", () => {
@@ -247,6 +299,8 @@ describe("where each template may print", () => {
     expect(mayPrintAs("subject label", EV.chart.subject_note!.id as TemplateId)).toBe(true);
     expect(mayPrintAs("universe line", EV.chart.universe_line.id as TemplateId)).toBe(true);
     expect(mayPrintAs("method line", H.method_line.id as TemplateId)).toBe(true);
+    expect(mayPrintAs("headline connective", "C1.headline.join")).toBe(true);
+    expect(mayPrintAs("headline connective", "C1.headline.end")).toBe(true);
   });
   it("finds the H3b clause's words in any case and with any subject, and not the recency caveat's", () => {
     const says = (t: string) => h3bWordingPatterns().some((re) => re.test(t));

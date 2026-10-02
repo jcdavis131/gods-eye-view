@@ -51,7 +51,26 @@
 //     order, which the renderer keeps;
 //   - the methods page's lines are the registered ones, every robustness
 //     number equals its evidence entry, and every robustness denominator is
-//     the size of the universe of the sets its count runs over.
+//     the size of the universe of the sets its count runs over;
+//   - no producer text prints. Every metro is named from Atlas's registry by
+//     CBSA (withRegistryNames, registryMetro: the bundle's label and title
+//     must be the registry's and are never printed); the headline's join
+//     and end are registered connectives; each precondition is a registered
+//     name with its registered gate and threshold; every evidence key the
+//     arithmetic prints is of a registered form, and a registered number
+//     cites the pre-registration at its registered path; every source entry
+//     a citation prints is of the fixed form of its fields; and the spec the
+//     cards and downloads draw is rebuilt here, with this side's source
+//     names, notes, dates, slug and as-of date, from records the sidecar's
+//     must equal (lib/insights/taint.test.ts appends a canary to every
+//     string of the bundle and finds none printed);
+//   - the precondition table's values are their evidence numbers' values and
+//     its results their values against their thresholds; the universe's size
+//     is one number in the set, main.universe.n and the registered largest_n;
+//   - every growth, change and cell the evidence holds, and every set
+//     member's growth, is recomputed from the published cells it reads
+//     (recompute.ts recomputeFromCells), and the peer rows ranked like the
+//     universe are its largest metros (recomputePeers).
 //
 // Timestamps are the bundle's own: asOf from the sidecar, retrievedAt the
 // latest retrieval among the chart's provenance records.
@@ -64,30 +83,36 @@ import { CANVAS_IDS, headlineMisfits, type CanvasId } from "./render/canvas";
 import { layoutFrame } from "./render/frame";
 import { LABEL_CAP, requestedLabels } from "./render/charts/bubble";
 import { isPlotted } from "./render/table";
-import { byteCompare, canonicalJson, parseChartSpec, toProvenance, type BubbleSpec, type ChartSpec } from "./render/spec";
+import { byteCompare, canonicalJson, parseChartSpec, toProvenance, type BubbleSpec, type ChartSpec, type SpecProvenance } from "./render/spec";
 import {
   DEK_LADDER_RECENCY,
   DEK_LIMIT,
+  FINDING_IDS,
   GATING_ROWS_H3B,
   METHODS_IS,
   NOT_PUBLISHED_CODES,
-  THRESHOLDS,
+  PREREG_FILE,
   METHODS_IS_NOT,
   TITLE_LADDER_H3B,
   asSentence,
   axisCopy,
+  cellNote,
   fill,
   fillWords,
   formatSlot,
   headlineSentence,
   h3bWordingPatterns,
+  isNumberKey,
+  isSetKey,
   isTemplateId,
   matchFormula,
   matchTemplate,
   mayPrintAs,
   panelBGateTemplate,
   placeholders,
+  preconditionForm,
   registeredFormula,
+  registeredPath,
   periodLabel,
   ROLE_TEMPLATES,
   robustnessChange,
@@ -99,8 +124,9 @@ import {
   type TemplateId,
   type TemplateRole,
 } from "./sentence";
-import { anchorMainToChart, recomputeMedian, recomputeRandomPeer, recomputeSpec } from "./recompute";
-import { MONTHS, SHAPING, sourceRefById } from "./sources";
+import { anchorMainToChart, recomputeFromCells, recomputeMedian, recomputePeers, recomputeRandomPeer, recomputeSpec } from "./recompute";
+import { cbsaOfQcew, metroName, qcewCode, qcewTitle } from "./metros";
+import { CES_SM, MONTHS, SHAPING, isoDateOf, sourceEntryProblems, sourceRefById } from "./sources";
 import type {
   ArithmeticRow,
   CellCitation,
@@ -124,8 +150,18 @@ export class InsightRefused extends Error {
 }
 
 const TUPLE = ["series_id", "year", "period", "value", "footnote", "url", "sha256", "last_modified"] as const;
+/** The fixed form of each printed field of a provenance tuple (the URL, sha256 and Last-Modified must be its source entry's). */
+const TUPLE_FORMS = {
+  series: /^(?:SMU\d{17}|C\d{4}:own5:\d{4}:agglvl43)$/,
+  year: /^\d{4}$/,
+  period: /^(?:M(?:0[1-9]|1[0-3])|A)$/,
+  value: /^-?\d+(?:\.\d+)?$/,
+  footnote: /^[A-Z]?$/,
+} as const;
 const H3B = "C1.H3b";
 const RECENCY = "C1.caveat.recency";
+/** The chart's two estimate records, by sidecar key, and the registered method each states. */
+const ESTIMATES = { growth: "C1.chart.growth_method", bubble: "C1.chart.bubble_method" } as const satisfies Record<string, TemplateId>;
 
 /** The template families this file can word. A new family is a refusal until it has sentences. */
 function templateFamily(template: string): "C1" | null {
@@ -409,6 +445,73 @@ export function randomPeerArithmetic(m: number, n: number, k: number): { numerat
   return { numerator, denominator, text: `(${m} / ${n})^${k} = ${numerator} / ${denominator}` };
 }
 
+// ---------------------------------------------------------------- names
+
+type Refuse = (reason: string) => never;
+
+/**
+ * A metro the bundle names, as Atlas's metro registry names it (metros.ts).
+ * The bundle's own label and title, where it gives them, must be the
+ * registry's; they are compared here and never printed.
+ */
+export function registryMetro(where: string, m: { cbsa: string; label?: string; title?: string }, refuse: Refuse): MetroRef {
+  const reg = metroName(m.cbsa) ?? refuse(`${where} names the metro ${JSON.stringify(m.cbsa)}, which Atlas's metro registry does not have`);
+  if (m.label !== undefined && m.label !== reg.label) refuse(`${where} labels ${m.cbsa} ${JSON.stringify(m.label)}; Atlas's metro registry labels it ${JSON.stringify(reg.label)}`);
+  if (m.title !== undefined && m.title !== reg.title) refuse(`${where} titles ${m.cbsa} ${JSON.stringify(m.title)}; Atlas's metro registry titles it ${JSON.stringify(reg.title)}`);
+  return reg;
+}
+
+/** Slots with every place and every list member named from the registry. */
+function registrySlots(where: string, slots: Record<string, Slot> | undefined, refuse: Refuse): Record<string, Slot> {
+  const out: Record<string, Slot> = {};
+  for (const [name, s] of Object.entries(slots ?? {})) {
+    if (s.format === "list") out[name] = { ...s, metros: s.metros.map((m) => registryMetro(`${where} slot {${name}}`, m, refuse)) };
+    else if (s.format === undefined && "cbsa" in s) out[name] = registryMetro(`${where} slot {${name}}`, s, refuse);
+    else out[name] = s;
+  }
+  return out;
+}
+
+/**
+ * The evidence with every metro name it would print replaced by the
+ * registry's: the slots of the headline, the random peer, the caveats and the
+ * chart's title, subtitle, subject note and universe line, the metros that
+ * are not published or fail closed, and the label request (checked only:
+ * the chart's own rows are renamed where the spec is built). A name that is
+ * not the registry's refuses. Only the parts it renames are copied.
+ */
+export function withRegistryNames(raw: Evidence, refuse: Refuse): Evidence {
+  const ch = raw.chart;
+  for (const r of ch.labels.requested) registryMetro(`the label request`, { cbsa: r.id, label: r.label }, refuse);
+  return {
+    ...raw,
+    headline: { ...raw.headline, slots: registrySlots("headline", raw.headline.slots, refuse) },
+    random_peer: { ...raw.random_peer, slots: registrySlots("random peer", raw.random_peer.slots, refuse) },
+    caveats: raw.caveats.map((c) => (c.slots ? { ...c, slots: registrySlots(`caveat ${c.id}`, c.slots, refuse) } : c)),
+    chart: {
+      ...ch,
+      title: { ...ch.title, slots: registrySlots("chart title", ch.title.slots, refuse) },
+      dek: { ...ch.dek, slots: registrySlots("chart subtitle", ch.dek.slots, refuse) },
+      subject_note: ch.subject_note ? { ...ch.subject_note, slots: registrySlots("subject label", ch.subject_note.slots, refuse) } : null,
+      universe_line: { ...ch.universe_line, slots: registrySlots("universe line", ch.universe_line.slots, refuse) },
+      not_published: ch.not_published.map((m) => ({ ...registryMetro("the chart's metros that are not published", m, refuse), ...(m.reason !== undefined ? { reason: m.reason } : {}) })),
+      fail_closed: ch.fail_closed.map((m) => {
+        if (m.qcew_code !== qcewCode(m.cbsa)) refuse(`${m.cbsa} fails closed under the QCEW code ${JSON.stringify(m.qcew_code)}, not ${JSON.stringify(qcewCode(m.cbsa))}`);
+        return { ...m, title: registryMetro("the chart's metros that fail closed", m, refuse).title };
+      }),
+    },
+  };
+}
+
+/** A metro a robustness row names: a CBSA, or for the QCEW row its area code, whose title is QCEW's (the registry's name and " MSA"). */
+function robustnessMetro(where: string, m: { id: string; title: string }, refuse: Refuse): MetroRef {
+  const cbsa = cbsaOfQcew(m.id);
+  if (cbsa === null) return registryMetro(where, { cbsa: m.id, title: m.title }, refuse);
+  const reg = registryMetro(where, { cbsa }, refuse);
+  if (m.title !== qcewTitle(reg)) refuse(`${where} titles ${m.id} ${JSON.stringify(m.title)}; QCEW titles ${cbsa} ${JSON.stringify(qcewTitle(reg))}`);
+  return reg;
+}
+
 // ---------------------------------------------------------------- the build
 
 export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
@@ -416,12 +519,16 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
     throw new InsightRefused(findingId, reason);
   };
   const f: LoadedFinding = bundle.findings.find((x) => x.id === findingId) ?? refuse(`not in bundle ${bundle.name}`);
-  const ev: Evidence = f.evidence;
   const { manifest, methods } = bundle;
 
   // The finding, its panel, its template family and the status line.
+  if (!FINDING_IDS.includes(findingId)) refuse(`it is not a finding this side has sentences for (${FINDING_IDS.join(", ")})`);
   const panel = manifest.panels[f.panel];
   if (panel !== "shipped") refuse(`panel ${f.panel} is ${JSON.stringify(panel)}, not shipped`);
+  if (!/^[A-Z]$/.test(f.panel)) refuse(`its panel is named ${JSON.stringify(f.panel)}, not a letter`);
+  if (!/^v\d+(?:\.\d+)*$/.test(manifest.release) || bundle.name !== `places-${manifest.release}`) refuse(`bundle ${bundle.name} names its release ${JSON.stringify(manifest.release)}`);
+  // Every metro the evidence names, by the names in Atlas's registry; the bundle's own labels and titles are only compared.
+  const ev: Evidence = withRegistryNames(f.evidence, refuse);
   if (ev.finding_id !== findingId) refuse(`its evidence is for ${JSON.stringify(ev.finding_id)}`);
   if (ev.release !== manifest.release || methods.release !== manifest.release) refuse(`evidence, methods and manifest name different releases`);
   if (ev.status !== manifest.status || methods.status !== manifest.status) refuse(`evidence, methods and manifest disagree on status`);
@@ -442,16 +549,40 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
   const failing = ev.preconditions.filter((p) => p.pass !== true);
   if (failing.length) refuse(`precondition ${failing.map((p) => `${p.name} (value ${JSON.stringify(p.value)}, needs ${p.threshold})`).join("; ")} does not pass`);
   if (!ev.preconditions.some((p) => p.gates === findingId)) refuse("no precondition gates the finding itself");
-  // The precondition table prints each threshold: a registered one, and a number in it is the value it is compared with.
-  for (const p of ev.preconditions) {
-    const ok = THRESHOLDS.some((id) => {
-      const m = matchTemplate(id, p.threshold);
-      return m !== null && (m.N === undefined || (typeof p.value === "number" && m.N === String(p.value)));
-    });
-    if (!ok) refuse(`precondition ${p.name} states the threshold ${JSON.stringify(p.threshold)}, which is not a registered one`);
+  // The precondition table prints each one's name, what it gates, its value and its threshold: the name a registered
+  // precondition, the gate and the threshold its registered ones, and a value read from an evidence number the
+  // value of that number. A suppressed clause's preconditions print by name in its reason, so they are held to it too.
+  for (const p of [...ev.preconditions, ...ev.suppressed.flatMap((s) => s.preconditions ?? [])]) {
+    const form = preconditionForm(p.name) ?? refuse(`precondition ${JSON.stringify(p.name)} is not a registered precondition`);
+    const gates = form.gates === "finding" ? findingId : form.gates;
+    if (p.gates !== gates) refuse(`precondition ${p.name} gates ${JSON.stringify(p.gates)}; registered, it gates ${gates}`);
+    if (matchTemplate(form.threshold, p.threshold) === null) refuse(`precondition ${p.name} states the threshold ${JSON.stringify(p.threshold)}, which is not its registered one (${form.threshold})`);
+    if (p.number !== undefined && !isNumberKey(p.number)) refuse(`precondition ${p.name} reads ${JSON.stringify(p.number)}, which is not an evidence key of a registered form`);
   }
+  for (const p of ev.preconditions) {
+    // The result the row prints is its value against its threshold, where the threshold is a comparison.
+    const form = preconditionForm(p.name) as NonNullable<ReturnType<typeof preconditionForm>>;
+    const holds =
+      form.threshold === "C1.threshold.zero" ? p.value === 0 : form.threshold === "C1.threshold.true" ? p.value === true : form.threshold === "C1.threshold.universe_n" ? String(p.value) === matchTemplate(form.threshold, p.threshold)?.N : undefined;
+    if (holds !== undefined && holds !== p.pass) refuse(`precondition ${p.name} says it ${p.pass ? "passes" : "fails"}, but ${JSON.stringify(p.value)} against ${JSON.stringify(p.threshold)} ${holds ? "holds" : "does not hold"}`);
+    if (p.number === undefined) continue;
+    const n = ev.numbers[p.number] ?? refuse(`precondition ${p.name} reads evidence number ${p.number}, which does not exist`);
+    if (n.value !== p.value) refuse(`precondition ${p.name} prints ${JSON.stringify(p.value)}, but its evidence number ${p.number} is ${JSON.stringify(n.value)}`);
+  }
+  // The universe's size, printed three times (the table's value, its threshold's N and the universe line's {N}): the
+  // main:universe set's size, main.universe.n and the pre-registered largest_n, all one number.
   const universeN = ev.numbers["main.universe.n"];
-  if (!universeN || universeN.value !== Object.keys(ev.sets["main:universe"]?.members ?? {}).length) refuse("main.universe.n is not the size of the main:universe set");
+  const universeSize = Object.keys(ev.sets["main:universe"]?.members ?? {}).length;
+  if (!universeN || universeN.value !== universeSize || universeN.registered_n !== universeSize) {
+    refuse(`main.universe.n is ${JSON.stringify(universeN?.value ?? null)} (registered largest_n ${JSON.stringify(universeN?.registered_n ?? null)}), but the main:universe set holds ${universeSize} metros`);
+  }
+  {
+    const p = ev.preconditions.find((x) => x.name === "universe.n") ?? refuse("the evidence records no universe.n precondition");
+    const threshold = matchTemplate("C1.threshold.universe_n", p.threshold);
+    if (p.number !== "main.universe.n" || p.value !== universeSize || threshold?.N !== String(universeSize)) {
+      refuse(`precondition universe.n prints ${JSON.stringify(p.value)} against ${JSON.stringify(p.threshold)} from ${JSON.stringify(p.number ?? null)}, but main.universe.n, the main:universe set and the registered largest_n are ${universeSize}`);
+    }
+  }
   // The values the table prints for the named-metro preconditions are the counts of the metros the chart names.
   for (const [name, named] of [["universe.nulls_named", ev.chart.not_published.map((m) => m.cbsa)], ["universe.fail_closed_named", ev.chart.fail_closed.map((m) => m.cbsa)]] as const) {
     const p = ev.preconditions.find((x) => x.name === name);
@@ -532,9 +663,13 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
     if (problems.length) refuse(`the H3b clause prints but its gate does not hold: ${problems.join("; ")}`);
   }
   for (const c of clauses.filter((x) => x.printed)) checkSlots("headline", c.id, h.slots);
+  // What stands between the clauses and after the last: the registered connectives, which the bundle's must equal.
+  for (const [what, got, id] of [["joins its clauses with", h.join, "C1.headline.join"], ["ends with", h.end, "C1.headline.end"]] as const) {
+    if (got !== templateText(id)) refuse(`the headline ${what} ${JSON.stringify(got)}, not the registered ${id} ${JSON.stringify(templateText(id))}`);
+  }
   let headline: string;
   try {
-    headline = headlineSentence(clauses, h.slots, h.join, h.end);
+    headline = headlineSentence(clauses, h.slots);
   } catch (e) {
     return refuse(`headline: ${(e as Error).message}`);
   }
@@ -608,6 +743,14 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
       return period !== "M13" || footnote !== "";
     }).length;
     if (tuples.length === 0 || prelim.value !== flagged) refuse(`precondition h3.cells_not_annual_or_footnoted is ${JSON.stringify(prelim.value)}, the subject's cells give ${flagged}`);
+  }
+  // The table's true/false values: the subject is a member of both main sets; the recency caveat prints.
+  for (const p of ev.preconditions) {
+    let want: boolean | undefined;
+    if (p.name === "h3.subject_publishable" || p.name === "h3b.subject_publishable") {
+      want = ["office", "goods_logistics"].every((a) => Object.hasOwn(ev.sets[`${mainPrefix}:${a}`]?.members ?? {}, ev.subject));
+    } else if (p.name === "h3b.recency_caveat_prints") want = ev.caveats.some((c) => c.id === RECENCY && c.printed);
+    if (want !== undefined && p.value !== want) refuse(`precondition ${p.name} prints ${JSON.stringify(p.value)}, but the evidence says ${want}`);
   }
   for (const [name, axis, what] of [["a", "office", "growth_pct"], ["b", "goods_logistics", "growth_pct"], ["r_a", "office", "rank"], ["r_b", "goods_logistics", "rank"]] as const) {
     const r = h.slots[name];
@@ -685,6 +828,7 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
     if (!p || !hasNumber(p) || rp.grid[String(rp.rule.k)]?.number !== p.number) refuse("the random-peer probability is not the grid's entry at the registered k");
     for (const kg of rp.rule.k_grid) {
       const g = rp.grid[String(kg)] ?? refuse(`the random-peer grid has no k = ${kg}`);
+      if (!isNumberKey(g.number)) refuse(`the random-peer grid at k = ${kg} reads ${JSON.stringify(g.number)}, which is not an evidence key of a registered form`);
       const { n, arithmetic } = checkProbability(g.number, kg);
       if (n.value !== g.value) refuse(`the random-peer grid at k = ${kg} is ${g.value}, evidence number ${g.number} is ${n.value}`);
       randomPeerGrid.push({ k: kg, printed: num(n.value as number, 3), number: g.number, arithmetic });
@@ -732,16 +876,18 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
 
   // The subject's label line: its two values, office-industry first.
   const subjectRow = ch.rows[ev.subject];
+  let subjectNote: string | null = null;
   if (ch.subject_note) {
     const id = registered("subject label", ch.subject_note.id, ch.subject_note.text, "subject label");
     const a = ch.subject_note.slots.a;
     const b = ch.subject_note.slots.b;
     if (!subjectRow || !a || !b || !hasNumber(a) || !hasNumber(b) || a.number !== subjectRow.x || b.number !== subjectRow.y) refuse("the subject's label values are not its chart row's x and y");
-    const note = checkSlots("subject label", id, ch.subject_note.slots);
-    if (canonicalJson(bubble.subjectNotes ?? []) !== canonicalJson([note])) refuse("the chart's subject note is not its template's output");
+    subjectNote = checkSlots("subject label", id, ch.subject_note.slots);
+    if (canonicalJson(bubble.subjectNotes ?? []) !== canonicalJson([subjectNote])) refuse("the chart's subject note is not its template's output");
   } else if ((bubble.subjectNotes ?? []).length) refuse("the chart carries a subject note the evidence does not");
 
-  if (bubble.universe !== checkSlots("universe line", registered("universe line", ch.universe_line.id, ch.universe_line.text, "universe line"), ch.universe_line.slots)) refuse("the chart's universe line is not its template's output");
+  const universeLine = checkSlots("universe line", registered("universe line", ch.universe_line.id, ch.universe_line.text, "universe line"), ch.universe_line.slots);
+  if (bubble.universe !== universeLine) refuse("the chart's universe line is not its template's output");
   if (bubble.subject !== ev.subject) refuse(`the chart's subject is ${JSON.stringify(bubble.subject)}, the evidence's is ${ev.subject}`);
 
   // Axis, bubble and median labels and the estimate methods: registered texts over the registered window.
@@ -796,17 +942,6 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
     if (left.length === 0 || left.some((r) => r !== m.reason)) refuse(`${m.title}'s reason is not the one the main sets give for leaving it out`);
   }
 
-  // Every canvas can lay the chart out: the headline, the dek (the OG card's text column carries it too, so the H3b
-  // title never travels without its caveat) and the source lines. A chart that would not fit is refused here, not
-  // when a card is first requested.
-  for (const c of CANVAS_IDS) {
-    try {
-      layoutFrame(bubble, c, "dark");
-    } catch (e) {
-      refuse(`the chart does not fit the ${c} canvas: ${(e as Error).message}`);
-    }
-  }
-
   // Labels: exactly the evidence's request, in its order, which the renderer keeps, on canvases that can draw that many.
   const requested = ch.labels.requested.map((r) => r.id);
   if (canonicalJson(bubble.labels?.ids ?? []) !== canonicalJson(requested)) refuse("the chart's label ids are not the evidence's requested labels in their order");
@@ -820,18 +955,31 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
     if (!(CANVAS_IDS as string[]).includes(c)) refuse(`the label request names canvas ${JSON.stringify(c)}, which the renderer does not have`);
     if (LABEL_CAP[c as CanvasId] < ch.labels.max) refuse(`the ${c} canvas draws at most ${LABEL_CAP[c as CanvasId]} labels, fewer than the ${ch.labels.max} the evidence allows`);
   }
-  if (canonicalJson(requestedLabels(bubble)) !== canonicalJson(requested)) refuse("the renderer would not ask for the evidence's labels in the evidence's order");
-
-  // Provenance of every printed cell, cited with its file's sha256 and Last-Modified.
-  const cesRef: SourceRef | null = Object.values(spec.provenance).find((r) => r.source.id === "bls-ces-sm")?.source ?? null;
+  // Provenance of every printed cell, cited with its file's sha256 and Last-Modified. A source entry that a citation
+  // prints is held to the fixed form of each of its fields (sources.ts) and is manifest.json's entry for its file;
+  // every field of a tuple the arithmetic prints is of its fixed form; the source's names are this side's.
+  const manifestByUrl = new Map(Object.values(manifest.sources).map((s) => [s.url, s]));
   const sourceByUrl = new Map(Object.values(ev.sources).map((s) => [s.url, s]));
+  const entryChecked = new Set<SourceEntry>();
+  const checkedEntry = (where: string, entry: SourceEntry): SourceEntry => {
+    if (entryChecked.has(entry)) return entry;
+    const problems = sourceEntryProblems(entry);
+    if (problems.length) refuse(`${where} ${entry.url}: ${problems.join("; ")}`);
+    const m = manifestByUrl.get(entry.url);
+    if (!m || canonicalJson(m) !== canonicalJson(entry)) refuse(`${where} ${entry.url}, and the evidence's entry for it is not manifest.json's`);
+    entryChecked.add(entry);
+    return entry;
+  };
   const cell = (tuple: string): CellCitation => {
     const parts = tuple.split("|");
     if (parts.length !== TUPLE.length) return refuse(`provenance tuple with ${parts.length} fields: ${tuple}`);
     const [seriesId, year, period, value, footnote, url, sha256, lastModified] = parts;
-    const entry = sourceByUrl.get(url) ?? refuse(`provenance tuple cites ${url}, which is not an evidence source`);
+    for (const [field, text] of [["series", seriesId], ["year", year], ["period", period], ["value", value], ["footnote", footnote]] as const) {
+      if (!TUPLE_FORMS[field].test(text)) refuse(`provenance tuple ${tuple} has the ${field} ${JSON.stringify(text)}, which is not of the fixed form a ${field} takes`);
+    }
+    const entry = checkedEntry("a provenance tuple cites", sourceByUrl.get(url) ?? refuse(`provenance tuple cites ${url}, which is not an evidence source`));
     if (entry.sha256 !== sha256 || (entry.last_modified ?? "") !== lastModified) refuse(`provenance tuple cites ${url} at ${sha256}, Last-Modified ${lastModified}; the evidence source says otherwise`);
-    const source = sourceRefById(entry.source, cesRef) ?? refuse(`no source reference for upstream file kind ${entry.source}`);
+    const source = sourceRefById(entry.source) ?? refuse(`no source reference for upstream file kind ${entry.source}`);
     const provenance: Provenance = {
       source,
       seriesId,
@@ -845,7 +993,6 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
   };
 
   // The files the chart's rows read, once each, with the years actually read from each (from the evidence tuples).
-  const manifestByUrl = new Map(Object.values(manifest.sources).map((s) => [s.url, s]));
   const yearsByUrl = new Map<string, Set<number>>();
   /** Each cell the chart's rows read, "series|year|period", with the file it is read from. */
   const chartCells = new Map<string, string>();
@@ -865,27 +1012,108 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
   }
   // Every card's Source line prints the period of each published cell the sidecar cites, and its citations the
   // estimates' period: each is one of the cells the rows read, at an end of the window, in its registered words.
+  // Each record is rebuilt here from what was checked (this side's source names, the cell's file entry, the registered
+  // methods) and the sidecar's must be exactly that, so the spec the cards and downloads print carries no record text
+  // of the producer's: the cell notes, release and fetch dates and the estimates' fetch times included.
   const windowYears = new Set([String(window.t0), String(window.t1)]);
-  for (const [key, p] of Object.entries(spec.provenance)) {
+  const urlsRead = (fields: ReadonlyArray<"x" | "y" | "size">): string[] =>
+    [...new Set(bubble.data.flatMap((d) => fields.flatMap((k) => ev.numbers[ch.rows[d.id][k]].provenance.map((t) => t.split("|")[5]))))].sort(byteCompare);
+  const latestFetch = (urls: string[]): string => urls.map((u) => (sourceByUrl.get(u) as SourceEntry).fetched_at).reduce((a, b) => (b > a ? b : a), "");
+  const records: Record<string, SpecProvenance> = {};
+  for (const [key, p] of Object.entries(bubble.provenance)) {
+    let want: SpecProvenance;
     if (p.kind === "published") {
       const [series, year, period] = key.split("|");
       if (chartCells.get(key) !== p.upstreamUrl || p.seriesId !== series) refuse(`the chart cites ${key} from ${JSON.stringify(p.upstreamUrl ?? null)}, which is not a cell its rows read from that file`);
       if (!windowYears.has(year)) refuse(`the chart cites ${key}, a ${year} cell, outside the window ${window.t0} to ${window.t1}`);
       let words: string;
+      let note: string;
       try {
         words = periodLabel(year, period);
+        note = cellNote(series);
       } catch (e) {
         return refuse(`the chart cites ${key}: ${(e as Error).message}`);
       }
       if (p.period !== words) refuse(`the chart's Source line prints ${JSON.stringify(p.period ?? null)} for ${key}, the cell's period is ${JSON.stringify(words)}`);
+      const entry = sourceByUrl.get(chartCells.get(key) as string) as SourceEntry;
+      if (entry.last_modified === null) return refuse(`the chart cites ${key} from ${entry.url}, which has no Last-Modified date to release it on`);
+      want = {
+        source: sourceRefById(entry.source) ?? refuse(`no source reference for upstream file kind ${entry.source}`),
+        seriesId: series,
+        upstreamUrl: entry.url,
+        period: words,
+        releasedAt: isoDateOf(entry.last_modified),
+        retrievedAt: entry.fetched_at,
+        kind: "published",
+        notes: [note, `sha256 ${entry.sha256}`, `Last-Modified ${entry.last_modified}`, `${entry.bytes} bytes`],
+      };
     } else if (p.kind === "estimate") {
       if (p.period !== isoYears([window.t0, window.t1])) refuse(`the chart's estimate ${key} is for ${JSON.stringify(p.period ?? null)}, not the window ${isoYears([window.t0, window.t1])}`);
-    } else refuse(`the chart cites ${key} as a ${p.kind} record; it prints published cells and estimates computed from them only`);
+      if (!Object.hasOwn(ESTIMATES, key)) return refuse(`the chart's estimate record ${JSON.stringify(key)} is not one of its registered estimates (${Object.keys(ESTIMATES).join(", ")})`);
+      const est = key as keyof typeof ESTIMATES;
+      want = { source: CES_SM, kind: "estimate", method: fill(ESTIMATES[est], windowSlots), period: isoYears([window.t0, window.t1]), retrievedAt: latestFetch(urlsRead(est === "growth" ? ["x", "y"] : ["size"])) };
+    } else return refuse(`the chart cites ${key} as a ${p.kind} record; it prints published cells and estimates computed from them only`);
+    if (canonicalJson(p) !== canonicalJson(want)) refuse(`the chart's provenance record ${key} is not the one this side builds from the evidence: it reads ${canonicalJson(p)}, not ${canonicalJson(want)}`);
+    records[key] = want;
   }
+
+  // The chart's rows as this side prints them: each metro named from Atlas's registry (the sidecar's label and full
+  // name must be the registry's), citing exactly the cells its three numbers read and the two estimates.
+  const data = bubble.data.map((d) => {
+    if (d.href !== undefined) refuse(`chart row ${d.id} carries a link, which the evidence does not give`);
+    const read = (["x", "y", "size"] as const).flatMap((k) => ev.numbers[ch.rows[d.id][k]].provenance.map((t) => t.split("|").slice(0, 3).join("|")));
+    const cites = [...new Set([...read, ...Object.keys(ESTIMATES)])].sort(byteCompare);
+    if (canonicalJson([...d.provenance].sort(byteCompare)) !== canonicalJson(cites)) refuse(`chart row ${d.id} cites ${JSON.stringify(d.provenance)}, not the cells its numbers read and the estimates`);
+    const name = registryMetro(`chart row ${d.id}`, { cbsa: d.id, label: d.label, title: d.fullLabel }, refuse);
+    return { id: d.id, label: name.label, fullLabel: name.title, provenance: [...d.provenance], x: d.x, y: d.y, size: d.size };
+  });
+  // The date the numbers are as of: the latest Last-Modified among the files the rows read. The address: registered.
+  const asOf = [...yearsByUrl.keys()].map((u) => isoDateOf((sourceByUrl.get(u) as SourceEntry).last_modified ?? "")).reduce((a, b) => (b > a ? b : a));
+  if (bubble.asOf !== asOf) refuse(`the chart's numbers are as of ${JSON.stringify(bubble.asOf)}, but the latest file its rows read was last modified on ${asOf}`);
+  const slug = fillWords("C1.slug", { finding: findingId.toLowerCase(), t0: String(window.t0), t1: String(window.t1) });
+  if (bubble.slug !== slug) refuse(`the chart's slug is ${JSON.stringify(bubble.slug)}, not the registered ${JSON.stringify(slug)}`);
+  // The spec the cards, the page and the downloads draw: every word in it this side's (the checks above say the
+  // sidecar's are the same), every number the sidecar's that the evidence gives.
+  const median = templateText("C1.chart.median_label");
+  const axisOf = (a: BubbleSpec["x"], id: TemplateId) => ({ ...a, label: fill(id, windowSlots), ...(a.reference ? { reference: a.reference.map((r) => ({ value: r.value, label: median })) } : {}) });
+  try {
+    spec = parseChartSpec({
+      version: 1,
+      kind: "bubble",
+      slug,
+      headline: chartTitle,
+      dek,
+      asOf,
+      universe: universeLine,
+      subject: ev.subject,
+      ...(subjectNote !== null ? { subjectNotes: [subjectNote] } : {}),
+      provenance: records,
+      x: axisOf(bubble.x, "C1.chart.x_label"),
+      y: axisOf(bubble.y, "C1.chart.y_label"),
+      size: { ...bubble.size, label: fill("C1.chart.size_label", windowSlots) },
+      labels: { ids: requested, topBySize: 0, extremes: false },
+      data,
+    });
+  } catch (e) {
+    return refuse(`the chart this side builds is not a valid ChartSpec: ${(e as Error).message}`);
+  }
+  if (canonicalJson(requestedLabels(spec as BubbleSpec)) !== canonicalJson(requested)) refuse("the renderer would not ask for the evidence's labels in the evidence's order");
+
+  // Every canvas can lay the chart out: the headline, the dek (the OG card's text column carries it too, so the H3b
+  // title never travels without its caveat) and the source lines. A chart that would not fit is refused here, not
+  // when a card is first requested.
+  for (const c of CANVAS_IDS) {
+    try {
+      layoutFrame(spec, c, "dark");
+    } catch (e) {
+      refuse(`the chart does not fit the ${c} canvas: ${(e as Error).message}`);
+    }
+  }
+
   const fileCite = (entry: SourceEntry, ref: SourceRef, period: string): Provenance => ({ source: ref, upstreamUrl: entry.url, period, retrievedAt: entry.fetched_at, kind: "published" });
   const files: FileCitation[] = [...yearsByUrl.keys()].sort(byteCompare).map((url) => {
-    const entry = manifestByUrl.get(url) ?? refuse(`the chart reads ${url}, which manifest.json does not record`);
-    const ref = sourceRefById(entry.source, cesRef) ?? refuse(`no source reference for upstream file kind ${entry.source}`);
+    const entry = checkedEntry("the chart reads", manifestByUrl.get(url) ?? refuse(`the chart reads ${url}, which manifest.json does not record`));
+    const ref = sourceRefById(entry.source) ?? refuse(`no source reference for upstream file kind ${entry.source}`);
     const years = [...(yearsByUrl.get(url) as Set<number>)].sort((a, b) => a - b);
     const provenance = fileCite(entry, ref, isoYears(years));
     return { url, provenance, years, citation: withFile(citation(provenance), entry.sha256, entry.last_modified, entry.bytes) };
@@ -902,7 +1130,7 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
   const shaping: ShapingSource[] = SHAPING.map((rule) => {
     const entries = Object.values(manifest.sources).filter((s) => s.source === rule.id);
     if (entries.length !== 1) refuse(`manifest.json records ${entries.length} ${rule.id} files, not one`);
-    const entry = entries[0];
+    const entry = checkedEntry(`the ${rule.id} file`, entries[0]);
     const year = rule.url.exec(entry.url)?.[1] ?? refuse(`the ${rule.id} file ${entry.url} is not a URL this side can read a year from`);
     const idYear = /(\d{4})$/.exec(rule.id)?.[1];
     if (idYear !== undefined && idYear !== year) refuse(`the ${rule.id} file ${entry.url} is for ${year}, its registry id says ${idYear}`);
@@ -960,17 +1188,32 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
       if (arithmetic.some((r) => r.where === where && r.number === s.number && r.slot === name)) continue;
       const n = ev.numbers[s.number];
       const prob = n.kind === "probability" ? randomPeerGrid.find((g) => g.number === s.number) : undefined;
+      // The keys the arithmetic prints name an evidence number and its sets, in a registered form, and nothing else.
+      if (!isNumberKey(s.number)) refuse(`${where} {${name}} reads ${JSON.stringify(s.number)}, which is not an evidence key of a registered form`);
+      for (const k of n.over ?? []) if (!isSetKey(k) || !ev.sets[k]) refuse(`evidence number ${s.number} runs over ${JSON.stringify(k)}, which is not an evidence set of a registered form`);
+      // A registered number cites where the pre-registration holds it: the registered file, at manifest.json's hash, and the path registered for its key.
+      let registeredAt: string | undefined;
+      if (n.kind === "registered") {
+        const r = n.registered ?? refuse(`registered number ${s.number} cites no pre-registration`);
+        const input = manifest.inputs?.[r.file];
+        if (r.file !== PREREG_FILE || !input || input.sha256 !== r.sha256 || input.bytes !== r.bytes || r.path !== registeredPath(s.number)) {
+          refuse(`registered number ${s.number} cites ${JSON.stringify(`${r.file} ${r.path}`)} at ${r.sha256}, not ${PREREG_FILE} ${JSON.stringify(registeredPath(s.number))} at manifest.json's hash`);
+        }
+        if (n.provenance.length !== 0 || n.formula !== undefined) refuse(`registered number ${s.number} cites cells or states a formula`);
+        registeredAt = `${r.file} ${r.path} (sha256 ${r.sha256})`;
+      } else if (n.registered) refuse(`evidence number ${s.number} is a ${n.kind}, but cites a pre-registration`);
       arithmetic.push({
         where,
         slot: name,
         printed: formatSlot(name, s),
         number: s.number,
         kind: n.kind,
-        formula: n.kind === "registered" ? (n.formula === undefined ? "a registered value" : refuse(`registered number ${s.number} states a formula`)) : formulaOf(s.number, n),
+        category: n.kind === "registered" ? "registered" : n.kind === "cell" ? "cell" : "estimate",
+        formula: n.kind === "registered" ? "a registered value" : formulaOf(s.number, n),
         ...(prob ? { arithmetic: prob.arithmetic } : {}),
         over: n.over ?? [],
         cells: (n.provenance ?? []).map(cell),
-        ...(n.registered ? { registered: `${n.registered.file} ${n.registered.path} (sha256 ${n.registered.sha256})` } : {}),
+        ...(registeredAt ? { registered: registeredAt } : {}),
       });
     }
   };
@@ -1036,6 +1279,11 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
       // Every count and rank of the window, recomputed from its sets.
       if (!win.publishable.number.endsWith(".publishable")) refuse(`robustness ${rid} ${w}: ${win.publishable.number} is not a publishable count`);
       const prefix = win.publishable.number.slice(0, -".publishable".length);
+      // The window the table prints is the one its numbers read, and the metro it recomputes for is the subject (on the
+      // QCEW row, the subject's QCEW area code).
+      if (!isNumberKey(win.publishable.number) || prefix !== `${rid}:${w}`) refuse(`robustness ${rid}'s window ${JSON.stringify(w)} is not the window its numbers read (${win.publishable.number})`);
+      const subjectId = row.kind === "cross_source" ? qcewCode(ev.subject) : ev.subject;
+      if (win.subject !== subjectId) refuse(`robustness ${rid} ${w} is recomputed for ${JSON.stringify(win.subject)}, not the subject ${JSON.stringify(subjectId)}`);
       const recomputed = recomputeSpec(ev, prefix, win.subject);
       if (recomputed.length) refuse(`robustness ${rid} ${w}: the evidence's counts disagree with its sets: ${recomputed.join("; ")}`);
       for (const [axis, a] of Object.entries(win.axes ?? {})) {
@@ -1071,6 +1319,9 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
           return refuse(`robustness row ${rid}'s ranking: ${(e as Error).message}`);
         }
         if (words.ranked_by !== want) refuse(`robustness row ${rid} is ranked by ${JSON.stringify(words.ranked_by)}, but the universe ranks on ${JSON.stringify(want)}`);
+        // Ranked as the universe is, its metros are pinned to that ranking: as many as it registers, the largest of it.
+        const peers = recomputePeers(ev, prefix, row.registered.largest_n ?? Number.NaN);
+        if (peers.length) refuse(`robustness ${rid} ${w}: ${peers.join("; ")}`);
       }
       if (row.kind === "end_year" && typeof row.registered.window?.t1 === "string") {
         const months = monthlyEnd(row.registered.window.t1) ?? refuse(`robustness row ${rid}'s end ${JSON.stringify(row.registered.window.t1)} names no run of months`);
@@ -1107,8 +1358,17 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
           return { axis, label: axisCopy(axis).label, growth: signedPct(a.growth_pct.value, 1), rank: ordinal(a.rank.value), numbers: [a.growth_pct.number, a.rank.number] as [string, string] };
         });
       const both = win.beat_on_both;
-      if (both) check("Beat on both", both.number, both.value);
-      robustness.push({ ...base, axes, beatOnBoth: both ? { count: num(both.value), names: both.metros.map((m) => m.title), number: both.number } : null });
+      let names: string[] = [];
+      if (both) {
+        // The metros the table names are the ones the evidence's count names (recomputed from the sets), by Atlas's registry.
+        const counted = check("Beat on both", both.number, both.value);
+        const ids = both.metros.map((m) => m.id);
+        if (canonicalJson([...ids].sort(byteCompare)) !== canonicalJson([...(counted.metros ?? [])].sort(byteCompare))) {
+          refuse(`robustness ${rid} ${w} names ${JSON.stringify(ids)} as beating the subject on both, but ${both.number} names ${JSON.stringify(counted.metros ?? [])}`);
+        }
+        names = both.metros.map((m) => robustnessMetro(`robustness ${rid} ${w}`, m, refuse).title);
+      }
+      robustness.push({ ...base, axes, beatOnBoth: both ? { count: num(both.value), names, number: both.number } : null });
     }
     // A peer set chosen by a file no number cites (row P1: the Census estimates) is cited too.
     for (const sid of row.registered.source_ids ?? []) {
@@ -1123,6 +1383,10 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
     for (const r of robustness) if (r.gates.includes(H3B) !== gating.has(r.id)) refuse(`robustness ${r.id}'s gates disagree with the gating list`);
   }
 
+  // Every growth, change and cell the evidence holds, and every set member's growth, from the published cells it reads.
+  const fromCells = recomputeFromCells(ev);
+  if (fromCells.length) refuse(`the evidence's values disagree with the published cells they read: ${fromCells.slice(0, 5).join("; ")}${fromCells.length > 5 ? `; and ${fromCells.length - 5} more` : ""}`);
+
   // The chart's own provenance and the bundle's stamps.
   const provenance = Object.keys(spec.provenance)
     .sort(byteCompare)
@@ -1130,7 +1394,7 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
   const retrievedAt = provenance.map((p) => p.retrievedAt).reduce((a, b) => (b > a ? b : a));
   const hashes = { manifest: bundle.hashes["manifest.json"], chart: bundle.hashes[f.chartFile], evidence: bundle.hashes[f.evidenceFile], methods: bundle.hashes["methods.json"] };
 
-  const subjectRef: MetroRef = { cbsa: subject.cbsa, label: subject.label, title: subject.title };
+  const subjectRef: MetroRef = registryMetro("the subject", subject, refuse);
   const insight: Insight = {
     id: findingId,
     slug: spec.slug,
@@ -1159,8 +1423,9 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
     methodNote: [methodLine, status],
     is,
     isNot,
-    panelB: { text: panelBText, gate: methods.panel_b.gate },
-    preconditions: ev.preconditions,
+    panelB: { text: panelBText, gate: methods.panel_b.gate.map((g) => ({ name: g.name, rule: g.rule, status: g.status })) },
+    // What the table prints of each, and nothing else of the producer's.
+    preconditions: ev.preconditions.map((p) => ({ name: p.name, gates: p.gates, value: p.value, threshold: p.threshold, pass: p.pass })),
     arithmetic,
     robustness,
     robustnessFormulas: [...formulas.entries()].map(([formula, f]) => ({ column: f.column, rows: [...f.rows].sort(byteCompare), formula })),

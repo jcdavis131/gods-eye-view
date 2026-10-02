@@ -20,7 +20,13 @@
 // a metro is not published (each form the producer writes, its slots read
 // back from the evidence by build.ts), the precondition thresholds, every
 // formula (formulaText) and the period a card's Source line prints for a
-// cell. The years and counts in the reasons and formulas are placeholders,
+// cell. The headline's connectives (C1.headline.join, C1.headline.end), the
+// precondition names (preconditionForm), the evidence and set keys the
+// arithmetic prints (isNumberKey, isSetKey), the pre-registration paths
+// (registeredPath), the CES series notes (cellNote) and the parts each
+// specification sums (axisParts) are registered here too, so the bundle's
+// copies are compared and this side's are printed. Metro names are not
+// templates: they come from Atlas's registry (metros.ts). The years and counts in the reasons and formulas are placeholders,
 // read back from the evidence by build.ts. Each text may print in its own
 // place on the page only (ROLE_TEMPLATES). The status note is this side's
 // own sentence, keyed by the bundle status.
@@ -45,6 +51,8 @@ export const TEMPLATE_IDS = [
   "C1.H3.ranks",
   "C1.H3b",
   "C1.H3.twins",
+  "C1.headline.join",
+  "C1.headline.end",
   "C1.random_peer",
   "C1.caveat.recency",
   "C1.caveat.ces_manufacturing",
@@ -65,6 +73,7 @@ export const TEMPLATE_IDS = [
   "C1.chart.size_label",
   "C1.chart.median_label",
   "C1.chart.period_annual",
+  "C1.chart.cell_note",
   "C1.chart.growth_method",
   "C1.chart.bubble_method",
   "C1.method_line",
@@ -96,9 +105,11 @@ export const TEMPLATE_IDS = [
   "C1.threshold.universe_n",
   "C1.threshold.nulls_named",
   "C1.threshold.fail_closed_named",
+  "C1.threshold.twins_stable",
   "C1.shaping.omb",
   "C1.shaping.qcew_county",
   "C1.shaping.census_p1",
+  "C1.slug",
 ] as const;
 
 export type TemplateId = (typeof TEMPLATE_IDS)[number];
@@ -121,6 +132,12 @@ export function templateText(id: TemplateId): string {
       return "no major metro beat {subject} on both";
     case "C1.H3.twins":
       return "its {t0} twins {T1}, {T2} and {T3} grew a median {a_med}% and {b_med}%";
+    // What stands between two printed clauses of the headline and after the last one (evidence headline.join and
+    // headline.end): the bundle's strings are compared with these, and these are what the headline prints.
+    case "C1.headline.join":
+      return "; ";
+    case "C1.headline.end":
+      return ".";
     case "C1.random_peer":
       return "drawing {k} major metros at random, with replacement, the chance that {subject} beat all {k} on both is {p}";
     case "C1.caveat.recency":
@@ -163,6 +180,10 @@ export function templateText(id: TemplateId): string {
     // period code: build.ts periodLabel requires it of every cell the chart cites.
     case "C1.chart.period_annual":
       return "{year} annual average";
+    // The note on each published cell's record in the chart's provenance (the downloads carry it): what the series
+    // is, by its supersector code and this side's name for it (cesSupersector).
+    case "C1.chart.cell_note":
+      return "supersector {code} {name}, all employees, not seasonally adjusted, thousands";
     case "C1.chart.growth_method":
       return "growth = ({t1} / {t0} - 1) x 100 of annual-average jobs summed over CES supersectors 50 + 55 + 60 (horizontal) and MLC + 30 + 43 (vertical), MLC = 15, else 10 + 20; null if a part is not published; CES is a sample survey, benchmarked to QCEW once a year";
     case "C1.chart.bubble_method":
@@ -231,6 +252,8 @@ export function templateText(id: TemplateId): string {
       return "every metro without a value on both axes is named with its reason";
     case "C1.threshold.fail_closed_named":
       return "every metro that fails closed for twins is named (no twins, still in panel A)";
+    case "C1.threshold.twins_stable":
+      return ">= 0.8 of draws for each twin shown";
     // What each file that shapes the comparison decides (lib/insights/sources.ts SHAPING), printed in the Universe
     // and Sources sections. These are this side's sentences; build.ts fills them with fillWords from the bundle: the
     // delineation's month and year, the weights' year and the peer set's size and ranking.
@@ -240,6 +263,9 @@ export function templateText(id: TemplateId): string {
       return "The fail-closed check's weights: each member county's {year} QCEW total covered employment; a metro with a member county that has none fails closed for twins.";
     case "C1.shaping.census_p1":
       return "Row P1's peer set: the {n} largest metros by {ranked_by}.";
+    // The page's address under /insights: the finding id in lower case and the registered window.
+    case "C1.slug":
+      return "{finding}-office-goods-job-growth-{t0}-{t1}";
   }
 }
 
@@ -267,7 +293,154 @@ export function panelBGateTemplate(name: string): TemplateId | null {
 }
 
 /** The precondition thresholds the page may print. */
-export const THRESHOLDS: TemplateId[] = ["C1.threshold.zero", "C1.threshold.true", "C1.threshold.universe_n", "C1.threshold.nulls_named", "C1.threshold.fail_closed_named"];
+export const THRESHOLDS: TemplateId[] = ["C1.threshold.zero", "C1.threshold.true", "C1.threshold.universe_n", "C1.threshold.nulls_named", "C1.threshold.fail_closed_named", "C1.threshold.twins_stable"];
+
+/** What a registered precondition gates and the threshold it states; `row` names the specification an H3b row reads. */
+export interface PreconditionForm {
+  /** "finding" for the finding itself, else the clause it gates. */
+  gates: "finding" | TemplateId;
+  threshold: TemplateId;
+  row?: string;
+}
+
+/**
+ * The preconditions a C1 evidence may record, by name (the table prints each
+ * name, and a reason may print a failing one's): a total switch, so a name the
+ * producer invents is a refusal in build.ts, not a row on the page. The H3b
+ * rows are one per registered specification: main and the gating rows.
+ */
+export function preconditionForm(name: string): PreconditionForm | null {
+  switch (name) {
+    case "universe.n":
+      return { gates: "finding", threshold: "C1.threshold.universe_n" };
+    case "universe.nulls_named":
+      return { gates: "finding", threshold: "C1.threshold.nulls_named" };
+    case "universe.fail_closed_named":
+      return { gates: "finding", threshold: "C1.threshold.fail_closed_named" };
+    case "h3.subject_publishable":
+      return { gates: "C1.H3.ranks", threshold: "C1.threshold.true" };
+    case "h3.cells_not_annual_or_footnoted":
+      return { gates: "C1.H3.ranks", threshold: "C1.threshold.zero" };
+    case "h3.twins_stable_in_80pct_of_draws":
+      return { gates: "C1.H3.twins", threshold: "C1.threshold.twins_stable" };
+    case "h3b.subject_publishable":
+    case "h3b.recency_caveat_prints":
+      return { gates: "C1.H3b", threshold: "C1.threshold.true" };
+  }
+  const m = /^h3b\.(?:no_metro_beat_both|not_publishable_cannot_beat_both)\.([A-Za-z0-9]+)$/.exec(name);
+  if (m && (m[1] === "main" || GATING_ROWS_H3B.includes(m[1]))) return { gates: "C1.H3b", threshold: "C1.threshold.zero", row: m[1] };
+  return null;
+}
+
+// ---------------------------------------------------------------- evidence keys the page prints
+
+/** The registered robustness rows (robustnessRegistered has words for each). */
+export const ROBUSTNESS_ROWS: readonly string[] = ["D1", "D2", "D3", "E1", "E2", "E3", "P1", "P2", "P3", "R", "X1"];
+
+const KEY_ROW = `(?:main|${ROBUSTNESS_ROWS.join("|")})`;
+const KEY_WINDOW = String.raw`\d{4}->(?:\d{4}|mean\([A-Z][a-z]{2} \d{4}-[A-Z][a-z]{2} \d{4}\))`;
+const KEY_METRO = String.raw`(?:\d{5}|C\d{4})`;
+const KEY_AXIS = "(?:office|goods_logistics|wc|bc)";
+const NUMBER_KEYS: RegExp[] = [
+  /^window\.t[01]$/,
+  /^random_peer\.k$/,
+  /^R\.windows\.\d\.t[01]$/,
+  /^main\.universe\.n$/,
+  /^cell\.SMU\d{17}\|\d{4}\|M(?:0[1-9]|1[0-3])$/,
+  new RegExp(`^${KEY_ROW}:${KEY_WINDOW}\\.publishable$`),
+  new RegExp(`^${KEY_ROW}:${KEY_WINDOW}\\.${KEY_AXIS}\\.median$`),
+  new RegExp(`^${KEY_ROW}:${KEY_WINDOW}\\.${KEY_METRO}\\.${KEY_AXIS}\\.(?:growth_pct|rank)$`),
+  new RegExp(`^${KEY_ROW}:${KEY_WINDOW}\\.${KEY_METRO}\\.(?:beat_on_both|beat_on_either|rank_min|not_publishable_could_beat_both|total_nonfarm\\.change|random_peer\\.k\\d{1,3})$`),
+];
+const SET_KEYS: RegExp[] = [/^main:universe$/, new RegExp(`^${KEY_ROW}:${KEY_WINDOW}:${KEY_AXIS}$`)];
+
+/**
+ * Whether `key` is an evidence-number key of a registered form. The
+ * arithmetic prints each number's key and the sets it runs over, so a key is
+ * a producer text like any other: build.ts refuses one of no registered form
+ * (a key that says something rather than names something).
+ */
+export function isNumberKey(key: string): boolean {
+  return NUMBER_KEYS.some((re) => re.test(key));
+}
+
+/** Whether `key` is an evidence-set key of a registered form. */
+export function isSetKey(key: string): boolean {
+  return SET_KEYS.some((re) => re.test(key));
+}
+
+/** The pre-registration file the registered numbers are read from (manifest.json inputs). */
+export const PREREG_FILE = "registry/prereg.json";
+
+/** Where in the pre-registration a registered number lives, by its key; null for a key that is not a registered number. */
+export function registeredPath(key: string): string | null {
+  switch (key) {
+    case "window.t0":
+    case "window.t1":
+    case "random_peer.k":
+      return `flagship.${key}`;
+  }
+  const m = /^R\.windows\.(\d)\.(t[01])$/.exec(key);
+  return m ? `flagship.registered_rows.R.windows[${m[1]}].${m[2]}` : null;
+}
+
+/** The findings this side has sentences for: a total list, like the template families. */
+export const FINDING_IDS: readonly string[] = ["C1-raw"];
+
+/** The CES supersectors a C1 chart reads, by code, as the page names them; any other code refuses. */
+export function cesSupersector(code: string): string {
+  switch (code) {
+    case "00":
+      return "Total Nonfarm";
+    case "10":
+      return "Mining and Logging";
+    case "15":
+      return "Mining, Logging and Construction";
+    case "20":
+      return "Construction";
+    case "30":
+      return "Manufacturing";
+    case "43":
+      return "Transportation, Warehousing, and Utilities";
+    case "50":
+      return "Information";
+    case "55":
+      return "Financial Activities";
+    case "60":
+      return "Professional and Business Services";
+    default:
+      throw new Error(`no name for CES supersector ${JSON.stringify(code)}`);
+  }
+}
+
+/** The note on a published CES cell's record: an all-employees, not seasonally adjusted supersector series, named by its code. */
+export function cellNote(series: string): string {
+  const m = /^SMU\d{2}\d{5}(\d{2})000000(\d{2})$/.exec(series);
+  if (!m || m[2] !== "01") throw new Error(`series ${JSON.stringify(series)} is not a not seasonally adjusted, all-employees CES supersector series`);
+  return fillWords("C1.chart.cell_note", { code: m[1], name: cesSupersector(m[1]) });
+}
+
+/**
+ * The parts each registered specification sums on each axis: CES
+ * supersectors (MLC: 15, or 10 and 20 where 15 is not published) or, for the
+ * QCEW row X1, QCEW industries. D1 puts all of 40 in place of 43, D2 adds 65
+ * to the office industries, D3 does both (robustnessRegistered's words).
+ */
+export function axisParts(row: string, axis: string): string[] {
+  const office = ["50", "55", "60"];
+  const goods = ["MLC", "30", "43"];
+  const parts: Record<string, Record<string, string[]>> = {
+    main: { office, goods_logistics: goods },
+    D1: { office, goods_logistics: ["MLC", "30", "40"] },
+    D2: { office: [...office, "65"], goods_logistics: goods },
+    D3: { office: [...office, "65"], goods_logistics: ["MLC", "30", "40"] },
+    X1: { wc: ["1023", "1024"], bc: ["1011", "1012", "1013"] },
+  };
+  for (const r of ["E1", "E2", "E3", "P1", "P2", "P3", "R"]) parts[r] = { office, goods_logistics: goods };
+  const got = parts[row]?.[axis];
+  if (!got) throw new Error(`no registered parts for ${row}'s ${axis} axis`);
+  return got;
+}
 
 /** The codes a missing chart value's reason may be made of, "; "-joined. */
 export const NOT_PUBLISHED_CODES: TemplateId[] = ["C1.reason.mlc_not_published", "C1.reason.no_value", "C1.reason.zero_base"];
@@ -333,6 +506,7 @@ export const ROLE_TEMPLATES = {
   "headline clause": ["C1.H3.ranks", "C1.H3b", "C1.H3.twins"],
   caveat: ["C1.caveat.recency", "C1.caveat.ces_manufacturing", "C1.caveat.qcew_manufacturing", "C1.caveat.not_published", "C1.caveat.not_published.plural", "C1.caveat.benchmarked"],
   "random peer": ["C1.random_peer"],
+  "headline connective": ["C1.headline.join", "C1.headline.end"],
   "chart title": ["C1.chart_title.raw", "C1.chart_title.h3b.1", "C1.chart_title.h3b.2"],
   "chart subtitle": ["C1.chart_dek", "C1.chart_dek.recency.1", "C1.chart_dek.recency.2"],
   "subject label": ["C1.chart.subject_note"],
@@ -539,11 +713,15 @@ export function fill(id: TemplateId, slots: Record<string, Slot>): string {
   return out;
 }
 
-/** The headline: the printed clauses, filled, joined and ended as the evidence says. */
-export function headlineSentence(clauses: Array<{ id: TemplateId; printed: boolean }>, slots: Record<string, Slot>, join: string, end: string): string {
+/**
+ * The headline: the printed clauses, filled, joined and ended with the
+ * registered connectives (C1.headline.join, C1.headline.end). The bundle's own
+ * join and end are compared with these in build.ts and never printed.
+ */
+export function headlineSentence(clauses: Array<{ id: TemplateId; printed: boolean }>, slots: Record<string, Slot>): string {
   const parts = clauses.filter((c) => c.printed).map((c) => fill(c.id, slots));
   if (parts.length === 0) throw new Error("no clause of the headline is printed");
-  return parts.join(join) + end;
+  return parts.join(templateText("C1.headline.join")) + templateText("C1.headline.end");
 }
 
 /** A fragment as a sentence on the page: first letter up, a full stop. */

@@ -2,16 +2,34 @@
 // (manifest.json sources[*].source), as lib/provenance SourceRefs, and the
 // files that shape who is compared rather than a plotted value.
 //
-// The CES files cite the source record the chart sidecar carries
-// (bls-ces-sm). The rest are named here because no sidecar record carries
-// them: the OMB delineation that defines the metros, the QCEW county totals
-// that weight the fail-closed check, and the Census population estimates
-// that pick row P1's peers. They live with the insights rather than in the
-// shared lib/provenance/sources.ts registry because only a bundle cites them.
+// Every SourceRef here is this side's: the publisher, programme name, home
+// URL and license a citation prints are never read from the bundle. The chart
+// sidecar carries a source record on each provenance entry; build.ts requires
+// it to be CES_SM below, word for word, and prints CES_SM. The rest are named
+// here because no sidecar record carries them: the OMB delineation that
+// defines the metros, the QCEW county totals that weight the fail-closed
+// check, and the Census population estimates that pick row P1's peers. They
+// live with the insights rather than in the shared lib/provenance/sources.ts
+// registry because only a bundle cites them.
+//
+// What the bundle does say about a file (its URL, sha256, size,
+// Last-Modified and fetch time) is checked against a fixed form before any
+// of it prints (sourceEntryProblems): a URL of the shape its registry id
+// fetches, 64 hex characters, an HTTP date, an ISO 8601 UTC time. Those are
+// facts about a file, not words, and a value outside its form refuses.
 
 import { SOURCES } from "@/lib/provenance/sources";
 import type { SourceRef } from "@/lib/provenance/types";
 import type { TemplateId } from "./sentence";
+import type { SourceEntry } from "./types";
+
+export const CES_SM: SourceRef = {
+  id: "bls-ces-sm",
+  name: "Current Employment Statistics, State and Metro Area",
+  publisher: "U.S. Bureau of Labor Statistics",
+  url: "https://download.bls.gov/pub/time.series/sm/",
+  license: "public domain",
+};
 
 export const OMB_DELINEATION: SourceRef = {
   id: "omb-cbsa-delineation",
@@ -45,14 +63,26 @@ export interface ShapingRule {
   chart: boolean;
   /** The sentence the page prints for it (sentence.ts), filled by build.ts. */
   role: TemplateId;
-  /** The manifest URL's shape; group 1 is the year the file describes. */
+  /** The manifest URL, whole; group 1 is the year the file describes. */
   url: RegExp;
 }
 
 export const SHAPING: ShapingRule[] = [
-  { id: "omb_list1_2023", ref: OMB_DELINEATION, chart: true, role: "C1.shaping.omb", url: /\/reference-files\/(\d{4})\/delineation-files\/list1_\1\.xlsx$/ },
-  { id: "qcew_county_total", ref: SOURCES["bls-qcew"], chart: false, role: "C1.shaping.qcew_county", url: /\/cew\/data\/api\/(\d{4})\/a\/industry\/10\.csv$/ },
-  { id: "census_cbsa_est2025", ref: CENSUS_CBSA_POPEST, chart: false, role: "C1.shaping.census_p1", url: /\/popest\/datasets\/\d{4}-(\d{4})\/metro\/totals\/cbsa-est\1-alldata\.csv$/ },
+  {
+    id: "omb_list1_2023",
+    ref: OMB_DELINEATION,
+    chart: true,
+    role: "C1.shaping.omb",
+    url: /^https:\/\/www2\.census\.gov\/programs-surveys\/metro-micro\/geographies\/reference-files\/(\d{4})\/delineation-files\/list1_\1\.xlsx$/,
+  },
+  { id: "qcew_county_total", ref: SOURCES["bls-qcew"], chart: false, role: "C1.shaping.qcew_county", url: /^https:\/\/data\.bls\.gov\/cew\/data\/api\/(\d{4})\/a\/industry\/10\.csv$/ },
+  {
+    id: "census_cbsa_est2025",
+    ref: CENSUS_CBSA_POPEST,
+    chart: false,
+    role: "C1.shaping.census_p1",
+    url: /^https:\/\/www2\.census\.gov\/programs-surveys\/popest\/datasets\/\d{4}-(\d{4})\/metro\/totals\/cbsa-est\1-alldata\.csv$/,
+  },
 ];
 
 /** The month names a delineation composition id ("msa_jul2023") may carry, as the page prints them. */
@@ -72,11 +102,11 @@ export const MONTHS: Record<string, { name: string; iso: string }> = {
 };
 
 /** The SourceRef for a producer registry id, or null when this side has none (a refusal at build time). */
-export function sourceRefById(id: string, ces: SourceRef | null): SourceRef | null {
+export function sourceRefById(id: string): SourceRef | null {
   switch (id) {
     case "bls_ces_sm_data":
     case "bls_ces_sm_data_alt":
-      return ces;
+      return CES_SM;
     case "qcew_msa_area":
     case "qcew_county_total":
       return SOURCES["bls-qcew"];
@@ -87,4 +117,42 @@ export function sourceRefById(id: string, ces: SourceRef | null): SourceRef | nu
     default:
       return null;
   }
+}
+
+/** The URL every file of a registry id is fetched from, whole. */
+function urlForm(id: string): RegExp | null {
+  switch (id) {
+    case "bls_ces_sm_data":
+    case "bls_ces_sm_data_alt":
+      return /^https:\/\/download\.bls\.gov\/pub\/time\.series\/sm\/sm\.data\.\d{1,3}\.[A-Za-z]+\.[A-Za-z]+$/;
+    case "qcew_msa_area":
+      return /^https:\/\/data\.bls\.gov\/cew\/data\/api\/\d{4}\/a\/area\/C\d{4}\.csv$/;
+    default:
+      return SHAPING.find((r) => r.id === id)?.url ?? null;
+  }
+}
+
+const HEX64 = /^[0-9a-f]{64}$/;
+/** An HTTP date (RFC 9110 IMF-fixdate), as a Last-Modified header carries it. */
+export const HTTP_DATE = /^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun), \d{2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{4} \d{2}:\d{2}:\d{2} GMT$/;
+/** A fetch time: ISO 8601 in UTC, to the second. */
+export const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
+
+/** What is wrong with a source entry the page cites, against the fixed form of each field; empty when nothing is. */
+export function sourceEntryProblems(entry: SourceEntry): string[] {
+  const problems: string[] = [];
+  const form = urlForm(entry.source);
+  if (!sourceRefById(entry.source) || !form) problems.push(`its registry id ${JSON.stringify(entry.source)} is not one this side cites`);
+  else if (!form.test(entry.url)) problems.push(`its URL ${JSON.stringify(entry.url)} is not one ${entry.source} fetches`);
+  if (!HEX64.test(entry.sha256)) problems.push(`its sha256 ${JSON.stringify(entry.sha256)} is not 64 hex characters`);
+  if (!Number.isSafeInteger(entry.bytes) || entry.bytes < 0) problems.push(`its size ${JSON.stringify(entry.bytes)} is not a byte count`);
+  if (entry.last_modified !== null && !HTTP_DATE.test(entry.last_modified)) problems.push(`its Last-Modified ${JSON.stringify(entry.last_modified)} is not an HTTP date`);
+  if (!ISO_UTC.test(entry.fetched_at)) problems.push(`its fetch time ${JSON.stringify(entry.fetched_at)} is not an ISO 8601 UTC time`);
+  return problems;
+}
+
+/** The date of an HTTP date, as ISO 8601 ("Fri, 18 Sep 2026 14:00:00 GMT" -> "2026-09-18"). */
+export function isoDateOf(httpDate: string): string {
+  if (!HTTP_DATE.test(httpDate)) throw new Error(`${JSON.stringify(httpDate)} is not an HTTP date`);
+  return new Date(Date.parse(httpDate)).toISOString().slice(0, 10);
 }

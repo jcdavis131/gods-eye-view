@@ -32,10 +32,28 @@
 // of that metro's office and goods-and-logistics growth, and a row is in
 // both sets exactly when it is plotted.
 //
+// recomputeFromCells goes one step further down, to the published cells:
+// every growth, change and cell number the evidence holds, and every set
+// member's growth, is recomputed from the cells it reads (the number's own
+// provenance tuples; a member's series in the cells table at the set's
+// periods), summing the published text exactly. Each reads exactly the
+// registered parts of its metro (sentence.ts axisParts) at every period of
+// both ends, and the value must agree to 1e-9, relative. The main universe's
+// values are its members' total nonfarm cells. So a value moved by hand,
+// with the cells it cites left alone, is a refusal however consistently the
+// rest of the evidence was moved with it (the A3 verifier's Dallas +4).
+//
+// recomputePeers checks a peers row ranked like the universe (P2, P3) against
+// that ranking: as many metros as it registers, and for a row no larger than
+// the universe, exactly the largest of it; for a larger row (P3), the whole
+// universe and its first metro out. The ranking past the universe's cutoff is
+// not in the evidence, so which metros fill the rest of P3 is not checked.
+//
 // Pure, over the evidence alone. Each function returns the problems it found
 // (empty when everything agrees); the build refuses on any.
 
 import { byteCompare, canonicalJson } from "./render/spec";
+import { axisParts } from "./sentence";
 import type { Evidence, EvidenceNumber, EvidenceSet } from "./types";
 
 /** One entry of not_publishable_could_beat_both's checks[], as the producer writes it. */
@@ -267,5 +285,303 @@ export function recomputeRandomPeer(ev: Evidence, key: string, prefix: string, s
   if (p.n !== others.length || p.m !== beaten.length || canonicalJson(sorted(p.not_beaten ?? [])) !== canonicalJson(notBeaten)) {
     return [`${key}: m = ${p.m} of n = ${p.n}, not beaten ${JSON.stringify(sorted(p.not_beaten ?? []))} in the evidence; the sets give m = ${beaten.length} of n = ${others.length}, not beaten ${JSON.stringify(notBeaten)}`];
   }
+  return [];
+}
+
+// ---------------------------------------------------------------- from the published cells
+
+/** Relative agreement of a recomputed value with the evidence's. */
+export const RELATIVE_TOLERANCE = 1e-9;
+
+function agrees(got: number, want: number): boolean {
+  if (got === want) return true;
+  return Math.abs(got - want) <= RELATIVE_TOLERANCE * Math.max(Math.abs(got), Math.abs(want));
+}
+
+/** One published cell: a series at "year|period", its value as published. */
+interface PublishedCell {
+  series: string;
+  at: string;
+  value: string;
+}
+
+const DECIMAL = /^(-?)(\d+)(?:\.(\d+))?$/;
+
+/** The decimal places of a published value, or null when it is not a plain decimal. */
+function places(text: string): number | null {
+  const m = DECIMAL.exec(text);
+  return m ? (m[3] ?? "").length : null;
+}
+
+/** A published decimal as an exact integer count of 10^-scale units. */
+function units(text: string, scale: number): bigint {
+  const m = DECIMAL.exec(text) as RegExpExecArray;
+  const frac = (m[3] ?? "").padEnd(scale, "0");
+  const v = BigInt(`${m[2]}${frac}`);
+  return m[1] ? -v : v;
+}
+
+/** The common scale of a set of published values, or a problem naming one that is not a decimal. */
+function scaleOf(cells: PublishedCell[]): number | string {
+  let scale = 0;
+  for (const c of cells) {
+    const p = places(c.value);
+    if (p === null) return `${c.series} ${c.at} is ${JSON.stringify(c.value)}, not a published decimal`;
+    scale = Math.max(scale, p);
+  }
+  return scale;
+}
+
+/** "SMU48124205000000001" -> its metro and supersector; "C1242:own5:1023:agglvl43" -> its metro and industry. */
+function partOf(series: string): { metro: string; part: string } | null {
+  const ces = /^SMU\d{2}(\d{5})(\d{2})00000001$/.exec(series);
+  if (ces) return { metro: ces[1], part: ces[2] };
+  const qcew = /^(C\d{4}):own5:(\d{4}):agglvl43$/.exec(series);
+  return qcew ? { metro: qcew[1], part: qcew[2] } : null;
+}
+
+/**
+ * Whether a series list's parts are exactly the registered ones (MLC: 15, or
+ * 10 and 20), or "incomplete" when a registered part has no series at all.
+ */
+function coversParts(parts: string[], registered: string[]): boolean | "incomplete" {
+  const have = new Set(parts);
+  if (have.size !== parts.length) return false;
+  const want: string[] = [];
+  for (const p of registered) {
+    if (p !== "MLC") want.push(p);
+    else if (have.has("15")) want.push("15");
+    else if (have.has("10") && have.has("20")) want.push("10", "20");
+    else if (have.has("10") || have.has("20")) return false;
+    else return "incomplete";
+  }
+  if (want.some((p) => !have.has(p))) return "incomplete";
+  return want.length === parts.length;
+}
+
+/**
+ * (X_t1 / X_t0 - 1) x 100, X the sum over the parts of each part's mean over
+ * its end's periods, from the published text: exact integer sums, one
+ * division. Each series must have a cell at exactly the periods of both ends.
+ */
+function growthFromCells(cells: PublishedCell[], t0: string[], t1: string[]): { value: number } | string {
+  const ends = new Set([...t0, ...t1]);
+  const bySeries = new Map<string, Map<string, string>>();
+  for (const c of cells) {
+    if (!ends.has(c.at)) return `it reads ${c.series} ${c.at}, which is not a period of the window's ends (${[...ends].join(", ")})`;
+    const m = bySeries.get(c.series) ?? new Map<string, string>();
+    if (m.has(c.at)) return `it reads ${c.series} ${c.at} twice`;
+    m.set(c.at, c.value);
+    bySeries.set(c.series, m);
+  }
+  for (const [series, m] of bySeries) {
+    if (m.size !== ends.size) return `it reads ${series} at ${m.size} of the ${ends.size} periods of the window's ends`;
+  }
+  const scale = scaleOf(cells);
+  if (typeof scale === "string") return scale;
+  const sum = (at: string[]) => [...bySeries.values()].reduce((s, m) => at.reduce((t, a) => t + units(m.get(a) as string, scale), s), BigInt(0));
+  const s0 = sum(t0) * BigInt(t1.length);
+  const s1 = sum(t1) * BigInt(t0.length);
+  if (s0 <= BigInt(0)) return `its ${t0.join(", ")} sum is not positive`;
+  return { value: (Number(s1 - s0) / Number(s0)) * 100 };
+}
+
+/** Every published cell of the evidence's cells table, by series and "year|period"; conflicting copies are a problem. */
+function cellTable(ev: Evidence, problems: string[]): Map<string, Map<string, string>> {
+  const out = new Map<string, Map<string, string>>();
+  for (const bySeries of Object.values(ev.cells ?? {})) {
+    for (const [series, cells] of Object.entries(bySeries)) {
+      const m = out.get(series) ?? new Map<string, string>();
+      for (const [at, text] of Object.entries(cells)) {
+        const value = text.split("|")[0];
+        if (m.has(at) && m.get(at) !== value) problems.push(`the cells table has ${series} ${at} as both ${m.get(at)} and ${value}`);
+        m.set(at, value);
+      }
+      out.set(series, m);
+    }
+  }
+  return out;
+}
+
+const atsOf = (ends: Array<[number, string]> | undefined): string[] => (ends ?? []).map(([y, p]) => `${y}|${p}`);
+
+/**
+ * Every growth, change and cell number of the evidence, every set member's
+ * growth and the universe's values, recomputed from the published cells.
+ * Returns the problems found.
+ */
+export function recomputeFromCells(ev: Evidence): string[] {
+  const problems: string[] = [];
+  const table = cellTable(ev, problems);
+  const tuplesOf = (key: string, n: EvidenceNumber): PublishedCell[] | null => {
+    const out: PublishedCell[] = [];
+    for (const t of n.provenance ?? []) {
+      const [series, year, period, value] = t.split("|");
+      const at = `${year}|${period}`;
+      if (table.get(series)?.get(at) !== value) {
+        problems.push(`${key} cites ${series} ${at} = ${value}, the cells table has ${JSON.stringify(table.get(series)?.get(at) ?? null)}`);
+        return null;
+      }
+      out.push({ series, at, value });
+    }
+    return out;
+  };
+  /** The two ends of a specification window, from its sets' periods. */
+  const endsOf = (prefix: string, axis: string): { t0: string[]; t1: string[] } | null => {
+    const set = ev.sets[`${prefix}:${axis}`];
+    const t0 = atsOf(set?.periods?.t0);
+    const t1 = atsOf(set?.periods?.t1);
+    return set && t0.length && t1.length ? { t0, t1 } : null;
+  };
+  /** A growth from its cells against `value`, its series exactly the metro's registered parts. */
+  const checkGrowth = (what: string, row: string, metro: string, axis: string, ends: { t0: string[]; t1: string[] }, cells: PublishedCell[], value: number | null) => {
+    let registered: string[];
+    try {
+      registered = axisParts(row, axis);
+    } catch (e) {
+      problems.push(`${what}: ${(e as Error).message}`);
+      return;
+    }
+    const parts: string[] = [];
+    for (const s of new Set(cells.map((c) => c.series))) {
+      const p = partOf(s);
+      if (!p || p.metro !== metro) {
+        problems.push(`${what} reads ${s}, which is not a series of ${metro}`);
+        return;
+      }
+      parts.push(p.part);
+    }
+    parts.sort(byteCompare);
+    const covered = coversParts(parts, registered);
+    if (value === null) {
+      if (covered === true) problems.push(`${what} is null, but its cells publish every part (${parts.join(", ")})`);
+      return;
+    }
+    if (covered !== true) {
+      problems.push(`${what} reads the parts ${parts.join(", ") || "(none)"}, not the registered ${registered.join(" + ")}`);
+      return;
+    }
+    const g = growthFromCells(cells, ends.t0, ends.t1);
+    if (typeof g === "string") problems.push(`${what}: ${g}`);
+    else if (!agrees(g.value, value)) problems.push(`${what} is ${value}, its published cells give ${g.value}`);
+  };
+
+  for (const [key, n] of Object.entries(ev.numbers)) {
+    if (n.kind === "growth") {
+      const m = /^([A-Za-z0-9]+):([^.]+)\.([^.]+)\.([a-z_]+)\.growth_pct$/.exec(key);
+      const ends = m ? endsOf(`${m[1]}:${m[2]}`, m[4]) : null;
+      if (!m || !ends) {
+        problems.push(`growth ${key} names no specification window with sets`);
+        continue;
+      }
+      const cells = tuplesOf(key, n);
+      if (cells) checkGrowth(key, m[1], m[3], m[4], ends, cells, typeof n.value === "number" ? n.value : null);
+    } else if (n.kind === "change") {
+      const m = /^([A-Za-z0-9]+):([^.]+)\.(\d{5})\.total_nonfarm\.change$/.exec(key);
+      const ends = m ? endsOf(`${m[1]}:${m[2]}`, "office") : null;
+      if (!m || !ends) {
+        problems.push(`change ${key} names no specification window with sets`);
+        continue;
+      }
+      const cells = tuplesOf(key, n);
+      if (!cells) continue;
+      const tnf = (at: string) => cells.filter((c) => c.at === at && partOf(c.series)?.metro === m[3] && partOf(c.series)?.part === "00");
+      if (ends.t0.length !== 1 || ends.t1.length !== 1 || cells.length !== 2 || tnf(ends.t0[0]).length !== 1 || tnf(ends.t1[0]).length !== 1) {
+        problems.push(`${key} does not read ${m[3]}'s total nonfarm cell at each end of the window, once`);
+        continue;
+      }
+      const scale = scaleOf(cells);
+      if (typeof scale === "string") {
+        problems.push(`${key}: ${scale}`);
+        continue;
+      }
+      const d = Number(units(tnf(ends.t1[0])[0].value, scale) - units(tnf(ends.t0[0])[0].value, scale)) / 10 ** scale;
+      if (typeof n.value !== "number" || !agrees(d, n.value)) problems.push(`${key} is ${JSON.stringify(n.value)}, its published cells give ${d}`);
+    } else if (n.kind === "cell") {
+      const m = /^cell\.(SMU\d{17})\|(\d{4})\|(M\d{2})$/.exec(key);
+      if (!m) {
+        problems.push(`cell ${key} is not a cell key`);
+        continue;
+      }
+      const cells = tuplesOf(key, n);
+      if (cells && (cells.length !== 1 || cells[0].series !== m[1] || cells[0].at !== `${m[2]}|${m[3]}` || n.value !== Number(cells[0].value))) {
+        problems.push(`${key} is ${JSON.stringify(n.value)}, not the one published cell it names`);
+      }
+    }
+  }
+
+  for (const [key, set] of Object.entries(ev.sets)) {
+    if (key === "main:universe") {
+      const at = atsOf(set.periods?.t0);
+      for (const [cbsa, member] of Object.entries(set.members)) {
+        const mm = member as { series?: string[]; value?: unknown };
+        const series = mm.series ?? [];
+        const p = series.length === 1 ? partOf(series[0]) : null;
+        const cell = p && at.length === 1 ? table.get(series[0])?.get(at[0]) : undefined;
+        if (!p || p.metro !== cbsa || p.part !== "00" || cell === undefined || Number(cell) !== mm.value) {
+          problems.push(`main:universe gives ${cbsa} ${JSON.stringify(mm.value)}, not its total nonfarm cell at ${at.join(", ")} (${JSON.stringify(cell ?? null)})`);
+        }
+      }
+      continue;
+    }
+    const m = /^([A-Za-z0-9]+):([^:]+):([a-z_]+)$/.exec(key);
+    const ends = m ? endsOf(`${m[1]}:${m[2]}`, m[3]) : null;
+    if (!m || !ends) {
+      problems.push(`set ${key} has no window ends to recompute its members from`);
+      continue;
+    }
+    for (const [cbsa, member] of Object.entries(set.members)) {
+      const mm = member as { series?: string[]; growth_pct?: unknown };
+      const cells: PublishedCell[] = [];
+      for (const s of mm.series ?? []) {
+        for (const at of [...ends.t0, ...ends.t1]) {
+          const value = table.get(s)?.get(at);
+          if (value !== undefined) cells.push({ series: s, at, value });
+        }
+      }
+      checkGrowth(`${key} member ${cbsa}`, m[1], cbsa, m[3], ends, cells, typeof mm.growth_pct === "number" ? mm.growth_pct : NaN);
+    }
+  }
+  return problems;
+}
+
+/**
+ * A peers row ranked like the universe (CES total nonfarm at the universe's
+ * period), against that ranking as the evidence holds it: the main universe's
+ * members by value, each its own published cell (recomputeFromCells). The row
+ * covers `largestN` metros; when that is no more than the universe, exactly
+ * its largest, with no tie at the cutoff; when it is more, the whole universe
+ * and the universe's first metro out.
+ */
+export function recomputePeers(ev: Evidence, prefix: string, largestN: number): string[] {
+  const w = windowSets(ev, prefix);
+  if (typeof w === "string") return [w];
+  const covered = sorted(new Set([...Object.keys(w.sets[0].members), ...Object.keys(w.sets[0].excluded ?? {})]));
+  if (covered.length !== largestN) return [`${prefix}: its sets cover ${covered.length} metros, but it registers the ${largestN} largest`];
+  const u = ev.sets["main:universe"];
+  if (!u) return [`${prefix}: the evidence has no main:universe ranking to check it against`];
+  const ranked = Object.entries(u.members)
+    .map(([c, m]) => [c, (m as { value?: unknown }).value] as const)
+    .filter((e): e is readonly [string, number] => finiteNumber(e[1]))
+    .sort((a, b) => b[1] - a[1] || byteCompare(a[0], b[0]));
+  const n = ranked.length;
+  const has = new Set(covered);
+  if (largestN <= n) {
+    if (largestN < n && !(ranked[largestN - 1][1] > ranked[largestN][1])) {
+      return [`${prefix}: the ranking ties at its cutoff (${ranked[largestN - 1][0]} and ${ranked[largestN][0]} at ${ranked[largestN][1]}), so its ${largestN} largest are not one set`];
+    }
+    const want = new Set(ranked.slice(0, largestN).map(([c]) => c));
+    const out = [...want].filter((c) => !has.has(c)).sort(byteCompare);
+    const extra = covered.filter((c) => !want.has(c));
+    if (out.length || extra.length) {
+      const said = [out.length ? `${out.join(", ")} left out` : "", extra.length ? `${extra.join(", ")} not among them` : ""].filter(Boolean).join("; ");
+      return [`${prefix}: its metros are not the ${largestN} largest by the universe's ranking: ${said}`];
+    }
+    return [];
+  }
+  const out = ranked.map(([c]) => c).filter((c) => !has.has(c));
+  if (out.length) return [`${prefix}: it registers the ${largestN} largest but leaves out ${out.join(", ")}, of the universe's ${n} largest`];
+  const first = u.cutoff?.[`rank_${n + 1}`]?.cbsa;
+  if (!first || !has.has(first)) return [`${prefix}: it registers the ${largestN} largest but leaves out the universe's first metro out, rank_${n + 1} (${first ?? "none named"})`];
   return [];
 }

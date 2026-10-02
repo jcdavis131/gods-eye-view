@@ -22,7 +22,11 @@ import { renderSvg } from "./render/render";
 import { parseChartSpec, type BubbleSpec } from "./render/spec";
 import { METHODS_IS, METHODS_IS_NOT, fill, formatSlot, templateText, type TemplateId } from "./sentence";
 import { THEMES } from "./render/tokens";
+import { metroName } from "./metros";
+import { recomputeFromCells, recomputePeers } from "./recompute";
+import { CES_SM } from "./sources";
 import { BASE, NAME, ROOT, suppressH3b, suppressedPath, variant, type Parts } from "./testFixtures";
+import type { MetroRef } from "./types";
 
 const DIR = path.join(ROOT, "lib/insights/data", NAME);
 const EV = BASE.findings[0].evidence;
@@ -247,7 +251,15 @@ describe("the H3b gate", () => {
       p.evidence.numbers[P2_BOTH].value = 1;
       p.evidence.numbers[P2_BOTH].metros = ["42340"];
     });
-    expect(refusal(b)).toMatch(/evidence number P2:2019->2025\.12420\.beat_on_both is 1 \(42340\), not 0/);
+    // The table would print the precondition's 0 beside an evidence number of 1: refused before the gate is asked.
+    expect(refusal(b)).toMatch(/precondition h3b\.no_metro_beat_both\.P2 prints 0, but its evidence number P2:2019->2025\.12420\.beat_on_both is 1/);
+    // With the precondition saying 1 as well and still claiming to pass, the row it prints contradicts itself.
+    const both = variant((p) => {
+      p.evidence.numbers[P2_BOTH].value = 1;
+      p.evidence.numbers[P2_BOTH].metros = ["42340"];
+      p.evidence.preconditions.find((x) => x.name === "h3b.no_metro_beat_both.P2")!.value = 1;
+    });
+    expect(refusal(both)).toMatch(/precondition h3b\.no_metro_beat_both\.P2 says it passes, but 1 against "== 0" does not hold/);
   });
 
   it("refuses when the gating list drops a row, or a row's not-publishable check is missing", () => {
@@ -394,13 +406,17 @@ describe("the H3b clause's words print only through its gate", () => {
     expect(refusal(b)).toMatch(/random peer uses template C1\.H3b, which a random peer may not print \(only C1\.random_peer\)/);
   });
 
-  it("refuses an H3b title rung as an extra headline clause, gated by its own precondition", () => {
-    const b = suppressedAnd((p) => {
+  it("refuses an H3b title rung as an extra headline clause, and a precondition invented to gate it", () => {
+    const clause = (p: Parts) => {
       p.evidence.headline.clauses.push({ id: "C1.chart_title.h3b.2", text: templateText("C1.chart_title.h3b.2"), printed: true, slots: ["subject", "t0", "t1"] });
-      p.evidence.preconditions.push({ ...structuredClone(p.evidence.preconditions[0]), name: "extra.clause", gates: "C1.chart_title.h3b.2" });
       p.methods.panel_a.headline.clauses["C1.chart_title.h3b.2"] = true;
+    };
+    expect(refusal(suppressedAnd(clause))).toMatch(/headline uses template C1\.chart_title\.h3b\.2, which a headline clause may not print \(only C1\.H3\.ranks, C1\.H3b, C1\.H3\.twins\)/);
+    const gated = suppressedAnd((p) => {
+      clause(p);
+      p.evidence.preconditions.push({ ...structuredClone(p.evidence.preconditions[0]), name: "extra.clause", gates: "C1.chart_title.h3b.2" });
     });
-    expect(refusal(b)).toMatch(/headline uses template C1\.chart_title\.h3b\.2, which a headline clause may not print \(only C1\.H3\.ranks, C1\.H3b, C1\.H3\.twins\)/);
+    expect(refusal(gated)).toMatch(/precondition "extra\.clause" is not a registered precondition/);
   });
 
   it("refuses the H3b clause listed twice in the headline", () => {
@@ -427,13 +443,15 @@ describe("the H3b clause's words print only through its gate", () => {
     });
     expect(refusal(suppressed)).toMatch(/the evidence suppresses "No major metro beat Austin on both", which is not a headline clause that does not print/);
     const gates = suppressedAnd((p) => void (p.evidence.preconditions[0].gates = "C1.caveat.recency"));
-    expect(refusal(gates)).toMatch(/precondition universe\.n gates "C1\.caveat\.recency", which is neither the finding nor a clause of its headline/);
+    expect(refusal(gates)).toMatch(/precondition universe\.n gates "C1\.caveat\.recency"; registered, it gates C1-raw/);
   });
 
-  // The backstop: routes no template id governs, each carrying the words into the insight.
-  it("refuses the words as a precondition's name when the clause does not print", () => {
-    const b = suppressedAnd((p) => void p.evidence.preconditions.push({ ...structuredClone(p.evidence.preconditions[0]), name: "No major metro beat Austin on both" }));
-    expect(refusal(b)).toMatch(/the H3b clause does not print \(its gate did not hold\), but its words do, at preconditions\.\d+\.name$/);
+  // Routes no template id governs once carried the words into the insight, and only the backstop caught them. Each is
+  // now closed before it: a precondition's name is a registered one, and a metro's label is Atlas's registry's.
+  it("refuses the words as a precondition's name, which is no registered precondition, whether or not the clause prints", () => {
+    const pushed = (p: Parts) => void p.evidence.preconditions.push({ ...structuredClone(p.evidence.preconditions[0]), name: "No major metro beat Austin on both" });
+    expect(refusal(suppressedAnd(pushed))).toMatch(/precondition "No major metro beat Austin on both" is not a registered precondition/);
+    expect(refusal(variant(pushed))).toMatch(/precondition "No major metro beat Austin on both" is not a registered precondition/);
   });
 
   it("refuses the words as a failing precondition's name in the reason the clause does not print", () => {
@@ -443,17 +461,12 @@ describe("the H3b clause's words print only through its gate", () => {
       s.preconditions[0].name = name;
       s.reason = `a precondition fails: ${name}`;
     });
-    expect(refusal(b)).toMatch(/but its words do, at notPrinted\.\d+\.reason$/);
+    expect(refusal(b)).toMatch(/precondition "no major metro beat Austin on both" is not a registered precondition/);
   });
 
-  it("refuses the words as a metro's label on the chart", () => {
+  it("refuses the words as a metro's label on the chart: the label is not the registry's", () => {
     const b = suppressedAnd((p) => void (p.chart.data[2].label = "No major metro beat Austin on both"));
-    expect(refusal(b)).toMatch(/but its words do, at spec\.data\.2\.label$/);
-  });
-
-  it("refuses the words outside the headline, its description and the title when the clause prints", () => {
-    const b = variant((p) => void p.evidence.preconditions.push({ ...structuredClone(p.evidence.preconditions[0]), name: "No major metro beat Austin on both" }));
-    expect(refusal(b)).toMatch(/the H3b clause's words print outside the headline, its description and the chart title, at preconditions\.\d+\.name$/);
+    expect(refusal(b)).toMatch(/chart row 16980 labels 16980 "No major metro beat Austin on both"; Atlas's metro registry labels it "Chicago"/);
   });
 
   it("finds the words at every place the page prints from, in any case and spacing", () => {
@@ -523,7 +536,10 @@ describe("refusals", () => {
     );
     expect(refusal(variant((p) => void (p.evidence.numbers["main:2019->2025.12420.office.rank"].formula = templateText("C1.H3b"))))).toMatch(/not the registered rank/);
     expect(refusal(variant((p) => void (p.evidence.preconditions.find((x) => x.name === "universe.n")!.threshold = "== 151 (prereg flagship.universe.largest_n)")))).toMatch(
-      /precondition universe\.n states the threshold "== 151 \(prereg flagship\.universe\.largest_n\)", which is not a registered one/,
+      /precondition universe\.n says it passes, but 150 against "== 151 \(prereg flagship\.universe\.largest_n\)" does not hold/,
+    );
+    expect(refusal(variant((p) => void (p.evidence.preconditions.find((x) => x.name === "universe.n")!.threshold = "== 150 (prereg flagship.largest_n)")))).toMatch(
+      /precondition universe\.n states the threshold "== 150 \(prereg flagship\.largest_n\)", which is not its registered one \(C1\.threshold\.universe_n\)/,
     );
   });
 
@@ -624,6 +640,267 @@ describe("refusals", () => {
     expect(refusal(b)).toMatch(/robustness D1 2019->2025: D1:2019->2025\.12420\.office\.rank is 2 on the methods page, 1 in the evidence/);
     const n = variant((p) => void (p.methods.robustness.rows.P2.windows["2019->2025"].n = 101));
     expect(refusal(n)).toMatch(/robustness P2 2019->2025: the methods page counts 101 metros, the evidence sets 100/);
+  });
+});
+
+/** The four documents with every quoted occurrence of `from` replaced by `to`: a key renamed with every reference to it, as a consistent export would. */
+function renamedEverywhere(from: string, to: string): LoadedBundle {
+  const f = BASE.findings[0];
+  const doc = <T>(v: T): T => JSON.parse(JSON.stringify(v).split(JSON.stringify(from)).join(JSON.stringify(to))) as T;
+  return { ...BASE, manifest: doc(BASE.manifest), methods: doc(BASE.methods), findings: [{ ...f, evidence: doc(f.evidence), chart: doc(f.chart) }] };
+}
+
+describe("no producer text reaches a printed surface (A2's attacks and the rest)", () => {
+  const AUSTIN_CAVEATS = ["C1.caveat.recency", "C1.caveat.ces_manufacturing"];
+
+  it("refuses a headline end or join that is not the registered connective: the words never print", () => {
+    for (const end of ["; no other large metro outgrew Austin on both.", ", and none of them beat Austin on both."]) {
+      expect(refusal(variant((p) => void (p.evidence.headline.end = end)))).toMatch(/the headline ends with ".*", not the registered C1\.headline\.end "\."/);
+      expect(refusal(variant((p) => void (p.evidence.headline.join = end)))).toMatch(/the headline joins its clauses with ".*", not the registered C1\.headline\.join "; "/);
+    }
+    // What the headline prints between and after its clauses is the registry's.
+    expect(I.headline.endsWith(`no major metro beat Austin on both${templateText("C1.headline.end")}`)).toBe(true);
+    expect(I.headline).toContain(`major metros${templateText("C1.headline.join")}no major metro`);
+  });
+
+  it("refuses 'Austin (unbeaten on both)' as the subject's label, in any slot, in every slot at once, or on the chart row", () => {
+    const label = "Austin (unbeaten on both)";
+    expect(refusal(variant((p) => void ((p.evidence.headline.slots.subject as MetroRef).label = label)))).toMatch(
+      /headline slot \{subject\} labels 12420 "Austin \(unbeaten on both\)"; Atlas's metro registry labels it "Austin"/,
+    );
+    expect(refusal(variant((p) => void ((p.evidence.chart.title.slots.subject as MetroRef).label = label)))).toMatch(/chart title slot \{subject\} labels 12420 "Austin \(unbeaten on both\)"/);
+    const everywhere = variant((p) => {
+      const ev = p.evidence;
+      for (const slots of [ev.headline.slots, ev.random_peer.slots, ev.chart.title.slots, ev.chart.dek.slots, ...ev.caveats.filter((c) => AUSTIN_CAVEATS.includes(c.id)).map((c) => c.slots!)]) {
+        (slots.subject as MetroRef).label = label;
+      }
+      ev.chart.labels.requested[0].label = label;
+      p.chart.data.find((d) => d.id === "12420")!.label = label;
+    });
+    expect(refusal(everywhere)).toMatch(/labels 12420 "Austin \(unbeaten on both\)"; Atlas's metro registry labels it "Austin"/);
+    // The chart row alone: its label is drawn beside the bubble and in the legend, so it is the registry's or nothing.
+    expect(refusal(variant((p) => void (p.chart.data.find((d) => d.id === "12420")!.label = label)))).toMatch(/chart row 12420 labels 12420 "Austin \(unbeaten on both\)"; Atlas's metro registry labels it "Austin"/);
+  });
+
+  it("refuses 'Houston' on Beaumont's CBSA, in the recency list, on the chart row and in the robustness table", () => {
+    const houston = (m: MetroRef) => void (m.label = "Houston");
+    const recency = variant((p) => {
+      const list = p.evidence.caveats.find((c) => c.id === "C1.caveat.recency")!.slots!.beat_both as { metros: MetroRef[] };
+      houston(list.metros.find((m) => m.cbsa === "13140")!);
+    });
+    expect(refusal(recency)).toMatch(/caveat C1\.caveat\.recency slot \{beat_both\} labels 13140 "Houston"; Atlas's metro registry labels it "Beaumont"/);
+    const dek = variant((p) => houston((p.evidence.chart.dek.slots.beat_both as { metros: MetroRef[] }).metros.find((m) => m.cbsa === "13140")!));
+    expect(refusal(dek)).toMatch(/chart subtitle slot \{beat_both\} labels 13140 "Houston"/);
+    expect(refusal(variant((p) => void (p.chart.data.find((d) => d.id === "13140")!.label = "Houston")))).toMatch(/chart row 13140 labels 13140 "Houston"; Atlas's metro registry labels it "Beaumont"/);
+    const table = variant((p) => void (p.methods.robustness.rows.R.windows["2022->2025"].beat_on_both!.metros[0].title = "Houston-Pasadena-The Woodlands, TX"));
+    expect(refusal(table)).toMatch(/robustness R 2022->2025 titles 13140 "Houston-Pasadena-The Woodlands, TX"; Atlas's metro registry titles it "Beaumont-Port Arthur, TX"/);
+    // Houston's own id and title, named by the table while the evidence's count names Beaumont: refused on the ids.
+    const ids = variant((p) => void (p.methods.robustness.rows.R.windows["2022->2025"].beat_on_both!.metros[0] = { id: "26420", title: "Houston-Pasadena-The Woodlands, TX" }));
+    expect(refusal(ids)).toMatch(/robustness R 2022->2025 names \["26420","45220"\] as beating the subject on both, but R:2022->2025\.12420\.beat_on_both names \["45220","13140"\]/);
+  });
+
+  it("prints every metro's names from Atlas's registry, even where the bundle gives none", () => {
+    const named = (cbsa: string) => metroName(cbsa)!;
+    expect(I.subject).toEqual(named("12420"));
+    expect(I.notPublished.map((m) => ({ cbsa: m.cbsa, label: m.label, title: m.title }))).toEqual([named("45300")]);
+    expect(I.failClosed).toEqual(EV.chart.fail_closed.map((m) => ({ cbsa: m.cbsa, title: named(m.cbsa).title })));
+    for (const d of (I.spec as BubbleSpec).data) expect({ label: d.label, fullLabel: d.fullLabel }, d.id).toEqual({ label: named(d.id).label, fullLabel: named(d.id).title });
+    expect(I.robustness.find((r) => r.id === "R" && r.window === "2022 to 2025")!.beatOnBoth!.names).toEqual([named("13140").title, named("45220").title]);
+    // Every label and title the evidence gives beside a slot's CBSA removed: the same insight, named by the registry.
+    const bare = variant((p) => {
+      const strip = (s: unknown): void => {
+        if (Array.isArray(s)) return s.forEach(strip);
+        if (s && typeof s === "object") {
+          const o = s as Record<string, unknown>;
+          if (typeof o.cbsa === "string") {
+            delete o.label;
+            delete o.title;
+          }
+          Object.values(o).forEach(strip);
+        }
+      };
+      const ev = p.evidence;
+      strip([ev.headline.slots, ev.random_peer.slots, ev.caveats, ev.chart.title.slots, ev.chart.dek.slots, ev.chart.not_published]);
+    });
+    const i = buildInsight(bare, "C1-raw");
+    expect([i.headline, i.description, i.chartTitle, i.dek, i.randomPeer, i.caveats, i.subject]).toEqual([I.headline, I.description, I.chartTitle, I.dek, I.randomPeer, I.caveats, I.subject]);
+  });
+
+  it("refuses an evidence key, a registered number's citation or a provenance field the arithmetic prints that is not of its registered form", () => {
+    expect(refusal(renamedEverywhere("R.windows.1.t0", "R.windows.1.t0 (Austin unbeaten)"))).toMatch(/\{t0\} reads "R\.windows\.1\.t0 \(Austin unbeaten\)", which is not an evidence key of a registered form/);
+    expect(refusal(variant((p) => void (p.evidence.numbers["window.t0"].registered!.path = "flagship.window.start (Austin unbeaten)")))).toMatch(
+      /registered number window\.t0 cites "registry\/prereg\.json flagship\.window\.start \(Austin unbeaten\)"/,
+    );
+    const footnote = variant((p) => {
+      const n = p.evidence.numbers["cell.SMU48124203000000001|2022|M13"];
+      n.provenance = n.provenance.map((t) => t.replace("|75.2||", "|75.2|X (unbeaten)|"));
+    });
+    expect(refusal(footnote)).toMatch(/has the footnote "X \(unbeaten\)", which is not of the fixed form a footnote takes/);
+    expect(refusal(variant((p) => void (p.evidence.preconditions.find((x) => x.name === "h3.subject_publishable")!.name = "h3.subject_publishable_and_unbeaten")))).toMatch(
+      /precondition "h3\.subject_publishable_and_unbeaten" is not a registered precondition/,
+    );
+  });
+
+  it("refuses a source entry a citation prints whose fields are not of their fixed form", () => {
+    const census = variant((p) => {
+      const e = Object.values(p.manifest.sources).find((s) => s.source === "census_cbsa_est2025")!;
+      e.last_modified = `${e.last_modified} (Austin unbeaten)`;
+    });
+    expect(refusal(census)).toMatch(/the census_cbsa_est2025 file .*cbsa-est2025-alldata\.csv: its Last-Modified ".* \(Austin unbeaten\)" is not an HTTP date/);
+    const url = variant((p) => {
+      const e = Object.values(p.manifest.sources).find((s) => s.source === "omb_list1_2023")!;
+      e.url = `${e.url}?austin=unbeaten`;
+    });
+    expect(refusal(url)).toMatch(/the omb_list1_2023 file is not a URL this side can read a year from|is not one omb_list1_2023 fetches/);
+  });
+
+  it("prints the chart's source names, notes, dates, as-of date and address as this side builds them, and refuses a sidecar that says otherwise", () => {
+    const CELL = "SMU01138200000000001|2019|M13";
+    const built = /the chart's provenance record .* is not the one this side builds from the evidence/;
+    expect(refusal(variant((p) => void (p.chart.provenance[CELL].source = { ...p.chart.provenance[CELL].source, name: "Austin, the unbeaten metro" })))).toMatch(built);
+    expect(refusal(variant((p) => void (p.chart.provenance.growth.source = { ...p.chart.provenance.growth.source, publisher: "Austin Chamber of Commerce" })))).toMatch(built);
+    expect(refusal(variant((p) => void (p.chart.provenance[CELL].notes![0] = "supersector 00 Total Nonfarm, where Austin is unbeaten")))).toMatch(built);
+    expect(refusal(variant((p) => void (p.chart.provenance[CELL].releasedAt = "2026-09-30")))).toMatch(built);
+    expect(refusal(variant((p) => void (p.chart.provenance.growth.retrievedAt = "2026-10-02T00:00:00Z")))).toMatch(built);
+    expect(refusal(variant((p) => void (p.chart.asOf = "2026-09-30")))).toMatch(/the chart's numbers are as of "2026-09-30", but the latest file its rows read was last modified on 2026-09-18/);
+    expect(refusal(variant((p) => void (p.chart.slug = "austin-unbeaten-on-both")))).toMatch(/the chart's slug is "austin-unbeaten-on-both", not the registered "c1-raw-office-goods-job-growth-2019-2025"/);
+    // The sources' names are this side's registry entry, not the sidecar's record.
+    for (const p of Object.values(I.spec.provenance)) expect(p.source).toEqual(CES_SM);
+  });
+
+  it("refuses a robustness window, subject or count the table would print that its numbers do not read", () => {
+    const w = variant((p) => {
+      const rows = p.methods.robustness.rows.R.windows;
+      rows["2019->2022 (Austin)"] = rows["2019->2022"];
+      delete rows["2019->2022"];
+    });
+    expect(refusal(w)).toMatch(/robustness R's window "2019->2022 \(Austin\)" is not the window its numbers read \(R:2019->2022\.publishable\)/);
+    expect(refusal(variant((p) => void (p.methods.robustness.rows.X1.windows["2019->2023"].subject = "C4522")))).toMatch(/robustness X1 2019->2023 is recomputed for "C4522", not the subject "C1242"/);
+  });
+});
+
+describe("the precondition table's numbers, tied to the evidence", () => {
+  it("refuses universe.n at 151 against main.universe.n's 150, and a universe whose three sizes disagree", () => {
+    const n151 = variant((p) => {
+      const u = p.evidence.preconditions.find((x) => x.name === "universe.n")!;
+      u.value = 151;
+      u.threshold = "== 151 (prereg flagship.universe.largest_n)";
+    });
+    expect(refusal(n151)).toMatch(/precondition universe\.n prints 151, but its evidence number main\.universe\.n is 150/);
+    const all151 = variant((p) => {
+      const u = p.evidence.preconditions.find((x) => x.name === "universe.n")!;
+      u.value = 151;
+      u.threshold = "== 151 (prereg flagship.universe.largest_n)";
+      p.evidence.numbers["main.universe.n"].value = 151;
+      p.evidence.numbers["main.universe.n"].registered_n = 151;
+    });
+    expect(refusal(all151)).toMatch(/main\.universe\.n is 151 \(registered largest_n 151\), but the main:universe set holds 150 metros/);
+    const registered = variant((p) => void (p.evidence.numbers["main.universe.n"].registered_n = 151));
+    expect(refusal(registered)).toMatch(/main\.universe\.n is 150 \(registered largest_n 151\), but the main:universe set holds 150 metros/);
+  });
+
+  it("refuses a row whose result is not its value against its threshold, or a true value the evidence does not give", () => {
+    const pass = variant((p) => void (p.evidence.preconditions.find((x) => x.name === "h3.cells_not_annual_or_footnoted")!.pass = true));
+    expect(buildInsight(pass, "C1-raw").preconditions.find((x) => x.name === "h3.cells_not_annual_or_footnoted")!.pass).toBe(true);
+    const subject = variant((p) => {
+      const x = p.evidence.preconditions.find((q) => q.name === "h3.subject_publishable")!;
+      x.value = false;
+    });
+    expect(refusal(subject)).toMatch(/precondition h3\.subject_publishable says it passes, but false against "== true" does not hold/);
+  });
+
+  it("prints only each precondition's name, gate, value, threshold and result", () => {
+    for (const p of I.preconditions) expect(Object.keys(p).sort()).toEqual(["gates", "name", "pass", "threshold", "value"]);
+    expect(I.preconditions.find((p) => p.name === "universe.n")).toEqual({ name: "universe.n", gates: "C1-raw", value: 150, threshold: "== 150 (prereg flagship.universe.largest_n)", pass: true });
+  });
+});
+
+describe("growth recomputed from the published cells it cites", () => {
+  const DALLAS = "main:2019->2025.19100.office.growth_pct";
+
+  it("agrees with every growth, change and cell the bundle holds, and every set member, to 1e-9", () => {
+    expect(recomputeFromCells(EV)).toEqual([]);
+  });
+
+  it("refuses Dallas's growth moved +4 in its number, its chart row and its set, with its cells unchanged", () => {
+    const dallas = variant((p) => {
+      p.evidence.numbers[DALLAS].value = (p.evidence.numbers[DALLAS].value as number) + 4;
+      (p.evidence.sets["main:2019->2025:office"].members["19100"] as { growth_pct: number }).growth_pct += 4;
+      const d = p.chart.data.find((x) => x.id === "19100")!;
+      d.x = (d.x as number) + 4;
+    });
+    const message = refusal(dallas);
+    expect(message).toMatch(/the evidence's values disagree with the published cells they read: main:2019->2025\.19100\.office\.growth_pct is 25\.12\d*, its published cells give 21\.12\d*/);
+    expect(message).toMatch(/main:2019->2025:office member 19100 is 25\.12\d*, its published cells give 21\.12\d*/);
+    // Everything else agreed with itself: the counts, the medians, the chart rows.
+    expect(message).not.toMatch(/disagree with its sets/);
+  });
+
+  it("refuses a set member, a change or a cell moved alone, and a growth that reads other parts than the registered ones", () => {
+    const d1 = variant((p) => void ((p.evidence.sets["D1:2019->2025:office"].members["19100"] as { growth_pct: number }).growth_pct += 4));
+    expect(refusal(d1)).toMatch(/D1:2019->2025:office member 19100 is 25\.12\d*, its published cells give 21\.12\d*/);
+    const ev = structuredClone(EV);
+    ev.numbers["main:2019->2025.19100.total_nonfarm.change"].value = 999;
+    ev.numbers["cell.SMU48124203000000001|2022|M13"].value = 80;
+    const n = ev.numbers[DALLAS];
+    n.provenance = n.provenance.filter((t) => !t.startsWith("SMU48191006000000001|"));
+    const problems = recomputeFromCells(ev);
+    expect(problems).toContainEqual(expect.stringMatching(/main:2019->2025\.19100\.total_nonfarm\.change is 999, its published cells give 542$/));
+    expect(problems).toContainEqual(expect.stringMatching(/cell\.SMU48124203000000001\|2022\|M13 is 80, not the one published cell it names/));
+    expect(problems).toContainEqual(expect.stringMatching(/main:2019->2025\.19100\.office\.growth_pct reads the parts 50, 55, not the registered 50 \+ 55 \+ 60/));
+  });
+
+  it("recomputes the monthly end (E2) and the QCEW row (X1) from their cells too", () => {
+    const e2 = "E2:2019->mean(Sep 2025-Aug 2026).12420.office.growth_pct";
+    const x1 = "X1:2019->2023.C1242.wc.growth_pct";
+    for (const key of [e2, x1]) {
+      const ev = structuredClone(EV);
+      ev.numbers[key].value = (ev.numbers[key].value as number) * (1 + 1e-6);
+      expect(recomputeFromCells(ev), key).toContainEqual(expect.stringContaining(`${key} is `));
+    }
+  });
+});
+
+describe("the peer rows pinned to their ranking", () => {
+  const P2 = "P2:2019->2025";
+  const move = (p: Parts, row: string, from: string, to: string | null) => {
+    for (const a of ["office", "goods_logistics"]) {
+      const set = p.evidence.sets[`${row}:${a}`];
+      for (const part of [set.members, set.excluded ?? {}] as Array<Record<string, unknown>>) {
+        if (!Object.hasOwn(part, from)) continue;
+        if (to !== null) part[to] = to === "44700" ? structuredClone(p.evidence.sets[`main:2019->2025:${a}`].members[to]) : part[from];
+        delete part[from];
+      }
+    }
+  };
+
+  it("holds for P2 (exactly the 100 largest) and P3 (the universe and its first metro out)", () => {
+    expect(recomputePeers(EV, P2, 100)).toEqual([]);
+    expect(recomputePeers(EV, "P3:2019->2025", 200)).toEqual([]);
+  });
+
+  it("refuses P2 with Houston dropped, however consistently the counts were moved with it", () => {
+    expect(refusal(variant((p) => move(p, P2, "26420", null)))).toMatch(/P2:2019->2025: the publishable count is 99, the sets have 98 metros in both/);
+    const consistent = variant((p) => {
+      move(p, P2, "26420", null);
+      p.evidence.numbers[`${P2}.publishable`].value = 98;
+      const win = p.methods.robustness.rows.P2.windows["2019->2025"];
+      win.publishable.value = 98;
+      win.n = 99;
+    });
+    expect(refusal(consistent)).toMatch(/robustness row P2 registers the 100 largest metros, but its sets cover 99/);
+    const ev = structuredClone(EV);
+    for (const a of ["office", "goods_logistics"]) delete ev.sets[`${P2}:${a}`].members["26420"];
+    expect(recomputePeers(ev, P2, 100)).toEqual([`${P2}: its sets cover 99 metros, but it registers the 100 largest`]);
+  });
+
+  it("refuses P2 with Houston swapped for the 101st metro, whose values change no count", () => {
+    expect(refusal(variant((p) => move(p, P2, "26420", "44700")))).toMatch(/robustness P2 2019->2025: P2:2019->2025: its metros are not the 100 largest by the universe's ranking: 26420 left out; 44700 not among them/);
+  });
+
+  it("refuses P3 without the universe's first metro out, or without a metro of the universe", () => {
+    expect(refusal(variant((p) => move(p, "P3:2019->2025", "34940", "99990")))).toMatch(/P3:2019->2025: it registers the 200 largest but leaves out the universe's first metro out, rank_151 \(34940\)/);
+    expect(refusal(variant((p) => move(p, "P3:2019->2025", "26420", "99990")))).toMatch(/P3:2019->2025: it registers the 200 largest but leaves out 26420, of the universe's 150 largest/);
   });
 });
 

@@ -260,6 +260,13 @@ export interface ArithmeticRow {
   /** The evidence.numbers key. */
   number: string;
   kind: EvidenceNumber["kind"];
+  /**
+   * What the number is: a published cell; an estimate computed from published
+   * cells (a growth, rank, count, median, change or probability); or a value
+   * registered in advance (the window's years, k), read from the
+   * pre-registration and neither.
+   */
+  category: "cell" | "estimate" | "registered";
   formula: string;
   /** For a probability: the exact arithmetic, e.g. "(147 / 148)^10 = 4711653532607691047049 / 5042166166892418433024". */
   arithmetic?: string;
@@ -360,7 +367,8 @@ export interface Insight {
   is: string[];
   isNot: string[];
   panelB: { text: string; gate: Array<{ name: string; rule: string; status: string }> };
-  preconditions: Precondition[];
+  /** The precondition table: each registered precondition's name, gate, value (tied to its evidence), threshold and result. */
+  preconditions: Array<Pick<Precondition, "name" | "gates" | "value" | "threshold" | "pass">>;
   arithmetic: ArithmeticRow[];
   robustness: RobustnessSummary[];
   /** The evidence's formula behind each robustness column, once per formula, with the rows it computes. */
