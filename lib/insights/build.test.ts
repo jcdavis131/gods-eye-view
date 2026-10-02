@@ -24,8 +24,8 @@ import { METHODS_IS, METHODS_IS_NOT, fill, formatSlot, formulaText, templateText
 import { THEMES } from "./render/tokens";
 import { metroName } from "./metros";
 import { recomputeFromCells, recomputePeers } from "./recompute";
-import { CES_SM } from "./sources";
-import { BASE, NAME, ROOT, suppressH3b, suppressedPath, variant, type Parts } from "./testFixtures";
+import { CES_SM, CES_SM_FILES } from "./sources";
+import { BASE, NAME, ROOT, substitutedEverywhere, suppressH3b, suppressedPath, variant, type Parts } from "./testFixtures";
 import type { Insight, MetroRef } from "./types";
 
 const DIR = path.join(ROOT, "lib/insights/data", NAME);
@@ -753,6 +753,34 @@ describe("no producer text reaches a printed surface (A2's attacks and the rest)
       e.url = `${e.url}?austin=unbeaten`;
     });
     expect(refusal(url)).toMatch(/the omb_list1_2023 file is not a URL this side can read a year from|is not one omb_list1_2023 fetches/);
+  });
+
+  it("refuses a CES file renamed to words through the whole bundle, and prints only the registered file names", () => {
+    // A3 verifier: sm.data.54.TotalNonFarm.All renamed consistently (manifest, evidence, tuples, sidecar) built and printed the words.
+    const renamed = substitutedEverywhere("sm.data.54.TotalNonFarm.All", "sm.data.54.NoMetroBeatAustin.OnBoth");
+    expect(refusal(renamed)).toMatch(/sm\.data\.54\.NoMetroBeatAustin\.OnBoth: its URL ".*sm\.data\.54\.NoMetroBeatAustin\.OnBoth" is not one bls_ces_sm_data fetches/);
+    // The consistent-edit sweep's other two: a canary appended to sm.data.60 and sm.data.61, through the whole bundle.
+    for (const file of ["sm.data.60.MiningAndLogging.Current", "sm.data.61.MiningLoggingConstr.Current"]) {
+      expect(refusal(substitutedEverywhere(file, `${file}QZXQ`)), file).toMatch(/its URL ".*QZXQ" is not one bls_ces_sm_data fetches/);
+    }
+    // A registered name under the other registry id is not the file that id fetches.
+    const moved = variant((p) => {
+      for (const s of [...Object.values(p.manifest.sources), ...Object.values(p.evidence.sources)]) {
+        if (s.url.endsWith("/sm.data.66.TradeTransUtilities.Current")) s.source = "bls_ces_sm_data";
+      }
+    });
+    expect(refusal(moved)).toMatch(/sm\.data\.66\.TradeTransUtilities\.Current: its URL ".*" is not one bls_ces_sm_data fetches/);
+    // Every CES file the built insight cites is one of the registered names.
+    const printed = printedSurfaces(I).match(/sm\.data\.[^\s"|,;)]+/g) ?? [];
+    expect(printed.length).toBeGreaterThan(0);
+    for (const name of new Set(printed)) expect([...CES_SM_FILES.bls_ces_sm_data, ...CES_SM_FILES.bls_ces_sm_data_alt], name).toContain(name.replace(/\.$/, ""));
+  });
+
+  it("refuses a registered number's pre-registration hash edited to words in the manifest and the evidence together", () => {
+    // Equal to manifest.json's input entry is not enough: both were edited to the same text and it printed 15 times.
+    const sha = BASE.manifest.inputs["registry/prereg.json"].sha256;
+    expect(refusal(substitutedEverywhere(sha, `${sha}QZXQ`))).toMatch(/registered number .* cites registry\/prereg\.json at sha256 ".*QZXQ" \(\d+ bytes\), which is not 64 hex characters and a byte count/);
+    expect(refusal(substitutedEverywhere(sha, "no metro beat Austin on both"))).toMatch(/at sha256 "no metro beat Austin on both"/);
   });
 
   it("prints the chart's source names, notes, dates, as-of date and address as this side builds them, and refuses a sidecar that says otherwise", () => {

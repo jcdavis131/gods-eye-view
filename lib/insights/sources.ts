@@ -16,7 +16,10 @@
 // Last-Modified and fetch time) is checked against a fixed form before any
 // of it prints (sourceEntryProblems): a URL of the shape its registry id
 // fetches, 64 hex characters, an HTTP date, an ISO 8601 UTC time. Those are
-// facts about a file, not words, and a value outside its form refuses.
+// facts about a file, not words, and a value outside its form refuses. A
+// CES file's name is words (sm.data.54.TotalNonFarm.All), so its URL is one
+// of the names registered here (CES_SM_FILES), not a shape: a consistent
+// rename to sm.data.54.NoMetroBeatAustin.OnBoth used to print.
 
 import { SOURCES } from "@/lib/provenance/sources";
 import type { SourceRef } from "@/lib/provenance/types";
@@ -125,12 +128,39 @@ export function sourceRefById(id: string): SourceRef | null {
   }
 }
 
+/**
+ * The CES SM flat files each registry id reads, by BLS's own file names under
+ * https://download.bls.gov/pub/time.series/sm/ (vector-places
+ * places/flagship/ces.py registers the same list, by supersector): total
+ * nonfarm and the eight supersectors the panel's axes add, and the two the
+ * alternative definitions add. A file name is printed (in every citation, the
+ * arithmetic's cells, the CSV footer and the JSON-LD), so it is this side's,
+ * whole: a file of any other name, or one of these under the other id,
+ * refuses, rather than any letters in a name's last two segments.
+ */
+export const CES_SM_FILES: Readonly<Record<"bls_ces_sm_data" | "bls_ces_sm_data_alt", readonly string[]>> = {
+  bls_ces_sm_data: [
+    "sm.data.54.TotalNonFarm.All",
+    "sm.data.60.MiningAndLogging.Current",
+    "sm.data.61.MiningLoggingConstr.Current",
+    "sm.data.62.Construction.Current",
+    "sm.data.63.Manufacturing.Current",
+    "sm.data.69.TransUtilities.Current",
+    "sm.data.70.Information.Current",
+    "sm.data.71.FinancialActivities.Current",
+    "sm.data.72.ProfBusSrvc.Current",
+  ],
+  bls_ces_sm_data_alt: ["sm.data.66.TradeTransUtilities.Current", "sm.data.73.EduHealthSrvc.Current"],
+};
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 /** The URL every file of a registry id is fetched from, whole. */
 function urlForm(id: string): RegExp | null {
   switch (id) {
     case "bls_ces_sm_data":
     case "bls_ces_sm_data_alt":
-      return /^https:\/\/download\.bls\.gov\/pub\/time\.series\/sm\/sm\.data\.\d{1,3}\.[A-Za-z]+\.[A-Za-z]+$/;
+      return new RegExp(`^https://download\\.bls\\.gov/pub/time\\.series/sm/(?:${CES_SM_FILES[id].map(escapeRe).join("|")})$`);
     case "qcew_msa_area":
       return /^https:\/\/data\.bls\.gov\/cew\/data\/api\/\d{4}\/a\/area\/C\d{4}\.csv$/;
     default:

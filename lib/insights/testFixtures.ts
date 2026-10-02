@@ -36,6 +36,16 @@ export function variant(change: (p: Parts) => void): LoadedBundle {
   return { ...BASE, manifest: p.manifest, methods: p.methods, findings: [{ ...f, evidence: p.evidence, chart: p.chart, template: p.template }] };
 }
 
+/**
+ * The four documents with every occurrence of `from` replaced by `to`, inside any string or key (a URL inside a
+ * provenance tuple included): an edit made consistently through the whole bundle, which no equality check can see.
+ */
+export function substitutedEverywhere(from: string, to: string): LoadedBundle {
+  const f = BASE.findings[0];
+  const doc = <T>(v: T): T => JSON.parse(JSON.stringify(v).split(from).join(to)) as T;
+  return { ...BASE, manifest: doc(BASE.manifest), methods: doc(BASE.methods), findings: [{ ...f, evidence: doc(f.evidence), chart: doc(f.chart) }] };
+}
+
 /** The H3b clause suppressed the way the producer suppresses it: a failing row named in the registered reason form. */
 export function suppressH3b(p: Parts): void {
   p.evidence.headline.clauses.find((c) => c.id === "C1.H3b")!.printed = false;

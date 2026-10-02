@@ -76,8 +76,10 @@
 //     and end are registered connectives; each precondition is a registered
 //     name with its registered gate and threshold; every evidence key the
 //     arithmetic prints is of a registered form, and a registered number
-//     cites the pre-registration at its registered path; every source entry
-//     a citation prints is of the fixed form of its fields; and the spec the
+//     cites the pre-registration at its registered path and a hash of 64 hex
+//     characters; every source entry a citation prints is of the fixed form
+//     of its fields, a CES file's name one of the registered names
+//     (sources.ts CES_SM_FILES); and the spec the
 //     cards and downloads draw is rebuilt here, with this side's source
 //     names, notes, dates, slug and as-of date, from records the sidecar's
 //     must equal (lib/insights/taint.test.ts appends a canary to every
@@ -208,6 +210,7 @@ const TUPLE_FORMS = {
   value: /^-?\d+(?:\.\d+)?$/,
   footnote: /^[A-Z]?$/,
 } as const;
+const HEX64 = /^[0-9a-f]{64}$/;
 const H3B = "C1.H3b";
 const RECENCY = "C1.caveat.recency";
 /** The chart's two estimate records, by sidecar key, and the registered method each states. */
@@ -1544,6 +1547,9 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
         if (r.file !== PREREG_FILE || !input || input.sha256 !== r.sha256 || input.bytes !== r.bytes || r.path !== registeredPath(s.number)) {
           refuse(`registered number ${s.number} cites ${JSON.stringify(`${r.file} ${r.path}`)} at ${r.sha256}, not ${PREREG_FILE} ${JSON.stringify(registeredPath(s.number))} at manifest.json's hash`);
         }
+        // The hash it prints is a hash, of the form a source entry's must take too: equal to the manifest's is not
+        // enough, since both can be edited to the same words.
+        if (!HEX64.test(r.sha256) || !Number.isSafeInteger(r.bytes) || r.bytes < 0) refuse(`registered number ${s.number} cites ${PREREG_FILE} at sha256 ${JSON.stringify(r.sha256)} (${JSON.stringify(r.bytes)} bytes), which is not 64 hex characters and a byte count`);
         if (n.provenance.length !== 0 || n.formula !== undefined) refuse(`registered number ${s.number} cites cells or states a formula`);
         registeredAt = `${r.file} ${r.path} (sha256 ${r.sha256})`;
       } else if (n.registered) refuse(`evidence number ${s.number} is a ${n.kind}, but cites a pre-registration`);
