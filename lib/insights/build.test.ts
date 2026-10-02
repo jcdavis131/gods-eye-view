@@ -1030,6 +1030,12 @@ describe("every printed slot reads its registered evidence (A3's attacks)", () =
     expect([s.x.format, s.x.digits, s.y.format, s.y.digits, s.size.format, s.size.digits]).toEqual(["signedPct", 0, "signedPct", 0, "num", 1]);
   });
 
+  it("refuses a delineation month that is not the one OMB issued that year's delineation in", () => {
+    const b = variant((p) => void ((p.methods.panel_b as unknown as { registered: { twins: { pooling_composition: string } } }).registered.twins.pooling_composition = "msa_feb2023"));
+    expect(refusal(b)).toMatch(/the delineation composition "msa_feb2023" names February 2023; OMB issued the 2023 delineation in July/);
+    expect(I.shaping.find((s) => s.id === "omb_list1_2023")!.role).toContain("OMB's July 2023 delineation");
+  });
+
   it("pins the bubble, the medians, the random-peer grid and every number's kind and sets to their keys", () => {
     const bubble = variant((p) => {
       p.evidence.chart.rows["12420"].size = "main:2019->2025.26420.total_nonfarm.change";

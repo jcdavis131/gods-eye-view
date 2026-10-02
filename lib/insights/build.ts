@@ -174,7 +174,7 @@ import {
   windowSets,
 } from "./recompute";
 import { cbsaOfQcew, metroName, qcewCode, qcewTitle } from "./metros";
-import { CES_SM, MONTHS, SHAPING, isoDateOf, sourceEntryProblems, sourceRefById } from "./sources";
+import { CES_SM, MONTHS, OMB_DELINEATION_MONTH, SHAPING, isoDateOf, sourceEntryProblems, sourceRefById } from "./sources";
 import type {
   ArithmeticRow,
   CellCitation,
@@ -1486,6 +1486,8 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
         const m = typeof composition === "string" ? /^msa_([a-z]{3})(\d{4})$/.exec(composition) : null;
         const month = m ? MONTHS[m[1]] : undefined;
         if (!m || !month || m[2] !== year) refuse(`the delineation composition ${JSON.stringify(composition ?? null)} is not a month of ${year}, the year of ${entry.url}`);
+        // The month is the one OMB issued that year's delineation in, registered here, not the producer's to name.
+        if (m && m[1] !== OMB_DELINEATION_MONTH[year]) refuse(`the delineation composition ${JSON.stringify(composition)} names ${(month as { name: string }).name} ${year}; OMB issued the ${year} delineation in ${MONTHS[OMB_DELINEATION_MONTH[year] ?? ""]?.name ?? "no month registered here"}`);
         coverage = `${year}-${(month as { iso: string }).iso}`;
         words = { month: (month as { name: string }).name, year };
         break;

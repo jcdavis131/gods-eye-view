@@ -85,6 +85,12 @@ export const SHAPING: ShapingRule[] = [
   },
 ];
 
+/**
+ * The month OMB issued each year's delineation the list1 file holds (OMB Bulletin 23-01, July 21, 2023). The
+ * Universe section prints it ("OMB's July 2023 delineation"); the producer's composition id must name this month.
+ */
+export const OMB_DELINEATION_MONTH: Readonly<Record<string, string>> = { "2023": "jul" };
+
 /** The month names a delineation composition id ("msa_jul2023") may carry, as the page prints them. */
 export const MONTHS: Record<string, { name: string; iso: string }> = {
   jan: { name: "January", iso: "01" },
