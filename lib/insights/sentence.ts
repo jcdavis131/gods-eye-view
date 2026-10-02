@@ -14,11 +14,13 @@
 // clause, the twins clause), the random-peer sentence, the caveats, the
 // chart's title and subtitle with their ladders, the subject's label line,
 // the universe line, the axis, bubble and median labels and the two estimate
-// methods the chart prints, the method line and the methods page's lines.
-// The status note is this side's own sentence, keyed by the bundle status.
-// Formulas, thresholds and the reasons a value is missing or a clause is
-// suppressed are evidence fields, not sentences; the page shows them
-// verbatim, labelled as the evidence's, in its tables.
+// methods the chart prints, the method line and the methods page's lines,
+// panel B's gate rules, each robustness row's rule, ranking or end
+// (robustnessRegistered), the reasons a clause or caveat does not print and
+// a metro is not published (each form the producer writes, its slots read
+// back from the evidence by build.ts), the precondition thresholds and every
+// formula (formulaText). The status note is this side's own sentence, keyed
+// by the bundle status.
 //
 // Slot formats. A template that carries its own unit ("grew {a}%", "from
 // {v0}k") takes a bare number, a num slot; signedPct prints its own sign and
@@ -70,6 +72,26 @@ export const TEMPLATE_IDS = [
   "C1.methods.is_not.causal",
   "C1.methods.panel_b",
   "C1.methods.status",
+  "C1.panel_b.gate.bar_result_recorded",
+  "C1.panel_b.gate.beats_naive_and_geography_peers",
+  "C1.panel_b.gate.stage0_passed",
+  "C1.reason.twins_pending",
+  "C1.reason.extends_suppressed",
+  "C1.reason.precondition_fails",
+  "C1.reason.recency_no_window",
+  "C1.reason.recency_subject",
+  "C1.reason.recency_empty",
+  "C1.reason.ces_not_above",
+  "C1.reason.ces_no_cell",
+  "C1.reason.qcew_manufacturing",
+  "C1.reason.mlc_not_published",
+  "C1.reason.no_value",
+  "C1.reason.zero_base",
+  "C1.threshold.zero",
+  "C1.threshold.true",
+  "C1.threshold.universe_n",
+  "C1.threshold.nulls_named",
+  "C1.threshold.fail_closed_named",
 ] as const;
 
 export type TemplateId = (typeof TEMPLATE_IDS)[number];
@@ -152,7 +174,186 @@ export function templateText(id: TemplateId): string {
       return "Twin-adjusted panel B is pending the place-model bar: no rung has been through it, so no rung has shipped and no twin exists.";
     case "C1.methods.status":
       return "Twin-adjusted panel pending: this page is panel A, raw growth ranked among the major metros that publish every component, not against each metro's {t0} twins.";
+    // Panel B's gate, rule by rule (methods.json panel_b.gate[*].rule). "{B*}" is the producer's own placeholder for
+    // the frozen best baseline, printed as it stands: it is not a slot here, and these texts are compared, never filled.
+    case "C1.panel_b.gate.bar_result_recorded":
+      return 'The shipped rung\'s bar result is recorded. If the MTNN did not clear, the footer says "twins chosen by {B*}; the learned model did not beat this".';
+    case "C1.panel_b.gate.beats_naive_and_geography_peers":
+      return "The shipped rung beat naive peers (R0n: same division, ±25% size) and geography-only peers (R0g) on val PS, each with CI lower bound > 0. Otherwise panel B does not ship, and the flagship publishes panel A with the methods note.";
+    case "C1.panel_b.gate.stage0_passed":
+      return "Stage-0 passed.";
+    // Why a clause or a caveat does not print (evidence suppressed[*].reason and caveats[*].reason), in each form the
+    // producer writes one (vector-places places/export.py). The page prints them under "Not printed, and why".
+    case "C1.reason.twins_pending":
+      return "twins_pending: no rung has shipped, so no twin exists (M7-M9 have not run; they wait on RAM)";
+    case "C1.reason.extends_suppressed":
+      return "the clause it extends (C1.H3.ranks) is suppressed";
+    case "C1.reason.precondition_fails":
+      return "a precondition fails: {names}";
+    case "C1.reason.recency_no_window":
+      return "row R's {window} window is not in data/flagship/registered_rows.json";
+    case "C1.reason.recency_subject":
+      return "the subject is not publishable in row R's window";
+    case "C1.reason.recency_empty":
+      return "no metro beat the subject on both in row R's window, so the list the caveat names is empty";
+    case "C1.reason.ces_not_above":
+      return "the {y1} value is not above the {y0} one, so the caveat would say something the cells do not";
+    case "C1.reason.ces_no_cell":
+      return "no published unfootnoted cell {key}";
+    case "C1.reason.qcew_manufacturing":
+      return "no QCEW cell after 2023 is in this bundle's evidence (row X1 reads 2019 and 2023), so the comparison can't be shown from published cells here";
+    // Why a metro's value is not published (chart.not_published[*].reason): "; "-joined codes.
+    case "C1.reason.mlc_not_published":
+      return "mlc_not_published: CES publishes neither 15 nor both 10 and 20";
+    case "C1.reason.no_value":
+      return "no_value:{key}";
+    case "C1.reason.zero_base":
+      return "zero_base";
+    // The thresholds the precondition table prints (evidence preconditions[*].threshold).
+    case "C1.threshold.zero":
+      return "== 0";
+    case "C1.threshold.true":
+      return "== true";
+    case "C1.threshold.universe_n":
+      return "== {N} (prereg flagship.universe.largest_n)";
+    case "C1.threshold.nulls_named":
+      return "every metro without a value on both axes is named with its reason";
+    case "C1.threshold.fail_closed_named":
+      return "every metro that fails closed for twins is named (no twins, still in panel A)";
   }
+}
+
+/** The registered template of panel B's gate rule `name`, or null when none is registered (a refusal at build time). */
+export function panelBGateTemplate(name: string): TemplateId | null {
+  const id = `C1.panel_b.gate.${name}`;
+  return isTemplateId(id) ? id : null;
+}
+
+/** The precondition thresholds the page may print. */
+export const THRESHOLDS: TemplateId[] = ["C1.threshold.zero", "C1.threshold.true", "C1.threshold.universe_n", "C1.threshold.nulls_named", "C1.threshold.fail_closed_named"];
+
+/** The codes a missing chart value's reason may be made of, "; "-joined. */
+export const NOT_PUBLISHED_CODES: TemplateId[] = ["C1.reason.mlc_not_published", "C1.reason.no_value", "C1.reason.zero_base"];
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * The slot strings that make `text` the registered template `id`, or null
+ * when it is not that template. Each placeholder matches a non-empty run of
+ * characters and the literal parts must match exactly. For texts whose slots
+ * are not evidence numbers (precondition names, a cell key, a window label),
+ * the caller checks each captured string against the evidence.
+ */
+export function matchTemplate(id: TemplateId, text: string): Record<string, string> | null {
+  const t = templateText(id);
+  const names: string[] = [];
+  let pattern = "";
+  let last = 0;
+  for (const m of t.matchAll(PLACEHOLDER)) {
+    pattern += `${escapeRegExp(t.slice(last, m.index))}(.+?)`;
+    names.push(m[1]);
+    last = (m.index as number) + m[0].length;
+  }
+  pattern += escapeRegExp(t.slice(last));
+  const got = new RegExp(`^${pattern}$`, "s").exec(text);
+  if (!got) return null;
+  return Object.fromEntries(names.map((n, i) => [n, got[i + 1]]));
+}
+
+// ---------------------------------------------------------------- formulas
+
+export const FORMULA_IDS = [
+  "growth.ces",
+  "growth.qcew",
+  "rank",
+  "rank_min",
+  "count.publishable",
+  "count.beat_on_both",
+  "count.beat_on_either",
+  "count.not_publishable_could_beat_both",
+  "count.universe",
+  "median",
+  "cell",
+  "change",
+  "probability",
+] as const;
+
+export type FormulaId = (typeof FORMULA_IDS)[number];
+
+/**
+ * How each kind of evidence number is computed, as the evidence's `formula`
+ * words it (vector-places places/export.py), word for word. The page prints
+ * the formula beside every number it shows, so a formula is a producer text
+ * like any other: build.ts refuses one that is not registered here for the
+ * number's kind (formulasFor).
+ */
+export function formulaText(id: FormulaId): string {
+  switch (id) {
+    case "growth.ces":
+      return "(X_t1 / X_t0 - 1) x 100, X = the sum over parts of the mean over the end's periods (one period: its value), exact sums of the published text; null if a part is not published or has no value";
+    case "growth.qcew":
+      return "(L_t1 - L_t0) / L_t0 x 100, L = the sum over parts; a part with any disclosure code masks the metro";
+    case "rank":
+      return "competition rank among the set's members: 1 + the members with a strictly larger value";
+    case "rank_min":
+      return "competition rank of min(both axes) among the metros in both sets: 1 + those with a strictly larger minimum";
+    case "count.publishable":
+      return "the metros with a value on both axes (the members of both sets)";
+    case "count.beat_on_both":
+      return "the metros in both sets with a strictly larger value than the subject on both axes";
+    case "count.beat_on_either":
+      return "the metros in both sets, the subject aside, with a strictly larger value on at least one axis";
+    case "count.not_publishable_could_beat_both":
+      return "a metro of the universe that is not in both sets, checked on each axis it has a value on: it could beat the subject on both if it has no axis, or a strictly larger value than the subject's on every axis it has";
+    case "count.universe":
+      return "the largest_n metros by CES total nonfarm (00), 2019 M13; rank_150 and rank_151 are the cutoff";
+    case "median":
+      return "the median of the set's members' values; an odd count gives the middle value, a member's own value";
+    case "cell":
+      return "the published value";
+    case "change":
+      return "X_t1 - X_t0, the exact difference of the published values";
+    case "probability":
+      return "(m / n)^k, exact: k independent uniform draws, with replacement, from the n members of both sets other than the subject, m of which have a strictly smaller value than the subject on both axes (a tie is not a beat); not_beaten lists the n - m others";
+  }
+}
+
+/** The registered formulas a number of this kind and key may carry; empty for a kind that carries none (a registered value). */
+export function formulasFor(kind: string, key: string): FormulaId[] {
+  switch (kind) {
+    case "growth":
+      return ["growth.ces", "growth.qcew"];
+    case "rank":
+      return key.endsWith(".rank_min") ? ["rank_min"] : ["rank"];
+    case "count":
+      if (key.endsWith(".publishable")) return ["count.publishable"];
+      if (key.endsWith(".beat_on_both")) return ["count.beat_on_both"];
+      if (key.endsWith(".beat_on_either")) return ["count.beat_on_either"];
+      if (key.endsWith(".not_publishable_could_beat_both")) return ["count.not_publishable_could_beat_both"];
+      if (key.endsWith(".universe.n")) return ["count.universe"];
+      return [];
+    case "median":
+      return ["median"];
+    case "cell":
+      return ["cell"];
+    case "change":
+      return ["change"];
+    case "probability":
+      return ["probability"];
+    default:
+      return [];
+  }
+}
+
+/** A number's formula, refused unless it is the registered text for its kind. */
+export function registeredFormula(kind: string, key: string, formula: string | undefined): string {
+  const ids = formulasFor(kind, key);
+  if (formula === undefined || !ids.some((id) => formulaText(id) === formula)) {
+    throw new Error(`evidence number ${key} (${kind}) states the formula ${JSON.stringify(formula ?? null)}, not ${ids.length ? `the registered ${ids.join(" or ")}` : "a registered one"}`);
+  }
+  return formula;
 }
 
 /** The methods page's "is" and "is not" lines, in their registered order. */
@@ -281,26 +482,75 @@ export function robustnessKind(kind: RobustnessRow["kind"]): string {
   }
 }
 
-/** What the row changes, built from its registered entry only. */
-export function robustnessChange(row: RobustnessRow): string {
+/**
+ * The producer's words for what each registered robustness row changes
+ * (methods.json robustness.rows[id].registered: a definition or disclosure
+ * row's rule, a peers row's ranking, an end-year row's end when it is not a
+ * year, a cross-source row's QCEW industries), word for word. A total switch
+ * over the registered rows: a row this side has no words for refuses.
+ */
+export function robustnessRegistered(id: string): { kind: RobustnessRow["kind"]; rule?: string; ranked_by?: string; t1?: string; wc?: string[]; bc?: string[] } {
+  switch (id) {
+    case "D1":
+      return { kind: "definition", rule: "all of 40 (trade, transportation and utilities) in place of 43" };
+    case "D2":
+      return { kind: "definition", rule: "office-industry plus 65 private education and health" };
+    case "D3":
+      return { kind: "definition", rule: "D1 and D2 together" };
+    case "E1":
+    case "E3":
+      return { kind: "end_year" };
+    case "E2":
+      return { kind: "end_year", t1: "the mean of the 12 monthly values Sep 2025-Aug 2026" };
+    case "P1":
+      return { kind: "peers", ranked_by: "Census 2025 population (POPESTIMATE2025)" };
+    case "P2":
+    case "P3":
+      return { kind: "peers", ranked_by: "CES total nonfarm, 2019 annual average" };
+    case "R":
+      return { kind: "disclosure", rule: "each named metro's ranks are printed" };
+    case "X1":
+      return { kind: "cross_source", wc: ["1023", "1024"], bc: ["1011", "1012", "1013"] };
+    default:
+      throw new Error(`no registered words for robustness row ${JSON.stringify(id)}`);
+  }
+}
+
+/**
+ * What the row changes, from its registered entry, each producer text in it
+ * required to be the registered one. A peers row's size is the evidence's
+ * count of the metros its sets cover (`n`), which must be the registered
+ * largest_n; an end-year row's numeric end is the registered window's.
+ */
+export function robustnessChange(id: string, row: RobustnessRow, n: number): string {
   const r = row.registered;
+  const reg = robustnessRegistered(id);
+  if (reg.kind !== row.kind) throw new Error(`robustness row ${id} is a ${row.kind} row; the registered one is a ${reg.kind} row`);
+  const same = (field: string, got: unknown, want: unknown) => {
+    if (JSON.stringify(got) !== JSON.stringify(want)) throw new Error(`robustness row ${id}'s ${field} reads ${JSON.stringify(got)}, not the registered ${JSON.stringify(want)}`);
+  };
   switch (row.kind) {
     case "definition":
     case "disclosure":
-      if (!r.rule) throw new Error(`a ${row.kind} row has no registered rule`);
-      return r.rule;
-    case "end_year":
-      if (!r.window) throw new Error("an end_year row has no registered window");
+      same("rule", r.rule, reg.rule);
+      return reg.rule as string;
+    case "end_year": {
+      if (!r.window) throw new Error(`robustness row ${id} has no registered window`);
+      if (typeof r.window.t1 === "string") {
+        same("end", r.window.t1, reg.t1);
+        return `ends at ${reg.t1}`;
+      }
+      if (reg.t1 !== undefined) same("end", r.window.t1, reg.t1);
       return `ends at ${r.window.t1}`;
-    case "peers":
-      if (r.largest_n == null || !r.ranked_by) throw new Error("a peers row has no registered size or ranking");
-      return `the ${num(r.largest_n)} largest metros by ${r.ranked_by}`;
-    case "cross_source": {
-      const wc = r.wc as string[] | undefined;
-      const bc = r.bc as string[] | undefined;
-      if (!wc || !bc) throw new Error("a cross_source row has no registered industries");
-      return `QCEW native metro rows; white-collar = QCEW industries ${wc.join(" + ")}; blue-collar = ${bc.join(" + ")}`;
     }
+    case "peers":
+      same("ranking", r.ranked_by, reg.ranked_by);
+      if (r.largest_n !== n) throw new Error(`robustness row ${id} registers the ${r.largest_n} largest metros, but its sets cover ${n}`);
+      return `the ${num(n)} largest metros by ${reg.ranked_by}`;
+    case "cross_source":
+      same("white-collar industries", r.wc, reg.wc);
+      same("blue-collar industries", r.bc, reg.bc);
+      return `QCEW native metro rows; white-collar = QCEW industries ${(reg.wc as string[]).join(" + ")}; blue-collar = ${(reg.bc as string[]).join(" + ")}`;
   }
 }
 

@@ -56,6 +56,15 @@ function variant(change: (p: Parts) => void): LoadedBundle {
   return { ...BASE, manifest: p.manifest, methods: p.methods, findings: [{ ...f, evidence: p.evidence, chart: p.chart, template: p.template }] };
 }
 
+/** The H3b clause suppressed the way the producer suppresses it: a failing row named in the registered reason form. */
+function suppressH3b(p: Parts): void {
+  p.evidence.headline.clauses.find((c) => c.id === "C1.H3b")!.printed = false;
+  const failing = { ...structuredClone(p.evidence.preconditions.find((x) => x.name === "h3b.no_metro_beat_both.P2")!), pass: false, value: 1 };
+  p.evidence.suppressed.push({ clause: "C1.H3b", reason: "a precondition fails: h3b.no_metro_beat_both.P2", preconditions: [failing] });
+  p.evidence.preconditions = p.evidence.preconditions.filter((x) => x.gates !== "C1.H3b");
+  p.methods.panel_a.headline.clauses["C1.H3b"] = false;
+}
+
 function refusal(b: LoadedBundle): string {
   try {
     buildInsight(b, "C1-raw");
@@ -315,9 +324,7 @@ describe("the H3b gate", () => {
     const b = variant((p) => {
       moveMain(p, "42340", "office", 40, true);
       moveMain(p, "42340", "goods_logistics", 40, true);
-      p.evidence.headline.clauses.find((c) => c.id === "C1.H3b")!.printed = false;
-      p.evidence.suppressed.push({ clause: "C1.H3b", reason: "a precondition fails: h3b.no_metro_beat_both.main", preconditions: [] });
-      p.methods.panel_a.headline.clauses["C1.H3b"] = false;
+      suppressH3b(p);
     });
     expect(refusal(b)).toMatch(/the evidence's counts disagree with its sets: .*the subject's office rank is 1 in the evidence, 2 recomputed from its set/);
   });
@@ -345,11 +352,7 @@ describe("the H3b gate", () => {
   });
 
   it("requires the neutral chart title when the clause does not print", () => {
-    const b = variant((p) => {
-      p.evidence.headline.clauses.find((c) => c.id === "C1.H3b")!.printed = false;
-      p.evidence.suppressed.push({ clause: "C1.H3b", reason: "suppressed in this variant", preconditions: [] });
-      p.methods.panel_a.headline.clauses["C1.H3b"] = false;
-    });
+    const b = variant(suppressH3b);
     expect(refusal(b)).toMatch(/the H3b clause does not print, so the chart title must be the neutral C1\.chart_title\.raw/);
   });
 });
@@ -372,6 +375,53 @@ describe("refusals", () => {
     expect(refusal(variant((p) => void (p.evidence.caveats[0].text = p.evidence.caveats[0].text.replace("ranks", "placed"))))).toMatch(/caveat C1\.caveat\.recency template C1\.caveat\.recency reads/);
     expect(refusal(variant((p) => void (p.evidence.chart.title.ladder![0].text = "No Metro Beat {subject}, {t0} to {t1}")))).toMatch(/chart title ladder template C1\.chart_title\.h3b\.1 reads/);
     expect(refusal(variant((p) => void (p.evidence.chart.dek.ladder![1].text += "!")))).toMatch(/chart subtitle ladder template C1\.chart_dek\.recency\.2 reads/);
+  });
+
+  it("refuses any other producer text the page prints that drifted from its registered words", () => {
+    // Panel B's gate rules.
+    expect(refusal(variant((p) => void (p.methods.panel_b.gate[1].rule = p.methods.panel_b.gate[1].rule.replace("±25%", "±30%"))))).toMatch(/panel B's gate beats_naive_and_geography_peers reads .*±30%.*, not the registered rule/);
+    expect(refusal(variant((p) => void (p.methods.panel_b.gate[0].name = "bar_result_noted")))).toMatch(/panel B's gate "bar_result_noted" has no registered rule/);
+    // The robustness rows' rules, rankings and sizes.
+    expect(refusal(variant((p) => void (p.methods.robustness.rows.D1.registered.rule = "all of 40 in place of 43")))).toMatch(/robustness row D1's rule reads "all of 40 in place of 43", not the registered/);
+    expect(refusal(variant((p) => void (p.methods.robustness.rows.P1.registered.ranked_by = "Census 2024 population")))).toMatch(/robustness row P1's ranking reads "Census 2024 population"/);
+    expect(refusal(variant((p) => void (p.methods.robustness.rows.P2.registered.largest_n = 99)))).toMatch(/robustness row P2 registers the 99 largest metros, but its sets cover 100/);
+    // Why a clause or a caveat does not print.
+    expect(refusal(variant((p) => void (p.evidence.suppressed[0].reason = "twins_pending: no twin yet")))).toMatch(/suppressed clause C1\.H3\.twins gives the reason "twins_pending: no twin yet", which is none of its registered forms/);
+    const qcew = variant((p) => {
+      const c = p.evidence.caveats.find((x) => x.id === "C1.caveat.qcew_manufacturing")!;
+      c.reason = c.reason!.replace("2023", "2024");
+    });
+    expect(refusal(qcew)).toMatch(/caveat C1\.caveat\.qcew_manufacturing gives the reason .*, which is none of its registered forms \(C1\.reason\.qcew_manufacturing\)/);
+    // Why a metro is not published: a registered code, and the one its sets give.
+    expect(refusal(variant((p) => void (p.evidence.chart.not_published[0].reason = "suppressed by BLS")))).toMatch(/Tampa-St\. Petersburg-Clearwater, FL is not published for the reason "suppressed by BLS", which is not a registered code/);
+    expect(refusal(variant((p) => void (p.evidence.chart.not_published[0].reason = "zero_base")))).toMatch(/Tampa-St\. Petersburg-Clearwater, FL's reason is not the one the main sets give for leaving it out/);
+    // Formulas and thresholds.
+    expect(refusal(variant((p) => void (p.evidence.numbers["main:2019->2025.12420.office.rank"].formula = "1 + the members with a larger value")))).toMatch(
+      /evidence number main:2019->2025\.12420\.office\.rank \(rank\) states the formula "1 \+ the members with a larger value", not the registered rank/,
+    );
+    expect(refusal(variant((p) => void (p.evidence.numbers["main:2019->2025.12420.office.rank"].formula = templateText("C1.H3b"))))).toMatch(/not the registered rank/);
+    expect(refusal(variant((p) => void (p.evidence.preconditions.find((x) => x.name === "universe.n")!.threshold = "== 151 (prereg flagship.universe.largest_n)")))).toMatch(
+      /precondition universe\.n states the threshold "== 151 \(prereg flagship\.universe\.largest_n\)", which is not a registered one/,
+    );
+  });
+
+  it("builds the suppressed path: no H3b clause, the neutral title, the reason in its registered form", () => {
+    const b = variant((p) => {
+      suppressH3b(p);
+      const slots = { ...p.evidence.chart.title.slots, N: p.evidence.chart.universe_line.slots.N };
+      p.evidence.chart.title = { id: "C1.chart_title.raw", text: templateText("C1.chart_title.raw"), slots };
+      p.chart.headline = fill("C1.chart_title.raw", slots);
+    });
+    const i = buildInsight(b, "C1-raw");
+    expect(i.headline).toBe("From 2019 to 2025 Austin's office-industry jobs grew 36.0% and its goods-and-logistics jobs 38.6%, ranking 1st and 2nd of 149 major metros.");
+    expect(i.chartTitle).toBe("Job Growth in Office and Goods-and-Logistics Industries, 150 Largest US Metros, 2019 to 2025");
+    expect(i.notPrinted).toContainEqual({ id: "C1.H3b", reason: "a precondition fails: h3b.no_metro_beat_both.P2" });
+    // The same suppression with a reason that names a row that did not fail is refused.
+    const wrong = variant((p) => {
+      suppressH3b(p);
+      p.evidence.suppressed.find((s) => s.clause === "C1.H3b")!.reason = "a precondition fails: h3b.no_metro_beat_both.P3";
+    });
+    expect(refusal(wrong)).toMatch(/suppressed clause C1\.H3b gives the reason "a precondition fails: h3b\.no_metro_beat_both\.P3"/);
   });
 
   it("refuses a title or subtitle rung that its ladder's rule would not pick", () => {

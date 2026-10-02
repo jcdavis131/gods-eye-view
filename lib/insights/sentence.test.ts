@@ -11,21 +11,30 @@ import { describe, expect, it } from "vitest";
 import { loadBundle } from "./load";
 import {
   DEK_LADDER_RECENCY,
+  FORMULA_IDS,
   TEMPLATE_IDS,
+  THRESHOLDS,
   TITLE_LADDER_H3B,
   asSentence,
   fill,
   formatSlot,
+  formulaText,
   headlineSentence,
   isTemplateId,
+  matchTemplate,
+  panelBGateTemplate,
   placeholders,
+  registeredFormula,
+  robustnessRegistered,
   statusNote,
   templateText,
   type TemplateId,
 } from "./sentence";
 import type { Slot } from "./types";
 
-const EV = loadBundle("places-v0.1.1").findings.find((f) => f.id === "C1-raw")!.evidence;
+const BUNDLE = loadBundle("places-v0.1.1");
+const EV = BUNDLE.findings.find((f) => f.id === "C1-raw")!.evidence;
+const METHODS = BUNDLE.methods;
 const H = EV.headline;
 
 const GOLDEN_HEADLINE =
@@ -159,6 +168,35 @@ describe("registered texts", () => {
   });
   it("no longer registers the clause H3b replaced", () => {
     expect(isTemplateId("C1.H3.no_metro_beat_both")).toBe(false);
+  });
+  it("cover panel B's gate rules, the robustness rows' words, the reasons, the thresholds and the formulas the bundle prints", () => {
+    for (const g of METHODS.panel_b.gate) expect(templateText(panelBGateTemplate(g.name)!), g.name).toBe(g.rule);
+    for (const [id, row] of Object.entries(METHODS.robustness.rows)) {
+      const reg = robustnessRegistered(id);
+      expect(reg.kind, id).toBe(row.kind);
+      if (reg.rule !== undefined) expect(row.registered.rule, id).toBe(reg.rule);
+      if (reg.ranked_by !== undefined) expect(row.registered.ranked_by, id).toBe(reg.ranked_by);
+      if (reg.t1 !== undefined) expect(row.registered.window?.t1, id).toBe(reg.t1);
+    }
+    expect(() => robustnessRegistered("P4")).toThrow(/no registered words for robustness row "P4"/);
+    expect(templateText("C1.reason.twins_pending")).toBe(EV.suppressed.find((s) => s.clause === "C1.H3.twins")!.reason);
+    expect(templateText("C1.reason.qcew_manufacturing")).toBe(EV.caveats.find((c) => c.id === "C1.caveat.qcew_manufacturing")!.reason);
+    expect(templateText("C1.reason.mlc_not_published")).toBe(EV.chart.not_published[0].reason);
+    for (const p of EV.preconditions) expect(THRESHOLDS.some((id) => matchTemplate(id, p.threshold) !== null), p.threshold).toBe(true);
+    for (const [key, n] of Object.entries(EV.numbers)) {
+      if (n.kind === "registered") expect(n.formula, key).toBeUndefined();
+      else expect(registeredFormula(n.kind, key, n.formula), key).toBe(n.formula);
+    }
+    expect(new Set(Object.values(EV.numbers).flatMap((n) => (n.formula ? [n.formula] : [])))).toEqual(new Set(FORMULA_IDS.map(formulaText)));
+  });
+  it("read a reason form's slots back out of the text, and nothing that is not the form", () => {
+    expect(matchTemplate("C1.reason.precondition_fails", "a precondition fails: h3b.no_metro_beat_both.P2, h3b.no_metro_beat_both.P3")).toEqual({ names: "h3b.no_metro_beat_both.P2, h3b.no_metro_beat_both.P3" });
+    expect(matchTemplate("C1.reason.ces_not_above", "the 2023 value is not above the 2022 one, so the caveat would say something the cells do not")).toEqual({ y1: "2023", y0: "2022" });
+    expect(matchTemplate("C1.threshold.universe_n", "== 150 (prereg flagship.universe.largest_n)")).toEqual({ N: "150" });
+    expect(matchTemplate("C1.reason.zero_base", "zero_base")).toEqual({});
+    expect(matchTemplate("C1.reason.zero_base", "zero_base; zero_base")).toBeNull();
+    expect(matchTemplate("C1.reason.precondition_fails", "a precondition fails: ")).toBeNull();
+    expect(matchTemplate("C1.threshold.zero", "== 0.0")).toBeNull();
   });
 });
 

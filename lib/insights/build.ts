@@ -57,6 +57,8 @@ import {
   DEK_LIMIT,
   GATING_ROWS_H3B,
   METHODS_IS,
+  NOT_PUBLISHED_CODES,
+  THRESHOLDS,
   METHODS_IS_NOT,
   TITLE_LADDER_H3B,
   asSentence,
@@ -65,9 +67,13 @@ import {
   formatSlot,
   headlineSentence,
   isTemplateId,
+  matchTemplate,
+  panelBGateTemplate,
   placeholders,
+  registeredFormula,
   robustnessChange,
   statusNote,
+  statusTemplate,
   templateText,
   windowLabel,
   type TemplateId,
@@ -216,6 +222,48 @@ export function h3bGate(ev: Evidence, methods: Methods): string[] {
   return problems;
 }
 
+// ---------------------------------------------------------------- reasons
+
+/** A registered reason template and the check its captured slots must pass against the evidence. */
+type ReasonForm = [TemplateId, (slots: Record<string, string>) => boolean];
+
+/** A CES cell key as the producer writes one: series id, year, period. */
+const CELL_KEY = /^SMU\d{17}\|\d{4}\|M\d{2}$/;
+/** The producer's Python repr of a list of CES cell keys. */
+const CELL_KEY_LIST = /^\['SMU\d{17}\|\d{4}\|M\d{2}'(?:, 'SMU\d{17}\|\d{4}\|M\d{2}')*\]$/;
+
+/** The registered forms of the reason a caveat gives when it does not print, by caveat. */
+function caveatReasonForms(c: Evidence["caveats"][number]): ReasonForm[] {
+  const yearOf = (name: string): string | null => {
+    const s = c.slots?.[name];
+    return s && "value" in s && s.format === "year" ? String(s.value) : null;
+  };
+  switch (c.id) {
+    case RECENCY:
+      return [
+        ["C1.reason.recency_no_window", (m) => c.window !== undefined && m.window === c.window],
+        ["C1.reason.recency_subject", () => true],
+        ["C1.reason.recency_empty", () => c.slots?.beat_both?.format === "list" && c.slots.beat_both.metros.length === 0],
+      ];
+    case "C1.caveat.ces_manufacturing":
+      return [
+        [
+          "C1.reason.ces_not_above",
+          (m) => {
+            const v0 = c.slots?.v0;
+            const v1 = c.slots?.v1;
+            return m.y0 === yearOf("y0") && m.y1 === yearOf("y1") && !!v0 && !!v1 && "value" in v0 && "value" in v1 && !(v1.value > v0.value);
+          },
+        ],
+        ["C1.reason.ces_no_cell", (m) => CELL_KEY_LIST.test(m.key)],
+      ];
+    case "C1.caveat.qcew_manufacturing":
+      return [["C1.reason.qcew_manufacturing", () => true]];
+    default:
+      return [];
+  }
+}
+
 // ---------------------------------------------------------------- probabilities
 
 const bigPow = (b: bigint, k: number): bigint => {
@@ -261,12 +309,28 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
   if (!sl || sl.id !== "C1.methods.status" || sl.slots.status !== manifest.status || sl.slots.panel_a !== manifest.panels.A || sl.slots.panel_b !== manifest.panels.B) {
     refuse("the methods page's status line does not agree with the manifest");
   }
+  // A status this side has no note for is refused before anything else is read.
+  try {
+    statusTemplate(manifest.status);
+  } catch (e) {
+    refuse((e as Error).message);
+  }
 
   // Preconditions: every one passes.
   if (ev.preconditions.length === 0) refuse("the evidence records no preconditions");
   const failing = ev.preconditions.filter((p) => p.pass !== true);
   if (failing.length) refuse(`precondition ${failing.map((p) => `${p.name} (value ${JSON.stringify(p.value)}, needs ${p.threshold})`).join("; ")} does not pass`);
   if (!ev.preconditions.some((p) => p.gates === findingId)) refuse("no precondition gates the finding itself");
+  // The precondition table prints each threshold: a registered one, and a number in it is the value it is compared with.
+  for (const p of ev.preconditions) {
+    const ok = THRESHOLDS.some((id) => {
+      const m = matchTemplate(id, p.threshold);
+      return m !== null && (m.N === undefined || (typeof p.value === "number" && m.N === String(p.value)));
+    });
+    if (!ok) refuse(`precondition ${p.name} states the threshold ${JSON.stringify(p.threshold)}, which is not a registered one`);
+  }
+  const universeN = ev.numbers["main.universe.n"];
+  if (!universeN || universeN.value !== Object.keys(ev.sets["main:universe"]?.members ?? {}).length) refuse("main.universe.n is not the size of the main:universe set");
 
   // The numbers behind every slot.
   // A year slot that cites a published cell prints the cell's year, so it is
@@ -299,6 +363,14 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
       return fill(id, slots);
     } catch (e) {
       return refuse(`${where}: ${(e as Error).message}`);
+    }
+  };
+  /** A number's formula as the page prints it: the registered text for its kind, or a refusal. */
+  const formulaOf = (key: string, n: EvidenceNumber): string => {
+    try {
+      return registeredFormula(n.kind, key, n.formula);
+    } catch (e) {
+      return refuse((e as Error).message);
     }
   };
   const registered = (where: string, id: string, text: string): TemplateId => {
@@ -362,10 +434,29 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
     if (!r || !hasNumber(r) || r.number !== `${mainPrefix}.${ev.subject}.${axis}.${what}`) refuse(`the headline's {${name}} is not the subject's ${axis} ${what} in ${mainPrefix}`);
   }
 
-  // Caveats: printed ones are filled from registered templates; the rest say why not.
+  // Why a clause or a caveat does not print: one of the registered forms, each slot in it read back from the evidence.
+  const reasonIs = (what: string, reason: string | undefined, forms: ReasonForm[]): void => {
+    if (reason !== undefined && forms.some(([id, ok]) => {
+      const m = matchTemplate(id, reason);
+      return m !== null && ok(m);
+    })) return;
+    refuse(`${what} gives the reason ${JSON.stringify(reason ?? null)}, which is none of its registered forms (${forms.map(([id]) => id).join(", ") || "none registered"}) with the evidence's own values`);
+  };
+  for (const s of ev.suppressed) {
+    const failingNames = (s.preconditions ?? []).filter((p) => p.pass !== true).map((p) => p.name);
+    const forms: ReasonForm[] = [
+      ["C1.reason.precondition_fails", (m) => failingNames.length > 0 && m.names === failingNames.join(", ")],
+      ["C1.reason.extends_suppressed", () => failingNames.length === 0 && !clauses.some((c) => c.id === "C1.H3.ranks" && c.printed)],
+    ];
+    if (s.clause === "C1.H3.twins") forms.unshift(["C1.reason.twins_pending", () => manifest.status === "twins_pending"]);
+    reasonIs(`suppressed clause ${s.clause}`, s.reason, forms);
+  }
+
+  // Caveats: printed ones are filled from registered templates; the rest say why not, in a registered form.
   const caveats: Insight["caveats"] = [];
   const notPrinted: Insight["notPrinted"] = ev.suppressed.map((s) => ({ id: s.clause, reason: s.reason }));
   for (const c of ev.caveats) {
+    if (!c.printed) reasonIs(`caveat ${c.id}`, c.reason, caveatReasonForms(c));
     const id = registered(`caveat ${c.id}`, c.id, c.text);
     if (c.printed) {
       if (id === "C1.caveat.not_published" || id === "C1.caveat.not_published.plural") {
@@ -507,6 +598,18 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
   for (const m of ch.not_published) {
     const d = bubble.data.find((x) => x.id === m.cbsa) ?? refuse(`${m.title} is named as not published but is not a chart row`);
     if (isPlotted(bubble, d)) refuse(`${m.title} is named as not published but is plotted`);
+    // Its reason prints beside it: registered codes, and the one the main sets give for leaving it out.
+    for (const part of (m.reason ?? "").split("; ")) {
+      const ok = NOT_PUBLISHED_CODES.some((id) => {
+        const g = matchTemplate(id, part);
+        return g !== null && (g.key === undefined || CELL_KEY.test(g.key));
+      });
+      if (!ok) refuse(`${m.title} is not published for the reason ${JSON.stringify(part)}, which is not a registered code`);
+    }
+    const left = Object.values(ev.sets)
+      .filter((s) => s.row === "main" && s.window === `${window.t0}->${window.t1}`)
+      .map((s) => s.excluded?.[m.cbsa]);
+    if (left.length === 0 || left.some((r) => r !== m.reason)) refuse(`${m.title}'s reason is not the one the main sets give for leaving it out`);
   }
 
   // Labels: exactly the evidence's request, in its order, which the renderer keeps, on canvases that can draw that many.
@@ -599,7 +702,7 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
         printed: formatSlot(name, s),
         number: s.number,
         kind: n.kind,
-        formula: n.formula ?? (n.kind === "registered" ? "a registered value" : refuse(`evidence number ${s.number} has no formula`)),
+        formula: n.kind === "registered" ? (n.formula === undefined ? "a registered value" : refuse(`registered number ${s.number} states a formula`)) : formulaOf(s.number, n),
         ...(prob ? { arithmetic: prob.arithmetic } : {}),
         over: n.over ?? [],
         cells: (n.provenance ?? []).map(cell),
@@ -625,6 +728,12 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
   if (methods.panel_a.finding !== findingId) refuse(`the methods page's panel A is ${methods.panel_a.finding}`);
   const panelBText = templateText("C1.methods.panel_b");
   if (methods.panel_b.status !== "pending" || methods.panel_b.text !== panelBText || manifest.panels.B !== "pending") refuse("panel B's status or text is not the registered pending note");
+  if (methods.panel_b.gate.length === 0) refuse("panel B's gate lists no rule");
+  for (const g of methods.panel_b.gate) {
+    const id = panelBGateTemplate(g.name) ?? refuse(`panel B's gate ${JSON.stringify(g.name)} has no registered rule`);
+    if (g.rule !== templateText(id)) refuse(`panel B's gate ${g.name} reads ${JSON.stringify(g.rule)}, not the registered rule`);
+    if (g.status !== "pending") refuse(`panel B's gate ${g.name} is ${JSON.stringify(g.status)} while panel B is pending`);
+  }
   let status: string;
   try {
     status = statusNote(manifest.status, t0);
@@ -645,7 +754,7 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
       const check = (column: string, key: string, value: number) => {
         const n = ev.numbers[key] ?? refuse(`robustness ${rid} ${w} names evidence number ${key}, which does not exist`);
         if (n.value !== value) refuse(`robustness ${rid} ${w}: ${key} is ${value} on the methods page, ${JSON.stringify(n.value)} in the evidence`);
-        const formula = n.formula ?? refuse(`robustness ${rid} ${w}: evidence number ${key} has no formula`);
+        const formula = formulaOf(key, n);
         const entry = formulas.get(formula) ?? { column, rows: new Set<string>() };
         if (entry.column !== column) refuse(`robustness ${rid} ${w}: one formula computes both ${entry.column} and ${column}`);
         entry.rows.add(rid);
@@ -677,10 +786,17 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
       if (universes.some((u) => canonicalJson(u) !== canonicalJson(universes[0]))) refuse(`robustness ${rid} ${w}: the sets ${over.join(" and ")} cover different metros`);
       const n = universes[0].length;
       if (n !== win.n) refuse(`robustness ${rid} ${w}: the methods page counts ${win.n} metros, the evidence sets ${n}`);
+      let change: string;
+      try {
+        change = robustnessChange(rid, row, n);
+      } catch (e) {
+        return refuse((e as Error).message);
+      }
+      if (row.kind === "end_year" && typeof row.registered.window?.t1 === "number" && w !== `${row.registered.window.t0}->${row.registered.window.t1}`) refuse(`robustness ${rid}'s window ${w} is not its registered ${row.registered.window.t0} to ${row.registered.window.t1}`);
       const base = {
         id: rid,
         kind: row.kind,
-        change: robustnessChange(row),
+        change,
         window: windowLabel(w),
         publishable: `${num(win.publishable.value)} of ${num(n)}`,
         denominator: { number: win.publishable.number, sets: over },
