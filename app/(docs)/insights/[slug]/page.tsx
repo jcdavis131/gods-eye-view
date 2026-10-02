@@ -56,9 +56,10 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug } = await params;
   const i = load(slug);
   const url = absoluteUrl(insightPath(i));
+  // The chart title can make the H3b claim; the description carries the recency caveat that prints with it.
   return {
     title: i.chartTitle,
-    description: i.headline,
+    description: i.description,
     alternates: {
       canonical: url,
       types: {
@@ -67,8 +68,8 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
         "text/csv": absoluteUrl(`${insightPath(i)}/data.csv`),
       },
     },
-    openGraph: { title: i.chartTitle, description: i.headline, url, type: "article" },
-    twitter: { card: "summary_large_image", title: i.chartTitle, description: i.headline },
+    openGraph: { title: i.chartTitle, description: i.description, url, type: "article" },
+    twitter: { card: "summary_large_image", title: i.chartTitle, description: i.description },
   };
 }
 

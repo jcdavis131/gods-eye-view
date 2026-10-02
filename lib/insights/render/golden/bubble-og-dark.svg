@@ -173,11 +173,15 @@
 <text x="787.72" y="187.87" font-size="15" font-weight="700" text-anchor="end" fill="#c9d1d9">Las Vegas</text>
 <text x="803.86" y="207.51" font-size="15" font-weight="700" text-anchor="end" fill="none" stroke="#05070a" stroke-opacity="0.85" stroke-width="2.4" stroke-linejoin="round">San Antonio</text>
 <text x="803.86" y="207.51" font-size="15" font-weight="700" text-anchor="end" fill="#c9d1d9">San Antonio</text>
-<text x="48" y="76.4" font-size="40" font-weight="900" fill="#eef3f7">White-Collar and</text>
-<text x="48" y="118.8" font-size="40" font-weight="900" fill="#eef3f7">Blue-Collar Industry</text>
-<text x="48" y="161.2" font-size="40" font-weight="900" fill="#eef3f7">Job Growth in the</text>
-<text x="48" y="203.6" font-size="40" font-weight="900" fill="#eef3f7">150 Largest US Metro</text>
-<text x="48" y="246" font-size="40" font-weight="900" fill="#eef3f7">Areas, 2019 to 2023</text>
+<text x="48" y="72.14" font-size="34" font-weight="900" fill="#eef3f7">White-Collar and</text>
+<text x="48" y="108.18" font-size="34" font-weight="900" fill="#eef3f7">Blue-Collar Industry</text>
+<text x="48" y="144.22" font-size="34" font-weight="900" fill="#eef3f7">Job Growth in the</text>
+<text x="48" y="180.26" font-size="34" font-weight="900" fill="#eef3f7">150 Largest US Metro</text>
+<text x="48" y="216.3" font-size="34" font-weight="900" fill="#eef3f7">Areas, 2019 to 2023</text>
+<text x="48" y="248.27" font-size="14" font-weight="400" fill="#7d8894">Industry groups standing in for white- and blue-collar</text>
+<text x="48" y="266.27" font-size="14" font-weight="400" fill="#7d8894">work: private financial activities and professional and</text>
+<text x="48" y="284.27" font-size="14" font-weight="400" fill="#7d8894">business services against goods-producing industries.</text>
+<text x="48" y="302.27" font-size="14" font-weight="400" fill="#7d8894">Jobs are counted by employer industry, not occupation.</text>
 <text x="633.89" y="501.67" font-size="15" font-weight="400" text-anchor="middle" fill="#7d8894">-20%</text>
 <text x="716.85" y="501.67" font-size="15" font-weight="400" text-anchor="middle" fill="#7d8894">-10%</text>
 <text x="799.8" y="501.67" font-size="15" font-weight="400" text-anchor="middle" fill="#7d8894">0%</text>

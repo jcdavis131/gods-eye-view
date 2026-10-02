@@ -110,6 +110,9 @@ describe("the insight page", () => {
     await expect(InsightPage(ctx("no-such-insight"))).rejects.toThrow();
     const meta = await generateMetadata(ctx(SLUG));
     expect(meta.title).toBe(TITLE);
+    // The title says no major metro beat Austin on both; every description beside it carries the recency caveat.
+    const caveat = "From 2022 to 2025 Austin ranks 17th on office-industry and 5th on goods-and-logistics growth, and Beaumont and Tallahassee beat it on both.";
+    for (const d of [meta.description, meta.openGraph?.description, meta.twitter?.description]) expect(d).toContain(caveat);
     expect(meta.alternates?.canonical).toBe(`https://eye.jcamd.com/insights/${SLUG}`);
   });
 

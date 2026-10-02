@@ -49,6 +49,7 @@ import { signedPct, num, ordinal } from "@/lib/brief/format";
 import { stableHash } from "@/lib/feed/hash";
 import { BUNDLES, loadBundle, type LoadedBundle, type LoadedFinding } from "./load";
 import { CANVAS_IDS, headlineMisfits, type CanvasId } from "./render/canvas";
+import { layoutFrame } from "./render/frame";
 import { LABEL_CAP, requestedLabels } from "./render/charts/bubble";
 import { isPlotted } from "./render/table";
 import { byteCompare, canonicalJson, parseChartSpec, toProvenance, type BubbleSpec, type ChartSpec } from "./render/spec";
@@ -477,6 +478,10 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
     else refuse(`caveat ${c.id} does not print and gives no reason`);
   }
   const recency = ev.caveats.find((c) => c.id === RECENCY);
+  // Wherever the headline travels alone (a page's description, a card's, a Report's) its H3b clause takes the recency caveat with it.
+  const recencySentence = caveats.find((c) => c.id === RECENCY)?.text;
+  if (h3bPrinted && !recencySentence) refuse("the H3b clause prints but the recency caveat does not");
+  const description = h3bPrinted ? `${headline} ${recencySentence}` : headline;
 
   // The random-peer probability: the sentence, and its arithmetic recomputed exactly.
   const rp = ev.random_peer;
@@ -612,6 +617,17 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
       .filter((s) => s.row === "main" && s.window === `${window.t0}->${window.t1}`)
       .map((s) => s.excluded?.[m.cbsa]);
     if (left.length === 0 || left.some((r) => r !== m.reason)) refuse(`${m.title}'s reason is not the one the main sets give for leaving it out`);
+  }
+
+  // Every canvas can lay the chart out: the headline, the dek (the OG card's text column carries it too, so the H3b
+  // title never travels without its caveat) and the source lines. A chart that would not fit is refused here, not
+  // when a card is first requested.
+  for (const c of CANVAS_IDS) {
+    try {
+      layoutFrame(bubble, c, "dark");
+    } catch (e) {
+      refuse(`the chart does not fit the ${c} canvas: ${(e as Error).message}`);
+    }
   }
 
   // Labels: exactly the evidence's request, in its order, which the renderer keeps, on canvases that can draw that many.
@@ -899,6 +915,7 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
     status: manifest.status,
     panel: f.panel,
     headline,
+    description,
     chartTitle,
     dek,
     universe: spec.universe,

@@ -456,6 +456,8 @@ describe("refusals", () => {
     });
     const i = buildInsight(b, "C1-raw");
     expect(i.headline).toBe("From 2019 to 2025 Austin's office-industry jobs grew 36.0% and its goods-and-logistics jobs 38.6%, ranking 1st and 2nd of 149 major metros.");
+    // With no claim in the headline or the title, the description is the headline alone.
+    expect(i.description).toBe(i.headline);
     expect(i.chartTitle).toBe("Job Growth in Office and Goods-and-Logistics Industries, 150 Largest US Metros, 2019 to 2025");
     expect(i.notPrinted).toContainEqual({ id: "C1.H3b", reason: "a precondition fails: h3b.no_metro_beat_both.P2" });
     // The same suppression with a reason that names a row that did not fail is refused.
@@ -551,6 +553,15 @@ describe("drawn from the bundle alone", () => {
     insightJson(i, { all: true });
     insightJsonLd(i);
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("draws the recency subtitle under the H3b title on the OG card, as on the social card", () => {
+    for (const canvas of ["social", "og"] as const) {
+      const svg = renderSvg(I.spec, canvas, "dark");
+      const words = [...svg.matchAll(/<text[^>]*>([^<]*)<\/text>/g)].map((m) => m[1].replace(/&amp;/g, "&")).join(" ");
+      expect(words, canvas).toContain(I.dek);
+      expect(I.dek).toContain("Beaumont and Tallahassee beat it on both");
+    }
   });
 
   it("charts exactly the sidecar: the spec is the parsed sidecar, and every published row is drawn", () => {
@@ -663,12 +674,13 @@ describe("JSON-LD and the feed", () => {
   const [report, dataset] = insightJsonLd(I) as Array<Record<string, unknown>>;
   const ISO = /^\d{4}(-\d{2})?(\/\d{4}(-\d{2})?)?$/;
 
-  it("heads the Report with the chart title, within 110 characters, and puts the sentence in its description", () => {
+  it("heads the Report with the chart title, within 110 characters, and puts the sentence and its recency caveat in its description", () => {
     expect(report["@type"]).toBe("Report");
     expect(report.headline).toBe(TITLE);
     expect((report.headline as string).length).toBeLessThanOrEqual(HEADLINE_MAX);
     expect(HEADLINE_MAX).toBe(110);
-    expect(report.description).toBe(I.headline);
+    expect(report.description).toBe(I.description);
+    expect(I.description).toBe(`${I.headline} From 2022 to 2025 Austin ranks 17th on office-industry and 5th on goods-and-logistics growth, and Beaumont and Tallahassee beat it on both.`);
     expect((report.about as { url: string }).url).toMatch(/\/metro\/12420$/);
     expect(() => reportHeadline({ id: "x", chartTitle: "A".repeat(111) })).toThrow(/111 characters, over the 110/);
   });

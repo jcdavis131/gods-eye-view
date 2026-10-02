@@ -4,7 +4,8 @@
 // distributions are the downloads the page really serves, and the
 // breadcrumb. The Report's headline is the chart title: search engines take
 // at most 110 characters there, and the finding's full sentence goes in its
-// description, so a title past that bound throws rather than be cut. Dates
+// description (with the recency caveat when the title makes the H3b claim),
+// so a title past that bound throws rather than be cut. Dates
 // are the bundle's (asOf), never a clock.
 //
 // isBasedOn is built here from the insight's own file list, not from
@@ -102,7 +103,7 @@ export function insightJsonLd(i: Insight): unknown[] {
     "@id": `${url}#insight`,
     name: i.chartTitle,
     headline: reportHeadline(i),
-    description: i.headline,
+    description: i.description,
     abstract: i.dek,
     url,
     inLanguage: "en-US",

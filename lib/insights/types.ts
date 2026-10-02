@@ -316,6 +316,12 @@ export interface Insight {
   panel: string;
   /** The headline sentence, from the registered templates. */
   headline: string;
+  /**
+   * The headline as a page's description, a card's and a Report's: when the
+   * H3b clause prints, followed by the recency caveat, which precondition
+   * h3b.recency_caveat_prints says prints with it wherever it prints.
+   */
+  description: string;
   /** The chart's own title (sidecar headline), from its template. */
   chartTitle: string;
   dek: string;

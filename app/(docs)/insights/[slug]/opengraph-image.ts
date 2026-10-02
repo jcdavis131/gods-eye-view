@@ -1,5 +1,7 @@
 // The 1200 x 630 Open Graph card for an insight: the chart's og-canvas SVG
-// (a text column with the chart title and source lines, the plot beside it)
+// (a text column with the chart title, its subtitle and the source lines, the
+// plot beside it; the subtitle carries the recency caveat when the title makes
+// the H3b claim)
 // rasterised by resvg-wasm with the vendored Geist faces. Not next/og's
 // ImageResponse: that goes through sharp/librsvg wherever sharp resolves and
 // draws no text without fonts (lib/insights/render/raster.ts). The default

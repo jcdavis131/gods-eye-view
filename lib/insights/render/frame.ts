@@ -11,9 +11,9 @@
 //                           the plot takes what is left. The first design
 //                           placed these at fixed y positions and the x title
 //                           overprinted the legend; bottom-up cannot.
-//   split (og)              a text column on the left (headline from the top;
-//                           brand and source lines from the bottom), the plot,
-//                           its axes and the legend on the right.
+//   split (og)              a text column on the left (headline and dek from
+//                           the top; brand and source lines from the bottom),
+//                           the plot, its axes and the legend on the right.
 //
 // Gutters are measured, never fixed: the left gutter is the rotated y title
 // plus the widest y tick label as formatted, so "+100%" or "$1,250,000" ticks
@@ -559,8 +559,14 @@ export function layoutFrame(input: ChartSpec, canvasId: CanvasId, theme: Theme, 
       top = headline.top;
     }
     if (split) {
-      if (top + cv.gaps.headline > notesTop) {
-        tried.push(`${size} px: column overflows by ${Math.ceil(top + cv.gaps.headline - notesTop)} px`);
+      // The dek sits under the headline in the text column: a title that makes a claim keeps its caveat on every card.
+      if (cv.dek && spec.dek) {
+        dek = dekBlock(spec.dek, cv, pal, colX, colW, headline ? top + cv.gaps.headline : top);
+        top = dek.top;
+      }
+      const gap = dek ? cv.gaps.dek : cv.gaps.headline;
+      if (top + gap > notesTop) {
+        tried.push(`${size} px: column overflows by ${Math.ceil(top + gap - notesTop)} px`);
         continue;
       }
       ax2 = layoutAxes(ax, { x0: plotX0, x1: W - M, y0: M, y1: leg.top - cv.gaps.block }, cv, pal);

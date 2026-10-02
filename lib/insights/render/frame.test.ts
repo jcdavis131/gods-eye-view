@@ -193,6 +193,23 @@ describe("notes", () => {
     ]);
   });
 
+  it("draws the dek in the OG text column, under the headline and above the source lines", () => {
+    const f = layoutFrame(SPEC, "og", "dark");
+    const cv = CANVASES.og;
+    const dek = runs(f, "dek");
+    expect(dek.map((r) => r.node.text).join(" ")).toBe(SPEC.dek);
+    for (const r of dek) {
+      const span = textSpan(r.node);
+      expect(span.x0).toBeGreaterThanOrEqual(cv.margin - EPS);
+      expect(span.x1).toBeLessThanOrEqual(cv.margin + cv.column + EPS);
+    }
+    const head = runs(f, "headline");
+    expect(Math.max(...head.map((r) => r.node.y))).toBeLessThan(Math.min(...dek.map((r) => r.node.y - r.node.size)));
+    expect(Math.max(...dek.map((r) => r.node.y + r.node.size * 0.3))).toBeLessThan(Math.min(...runs(f, "source").map((r) => r.node.y - r.node.size)));
+    // With no dek the column is the headline's alone, as before.
+    expect(runs(layoutFrame({ ...SPEC, dek: undefined }, "og", "dark"), "dek")).toEqual([]);
+  });
+
   it("moves the permalink under the brand when one row cannot hold both", () => {
     const f = layoutFrame(SPEC, "og", "dark");
     const brand = runs(f, "brand")[0].node;
