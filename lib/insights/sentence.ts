@@ -18,10 +18,12 @@
 // panel B's gate rules, each robustness row's rule, ranking or end
 // (robustnessRegistered), the reasons a clause or caveat does not print and
 // a metro is not published (each form the producer writes, its slots read
-// back from the evidence by build.ts), the precondition thresholds and every
-// formula (formulaText). Each text may print in its own place on the page
-// only (ROLE_TEMPLATES). The status note is this side's own sentence, keyed
-// by the bundle status.
+// back from the evidence by build.ts), the precondition thresholds, every
+// formula (formulaText) and the period a card's Source line prints for a
+// cell. The years and counts in the reasons and formulas are placeholders,
+// read back from the evidence by build.ts. Each text may print in its own
+// place on the page only (ROLE_TEMPLATES). The status note is this side's
+// own sentence, keyed by the bundle status.
 //
 // Slot formats. A template that carries its own unit ("grew {a}%", "from
 // {v0}k") takes a bare number, a num slot; signedPct prints its own sign and
@@ -62,6 +64,7 @@ export const TEMPLATE_IDS = [
   "C1.chart.y_label",
   "C1.chart.size_label",
   "C1.chart.median_label",
+  "C1.chart.period_annual",
   "C1.chart.growth_method",
   "C1.chart.bubble_method",
   "C1.method_line",
@@ -156,6 +159,10 @@ export function templateText(id: TemplateId): string {
       return "change in total nonfarm jobs (thousands), {t0} to {t1}";
     case "C1.chart.median_label":
       return "Median metro";
+    // The period a card's Source line prints for each published cell (sidecar provenance[*].period), by the cell's
+    // period code: build.ts periodLabel requires it of every cell the chart cites.
+    case "C1.chart.period_annual":
+      return "{year} annual average";
     case "C1.chart.growth_method":
       return "growth = ({t1} / {t0} - 1) x 100 of annual-average jobs summed over CES supersectors 50 + 55 + 60 (horizontal) and MLC + 30 + 43 (vertical), MLC = 15, else 10 + 20; null if a part is not published; CES is a sample survey, benchmarked to QCEW once a year";
     case "C1.chart.bubble_method":
@@ -205,7 +212,7 @@ export function templateText(id: TemplateId): string {
     case "C1.reason.ces_no_cell":
       return "no published unfootnoted cell {key}";
     case "C1.reason.qcew_manufacturing":
-      return "no QCEW cell after 2023 is in this bundle's evidence (row X1 reads 2019 and 2023), so the comparison can't be shown from published cells here";
+      return "no QCEW cell after {y1} is in this bundle's evidence (row X1 reads {y0} and {y1}), so the comparison can't be shown from published cells here";
     // Why a metro's value is not published (chart.not_published[*].reason): "; "-joined codes.
     case "C1.reason.mlc_not_published":
       return "mlc_not_published: CES publishes neither 15 nor both 10 and 20";
@@ -376,7 +383,9 @@ export type FormulaId = (typeof FORMULA_IDS)[number];
  * words it (vector-places places/export.py), word for word. The page prints
  * the formula beside every number it shows, so a formula is a producer text
  * like any other: build.ts refuses one that is not registered here for the
- * number's kind (formulasFor).
+ * number's kind (formulasFor). A formula that names the bundle's own years
+ * or counts (count.universe) carries them as placeholders, and build.ts
+ * checks each one it reads back (matchFormula) against the evidence.
  */
 export function formulaText(id: FormulaId): string {
   switch (id) {
@@ -397,7 +406,7 @@ export function formulaText(id: FormulaId): string {
     case "count.not_publishable_could_beat_both":
       return "a metro of the universe that is not in both sets, checked on each axis it has a value on: it could beat the subject on both if it has no axis, or a strictly larger value than the subject's on every axis it has";
     case "count.universe":
-      return "the largest_n metros by CES total nonfarm (00), 2019 M13; rank_150 and rank_151 are the cutoff";
+      return "the largest_n metros by CES total nonfarm (00), {year} {period}; rank_{n} and rank_{n1} are the cutoff";
     case "median":
       return "the median of the set's members' values; an odd count gives the middle value, a member's own value";
     case "cell":
@@ -436,10 +445,15 @@ export function formulasFor(kind: string, key: string): FormulaId[] {
   }
 }
 
+/** The slot strings that make `formula` the registered formula `id`, or null when it is not that formula. */
+export function matchFormula(id: FormulaId, formula: string): Record<string, string> | null {
+  return matchText(formulaText(id), formula);
+}
+
 /** A number's formula, refused unless it is the registered text for its kind. */
 export function registeredFormula(kind: string, key: string, formula: string | undefined): string {
   const ids = formulasFor(kind, key);
-  if (formula === undefined || !ids.some((id) => formulaText(id) === formula)) {
+  if (formula === undefined || !ids.some((id) => matchFormula(id, formula) !== null)) {
     throw new Error(`evidence number ${key} (${kind}) states the formula ${JSON.stringify(formula ?? null)}, not ${ids.length ? `the registered ${ids.join(" or ")}` : "a registered one"}`);
   }
   return formula;
@@ -676,6 +690,16 @@ export function axisCopy(axis: string): { order: number; label: string } {
       return { order: 1, label: "QCEW blue-collar" };
     default:
       throw new Error(`no label for robustness axis ${JSON.stringify(axis)}`);
+  }
+}
+
+/** The period a card's Source line prints for a published cell, by its period code; a code with no words refuses. */
+export function periodLabel(year: string, period: string): string {
+  switch (period) {
+    case "M13":
+      return fillWords("C1.chart.period_annual", { year });
+    default:
+      throw new Error(`no words for the period ${JSON.stringify(period)} of a ${year} cell`);
   }
 }
 

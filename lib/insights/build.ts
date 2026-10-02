@@ -35,6 +35,11 @@
 //     and then only in the headline, its description and the chart title
 //     (h3bWordingAt), whatever route they took in: a caveat, the random
 //     peer, a label, a reason, a precondition's name;
+//   - the years and counts the registered texts carry are read back from the
+//     evidence: the QCEW caveat's reason (row X1's window, the latest QCEW
+//     cell), the universe formula (the window's start, the period, the two
+//     cutoff ranks and their cells) and the period each card's Source line
+//     prints for a cell (one the rows read, at an end of the window);
 //   - every slot that prints a number names an evidence number whose value is
 //     the slot's value, so the printed number carries that entry's formula
 //     and published cells; a probability's exact fraction is recomputed;
@@ -77,11 +82,13 @@ import {
   headlineSentence,
   h3bWordingPatterns,
   isTemplateId,
+  matchFormula,
   matchTemplate,
   mayPrintAs,
   panelBGateTemplate,
   placeholders,
   registeredFormula,
+  periodLabel,
   ROLE_TEMPLATES,
   robustnessChange,
   robustnessRegistered,
@@ -275,6 +282,34 @@ export function h3bWordingAt(value: unknown): string[] {
   return out;
 }
 
+/** The words a peers row ranked on CES total nonfarm starts with; the rest is the period of the cells it ranks on. */
+const CES_RANKING = "CES total nonfarm, ";
+
+/**
+ * The cells a monthly end reads, "year|Mmm", from its registered words ("the
+ * mean of the 12 monthly values Sep 2025-Aug 2026"): every month from the
+ * first to the last, which must be as many as the words say; null when the
+ * words are not that form.
+ */
+export function monthlyEnd(words: string): string[] | null {
+  const m = /^the mean of the (\d+) monthly values ([A-Z][a-z]{2}) (\d{4})-([A-Z][a-z]{2}) (\d{4})$/.exec(words);
+  if (!m) return null;
+  const month = (name: string) => Number(MONTHS[name.toLowerCase()]?.iso ?? NaN);
+  let y = Number(m[3]);
+  let mo = month(m[2]);
+  const endY = Number(m[5]);
+  const endMo = month(m[4]);
+  if (!Number.isInteger(mo) || !Number.isInteger(endMo)) return null;
+  const out: string[] = [];
+  while (y < endY || (y === endY && mo <= endMo)) {
+    out.push(`${y}|M${String(mo).padStart(2, "0")}`);
+    if (out.length > 120) return null;
+    mo += 1;
+    if (mo > 12) [y, mo] = [y + 1, 1];
+  }
+  return out.length === Number(m[1]) ? out : null;
+}
+
 /** A registered reason template and the check its captured slots must pass against the evidence. */
 type ReasonForm = [TemplateId, (slots: Record<string, string>) => boolean];
 
@@ -283,8 +318,43 @@ const CELL_KEY = /^SMU\d{17}\|\d{4}\|M\d{2}$/;
 /** The producer's Python repr of a list of CES cell keys. */
 const CELL_KEY_LIST = /^\['SMU\d{17}\|\d{4}\|M\d{2}'(?:, 'SMU\d{17}\|\d{4}\|M\d{2}')*\]$/;
 
+/** The years of the QCEW cells the evidence holds, from its cell table and the tuples its numbers cite, under `prefix` only when given. */
+function qcewYears(ev: Evidence, prefix?: string): number[] {
+  const qcew = (s: SourceEntry | undefined) => !!s && s.source.startsWith("qcew");
+  const urls = new Set(Object.values(ev.sources).filter(qcew).map((s) => s.url));
+  const years: number[] = [];
+  for (const [key, n] of Object.entries(ev.numbers)) {
+    if (prefix !== undefined && !key.startsWith(prefix)) continue;
+    for (const t of n.provenance ?? []) {
+      const parts = t.split("|");
+      if (urls.has(parts[5])) years.push(Number(parts[1]));
+    }
+  }
+  if (prefix === undefined) {
+    for (const [key, bySeries] of Object.entries(ev.cells ?? {})) {
+      if (!qcew(ev.sources[key])) continue;
+      for (const cells of Object.values(bySeries)) for (const yp of Object.keys(cells)) years.push(Number(yp.split("|")[0]));
+    }
+  }
+  return years;
+}
+
+/**
+ * The QCEW caveat's reason read back: row X1 is the cross-source row
+ * registered over {y0} to {y1} and its numbers read QCEW cells of exactly
+ * those two years, and no QCEW cell anywhere in the evidence is after {y1}.
+ */
+function qcewReasonHolds(ev: Evidence, methods: Methods, y0: string, y1: string): boolean {
+  const x1 = methods.robustness.rows.X1;
+  const w = x1?.registered.window;
+  if (!x1 || x1.kind !== "cross_source" || !w || String(w.t0) !== y0 || String(w.t1) !== y1 || !Object.hasOwn(x1.windows, `${y0}->${y1}`)) return false;
+  const all = qcewYears(ev);
+  const x1Years = [...new Set(qcewYears(ev, `X1:${y0}->${y1}.`))].sort((a, b) => a - b);
+  return all.length > 0 && all.every((y) => y <= Number(y1)) && canonicalJson(x1Years) === canonicalJson([Number(y0), Number(y1)]);
+}
+
 /** The registered forms of the reason a caveat gives when it does not print, by caveat. */
-function caveatReasonForms(c: Evidence["caveats"][number]): ReasonForm[] {
+function caveatReasonForms(c: Evidence["caveats"][number], ev: Evidence, methods: Methods): ReasonForm[] {
   const yearOf = (name: string): string | null => {
     const s = c.slots?.[name];
     return s && "value" in s && s.format === "year" ? String(s.value) : null;
@@ -309,7 +379,7 @@ function caveatReasonForms(c: Evidence["caveats"][number]): ReasonForm[] {
         ["C1.reason.ces_no_cell", (m) => CELL_KEY_LIST.test(m.key)],
       ];
     case "C1.caveat.qcew_manufacturing":
-      return [["C1.reason.qcew_manufacturing", () => true]];
+      return [["C1.reason.qcew_manufacturing", (m) => qcewReasonHolds(ev, methods, m.y0, m.y1)]];
     default:
       return [];
   }
@@ -484,6 +554,38 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
   const windowSlots: Record<string, Slot> = { t0, t1 };
   const window = { t0: (t0 as { value: number }).value, t1: (t1 as { value: number }).value };
 
+  // main.universe.n's formula names the cells it ranks on ("2019 M13") and the two ranks either side of the cutoff
+  // ("rank_150 and rank_151"): each is read back here, from the window, the universe set and the two cells it cites.
+  {
+    const u = ev.sets["main:universe"];
+    const n = universeN.value as number;
+    const got = universeN.formula === undefined ? null : matchFormula("count.universe", universeN.formula);
+    const ends = u?.periods?.t0 ?? [];
+    const cut = u?.cutoff ?? {};
+    const inside = cut[`rank_${n}`];
+    const outside = cut[`rank_${n + 1}`];
+    const valueOf = (cbsa: string) => (u?.members[cbsa] as { value?: unknown } | undefined)?.value;
+    const values = Object.keys(u?.members ?? {}).map(valueOf);
+    const problems: string[] = [];
+    if (!got) problems.push("it is not the registered count.universe formula");
+    else {
+      if (ends.length !== 1 || ends[0][0] !== window.t0 || got.year !== String(window.t0) || got.period !== ends[0][1]) problems.push(`it ranks on ${got.year} ${got.period}, the universe set on ${JSON.stringify(ends)} and the window starts in ${window.t0}`);
+      if (got.n !== String(n) || got.n1 !== String(n + 1) || universeN.registered_n !== n) problems.push(`it names rank_${got.n} and rank_${got.n1}, the universe holds ${n} metros (registered ${JSON.stringify(universeN.registered_n ?? null)})`);
+    }
+    if (canonicalJson(Object.keys(cut).sort(byteCompare)) !== canonicalJson([`rank_${n}`, `rank_${n + 1}`].sort(byteCompare)) || !inside || !outside) problems.push(`the universe set's cutoff is ${JSON.stringify(Object.keys(cut))}, not rank_${n} and rank_${n + 1}`);
+    else {
+      if (!Object.hasOwn(u.members, inside.cbsa) || Object.hasOwn(u.members, outside.cbsa)) problems.push(`rank_${n} (${inside.cbsa}) is not the last metro in or rank_${n + 1} (${outside.cbsa}) not the first one out`);
+      if (values.some((v) => typeof v !== "number" || v < inside.value) || !values.includes(inside.value) || !(outside.value <= inside.value)) problems.push(`rank_${n}'s ${inside.value} is not the smallest member value, or rank_${n + 1}'s ${outside.value} is above it`);
+      const cells = universeN.provenance.map((t) => t.split("|"));
+      const want = [inside, outside];
+      const ok =
+        cells.length === 2 &&
+        cells.every(([series, year, period, value], k) => series.slice(5, 10) === want[k].cbsa && series.slice(10) === "0000000001" && year === String(window.t0) && period === ends[0]?.[1] && Number(value) === want[k].value);
+      if (!ok) problems.push(`its cells are not the total nonfarm ${window.t0} cells of rank_${n} and rank_${n + 1}`);
+    }
+    if (problems.length) refuse(`main.universe.n's formula ${JSON.stringify(universeN.formula ?? null)} does not read back from the evidence: ${problems.join("; ")}`);
+  }
+
   // The main specification, recomputed from its sets: the chart's rows are its universe and read its numbers, and
   // the subject's ranks, the publishable count, the beat-on-both and not-publishable counts, the medians and the
   // random peer's m and n are what the sets say, not only what the evidence numbers say.
@@ -534,7 +636,7 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
   const caveats: Insight["caveats"] = [];
   const notPrinted: Insight["notPrinted"] = ev.suppressed.map((s) => ({ id: s.clause, reason: s.reason }));
   for (const c of ev.caveats) {
-    if (!c.printed) reasonIs(`caveat ${c.id}`, c.reason, caveatReasonForms(c));
+    if (!c.printed) reasonIs(`caveat ${c.id}`, c.reason, caveatReasonForms(c, ev, methods));
     const id = registered(`caveat ${c.id}`, c.id, c.text, "caveat");
     if (c.printed) {
       if (id === "C1.caveat.not_published" || id === "C1.caveat.not_published.plural") {
@@ -745,6 +847,8 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
   // The files the chart's rows read, once each, with the years actually read from each (from the evidence tuples).
   const manifestByUrl = new Map(Object.values(manifest.sources).map((s) => [s.url, s]));
   const yearsByUrl = new Map<string, Set<number>>();
+  /** Each cell the chart's rows read, "series|year|period", with the file it is read from. */
+  const chartCells = new Map<string, string>();
   for (const d of bubble.data) {
     for (const k of ["x", "y", "size"] as const) {
       for (const t of ev.numbers[ch.rows[d.id][k]].provenance) {
@@ -752,11 +856,31 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
         const ys = yearsByUrl.get(c.url) ?? new Set<number>();
         ys.add(Number(c.period.slice(0, 4)));
         yearsByUrl.set(c.url, ys);
+        chartCells.set(t.split("|").slice(0, 3).join("|"), c.url);
       }
     }
   }
   for (const p of Object.values(spec.provenance)) {
     if (p.upstreamUrl && !yearsByUrl.has(p.upstreamUrl)) refuse(`the chart cites ${p.upstreamUrl}, which none of its rows' numbers read`);
+  }
+  // Every card's Source line prints the period of each published cell the sidecar cites, and its citations the
+  // estimates' period: each is one of the cells the rows read, at an end of the window, in its registered words.
+  const windowYears = new Set([String(window.t0), String(window.t1)]);
+  for (const [key, p] of Object.entries(spec.provenance)) {
+    if (p.kind === "published") {
+      const [series, year, period] = key.split("|");
+      if (chartCells.get(key) !== p.upstreamUrl || p.seriesId !== series) refuse(`the chart cites ${key} from ${JSON.stringify(p.upstreamUrl ?? null)}, which is not a cell its rows read from that file`);
+      if (!windowYears.has(year)) refuse(`the chart cites ${key}, a ${year} cell, outside the window ${window.t0} to ${window.t1}`);
+      let words: string;
+      try {
+        words = periodLabel(year, period);
+      } catch (e) {
+        return refuse(`the chart cites ${key}: ${(e as Error).message}`);
+      }
+      if (p.period !== words) refuse(`the chart's Source line prints ${JSON.stringify(p.period ?? null)} for ${key}, the cell's period is ${JSON.stringify(words)}`);
+    } else if (p.kind === "estimate") {
+      if (p.period !== isoYears([window.t0, window.t1])) refuse(`the chart's estimate ${key} is for ${JSON.stringify(p.period ?? null)}, not the window ${isoYears([window.t0, window.t1])}`);
+    } else refuse(`the chart cites ${key} as a ${p.kind} record; it prints published cells and estimates computed from them only`);
   }
   const fileCite = (entry: SourceEntry, ref: SourceRef, period: string): Provenance => ({ source: ref, upstreamUrl: entry.url, period, retrievedAt: entry.fetched_at, kind: "published" });
   const files: FileCitation[] = [...yearsByUrl.keys()].sort(byteCompare).map((url) => {
@@ -885,6 +1009,7 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
   addRows("Status note", "C1.methods.status", { t0 });
 
   // Robustness rows: a summary of each, every printed number checked against the evidence.
+  const universePeriod = ev.sets["main:universe"]?.periods?.t0?.[0]?.[1];
   const robustness: RobustnessSummary[] = [];
   /** How each robustness column is computed: the evidence's own formula, once per formula, with the rows that use it. */
   const formulas = new Map<string, { column: string; rows: Set<string> }>();
@@ -935,6 +1060,31 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
         return refuse((e as Error).message);
       }
       if (row.kind === "end_year" && typeof row.registered.window?.t1 === "number" && w !== `${row.registered.window.t0}->${row.registered.window.t1}`) refuse(`robustness ${rid}'s window ${w} is not its registered ${row.registered.window.t0} to ${row.registered.window.t1}`);
+      // The years in the row's registered words, read back: a CES ranking is by the cells the universe ranks on, and a
+      // monthly end's months are exactly the cells its numbers read past the window's start.
+      const words = robustnessRegistered(rid);
+      if (row.kind === "peers" && words.ranked_by?.startsWith(CES_RANKING)) {
+        let want: string;
+        try {
+          want = `${CES_RANKING}${periodLabel(String(window.t0), universePeriod ?? "")}`;
+        } catch (e) {
+          return refuse(`robustness row ${rid}'s ranking: ${(e as Error).message}`);
+        }
+        if (words.ranked_by !== want) refuse(`robustness row ${rid} is ranked by ${JSON.stringify(words.ranked_by)}, but the universe ranks on ${JSON.stringify(want)}`);
+      }
+      if (row.kind === "end_year" && typeof row.registered.window?.t1 === "string") {
+        const months = monthlyEnd(row.registered.window.t1) ?? refuse(`robustness row ${rid}'s end ${JSON.stringify(row.registered.window.t1)} names no run of months`);
+        const read = new Set<string>();
+        for (const [key, entry] of Object.entries(ev.numbers)) {
+          if (!key.startsWith(`${rid}:${w}.`)) continue;
+          for (const t of entry.provenance ?? []) {
+            const [, year, period] = t.split("|");
+            if (year !== String(window.t0) || period !== universePeriod) read.add(`${year}|${period}`);
+          }
+        }
+        const got = [...read].sort(byteCompare);
+        if (canonicalJson(got) !== canonicalJson([...months].sort(byteCompare))) refuse(`robustness row ${rid} ends at ${JSON.stringify(row.registered.window.t1)}, but its numbers read ${got.join(", ") || "no cell"} past ${window.t0}`);
+      }
       const base = {
         id: rid,
         kind: row.kind,

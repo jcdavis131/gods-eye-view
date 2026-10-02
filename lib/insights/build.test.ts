@@ -11,7 +11,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderRss } from "@/lib/feed/render";
-import { InsightRefused, buildInsight, h3bGate, h3bWordingAt, insightBySlug, publishedInsights } from "./build";
+import { InsightRefused, buildInsight, h3bGate, h3bWordingAt, insightBySlug, monthlyEnd, publishedInsights } from "./build";
 import { insightCsv, insightJson } from "./downloads";
 import { insightsFeedDoc } from "./feed";
 import { HEADLINE_MAX, insightJsonLd, reportHeadline } from "./jsonld";
@@ -624,6 +624,74 @@ describe("refusals", () => {
     expect(refusal(b)).toMatch(/robustness D1 2019->2025: D1:2019->2025\.12420\.office\.rank is 2 on the methods page, 1 in the evidence/);
     const n = variant((p) => void (p.methods.robustness.rows.P2.windows["2019->2025"].n = 101));
     expect(refusal(n)).toMatch(/robustness P2 2019->2025: the methods page counts 101 metros, the evidence sets 100/);
+  });
+});
+
+describe("years and counts in the registered texts, read back from the evidence", () => {
+  const CELL = "SMU01138200000000001|2019|M13";
+
+  it("refuses a Source line period that is not its cell's, a cited cell the rows do not read and an estimate off the window", () => {
+    expect(refusal(variant((p) => void (p.chart.provenance[CELL].period = "2018 annual average")))).toMatch(
+      /the chart's Source line prints "2018 annual average" for SMU01138200000000001\|2019\|M13, the cell's period is "2019 annual average"/,
+    );
+    // The record moved to 2018 and its datum citing it there: a valid sidecar, but no row's number reads that cell.
+    const moved = variant((p) => {
+      const MOVED = "SMU01138200000000001|2018|M13";
+      p.chart.provenance[MOVED] = { ...p.chart.provenance[CELL], period: "2018 annual average" };
+      delete p.chart.provenance[CELL];
+      for (const d of p.chart.data) d.provenance = d.provenance.map((k) => (k === CELL ? MOVED : k));
+    });
+    expect(refusal(moved)).toMatch(/the chart cites SMU01138200000000001\|2018\|M13 from ".*sm\.data\.54\.TotalNonFarm\.All", which is not a cell its rows read from that file/);
+    expect(refusal(variant((p) => void (p.chart.provenance.growth.period = "2019/2024")))).toMatch(/the chart's estimate growth is for "2019\/2024", not the window 2019\/2025/);
+  });
+
+  it("refuses the QCEW caveat's reason when its years are not row X1's or a later QCEW cell is in the evidence", () => {
+    const years = variant((p) => {
+      const c = p.evidence.caveats.find((x) => x.id === "C1.caveat.qcew_manufacturing")!;
+      c.reason = c.reason!.replaceAll("2023", "2024");
+    });
+    expect(refusal(years)).toMatch(/caveat C1\.caveat\.qcew_manufacturing gives the reason "no QCEW cell after 2024 .*", which is none of its registered forms \(C1\.reason\.qcew_manufacturing\) with the evidence's own values/);
+    // One 2023 QCEW cell moved to 2024: the reason's "no QCEW cell after 2023" is no longer true.
+    const later = variant((p) => {
+      const cells = p.evidence.cells!;
+      const key = Object.keys(cells).find((k) => p.evidence.sources[k]?.source.startsWith("qcew") && Object.values(cells[k]).some((c) => "2023|A" in c))!;
+      const series = Object.values(cells[key]).find((c) => "2023|A" in c)!;
+      series["2024|A"] = series["2023|A"];
+      delete series["2023|A"];
+    });
+    expect(refusal(later)).toMatch(/caveat C1\.caveat\.qcew_manufacturing gives the reason "no QCEW cell after 2023 .*", which is none of its registered forms/);
+  });
+
+  it("refuses a universe formula whose year, period or cutoff ranks are not the evidence's", () => {
+    const formula = (from: string, to: string) =>
+      variant((p) => {
+        const n = p.evidence.numbers["main.universe.n"];
+        n.formula = n.formula!.replace(from, to);
+      });
+    expect(refusal(formula("2019 M13", "2018 M13"))).toMatch(/main\.universe\.n's formula .* does not read back from the evidence: it ranks on 2018 M13, the universe set on \[\[2019,"M13"\]\] and the window starts in 2019/);
+    expect(refusal(formula("rank_150 and rank_151", "rank_149 and rank_150"))).toMatch(/it names rank_149 and rank_150, the universe holds 150 metros \(registered 150\)/);
+    const swapped = variant((p) => {
+      const c = p.evidence.sets["main:universe"].cutoff!;
+      [c.rank_150, c.rank_151] = [c.rank_151, c.rank_150];
+    });
+    expect(refusal(swapped)).toMatch(/rank_150 \(34940\) is not the last metro in or rank_151 \(38940\) not the first one out/);
+  });
+
+  it("reads a monthly end's months out of its words, as many as they say", () => {
+    const e2 = monthlyEnd("the mean of the 12 monthly values Sep 2025-Aug 2026")!;
+    expect(e2).toHaveLength(12);
+    expect([e2[0], e2[3], e2[4], e2[11]]).toEqual(["2025|M09", "2025|M12", "2026|M01", "2026|M08"]);
+    expect(monthlyEnd("the mean of the 11 monthly values Sep 2025-Aug 2026")).toBeNull();
+    expect(monthlyEnd("the mean of the 12 monthly values Sept 2025-Aug 2026")).toBeNull();
+  });
+
+  it("refuses a monthly end whose numbers do not read exactly the months its words name", () => {
+    const key = "E2:2019->mean(Sep 2025-Aug 2026).12420.office.growth_pct";
+    const b = variant((p) => {
+      const n = p.evidence.numbers[key];
+      n.provenance = n.provenance.map((t) => t.replace("|2026|M08|", "|2026|M09|"));
+    });
+    expect(refusal(b)).toMatch(/robustness row E2 ends at "the mean of the 12 monthly values Sep 2025-Aug 2026", but its numbers read .*2026\|M09/);
   });
 });
 

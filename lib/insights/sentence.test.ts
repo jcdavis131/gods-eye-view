@@ -20,14 +20,15 @@ import {
   fill,
   fillWords,
   formatSlot,
-  formulaText,
   gatesCopy,
   h3bWordingPatterns,
   headlineSentence,
   isTemplateId,
+  matchFormula,
   matchTemplate,
   mayPrintAs,
   panelBGateTemplate,
+  periodLabel,
   placeholders,
   registeredFormula,
   robustnessRegistered,
@@ -185,14 +186,21 @@ describe("registered texts", () => {
     }
     expect(() => robustnessRegistered("P4")).toThrow(/no registered words for robustness row "P4"/);
     expect(templateText("C1.reason.twins_pending")).toBe(EV.suppressed.find((s) => s.clause === "C1.H3.twins")!.reason);
-    expect(templateText("C1.reason.qcew_manufacturing")).toBe(EV.caveats.find((c) => c.id === "C1.caveat.qcew_manufacturing")!.reason);
+    // Its years are slots, read back from the evidence by build.ts: X1's window and the latest QCEW cell.
+    expect(matchTemplate("C1.reason.qcew_manufacturing", EV.caveats.find((c) => c.id === "C1.caveat.qcew_manufacturing")!.reason!)).toEqual({ y1: "2023", y0: "2019" });
     expect(templateText("C1.reason.mlc_not_published")).toBe(EV.chart.not_published[0].reason);
     for (const p of EV.preconditions) expect(THRESHOLDS.some((id) => matchTemplate(id, p.threshold) !== null), p.threshold).toBe(true);
     for (const [key, n] of Object.entries(EV.numbers)) {
       if (n.kind === "registered") expect(n.formula, key).toBeUndefined();
       else expect(registeredFormula(n.kind, key, n.formula), key).toBe(n.formula);
     }
-    expect(new Set(Object.values(EV.numbers).flatMap((n) => (n.formula ? [n.formula] : [])))).toEqual(new Set(FORMULA_IDS.map(formulaText)));
+    // Each formula the bundle states is exactly one registered formula, and every registered formula is used.
+    const used = new Set(Object.values(EV.numbers).flatMap((n) => (n.formula ? [n.formula] : [])));
+    const matched = (f: string) => FORMULA_IDS.filter((id) => matchFormula(id, f) !== null);
+    for (const f of used) expect(matched(f), f).toHaveLength(1);
+    expect(new Set([...used].flatMap(matched))).toEqual(new Set(FORMULA_IDS));
+    // The universe's formula names its year, period and cutoff ranks as slots, which build.ts reads back.
+    expect(matchFormula("count.universe", EV.numbers["main.universe.n"].formula!)).toEqual({ year: "2019", period: "M13", n: "150", n1: "151" });
   });
   it("fill this side's own sentences with words read from the bundle, every placeholder and no stray word", () => {
     expect(fillWords("C1.shaping.census_p1", { n: "150", ranked_by: "Census 2025 population (POPESTIMATE2025)" })).toBe("Row P1's peer set: the 150 largest metros by Census 2025 population (POPESTIMATE2025).");
@@ -209,6 +217,15 @@ describe("registered texts", () => {
     expect(matchTemplate("C1.reason.zero_base", "zero_base; zero_base")).toBeNull();
     expect(matchTemplate("C1.reason.precondition_fails", "a precondition fails: ")).toBeNull();
     expect(matchTemplate("C1.threshold.zero", "== 0.0")).toBeNull();
+  });
+  it("read a placeholder used twice only when it reads the same both times", () => {
+    const reason = EV.caveats.find((c) => c.id === "C1.caveat.qcew_manufacturing")!.reason!;
+    expect(matchTemplate("C1.reason.qcew_manufacturing", reason.replace("2023", "2024"))).toBeNull();
+    expect(matchTemplate("C1.reason.qcew_manufacturing", reason.replaceAll("2023", "2024"))).toEqual({ y1: "2024", y0: "2019" });
+  });
+  it("word each period a card's Source line prints, and refuse a period code they have no words for", () => {
+    expect(periodLabel("2019", "M13")).toBe("2019 annual average");
+    expect(() => periodLabel("2025", "M08")).toThrow(/no words for the period "M08"/);
   });
 });
 

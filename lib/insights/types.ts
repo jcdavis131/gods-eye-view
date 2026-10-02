@@ -61,6 +61,8 @@ export interface EvidenceNumber {
   subject?: string;
   null_reason?: string;
   registered?: { file: string; path: string; sha256: string; bytes: number };
+  /** A universe count: the pre-registered size it must equal. */
+  registered_n?: number;
   /** A probability: (m / n)^k, exact, as a reduced fraction of decimal integers, and the arithmetic written out. */
   k?: number;
   m?: number;
@@ -141,6 +143,10 @@ export interface EvidenceSet {
   members: Record<string, unknown>;
   /** The universe's metros left out of the set, each with its reason. */
   excluded?: Record<string, string>;
+  /** A universe set: the cells it ranks on, by end ("t0": [[2019, "M13"]]). */
+  periods?: Record<string, Array<[number, string]>>;
+  /** A universe set: the last metro in and the first one out, keyed rank_<n>. */
+  cutoff?: Record<string, { cbsa: string; title: string; value: number }>;
 }
 
 export interface Evidence {
@@ -189,6 +195,8 @@ export interface Evidence {
   preconditions: Precondition[];
   suppressed: Array<{ clause: string; reason: string; preconditions: Precondition[] }>;
   sources: Record<string, SourceEntry>;
+  /** Every cell the evidence read, by source key, series and "year|period": "value|footnote". */
+  cells?: Record<string, Record<string, Record<string, string>>>;
 }
 
 export interface RobustnessWindow {
