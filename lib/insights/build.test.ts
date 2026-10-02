@@ -193,6 +193,19 @@ describe("the published finding", () => {
     expect(I.notPrinted.map((n) => n.id)).toEqual(["C1.H3.twins", "C1.caveat.qcew_manufacturing"]);
   });
 
+  it("prints the evidence's formula behind every robustness column", () => {
+    expect(I.robustnessFormulas.map((f) => `${f.column} ${f.rows.join(",")}`)).toEqual([
+      "Publishable D1,D2,D3,E1,E2,E3,P1,P2,P3,R,X1",
+      "Growth D1,D2,D3,E1,E2,E3,P1,P2,P3,R",
+      "Rank D1,D2,D3,E1,E2,E3,P1,P2,P3,R,X1",
+      "Beat on both D1,D2,D3,E1,E2,E3,P1,P2,P3,R,X1",
+      "Growth X1",
+    ]);
+    for (const r of I.robustness) {
+      for (const a of r.axes) for (const key of a.numbers) expect(I.robustnessFormulas.map((f) => f.formula)).toContain(EV.numbers[key].formula);
+    }
+  });
+
   it("is the only published insight and is found by its slug", () => {
     expect(publishedInsights([BASE]).map((i) => i.slug)).toEqual([SLUG]);
     expect(publishedInsights().map((i) => i.bundle)).toEqual([NAME]);

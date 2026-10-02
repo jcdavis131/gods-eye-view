@@ -92,6 +92,7 @@ describe("the insight page", () => {
     expect(t).toContain("not against each metro's 2019 twins.");
     expect(t).toContain("P2: Peer set");
     expect(t).toContain("99 of 100");
+    for (const f of i.robustnessFormulas) expect(t).toContain(f.formula);
     // The universe and P1 cite the files that pick the metros: OMB's delineation and the Census estimates.
     for (const s of i.shaping) expect(t).toContain(s.citation);
     expect(t).toContain("list1_2023.xlsx");

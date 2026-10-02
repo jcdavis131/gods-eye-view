@@ -320,6 +320,17 @@ export default async function InsightPage({ params }: Params) {
           rows={robustnessRows}
           caption={`The registered robustness rows, recomputed for ${i.subject.title}. Publishable: the evidence's count of the row's metros with a value on both axes, of all the metros its two sets cover (their members and the ones each leaves out with a reason), both read from the evidence. A row that gates the headline is a precondition of its clause that no major metro beat it on both; the others are reported only.`}
         />
+        <p className="mt-3 text-[14px] font-semibold text-foreground">How each column is computed (the evidence&rsquo;s formulas)</p>
+        <ul className="mt-1 max-w-[48rem] list-disc space-y-1 pl-5 text-[13px] leading-relaxed text-muted-foreground">
+          {i.robustnessFormulas.map((f) => (
+            <li key={f.formula}>
+              <span className="text-foreground">
+                {f.column} (row{f.rows.length === 1 ? "" : "s"} {f.rows.join(", ")}):
+              </span>{" "}
+              {f.formula}
+            </li>
+          ))}
+        </ul>
         <ul className="mt-3 space-y-1 text-[13px] leading-relaxed text-muted-foreground">
           {robustnessSources.map((s) => (
             <li key={s} className="break-words">

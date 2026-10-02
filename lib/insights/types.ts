@@ -343,6 +343,8 @@ export interface Insight {
   preconditions: Precondition[];
   arithmetic: ArithmeticRow[];
   robustness: RobustnessSummary[];
+  /** The evidence's formula behind each robustness column, once per formula, with the rows it computes. */
+  robustnessFormulas: Array<{ column: string; rows: string[]; formula: string }>;
   notPublished: MetroRef[];
   failClosed: Array<{ cbsa: string; title: string }>;
   /** The chart's provenance records (one per published cell, plus the estimates), de-duplicated. */

@@ -590,14 +590,21 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
 
   // Robustness rows: a summary of each, every printed number checked against the evidence.
   const robustness: RobustnessSummary[] = [];
+  /** How each robustness column is computed: the evidence's own formula, once per formula, with the rows that use it. */
+  const formulas = new Map<string, { column: string; rows: Set<string> }>();
   for (const rid of Object.keys(methods.robustness.rows).sort(byteCompare)) {
     const row = methods.robustness.rows[rid];
     const cites = new Map<string, string>();
     for (const w of Object.keys(row.windows).sort(byteCompare)) {
       const win = row.windows[w];
-      const check = (key: string, value: number) => {
+      const check = (column: string, key: string, value: number) => {
         const n = ev.numbers[key] ?? refuse(`robustness ${rid} ${w} names evidence number ${key}, which does not exist`);
         if (n.value !== value) refuse(`robustness ${rid} ${w}: ${key} is ${value} on the methods page, ${JSON.stringify(n.value)} in the evidence`);
+        const formula = n.formula ?? refuse(`robustness ${rid} ${w}: evidence number ${key} has no formula`);
+        const entry = formulas.get(formula) ?? { column, rows: new Set<string>() };
+        if (entry.column !== column) refuse(`robustness ${rid} ${w}: one formula computes both ${entry.column} and ${column}`);
+        entry.rows.add(rid);
+        formulas.set(formula, entry);
         for (const t of n.provenance) {
           const c = cell(t);
           const entry = sourceByUrl.get(c.url) as SourceEntry;
@@ -606,7 +613,7 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
         return n;
       };
       // The denominator: how many metros the row's sets cover, members and the excluded alike, read from the evidence sets.
-      const pub = check(win.publishable.number, win.publishable.value);
+      const pub = check("Publishable", win.publishable.number, win.publishable.value);
       const over = pub.over ?? [];
       if (over.length === 0) refuse(`robustness ${rid} ${w}: the publishable count names no sets`);
       const universes = over.map((k) => {
@@ -633,12 +640,12 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
       const axes = Object.entries(win.axes)
         .sort(([a], [b]) => axisCopy(a).order - axisCopy(b).order || byteCompare(a, b))
         .map(([axis, a]) => {
-          check(a.growth_pct.number, a.growth_pct.value);
-          check(a.rank.number, a.rank.value);
+          check("Growth", a.growth_pct.number, a.growth_pct.value);
+          check("Rank", a.rank.number, a.rank.value);
           return { axis, label: axisCopy(axis).label, growth: signedPct(a.growth_pct.value, 1), rank: ordinal(a.rank.value), numbers: [a.growth_pct.number, a.rank.number] as [string, string] };
         });
       const both = win.beat_on_both;
-      if (both) check(both.number, both.value);
+      if (both) check("Beat on both", both.number, both.value);
       robustness.push({ ...base, axes, beatOnBoth: both ? { count: num(both.value), names: both.metros.map((m) => m.title), number: both.number } : null });
     }
     // A peer set chosen by a file no number cites (row P1: the Census estimates) is cited too.
@@ -692,6 +699,7 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
     preconditions: ev.preconditions,
     arithmetic,
     robustness,
+    robustnessFormulas: [...formulas.entries()].map(([formula, f]) => ({ column: f.column, rows: [...f.rows].sort(byteCompare), formula })),
     notPublished: ch.not_published.map((m) => ({ cbsa: m.cbsa, label: m.label, title: m.title, ...(m.reason ? { reason: m.reason } : {}) })),
     failClosed: ch.fail_closed.map((m) => ({ cbsa: m.cbsa, title: m.title })),
     provenance,
