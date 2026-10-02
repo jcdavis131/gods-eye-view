@@ -671,8 +671,10 @@ describe("downloads", () => {
   });
 
   it("JSON carries the plotted rows by default and every row with { all: true }, 'not published' for a missing value, and only the records they cite", () => {
-    const j = insightJson(I) as { rows: Array<Record<string, unknown>>; provenance: Record<string, unknown>; selection: Record<string, unknown> };
+    const j = insightJson(I) as { rows: Array<Record<string, unknown>>; provenance: Record<string, unknown>; selection: Record<string, unknown>; description: string };
     expect(j.selection).toMatchObject({ rows: "plotted", count: 149, plotted: 149, total: 150 });
+    expect(j.description).toBe(I.description);
+    expect(j.description).toContain("Beaumont and Tallahassee beat it on both");
     expect(j.rows.map((r) => r.id)).toEqual(plotted.map((d) => d.id).sort());
     const cited = new Set(plotted.flatMap((d) => d.provenance));
     expect(Object.keys(j.provenance).sort()).toEqual([...cited].sort());

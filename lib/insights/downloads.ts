@@ -85,6 +85,8 @@ export function insightJson(i: Insight, opts: DownloadOptions = {}): Record<stri
     asOf: i.asOf,
     retrievedAt: i.retrievedAt,
     headline: i.headline,
+    // The headline with the recency caveat when the H3b clause prints: the file's title makes that claim too.
+    description: i.description,
     chartTitle: i.chartTitle,
     universe: i.universe,
     subject: s.subject ?? null,
