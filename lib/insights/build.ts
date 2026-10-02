@@ -334,6 +334,11 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
   }
   const universeN = ev.numbers["main.universe.n"];
   if (!universeN || universeN.value !== Object.keys(ev.sets["main:universe"]?.members ?? {}).length) refuse("main.universe.n is not the size of the main:universe set");
+  // The values the table prints for the named-metro preconditions are the counts of the metros the chart names.
+  for (const [name, named] of [["universe.nulls_named", ev.chart.not_published.map((m) => m.cbsa)], ["universe.fail_closed_named", ev.chart.fail_closed.map((m) => m.cbsa)]] as const) {
+    const p = ev.preconditions.find((x) => x.name === name);
+    if (p && (p.value !== named.length || canonicalJson([...(p.metros ?? [])].sort(byteCompare)) !== canonicalJson([...named].sort(byteCompare)))) refuse(`precondition ${name} counts ${JSON.stringify(p.value)} (${(p.metros ?? []).join(", ")}), the chart names ${named.length} (${named.join(", ")})`);
+  }
 
   // The numbers behind every slot.
   // A year slot that cites a published cell prints the cell's year, so it is
@@ -432,6 +437,16 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
     ...Object.values(ev.random_peer.grid).flatMap((g) => recomputeRandomPeer(ev, g.number, mainPrefix, ev.subject)),
   ];
   if (mainProblems.length) refuse(`the evidence's counts disagree with its sets: ${mainProblems.join("; ")}`);
+  // h3.cells_not_annual_or_footnoted: the subject's cells on both axes that are not an M13 annual average or carry a footnote.
+  const prelim = ev.preconditions.find((p) => p.name === "h3.cells_not_annual_or_footnoted");
+  if (prelim) {
+    const tuples = ["office", "goods_logistics"].flatMap((a) => ev.numbers[`${mainPrefix}.${ev.subject}.${a}.growth_pct`]?.provenance ?? []);
+    const flagged = tuples.filter((t) => {
+      const [, , period, , footnote] = t.split("|");
+      return period !== "M13" || footnote !== "";
+    }).length;
+    if (tuples.length === 0 || prelim.value !== flagged) refuse(`precondition h3.cells_not_annual_or_footnoted is ${JSON.stringify(prelim.value)}, the subject's cells give ${flagged}`);
+  }
   for (const [name, axis, what] of [["a", "office", "growth_pct"], ["b", "goods_logistics", "growth_pct"], ["r_a", "office", "rank"], ["r_b", "goods_logistics", "rank"]] as const) {
     const r = h.slots[name];
     if (!r || !hasNumber(r) || r.number !== `${mainPrefix}.${ev.subject}.${axis}.${what}`) refuse(`the headline's {${name}} is not the subject's ${axis} ${what} in ${mainPrefix}`);

@@ -447,6 +447,20 @@ describe("refusals", () => {
     );
   });
 
+  it("refuses a precondition value the table prints that the chart or the subject's cells do not give", () => {
+    const named = variant((p) => {
+      const x = p.evidence.preconditions.find((q) => q.name === "universe.fail_closed_named")!;
+      x.value = 3;
+      x.metros = x.metros!.slice(1);
+    });
+    expect(refusal(named)).toMatch(/precondition universe\.fail_closed_named counts 3 \(.*\), the chart names 4/);
+    const prelim = variant((p) => {
+      const key = "main:2019->2025.12420.office.growth_pct";
+      p.evidence.numbers[key].provenance[0] = p.evidence.numbers[key].provenance[0].replace("|M13|", "|M12|");
+    });
+    expect(refusal(prelim)).toMatch(/precondition h3\.cells_not_annual_or_footnoted is 0, the subject's cells give 1/);
+  });
+
   it("builds the suppressed path: no H3b clause, the neutral title, the reason in its registered form", () => {
     const b = variant((p) => {
       suppressH3b(p);
