@@ -12,17 +12,17 @@ import { BundleLoadError, DATA_DIR, LOCK_FILE, loadBundle, readBundle } from "./
 const ROOT = path.resolve(__dirname, "../..");
 
 describe("loadBundle", () => {
-  it("reads places-v0.1 with every file matching its manifest", () => {
-    const b = loadBundle("places-v0.1", ROOT);
-    expect(b.manifest.bundle).toBe("places-v0.1");
+  it("reads places-v0.1.1 with every file matching its manifest", () => {
+    const b = loadBundle("places-v0.1.1", ROOT);
+    expect(b.manifest.bundle).toBe("places-v0.1.1");
     expect(b.findings.map((f) => f.id)).toEqual(["C1-raw"]);
     for (const [rel, f] of Object.entries(b.manifest.files)) expect(b.hashes[rel]).toBe(f.sha256);
     const lock = JSON.parse(readFileSync(path.join(ROOT, LOCK_FILE), "utf8"));
-    expect(b.hashes["manifest.json"]).toBe(lock.bundles["places-v0.1"].manifest_sha256);
+    expect(b.hashes["manifest.json"]).toBe(lock.bundles["places-v0.1.1"].manifest_sha256);
   });
 
   it("reads once per process", () => {
-    expect(loadBundle("places-v0.1", ROOT)).toBe(loadBundle("places-v0.1", ROOT));
+    expect(loadBundle("places-v0.1.1", ROOT)).toBe(loadBundle("places-v0.1.1", ROOT));
   });
 });
 
@@ -34,7 +34,7 @@ describe("a tampered copy", () => {
     const root = path.join(tmp, label);
     cpSync(path.join(ROOT, DATA_DIR), path.join(root, DATA_DIR), { recursive: true });
     if (rel) {
-      const file = path.join(root, DATA_DIR, "places-v0.1", rel);
+      const file = path.join(root, DATA_DIR, "places-v0.1.1", rel);
       const buf = readFileSync(file);
       buf[2000] = (buf[2000] + 1) & 0xff;
       writeFileSync(file, buf);
@@ -43,14 +43,14 @@ describe("a tampered copy", () => {
   }
 
   it("loads when nothing changed", () => {
-    expect(readBundle("places-v0.1", copyWith("intact", null)).findings).toHaveLength(1);
+    expect(readBundle("places-v0.1.1", copyWith("intact", null)).findings).toHaveLength(1);
   });
 
   it.each(["evidence/C1-raw.json", "charts/C1-raw.sidecar.json", "methods.json"])("refuses one changed byte in %s", (rel) => {
     const root = copyWith(rel.replace(/\W/g, "_"), rel);
     let err: unknown;
     try {
-      readBundle("places-v0.1", root);
+      readBundle("places-v0.1.1", root);
     } catch (e) {
       err = e;
     }
@@ -59,7 +59,7 @@ describe("a tampered copy", () => {
   });
 
   it("refuses one changed byte in manifest.json against the lock", () => {
-    expect(() => readBundle("places-v0.1", copyWith("manifest", "manifest.json"))).toThrow(/but lib\/insights\/data\/bundles\.lock\.json pins/);
+    expect(() => readBundle("places-v0.1.1", copyWith("manifest", "manifest.json"))).toThrow(/but lib\/insights\/data\/bundles\.lock\.json pins/);
   });
 
   it("refuses a bundle the lock does not pin", () => {

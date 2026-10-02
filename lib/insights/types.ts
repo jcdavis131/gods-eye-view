@@ -5,8 +5,10 @@
 // The bundle types name only the fields this side reads. The producer
 // (vector-places places.export) writes more; nothing here depends on it.
 // Every number an Insight prints is a `value` read from the evidence's
-// `numbers` table, addressed by its key, and every published cell behind it
-// is a provenance tuple that the importer resolved to a hashed upstream file.
+// `numbers` table, addressed by its key: a published cell, or an estimate
+// computed from published cells whose formula the page prints. Every
+// published cell behind it is a provenance tuple that the importer resolved
+// to a hashed upstream file.
 
 import type { Provenance } from "@/lib/provenance/types";
 import type { ChartSpec } from "./render/spec";
@@ -25,7 +27,7 @@ export interface SourceEntry {
   last_modified: string | null;
   etag: string | null;
   fetched_at: string;
-  /** The producer's registry id: bls_ces_sm_data, qcew_msa_area, ... */
+  /** The producer's registry id: bls_ces_sm_data, qcew_msa_area, omb_list1_2023, census_cbsa_est2025, ... */
   source: string;
 }
 
@@ -50,14 +52,22 @@ export interface BundleManifest {
 
 /** One entry of evidence.numbers. `provenance` holds series_id|year|period|value|footnote|url|sha256|last_modified tuples. */
 export interface EvidenceNumber {
-  kind: "growth" | "rank" | "count" | "median" | "change" | "cell" | "registered";
+  kind: "growth" | "rank" | "count" | "median" | "change" | "cell" | "registered" | "probability";
   value: number | null;
   formula?: string;
   provenance: string[];
   over?: string[];
   metros?: string[];
+  subject?: string;
   null_reason?: string;
   registered?: { file: string; path: string; sha256: string; bytes: number };
+  /** A probability: (m / n)^k, exact, as a reduced fraction of decimal integers, and the arithmetic written out. */
+  k?: number;
+  m?: number;
+  n?: number;
+  not_beaten?: string[];
+  exact?: { numerator: string; denominator: string };
+  arithmetic?: string;
 }
 
 export interface MetroRef {
@@ -67,16 +77,21 @@ export interface MetroRef {
   reason?: string;
 }
 
-/** A template slot. The template text carries the unit ("{a}%", "{v0}k"); the slot carries the number and how to print it. */
+/**
+ * A template slot. A template that carries the unit ("grew {a}%", "from
+ * {v0}k") takes a bare number (num); a slot that prints its own unit
+ * (signedPct, "+36.0%") is never followed by one. sentence.ts fill() refuses
+ * either mismatch, so a sentence prints exactly one % per number.
+ */
 export type Slot =
   | { format: "year"; number: string; value: number; period?: string }
-  | { format: "pct"; number: string; value: number; digits: number }
   | { format: "num"; number: string; value: number; digits?: number }
+  | { format: "signedPct"; number: string; value: number; digits: number }
   | { format: "ordinal"; number: string; value: number }
   | { format: "list"; number?: string; metros: MetroRef[] }
   /** A place: prints its short label. */
   | ({ format?: undefined } & MetroRef)
-  /** A whole number with no format (the chart title's slots), printed as written, like the producer's str.format. */
+  /** A whole number with no format (the universe line's slots), printed as written, like the producer's str.format. */
   | { format?: undefined; number: string; value: number };
 
 export interface Clause {
@@ -93,6 +108,9 @@ export interface Caveat {
   printed: boolean;
   slots?: Record<string, Slot>;
   reason?: string;
+  /** The robustness row and window a caveat reads (the recency caveat: R, 2022->2025). */
+  row?: string;
+  window?: string;
 }
 
 export interface Precondition {
@@ -104,7 +122,25 @@ export interface Precondition {
   number?: string;
   metros?: string[];
   window?: string;
+  caveat?: string;
   reason?: string;
+}
+
+/** A template choice with its registered alternatives: the chart title and subtitle ladders. */
+export interface Rung {
+  id: string;
+  text: string;
+}
+
+export interface EvidenceSet {
+  axis: string;
+  row: string;
+  window?: string;
+  formula: string;
+  /** The set's members: the metros with a value; each carries its value and series ids. */
+  members: Record<string, unknown>;
+  /** The universe's metros left out of the set, each with its reason. */
+  excluded?: Record<string, string>;
 }
 
 export interface Evidence {
@@ -124,20 +160,32 @@ export interface Evidence {
     slots: Record<string, Slot>;
     method_line: { id: string; text: string };
     never_used: string[];
+    rule?: { H3b?: { gating_rows?: string[] } };
+  };
+  random_peer: {
+    id: string;
+    text: string;
+    printed: boolean;
+    slots: Record<string, Slot>;
+    grid: Record<string, { number: string; value: number }>;
+    rule: { k: number; k_grid: number[]; rule: string };
   };
   caveats: Caveat[];
   chart: {
-    title: { id: string; text: string; slots: Record<string, Slot> };
+    sidecar: string;
+    title: { id: string; text: string; slots: Record<string, Slot>; ladder?: Rung[] };
     universe_line: { id: string; text: string; slots: Record<string, Slot> };
-    dek: { id: string; text: string };
+    dek: { id: string; text: string; slots: Record<string, Slot>; ladder?: Rung[]; caveat?: string };
+    subject_note: { id: string; text: string; slots: Record<string, Slot> } | null;
     rows: Record<string, { x: string; y: string; size: string }>;
     plotted: number;
     medians: Record<string, { number: string; value: number }>;
-    labels: { ids: string[]; cap: number };
+    labels: { requested: Array<{ id: string; label: string; why: string }>; max: number; canvases: string[]; priority: string[]; rule: string };
     not_published: MetroRef[];
     fail_closed: Array<{ cbsa: string; title: string; qcew_code: string; members_without_2019_weight: string[] }>;
   };
   numbers: Record<string, EvidenceNumber>;
+  sets: Record<string, EvidenceSet>;
   preconditions: Precondition[];
   suppressed: Array<{ clause: string; reason: string; preconditions: Precondition[] }>;
   sources: Record<string, SourceEntry>;
@@ -155,35 +203,48 @@ export interface RobustnessWindow {
 
 export interface RobustnessRow {
   kind: "definition" | "end_year" | "peers" | "disclosure" | "cross_source";
-  gates_no_metro_beat_both: boolean;
-  registered: Record<string, unknown> & { rule?: string; largest_n?: number; ranked_by?: string; window?: { t0: number; t1: number | string } };
+  /** The clauses this row gates; empty when it is reported only. */
+  gates: string[];
+  registered: Record<string, unknown> & { rule?: string; largest_n?: number; ranked_by?: string; window?: { t0: number; t1: number | string }; source_ids?: string[] };
   windows: Record<string, RobustnessWindow>;
 }
 
 export interface Methods {
   release: string;
   status: string;
-  panel_a: { finding: string; is: string[]; is_not: string[]; method_line: string };
+  panel_a: {
+    finding: string;
+    is: string[];
+    is_not: string[];
+    method_line: string;
+    headline: { clauses: Record<string, boolean>; h3b_gates: { registered: string; rows: string[] } };
+  };
   panel_b: { status: string; text: string; gate: Array<{ name: string; rule: string; status: string }> };
-  robustness: { gates: boolean; rows: Record<string, RobustnessRow> };
+  robustness: { gating: Record<string, string[]>; rows: Record<string, RobustnessRow> };
+  status_line: { id: string; slots: { status: string; panel_a: string; panel_b: string } };
 }
 
 // ---------------------------------------------------------------- the insight
 
-/** One published cell behind a printed number, with its citation. */
+/** One published cell behind a printed number, with the file it was read from and its citation. */
 export interface CellCitation {
   seriesId: string;
   period: string;
   /** The value as published (its text), and the footnote code, empty when none. */
   value: string;
   footnote: string;
+  /** The upstream file, its sha256 and Last-Modified header as the evidence tuple and the manifest record them. */
+  url: string;
+  sha256: string;
+  lastModified: string;
   provenance: Provenance;
+  /** citation() of the cell, then the file's sha256 and Last-Modified. */
   citation: string;
 }
 
 /** A printed number, how it was computed, and the cells it reads. */
 export interface ArithmeticRow {
-  /** Where it is printed: "headline" or a caveat id. */
+  /** Where it is printed: "Headline", "Caveat: recency", "Random peer", "Chart title", ... */
   where: string;
   slot: string;
   /** Exactly the characters printed in the sentence. */
@@ -192,7 +253,9 @@ export interface ArithmeticRow {
   number: string;
   kind: EvidenceNumber["kind"];
   formula: string;
-  /** Comparison sets a rank, count or median runs over. */
+  /** For a probability: the exact arithmetic, e.g. "(147 / 148)^10 = 4711653532607691047049 / 5042166166892418433024". */
+  arithmetic?: string;
+  /** Comparison sets a rank, count, median or probability runs over. */
   over: string[];
   cells: CellCitation[];
   /** For a registered number: the pre-registration it cites. */
@@ -208,10 +271,38 @@ export interface RobustnessSummary {
   /** Per axis, office-type first: label, printed growth, printed rank, evidence keys. */
   axes: Array<{ axis: string; label: string; growth: string; rank: string; numbers: [string, string] }>;
   beatOnBoth: { count: string; names: string[]; number: string } | null;
+  /** "149 of 150": the evidence's publishable count over the size of the row's universe, both read from the evidence. */
   publishable: string;
-  gates: boolean;
-  /** The distinct upstream files this row's numbers read, as citations. */
+  /** The evidence count behind the numerator and the sets whose universe is the denominator. */
+  denominator: { number: string; sets: string[] };
+  /** The clauses this row gates (empty: reported only). */
+  gates: string[];
+  /** The distinct upstream files this row's numbers read, and any file that chose its peer set, as citations. */
   sources: string[];
+}
+
+/** An upstream file that shapes who is compared rather than a plotted value: the metro delineation, the P1 peer ranking. */
+export interface ShapingSource {
+  /** The producer's registry id. */
+  id: string;
+  /** What it decides, as printed on the page. */
+  role: string;
+  url: string;
+  /** ISO 8601 for what the file describes ("2023-07", "2025"). */
+  coverage: string;
+  /** Whether the chart's own rows depend on it (the universe), or only a robustness row. */
+  chart: boolean;
+  provenance: Provenance;
+  citation: string;
+}
+
+/** An upstream file the chart's rows were read from, once, with the years actually read from it. */
+export interface FileCitation {
+  url: string;
+  provenance: Provenance;
+  /** The distinct years the chart reads from this file, ascending. */
+  years: number[];
+  citation: string;
 }
 
 export interface Insight {
@@ -231,13 +322,20 @@ export interface Insight {
   universe: string;
   subject: MetroRef;
   spec: ChartSpec;
+  /** The registered window, from the evidence's registered numbers. */
+  window: { t0: number; t1: number };
   /** The date the numbers are as of (sidecar asOf). */
   asOf: string;
   /** The latest retrieval time among the chart's provenance records: the bundle's own stamp, never a clock. */
   retrievedAt: string;
   caveats: Array<{ id: string; text: string }>;
+  /** The random-peer sentence, when it prints. */
+  randomPeer: string | null;
+  /** The random-peer probability at each k of the registered grid, as printed, with its evidence key and exact arithmetic. */
+  randomPeerGrid: Array<{ k: number; printed: string; number: string; arithmetic: string }>;
   notPrinted: Array<{ id: string; reason: string }>;
   methodLine: string;
+  statusNote: string;
   methodNote: string[];
   is: string[];
   isNot: string[];
@@ -247,8 +345,13 @@ export interface Insight {
   robustness: RobustnessSummary[];
   notPublished: MetroRef[];
   failClosed: Array<{ cbsa: string; title: string }>;
-  /** The chart's provenance records and their citations, de-duplicated. */
+  /** The chart's provenance records (one per published cell, plus the estimates), de-duplicated. */
   provenance: Provenance[];
+  /** Each upstream file the chart reads, once, with its sha256 and Last-Modified. */
+  files: FileCitation[];
+  /** The files that shape the universe or a peer set. */
+  shaping: ShapingSource[];
+  /** The chart's sources as citations: each file once, then each estimate with its method. */
   citations: string[];
   /** sha256 of the bundle files this insight was built from. */
   hashes: { manifest: string; chart: string; evidence: string; methods: string };

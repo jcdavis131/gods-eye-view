@@ -26,7 +26,7 @@ export const DATA_DIR = "lib/insights/data";
 /** The manifest pin of every imported release (written by the importer). */
 export const LOCK_FILE = `${DATA_DIR}/bundles.lock.json`;
 /** The bundles the site publishes from. */
-export const BUNDLES = ["places-v0.1"] as const;
+export const BUNDLES = ["places-v0.1.1"] as const;
 export type BundleName = (typeof BUNDLES)[number];
 
 export class BundleLoadError extends Error {

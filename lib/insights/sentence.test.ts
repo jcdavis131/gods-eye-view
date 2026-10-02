@@ -1,17 +1,31 @@
-// The C1 sentences: the golden headline and caveats for the committed
-// bundle's slots, the slot formats one by one, and the refusals.
+// The C1 sentences: the golden headline, random-peer sentence and caveats for
+// the committed bundle's slots, the slot formats one by one (one % per
+// number), and the refusals.
 //
 // The golden is two-sided. The sentence must equal a pinned string (a wording
-// change is a diff here), and it must equal the producer's own clause texts
-// with the same slots substituted in, so the registered templates in
-// sentence.ts and the texts the bundle ships cannot drift apart unnoticed.
+// change is a diff here), and it must equal the producer's own texts with the
+// same slots substituted in, so the registered templates in sentence.ts and
+// the texts the bundle ships cannot drift apart unnoticed.
 
 import { describe, expect, it } from "vitest";
 import { loadBundle } from "./load";
-import { TEMPLATE_IDS, asSentence, fill, formatSlot, headlineSentence, isTemplateId, placeholders, statusNote, templateText, type TemplateId } from "./sentence";
+import {
+  DEK_LADDER_RECENCY,
+  TEMPLATE_IDS,
+  TITLE_LADDER_H3B,
+  asSentence,
+  fill,
+  formatSlot,
+  headlineSentence,
+  isTemplateId,
+  placeholders,
+  statusNote,
+  templateText,
+  type TemplateId,
+} from "./sentence";
 import type { Slot } from "./types";
 
-const EV = loadBundle("places-v0.1").findings.find((f) => f.id === "C1-raw")!.evidence;
+const EV = loadBundle("places-v0.1.1").findings.find((f) => f.id === "C1-raw")!.evidence;
 const H = EV.headline;
 
 const GOLDEN_HEADLINE =
@@ -35,13 +49,55 @@ describe("the C1 headline (golden)", () => {
     expect(printed.join(H.join) + H.end).toBe(sentence);
   });
 
-  it("leaves out the clause that does not print (twins pending)", () => {
-    expect(H.clauses.find((c) => c.id === "C1.H3.twins")?.printed).toBe(false);
+  it("prints the H3 ranks and the H3b clause, and leaves out the twins clause (twins pending)", () => {
+    expect(H.clauses.map((c) => `${c.id}:${c.printed}`)).toEqual(["C1.H3.ranks:true", "C1.H3b:true", "C1.H3.twins:false"]);
     expect(sentence).not.toMatch(/twin/i);
   });
 
   it("uses none of the never-used words", () => {
     for (const w of H.never_used) expect(sentence).not.toMatch(new RegExp(`\\b${w}\\b`, "i"));
+  });
+});
+
+describe("one % per number", () => {
+  it("prints each growth once with its %, from bare-number slots in a template that carries the %", () => {
+    expect(H.slots.a).toMatchObject({ format: "num", digits: 1 });
+    const s = fill("C1.H3.ranks", H.slots);
+    expect(s).toContain("grew 36.0% and its goods-and-logistics jobs 38.6%, ranking");
+    expect(s.match(/%/g)).toHaveLength(2);
+    expect(s).not.toContain("%%");
+  });
+
+  it("prints the subject's label values with their own sign and %, in a template that carries none", () => {
+    const note = EV.chart.subject_note!;
+    expect(fill("C1.chart.subject_note", note.slots)).toBe("+36.0% / +38.6%");
+  });
+
+  it("refuses a slot before a template's % that prints its own %, or any slot there but a bare number", () => {
+    const pctA: Slot = { format: "signedPct", number: "n", value: 35.956493921944976, digits: 1 };
+    expect(() => fill("C1.H3.ranks", { ...H.slots, a: pctA })).toThrow(/prints "%" after \{a\}, so that slot must be a bare number/);
+    const ordinalA: Slot = { format: "ordinal", number: "n", value: 1 };
+    expect(() => fill("C1.H3.ranks", { ...H.slots, a: ordinalA })).toThrow(/must be a bare number/);
+  });
+
+  it("never prints %% in any sentence the bundle fills", () => {
+    const filled = [
+      headlineSentence(H.clauses.map((c) => ({ id: c.id as TemplateId, printed: c.printed })), H.slots, H.join, H.end),
+      fill(EV.random_peer.id as TemplateId, EV.random_peer.slots),
+      ...EV.caveats.filter((c) => c.printed).map((c) => fill(c.id as TemplateId, c.slots ?? {})),
+      fill(EV.chart.title.id as TemplateId, EV.chart.title.slots),
+      fill(EV.chart.dek.id as TemplateId, EV.chart.dek.slots),
+      fill("C1.chart.subject_note", EV.chart.subject_note!.slots),
+    ];
+    for (const s of filled) expect(s).not.toContain("%%");
+  });
+});
+
+describe("the random-peer sentence (golden)", () => {
+  it("equals the pinned sentence and the bundle's own text filled", () => {
+    const rp = EV.random_peer;
+    expect(asSentence(fill(rp.id as TemplateId, rp.slots))).toBe("Drawing 10 major metros at random, with replacement, the chance that Austin beat all 10 on both is 0.934.");
+    expect(fill(rp.id as TemplateId, rp.slots)).toBe(producerText(rp.text, rp.slots));
   });
 });
 
@@ -58,18 +114,51 @@ describe("the C1 caveats (golden)", () => {
   it("match the bundle's own texts filled with the same slots", () => {
     for (const c of EV.caveats.filter((x) => x.printed)) expect(fill(c.id as TemplateId, c.slots ?? {})).toBe(producerText(c.text, c.slots ?? {}));
   });
+  it("agree in number: one metro is, more are", () => {
+    const one = EV.caveats.find((c) => c.id === "C1.caveat.not_published")!.slots!.metros;
+    expect(fill("C1.caveat.not_published", { metros: one })).toBe("Tampa is not published");
+    const two: Slot = { format: "list", metros: [{ cbsa: "45300", label: "Tampa", title: "Tampa-St. Petersburg-Clearwater, FL" }, { cbsa: "13140", label: "Beaumont", title: "Beaumont-Port Arthur, TX" }] };
+    expect(fill("C1.caveat.not_published.plural", { metros: two })).toBe("Tampa and Beaumont are not published");
+  });
+});
+
+describe("the chart's title and subtitle (golden)", () => {
+  it("is the H3b title ladder's second rung and the recency subtitle's first", () => {
+    expect(EV.chart.title.id).toBe("C1.chart_title.h3b.2");
+    expect(fill("C1.chart_title.h3b.2", EV.chart.title.slots)).toBe("No Major Metro Beat Austin on Both Office and Goods-and-Logistics Job Growth, 2019 to 2025");
+    expect(EV.chart.dek.id).toBe("C1.chart_dek.recency.1");
+    expect(fill("C1.chart_dek.recency.1", EV.chart.dek.slots)).toBe(
+      "Industries, not occupations; supersector 60 includes administrative & support services. 2022 to 2025: Austin ranks 17th in office-industry and 5th in goods-and-logistics growth; Beaumont and Tallahassee beat it on both",
+    );
+  });
 });
 
 describe("registered texts", () => {
-  it("cover every template id the bundle uses, word for word", () => {
-    const used = [...H.clauses, ...EV.caveats, EV.chart.title, EV.chart.universe_line, H.method_line];
+  it("cover every template id and every ladder rung the bundle uses, word for word", () => {
+    const used = [
+      ...H.clauses,
+      ...EV.caveats,
+      EV.random_peer,
+      EV.chart.title,
+      ...(EV.chart.title.ladder ?? []),
+      EV.chart.dek,
+      ...(EV.chart.dek.ladder ?? []),
+      EV.chart.subject_note!,
+      EV.chart.universe_line,
+      H.method_line,
+    ];
     for (const t of used) {
       expect(isTemplateId(t.id), t.id).toBe(true);
       expect(templateText(t.id as TemplateId), t.id).toBe(t.text);
     }
+    expect((EV.chart.title.ladder ?? []).map((r) => r.id)).toEqual(TITLE_LADDER_H3B);
+    expect((EV.chart.dek.ladder ?? []).map((r) => r.id)).toEqual(DEK_LADDER_RECENCY);
   });
   it("has a text for every id (the switch is total)", () => {
     for (const id of TEMPLATE_IDS) expect(templateText(id).length).toBeGreaterThan(0);
+  });
+  it("no longer registers the clause H3b replaced", () => {
+    expect(isTemplateId("C1.H3.no_metro_beat_both")).toBe(false);
   });
 });
 
@@ -77,9 +166,9 @@ describe("slot formats", () => {
   it("prints a year as written, never with a thousands separator", () => {
     expect(formatSlot("t0", { format: "year", number: "window.t0", value: 2019 })).toBe("2019");
   });
-  it("prints a percent slot as the bare number; the template carries the %", () => {
-    expect(formatSlot("a", { format: "pct", number: "n", value: 35.956493921944976, digits: 1 })).toBe("36.0");
-    expect(fill("C1.H3.ranks", H.slots)).toContain("grew 36.0% and");
+  it("prints a num slot as the bare number and a signedPct slot with its sign and %", () => {
+    expect(formatSlot("a", { format: "num", number: "n", value: 35.956493921944976, digits: 1 })).toBe("36.0");
+    expect(formatSlot("a", { format: "signedPct", number: "n", value: 35.956493921944976, digits: 1 })).toBe("+36.0%");
   });
   it("prints ordinals, counts, lists and places", () => {
     expect(formatSlot("r", { format: "ordinal", number: "n", value: 2 })).toBe("2nd");
@@ -93,11 +182,12 @@ describe("slot formats", () => {
     expect(formatSlot("s", { cbsa: "12420", label: "Austin", title: "Austin-Round Rock-San Marcos, TX" })).toBe("Austin");
     expect(formatSlot("N", { number: "main.universe.n", value: 150 })).toBe("150");
   });
-  it("refuses a missing value, a fractional year and an empty list rather than print them", () => {
-    expect(() => formatSlot("a", { format: "pct", number: "n", value: null as unknown as number, digits: 1 })).toThrow(/no finite value/);
+  it("refuses a missing value, a fractional year, an empty list and a format it does not know rather than print them", () => {
+    expect(() => formatSlot("a", { format: "num", number: "n", value: null as unknown as number, digits: 1 })).toThrow(/no finite value/);
     expect(() => formatSlot("t", { format: "year", number: "n", value: 2019.5 })).toThrow(/not a whole number/);
     expect(() => formatSlot("b", { format: "list", metros: [] })).toThrow(/empty list/);
     expect(() => formatSlot("N", { number: "n", value: 1.5 })).toThrow(/not a whole number/);
+    expect(() => formatSlot("a", { format: "pct", number: "n", value: 36, digits: 1 } as unknown as Slot)).toThrow(/format "pct", which no template here prints/);
   });
   it("refuses a template whose slot is absent", () => {
     const rest: Record<string, Slot> = { ...H.slots };
@@ -105,8 +195,17 @@ describe("slot formats", () => {
     expect(() => fill("C1.H3.ranks", rest)).toThrow(/needs slot \{a\}/);
     expect(placeholders(templateText("C1.H3.ranks"))).toEqual(["t0", "t1", "subject", "a", "b", "r_a", "r_b", "N"]);
   });
-  it("has a status note only for statuses it knows", () => {
-    expect(statusNote("twins_pending")).toMatch(/^Twin-adjusted panel pending/);
-    expect(() => statusNote("shipped")).toThrow(/no status note/);
+});
+
+describe("the status note", () => {
+  it("fills its year from the registered window start, window.t0", () => {
+    expect(H.slots.t0).toMatchObject({ format: "year", number: "window.t0", value: 2019 });
+    expect(statusNote("twins_pending", H.slots.t0)).toBe(
+      "Twin-adjusted panel pending: this page is panel A, raw growth ranked among the major metros that publish every component, not against each metro's 2019 twins.",
+    );
+    expect(statusNote("twins_pending", { format: "year", number: "window.t0", value: 2018 })).toMatch(/each metro's 2018 twins\.$/);
+  });
+  it("has a note only for statuses it knows", () => {
+    expect(() => statusNote("shipped", H.slots.t0)).toThrow(/no status note/);
   });
 });
