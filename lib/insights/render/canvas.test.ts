@@ -31,9 +31,12 @@ describe("OG headline ladder", () => {
     expect(headlineAt(SPEC.headline, 46, 7, OG.column)?.lines.length).toBe(7);
   });
 
-  it.each(THEMES)("sets the flagship title on a rung of the ladder, inside the column, above the notes (%s)", (theme) => {
+  it.each(THEMES)("sets the flagship title on a rung of the ladder, inside the column, above its dek and the notes (%s)", (theme) => {
     const f = layoutFrame(SPEC, "og", theme);
-    expect(f.headline?.size).toBe(40);
+    // 40 px fits the title alone; with the dek under it in the same column the ladder steps down to 34.
+    expect(f.headline?.size).toBe(34);
+    const dek = f.runs.filter((r) => r.node.role === "dek");
+    expect(dek.map((r) => r.node.text).join(" ")).toBe(SPEC.dek);
     const head = f.runs.filter((r) => r.node.role === "headline");
     expect(head.map((r) => r.node.text)).toEqual(f.headline?.lines);
     const notes = f.runs.filter((r) => r.node.role === "source" || r.node.role === "brand" || r.node.role === "permalink");
@@ -45,6 +48,11 @@ describe("OG headline ladder", () => {
       expect(b.y).toBeGreaterThanOrEqual(OG.margin);
     }
     expect(headBottom + OG.gaps.headline).toBeLessThanOrEqual(Math.min(...notes.map((r) => textBox(r.node).y)));
+    const dekTop = Math.min(...dek.map((r) => textBox(r.node).y));
+    const dekBottom = Math.max(...dek.map((r) => textBox(r.node).y + textBox(r.node).h));
+    expect(headBottom + OG.gaps.headline).toBeLessThanOrEqual(dekTop + 1e-6);
+    expect(dekBottom + OG.gaps.dek).toBeLessThanOrEqual(Math.min(...notes.map((r) => textBox(r.node).y)));
+    for (const r of dek) expect(textBox(r.node).x + textBox(r.node).w).toBeLessThanOrEqual(OG.margin + OG.column + 1e-6);
   });
 });
 

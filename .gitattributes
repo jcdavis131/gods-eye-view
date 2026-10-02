@@ -3,3 +3,7 @@
 *.png binary
 *.jpg binary
 *.ico binary
+
+# Imported model bundles are pinned by sha256 (lib/insights/data/bundles.lock.json and
+# each manifest.json); git must store and check out their bytes unchanged.
+lib/insights/data/** -text

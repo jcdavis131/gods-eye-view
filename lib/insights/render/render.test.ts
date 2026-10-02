@@ -30,13 +30,16 @@ const GOLDENS: Array<[CanvasId, Theme]> = [
 const golden = (canvas: CanvasId, theme: Theme): string => path.resolve(__dirname, `golden/bubble-${canvas}-${theme}.svg`);
 const UPDATE = "UPDATE_INSIGHTS_GOLDEN=1 npx vitest run lib/insights/render/render.test.ts";
 
-/** Rows, provenance keys and label ids all reversed: a deterministic reordering of everything a spec orders. */
+/**
+ * Rows and provenance keys reversed: a deterministic reordering of everything
+ * whose order carries no meaning. labels.ids is left as it is: it is the
+ * label request in priority order (see "label order" below).
+ */
 function reversed(s: BubbleSpec): BubbleSpec {
   return {
     ...s,
     data: [...s.data].reverse().map((d) => ({ ...d, provenance: [...d.provenance].reverse() })),
     provenance: Object.fromEntries(Object.entries(s.provenance).reverse()),
-    labels: { ...s.labels, ids: [...(s.labels?.ids ?? [])].reverse() },
   };
 }
 
@@ -59,6 +62,35 @@ describe("determinism", () => {
     const a = renderSvg(SPEC, canvas, theme);
     expect(renderSvg(SPEC, canvas, theme)).toBe(a);
     expect(renderSvg(reversed(SPEC), canvas, theme)).toBe(a);
+  });
+});
+
+describe("label order", () => {
+  const named = SPEC.labels?.ids ?? [];
+
+  it("asks for the named labels in the order labels.ids names them, not by size", () => {
+    const flipped: BubbleSpec = { ...SPEC, labels: { ...SPEC.labels, ids: [...named].reverse() } };
+    expect(layoutBubble(SPEC, "social", "dark").requested.slice(1, 1 + named.length)).toEqual(named);
+    expect(layoutBubble(flipped, "social", "dark").requested.slice(1, 1 + named.length)).toEqual([...named].reverse());
+  });
+
+  it("drops from the end of the request when a canvas draws fewer labels than requested", () => {
+    // Twelve labels, the subject then the eleven largest bubbles smallest first: no extremes, no size ranking.
+    const plotted = SPEC.data.filter((d) => d.x != null && d.y != null && d.size != null && d.id !== SPEC.subject);
+    const ids = plotted
+      .sort((a, b) => Math.abs(b.size as number) - Math.abs(a.size as number) || (a.id < b.id ? -1 : 1))
+      .slice(0, 11)
+      .reverse()
+      .map((d) => d.id);
+    const request: BubbleSpec = { ...SPEC, labels: { ids, topBySize: 0, extremes: false } };
+    for (const canvas of CANVAS_IDS) {
+      const L = layoutBubble(request, canvas, "light");
+      expect(L.requested).toEqual([SPEC.subject, ...ids]);
+      const position = (id: string) => L.requested.indexOf(id);
+      const lastPlaced = Math.max(...L.placed.map((p) => position(p.id)));
+      for (const d of L.dropped.filter((x) => x.reason === "cap")) expect(position(d.id), `${canvas} ${d.id}`).toBeGreaterThan(lastPlaced);
+    }
+    expect(layoutBubble(request, "inline-narrow", "light").dropped.some((d) => d.reason === "cap")).toBe(true);
   });
 });
 
