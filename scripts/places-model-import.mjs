@@ -387,10 +387,11 @@ export function realPathDeep(p) {
 
 /**
  * The file id of a path that exists, following every link and junction on the way (stat, not lstat): the NTFS file
- * index or the inode, which is the same however the path is spelled, a loopback share's included. The volume is not
- * part of it: Windows gives a drive's volume and the same volume reached through a share different dev numbers.
- * Null when nothing is there, when it cannot be read (the bare "\\?\UNC" prefix of a device path, say), or when the
- * filesystem gives no id (0).
+ * index or the inode, which is the same however the path is spelled, a loopback share's included. On Windows the
+ * volume is not part of it, since a drive and the same volume reached through a share report different dev numbers
+ * (and a 64-bit file index rarely repeats across volumes); elsewhere it is, since every filesystem numbers its own
+ * inodes from the bottom. Null when nothing is there, when it cannot be read (the bare "\\?\UNC" prefix of a device
+ * path, say), or when the filesystem gives no id (0).
  */
 function fileId(p) {
   let s;
@@ -399,7 +400,8 @@ function fileId(p) {
   } catch {
     return null;
   }
-  return s && s.ino !== BigInt(0) ? s.ino : null;
+  if (!s || s.ino === BigInt(0)) return null;
+  return process.platform === "win32" ? `${s.ino}` : `${s.dev}:${s.ino}`;
 }
 
 /** The file ids of `p` and of each directory above it that exists, `p` first, walked on the path as resolved. */
@@ -448,8 +450,9 @@ export function main(argv, cwd = process.cwd()) {
   const name = path.basename(bundleDir);
   const lockFile = path.resolve(REPO_ROOT, opts.lock ?? LOCK_FILE);
   const out = path.resolve(REPO_ROOT, opts.out ?? path.join(DATA_DIR, name));
-  // Every comparison below is on real paths: a junction or a symlink to lib/insights/data (or to the lock) is
-  // that directory (or that file), however the path was spelled.
+  // Every comparison below is on real paths, so a junction or a symlink to lib/insights/data (or to the lock) is
+  // that directory (or that file); and each one that refuses a write is also made on file identity, so a share or a
+  // mapped drive that realpath leaves under its own name is that directory too.
   const realOut = realPathDeep(out);
   const dataDir = path.resolve(REPO_ROOT, DATA_DIR);
   const realData = realPathDeep(dataDir);
