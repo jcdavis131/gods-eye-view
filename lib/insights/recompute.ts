@@ -29,8 +29,15 @@
 //
 // anchorMainToChart ties the main specification's sets to the chart: its
 // universe is the chart's rows, each row's x and y are the evidence numbers
-// of that metro's office and goods-and-logistics growth, and a row is in
-// both sets exactly when it is plotted.
+// of that metro's office and goods-and-logistics growth and its bubble that
+// metro's total nonfarm change, and a row is in both sets exactly when it is
+// plotted.
+//
+// setPeriodProblems ties every set to its key: the row, window and axis it
+// says it is, and the cells each end reads (its periods) are the ones its
+// window label names, so the window a page prints is the one the members'
+// growth was recomputed over (the A3 verifier's E1 renamed to 2031 over 2024
+// cells).
 //
 // recomputeFromCells goes one step further down, to the published cells:
 // every growth, change and cell number the evidence holds, and every set
@@ -53,7 +60,8 @@
 // (empty when everything agrees); the build refuses on any.
 
 import { byteCompare, canonicalJson } from "./render/spec";
-import { axisParts } from "./sentence";
+import { axisParts, rowAxes } from "./sentence";
+import { MONTHS } from "./sources";
 import type { Evidence, EvidenceNumber, EvidenceSet } from "./types";
 
 /** One entry of not_publishable_could_beat_both's checks[], as the producer writes it. */
@@ -235,6 +243,8 @@ export function anchorMainToChart(ev: Evidence, prefix: string, x: string, y: st
       problems.push(`chart row ${c} reads ${r.x} and ${r.y}, not ${prefix}'s ${x} and ${y} growth of ${c}`);
       continue;
     }
+    // The bubble is the metro's own change in total nonfarm jobs over the window, not another metro's or another window's.
+    if (r.size !== `${prefix}.${c}.total_nonfarm.change`) problems.push(`chart row ${c}'s bubble reads ${r.size}, not ${prefix}'s total nonfarm change of ${c}`);
     const vx = ev.numbers[r.x]?.value;
     const vy = ev.numbers[r.y]?.value;
     const member = Object.hasOwn(w.sets[0].members, c) && Object.hasOwn(w.sets[1].members, c);
@@ -333,7 +343,7 @@ function scaleOf(cells: PublishedCell[]): number | string {
 }
 
 /** "SMU48124205000000001" -> its metro and supersector; "C1242:own5:1023:agglvl43" -> its metro and industry. */
-function partOf(series: string): { metro: string; part: string } | null {
+export function partOf(series: string): { metro: string; part: string } | null {
   const ces = /^SMU\d{2}(\d{5})(\d{2})00000001$/.exec(series);
   if (ces) return { metro: ces[1], part: ces[2] };
   const qcew = /^(C\d{4}):own5:(\d{4}):agglvl43$/.exec(series);
@@ -403,6 +413,122 @@ function cellTable(ev: Evidence, problems: string[]): Map<string, Map<string, st
   return out;
 }
 
+const cellIndex = new WeakMap<Evidence, Map<string, { value: string; footnote: string }>>();
+
+/** A published cell as the evidence's cells table holds it ("year|period" at), its value text and footnote code; null when the table has none. */
+export function publishedCell(ev: Evidence, series: string, at: string): { value: string; footnote: string } | null {
+  let index = cellIndex.get(ev);
+  if (!index) {
+    index = new Map();
+    for (const bySeries of Object.values(ev.cells ?? {})) {
+      for (const [s, cells] of Object.entries(bySeries)) {
+        for (const [a, text] of Object.entries(cells)) {
+          const [value, footnote = ""] = text.split("|");
+          index.set(`${s}|${a}`, { value, footnote });
+        }
+      }
+    }
+    cellIndex.set(ev, index);
+  }
+  return index.get(`${series}|${at}`) ?? null;
+}
+
+/** Every series of the cells table that is metro `cbsa`'s CES supersector (or QCEW industry) `part`. */
+export function seriesOfPart(ev: Evidence, cbsa: string, part: string): string[] {
+  const out = new Set<string>();
+  for (const bySeries of Object.values(ev.cells ?? {})) {
+    for (const series of Object.keys(bySeries)) {
+      const p = partOf(series);
+      if (p && p.metro === cbsa && p.part === part) out.add(series);
+    }
+  }
+  return sorted(out);
+}
+
+/**
+ * The metros of both sets of a specification window that beat the subject on both axes (a strictly larger
+ * value on each), recomputed from the sets; null when the window has no two sets or the subject is not a member
+ * of both.
+ */
+export function beatOnBoth(ev: Evidence, prefix: string, subject: string): string[] | null {
+  const w = windowSets(ev, prefix);
+  if (typeof w === "string") return null;
+  const s0 = memberValue(w.sets[0], subject);
+  const s1 = memberValue(w.sets[1], subject);
+  if (s0 === null || s1 === null) return null;
+  return sorted(
+    Object.keys(w.sets[0].members).filter((c) => {
+      if (c === subject || !Object.hasOwn(w.sets[1].members, c)) return false;
+      const a = memberValue(w.sets[0], c);
+      const b = memberValue(w.sets[1], c);
+      return a !== null && b !== null && a > s0 && b > s1;
+    }),
+  );
+}
+
+/** The "year|Mmm" cells of a run of months as a window label words it ("Sep 2025-Aug 2026"), first to last; null when the words are not that form. */
+export function monthsBetween(range: string): string[] | null {
+  const m = /^([A-Z][a-z]{2}) (\d{4})-([A-Z][a-z]{2}) (\d{4})$/.exec(range);
+  if (!m) return null;
+  const month = (name: string): number => {
+    const e = MONTHS[name.toLowerCase()];
+    return e && e.name.slice(0, 3) === name ? Number(e.iso) : Number.NaN;
+  };
+  let y = Number(m[2]);
+  let mo = month(m[1]);
+  const endY = Number(m[4]);
+  const endMo = month(m[3]);
+  if (!Number.isInteger(mo) || !Number.isInteger(endMo)) return null;
+  const out: string[] = [];
+  while (y < endY || (y === endY && mo <= endMo)) {
+    out.push(`${y}|M${String(mo).padStart(2, "0")}`);
+    if (out.length > 120) return null;
+    mo += 1;
+    if (mo > 12) [y, mo] = [y + 1, 1];
+  }
+  return out.length ? out : null;
+}
+
+/**
+ * The cells each end of a window label reads, as a set's periods list them: "2019->2025" the two years' annual
+ * cells (M13 for CES, A for a QCEW row), "2019->mean(Sep 2025-Aug 2026)" the start year's annual cell and each
+ * month of the run. Null for a label of neither form.
+ */
+export function windowPeriods(label: string, annual: "M13" | "A"): { t0: Array<[number, string]>; t1: Array<[number, string]> } | null {
+  const years = /^(\d{4})->(\d{4})$/.exec(label);
+  if (years) return { t0: [[Number(years[1]), annual]], t1: [[Number(years[2]), annual]] };
+  const mean = /^(\d{4})->mean\((.+)\)$/.exec(label);
+  const months = mean && annual === "M13" ? monthsBetween(mean[2]) : null;
+  if (!mean || !months) return null;
+  return { t0: [[Number(mean[1]), annual]], t1: months.map((at) => [Number(at.slice(0, 4)), at.slice(5)] as [number, string]) };
+}
+
+/**
+ * Every comparison set against its key: the row, window and axis it says it is are its key's, its axis is one of
+ * its row's two, and the cells each end reads (its periods) are the ones its window label names. Members are
+ * recomputed from the cells at those periods (recomputeFromCells), so the window a robustness table prints and
+ * the years a registered number states are the years of the cells the numbers read: "2019 to 2031" over 2024
+ * cells is a refusal. `annual` gives the annual period code of a row's cells.
+ */
+export function setPeriodProblems(ev: Evidence, annual: (row: string) => "M13" | "A"): string[] {
+  const problems: string[] = [];
+  for (const [key, set] of Object.entries(ev.sets)) {
+    if (key === "main:universe") continue;
+    const m = /^([A-Za-z0-9]+):([^:]+):([a-z_]+)$/.exec(key);
+    if (!m) {
+      problems.push(`set ${key} is not a row, a window and an axis`);
+      continue;
+    }
+    const [, row, label, axis] = m;
+    if (set.row !== row || set.window !== label || set.axis !== axis) problems.push(`set ${key} says it is row ${JSON.stringify(set.row)}, window ${JSON.stringify(set.window ?? null)}, axis ${JSON.stringify(set.axis)}`);
+    if (!rowAxes(row).includes(axis)) problems.push(`set ${key}'s axis ${axis} is not one of row ${row}'s (${rowAxes(row).join(", ")})`);
+    const want = windowPeriods(label, annual(row));
+    if (!want) problems.push(`set ${key}'s window ${JSON.stringify(label)} names no cells`);
+    else if (canonicalJson(set.periods ?? null) !== canonicalJson(want)) problems.push(`set ${key} reads ${canonicalJson(set.periods ?? null)}, not the cells its window ${label} names, ${canonicalJson(want)}`);
+  }
+  return problems;
+}
+
 const atsOf = (ends: Array<[number, string]> | undefined): string[] => (ends ?? []).map(([y, p]) => `${y}|${p}`);
 
 /**
@@ -416,10 +542,12 @@ export function recomputeFromCells(ev: Evidence): string[] {
   const tuplesOf = (key: string, n: EvidenceNumber): PublishedCell[] | null => {
     const out: PublishedCell[] = [];
     for (const t of n.provenance ?? []) {
-      const [series, year, period, value] = t.split("|");
+      const [series, year, period, value, footnote] = t.split("|");
       const at = `${year}|${period}`;
-      if (table.get(series)?.get(at) !== value) {
-        problems.push(`${key} cites ${series} ${at} = ${value}, the cells table has ${JSON.stringify(table.get(series)?.get(at) ?? null)}`);
+      // The value and the footnote the arithmetic prints for the cell are the cells table's.
+      const cell = publishedCell(ev, series, at);
+      if (table.get(series)?.get(at) !== value || cell?.footnote !== footnote) {
+        problems.push(`${key} cites ${series} ${at} = ${value}|${footnote}, the cells table has ${JSON.stringify(cell ? `${cell.value}|${cell.footnote}` : null)}`);
         return null;
       }
       out.push({ series, at, value });

@@ -26,10 +26,16 @@
 // (registeredPath), the CES series notes (cellNote) and the parts each
 // specification sums (axisParts) are registered here too, so the bundle's
 // copies are compared and this side's are printed. Metro names are not
-// templates: they come from Atlas's registry (metros.ts). The years and counts in the reasons and formulas are placeholders,
-// read back from the evidence by build.ts. Each text may print in its own
-// place on the page only (ROLE_TEMPLATES). The status note is this side's
-// own sentence, keyed by the bundle status.
+// templates: they come from Atlas's registry (metros.ts). The years and
+// counts in the reasons and formulas are placeholders, read back from the
+// evidence by build.ts. Each text may print in its own place on the page
+// only (ROLE_TEMPLATES), and each slot of it reads the one evidence key its
+// template registers (slotPins), in the registered format; the kind and
+// sets of every evidence number are read from its key (numberForm). The
+// rules_version, the finding's panel, the random peer's k grid, the row R
+// window the recency caveat reads, the manufacturing caveat's cells and the
+// chart's number formats are registered here too. The status note is this
+// side's own sentence, keyed by the bundle status.
 //
 // Slot formats. A template that carries its own unit ("grew {a}%", "from
 // {v0}k") takes a bare number, a num slot; signedPct prints its own sign and
@@ -292,6 +298,11 @@ export function panelBGateTemplate(name: string): TemplateId | null {
   return isTemplateId(id) ? id : null;
 }
 
+/** A precondition's threshold as the table prints it: the registered text, the universe's size in it where it has one. */
+export function thresholdText(id: TemplateId, universeN: number): string {
+  return id === "C1.threshold.universe_n" ? fillWords(id, { N: String(universeN) }) : fillWords(id, {});
+}
+
 /** The precondition thresholds the page may print. */
 export const THRESHOLDS: TemplateId[] = ["C1.threshold.zero", "C1.threshold.true", "C1.threshold.universe_n", "C1.threshold.nulls_named", "C1.threshold.fail_closed_named", "C1.threshold.twins_stable"];
 
@@ -361,7 +372,47 @@ const SET_KEYS: RegExp[] = [/^main:universe$/, new RegExp(`^${KEY_ROW}:${KEY_WIN
  * (a key that says something rather than names something).
  */
 export function isNumberKey(key: string): boolean {
-  return NUMBER_KEYS.some((re) => re.test(key));
+  return NUMBER_KEYS.some((re) => re.test(key)) && numberForm(key) !== null;
+}
+
+/** The two axes a specification's rows compare: QCEW's white- and blue-collar industries for X1, else office and goods-and-logistics. */
+export function rowAxes(row: string): [string, string] {
+  return row === "X1" ? ["wc", "bc"] : ["office", "goods_logistics"];
+}
+
+/**
+ * What an evidence number of this key is and the sets it runs over, read from the key alone: the arithmetic
+ * prints both ("(rank) ... Over the sets ..."), so neither is the producer's to choose. A rank runs over its
+ * axis's set, a median over its axis's set, a count, rank_min or probability over the window's two sets,
+ * main.universe.n over the universe set; a growth, change, cell or registered value over none. Null for a key of
+ * no registered form, or one whose axis is not its row's.
+ */
+export function numberForm(key: string): { kind: "growth" | "rank" | "count" | "median" | "change" | "cell" | "registered" | "probability"; over: string[] } | null {
+  if (/^(?:window\.t[01]|random_peer\.k|R\.windows\.\d\.t[01])$/.test(key)) return { kind: "registered", over: [] };
+  if (key === "main.universe.n") return { kind: "count", over: ["main:universe"] };
+  if (/^cell\.SMU\d{17}\|\d{4}\|M(?:0[1-9]|1[0-3])$/.test(key)) return { kind: "cell", over: [] };
+  const m = new RegExp(`^(${KEY_ROW}):(${KEY_WINDOW})\\.(.+)$`).exec(key);
+  if (!m) return null;
+  const prefix = `${m[1]}:${m[2]}`;
+  const axes = rowAxes(m[1]);
+  const pair = axes.map((a) => `${prefix}:${a}`);
+  const rest = m[3];
+  if (rest === "publishable") return { kind: "count", over: pair };
+  const median = /^([a-z_]+)\.median$/.exec(rest);
+  if (median) return axes.includes(median[1]) ? { kind: "median", over: [`${prefix}:${median[1]}`] } : null;
+  const per = new RegExp(`^${KEY_METRO}\\.(.+)$`).exec(rest);
+  if (!per) return null;
+  const what = per[1];
+  const axis = /^([a-z_]+)\.(growth_pct|rank)$/.exec(what);
+  if (axis) {
+    if (!axes.includes(axis[1])) return null;
+    return axis[2] === "growth_pct" ? { kind: "growth", over: [] } : { kind: "rank", over: [`${prefix}:${axis[1]}`] };
+  }
+  if (/^(?:beat_on_both|beat_on_either|not_publishable_could_beat_both)$/.test(what)) return { kind: "count", over: pair };
+  if (what === "rank_min") return { kind: "rank", over: pair };
+  if (what === "total_nonfarm.change") return { kind: "change", over: [] };
+  if (/^random_peer\.k\d{1,3}$/.test(what)) return { kind: "probability", over: pair };
+  return null;
 }
 
 /** Whether `key` is an evidence-set key of a registered form. */
@@ -386,6 +437,142 @@ export function registeredPath(key: string): string | null {
 
 /** The findings this side has sentences for: a total list, like the template families. */
 export const FINDING_IDS: readonly string[] = ["C1-raw"];
+
+/** The panel each finding is, as the page prints it ("panel A"): registered, not read from the manifest. */
+export const FINDING_PANEL: Readonly<Record<string, string>> = { "C1-raw": "A" };
+
+/**
+ * The rules_version these texts are registered under (docs/FLAGSHIP.md, rules_version 4). The page, the CSV and
+ * data.json print it; build.ts refuses a bundle whose manifest, evidence or methods name another, and prints this.
+ */
+export const RULES_VERSION = 4;
+
+/** The random peer's k grid (prereg flagship.random_peer.k_grid): the page prints the probability at each. */
+export const RANDOM_PEER_K_GRID: readonly number[] = [5, 10, 20];
+
+/**
+ * The window of row R the recency caveat reads: its index among row R's registered windows (prereg
+ * flagship.registered_rows.R.windows[1], 2022->2025; docs/FLAGSHIP.md H3b, "row R, 2022->2025").
+ */
+export const RECENCY_R_WINDOW = 1;
+
+/** The CES supersector and the two years the manufacturing caveat reads (docs/FLAGSHIP.md WHAT THE DATA ALREADY SAYS). */
+export const MANUFACTURING = { supersector: "30", years: [2022, 2023] } as const;
+
+/**
+ * How the chart prints its numbers: each axis's and the bubble's format and digits, and the gridline step. These
+ * decide the unit a printed number claims ("+36%" against "$36"), so they are registered here and the sidecar's
+ * must be the same.
+ */
+export const CHART_AXES = {
+  x: { format: "signedPct", digits: 0, step: 10 },
+  y: { format: "signedPct", digits: 0, step: 10 },
+  size: { format: "num", digits: 1, negative: "outline" },
+} as const;
+
+// ---------------------------------------------------------------- the evidence each slot reads
+
+/**
+ * What one slot of a template must be. A number slot names one evidence key, of the form given with build.ts's
+ * context filled in ({main}: the main specification over the registered window, "main:2019->2025"; {subject}:
+ * the subject's CBSA; {recency}: row R's window the recency caveat reads, "R:2022->2025"; {ri}: that window's
+ * index among row R's registered windows; {k}: the registered k; {mfg0}, {mfg1}: the subject's CES
+ * manufacturing cells at the registered years), and prints in the registered format with the registered digits
+ * ("bare": no format, a whole number as written). A place slot is the subject. A list slot names the metros of
+ * one count, or (key null) the chart's metros that are not published, which build.ts compares.
+ */
+export type SlotPin =
+  | { kind: "number"; key: string; format: "year" | "num" | "signedPct" | "ordinal" | "bare"; digits?: number; period?: string }
+  | { kind: "subject" }
+  | { kind: "list"; key: string | null };
+
+const pinYear = (key: string, period?: string): SlotPin => ({ kind: "number", key, format: "year", ...(period ? { period } : {}) });
+const pinNum = (key: string, digits = 0): SlotPin => ({ kind: "number", key, format: "num", digits });
+const pinSigned = (key: string, digits: number): SlotPin => ({ kind: "number", key, format: "signedPct", digits });
+const pinOrdinal = (key: string): SlotPin => ({ kind: "number", key, format: "ordinal" });
+const pinBare = (key: string): SlotPin => ({ kind: "number", key, format: "bare" });
+const PIN_SUBJECT: SlotPin = { kind: "subject" };
+const PIN_WINDOW = { t0: pinYear("window.t0"), t1: pinYear("window.t1") };
+const PIN_RECENCY: Record<string, SlotPin> = {
+  t0: pinYear("R.windows.{ri}.t0"),
+  t1: pinYear("R.windows.{ri}.t1"),
+  subject: PIN_SUBJECT,
+  r_a: pinOrdinal("{recency}.{subject}.office.rank"),
+  r_b: pinOrdinal("{recency}.{subject}.goods_logistics.rank"),
+  beat_both: { kind: "list", key: "{recency}.{subject}.beat_on_both" },
+};
+
+/**
+ * The evidence each slot of a template reads, by placeholder: a total switch. A template a page fills from
+ * evidence slots has an entry naming every placeholder; one with no entry (null) has no registered evidence for
+ * its slots, so build.ts refuses to print it (the twins clause, the QCEW caveat: neither has evidence to read
+ * yet). A slot that names any other evidence key, even one whose value it carries, is a refusal: "2022 to 2025"
+ * in the chart title would be a true number in a false sentence.
+ */
+export function slotPins(id: TemplateId): Readonly<Record<string, SlotPin>> | null {
+  switch (id) {
+    case "C1.H3.ranks":
+      return {
+        ...PIN_WINDOW,
+        subject: PIN_SUBJECT,
+        a: pinNum("{main}.{subject}.office.growth_pct", 1),
+        b: pinNum("{main}.{subject}.goods_logistics.growth_pct", 1),
+        r_a: pinOrdinal("{main}.{subject}.office.rank"),
+        r_b: pinOrdinal("{main}.{subject}.goods_logistics.rank"),
+        N: pinNum("{main}.publishable"),
+      };
+    case "C1.H3b":
+      return { subject: PIN_SUBJECT };
+    case "C1.random_peer":
+      return { k: pinNum("random_peer.k"), subject: PIN_SUBJECT, p: pinNum("{main}.{subject}.random_peer.k{k}", 3) };
+    case "C1.caveat.recency":
+    case "C1.chart_dek.recency.1":
+    case "C1.chart_dek.recency.2":
+      return PIN_RECENCY;
+    case "C1.caveat.ces_manufacturing":
+      return { subject: PIN_SUBJECT, v0: pinNum("cell.{mfg0}", 1), y0: pinYear("cell.{mfg0}", "M13"), v1: pinNum("cell.{mfg1}", 1), y1: pinYear("cell.{mfg1}", "M13") };
+    case "C1.caveat.not_published":
+    case "C1.caveat.not_published.plural":
+      return { metros: { kind: "list", key: null } };
+    case "C1.caveat.benchmarked":
+      return PIN_WINDOW;
+    case "C1.chart_title.raw":
+      return { N: pinBare("main.universe.n"), ...PIN_WINDOW };
+    case "C1.chart_title.h3b.1":
+    case "C1.chart_title.h3b.2":
+      return { subject: PIN_SUBJECT, ...PIN_WINDOW };
+    case "C1.chart.subject_note":
+      return { a: pinSigned("{main}.{subject}.office.growth_pct", 1), b: pinSigned("{main}.{subject}.goods_logistics.growth_pct", 1) };
+    case "C1.chart_universe":
+      return { N: pinBare("main.universe.n"), t0: pinBare("window.t0"), n_pub: pinBare("{main}.publishable") };
+    case "C1.methods.is.raw":
+      return { ...PIN_WINDOW, N: pinBare("main.universe.n") };
+    case "C1.methods.status":
+      return { t0: PIN_WINDOW.t0 };
+    case "C1.headline.join":
+    case "C1.headline.end":
+    case "C1.chart_dek":
+    case "C1.method_line":
+    case "C1.methods.is.ranks":
+    case "C1.methods.is.descriptive":
+    case "C1.methods.is_not.twins":
+    case "C1.methods.is_not.occupations":
+    case "C1.methods.is_not.causal":
+    case "C1.methods.panel_b":
+      return {};
+    default:
+      return null;
+  }
+}
+
+/** A pinned key with build.ts's context filled in; a placeholder the context has no value for throws. */
+export function pinnedKey(key: string, ctx: Readonly<Record<string, string | undefined>>): string {
+  return key.replace(/\{([a-z0-9]+)\}/g, (_m: string, name: string) => {
+    const v = ctx[name];
+    if (v === undefined) throw new Error(`no {${name}} to read ${key} with`);
+    return v;
+  });
+}
 
 /** The CES supersectors a C1 chart reads, by code, as the page names them; any other code refuses. */
 export function cesSupersector(code: string): string {
@@ -596,7 +783,8 @@ export function formulaText(id: FormulaId): string {
 export function formulasFor(kind: string, key: string): FormulaId[] {
   switch (kind) {
     case "growth":
-      return ["growth.ces", "growth.qcew"];
+      // Row X1 reads QCEW levels; every other row reads CES annual averages.
+      return key.startsWith("X1:") ? ["growth.qcew"] : ["growth.ces"];
     case "rank":
       return key.endsWith(".rank_min") ? ["rank_min"] : ["rank"];
     case "count":

@@ -11,8 +11,22 @@ import { describe, expect, it } from "vitest";
 import { loadBundle } from "./load";
 import {
   DEK_LADDER_RECENCY,
+  FINDING_PANEL,
   FORMULA_IDS,
+  MANUFACTURING,
+  METHODS_IS,
+  METHODS_IS_NOT,
+  RANDOM_PEER_K_GRID,
+  RECENCY_R_WINDOW,
   ROLE_TEMPLATES,
+  RULES_VERSION,
+  formulasFor,
+  numberForm,
+  pinnedKey,
+  rowAxes,
+  slotPins,
+  thresholdText,
+  type SlotPin,
   TEMPLATE_IDS,
   THRESHOLDS,
   TITLE_LADDER_H3B,
@@ -265,6 +279,58 @@ describe("registered names, keys and parts", () => {
       expect(isNumberKey(key), key).toBe(true);
       for (const s of n.over ?? []) expect(isSetKey(s), s).toBe(true);
     }
+  });
+  it("read each number's kind and sets from its key alone, and an axis only of its own row", () => {
+    for (const [key, n] of Object.entries(EV.numbers)) {
+      const form = numberForm(key);
+      expect(form, key).not.toBeNull();
+      expect({ kind: n.kind, over: n.over ?? [] }, key).toEqual(form);
+    }
+    expect(numberForm("X1:2019->2023.C1242.office.rank")).toBeNull();
+    expect(numberForm("main:2019->2025.12420.wc.growth_pct")).toBeNull();
+    expect(numberForm("main:2019->2025.bc.median")).toBeNull();
+    expect(isNumberKey("main:2019->2025.12420.bc.rank")).toBe(false);
+    expect(rowAxes("X1")).toEqual(["wc", "bc"]);
+    expect(rowAxes("P2")).toEqual(["office", "goods_logistics"]);
+  });
+  it("register the evidence of every slot a template the page fills prints, placeholder for placeholder", () => {
+    const filled = [...Object.values(ROLE_TEMPLATES).flat(), ...METHODS_IS, ...METHODS_IS_NOT, "C1.methods.status"] as TemplateId[];
+    for (const id of filled) {
+      const pins = slotPins(id);
+      // The two texts with nothing registered to read (twins pending; no QCEW cell after 2023) may not print.
+      if (id === "C1.H3.twins" || id === "C1.caveat.qcew_manufacturing") {
+        expect(pins, id).toBeNull();
+        continue;
+      }
+      expect(pins, id).not.toBeNull();
+      expect(Object.keys(pins!).sort(), id).toEqual(placeholders(templateText(id)).sort());
+    }
+    // The bundle's slots name exactly the registered keys, filled with the committed finding's context.
+    const ctx = { main: "main:2019->2025", subject: "12420", k: "10", ri: "1", recency: "R:2022->2025", mfg0: "SMU48124203000000001|2022|M13", mfg1: "SMU48124203000000001|2023|M13" };
+    const keyOf = (s: Slot) => ("cbsa" in s ? "subject" : "number" in s ? (s.number ?? null) : null);
+    const pinOf = (p: SlotPin) => (p.kind === "subject" ? "subject" : p.key === null ? null : pinnedKey(p.key, ctx));
+    const check = (id: string, slots: Record<string, Slot>) => {
+      for (const [name, pin] of Object.entries(slotPins(id as TemplateId)!)) expect(keyOf(slots[name]), `${id} {${name}}`).toBe(pinOf(pin));
+    };
+    for (const c of H.clauses.filter((x) => x.printed)) check(c.id, H.slots);
+    for (const c of EV.caveats.filter((x) => x.printed)) check(c.id, c.slots!);
+    check(EV.random_peer.id, EV.random_peer.slots);
+    check(EV.chart.title.id, EV.chart.title.slots);
+    check(EV.chart.dek.id, EV.chart.dek.slots);
+    check(EV.chart.subject_note!.id, EV.chart.subject_note!.slots);
+    check(EV.chart.universe_line.id, EV.chart.universe_line.slots);
+    expect(() => pinnedKey("{main}.{nobody}.rank", ctx)).toThrow(/no \{nobody\}/);
+  });
+  it("register what the bundle may not choose: the rules version, the panel, the k grid, the recency window, the manufacturing cells and the chart's formats", () => {
+    expect(RULES_VERSION).toBe(BUNDLE.manifest.rules_version);
+    expect(FINDING_PANEL["C1-raw"]).toBe(BUNDLE.manifest.findings["C1-raw"].panel);
+    expect(RANDOM_PEER_K_GRID).toEqual(EV.random_peer.rule.k_grid);
+    expect(EV.caveats.find((c) => c.id === "C1.caveat.recency")!.slots!.t0).toMatchObject({ number: `R.windows.${RECENCY_R_WINDOW}.t0` });
+    expect(MANUFACTURING.years.map(String)).toEqual(["y0", "y1"].map((y) => String((EV.caveats.find((c) => c.id === "C1.caveat.ces_manufacturing")!.slots![y] as { value: number }).value)));
+    expect(formulasFor("growth", "X1:2019->2023.C1242.wc.growth_pct")).toEqual(["growth.qcew"]);
+    expect(formulasFor("growth", "main:2019->2025.12420.office.growth_pct")).toEqual(["growth.ces"]);
+    expect(thresholdText("C1.threshold.universe_n", 150)).toBe("== 150 (prereg flagship.universe.largest_n)");
+    expect(thresholdText("C1.threshold.zero", 150)).toBe("== 0");
   });
   it("place every registered number in the pre-registration", () => {
     for (const [key, n] of Object.entries(EV.numbers)) if (n.kind === "registered") expect(n.registered!.path, key).toBe(registeredPath(key));

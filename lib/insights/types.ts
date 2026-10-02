@@ -213,12 +213,21 @@ export interface RobustnessRow {
   kind: "definition" | "end_year" | "peers" | "disclosure" | "cross_source";
   /** The clauses this row gates; empty when it is reported only. */
   gates: string[];
-  registered: Record<string, unknown> & { rule?: string; largest_n?: number; ranked_by?: string; window?: { t0: number; t1: number | string }; source_ids?: string[] };
+  registered: Record<string, unknown> & {
+    rule?: string;
+    largest_n?: number;
+    ranked_by?: string;
+    window?: { t0: number; t1: number | string };
+    /** Row R's windows, in their registered order (the recency caveat reads windows[1]). */
+    windows?: Array<{ t0: number; t1: number }>;
+    source_ids?: string[];
+  };
   windows: Record<string, RobustnessWindow>;
 }
 
 export interface Methods {
   release: string;
+  rules_version: number;
   status: string;
   panel_a: {
     finding: string;

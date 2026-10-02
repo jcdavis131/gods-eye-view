@@ -20,13 +20,13 @@ import { CANVAS_IDS } from "./render/canvas";
 import { LABEL_CAP, layoutBubble } from "./render/charts/bubble";
 import { renderSvg } from "./render/render";
 import { parseChartSpec, type BubbleSpec } from "./render/spec";
-import { METHODS_IS, METHODS_IS_NOT, fill, formatSlot, templateText, type TemplateId } from "./sentence";
+import { METHODS_IS, METHODS_IS_NOT, fill, formatSlot, formulaText, templateText, type TemplateId } from "./sentence";
 import { THEMES } from "./render/tokens";
 import { metroName } from "./metros";
 import { recomputeFromCells, recomputePeers } from "./recompute";
 import { CES_SM } from "./sources";
 import { BASE, NAME, ROOT, suppressH3b, suppressedPath, variant, type Parts } from "./testFixtures";
-import type { MetroRef } from "./types";
+import type { Insight, MetroRef } from "./types";
 
 const DIR = path.join(ROOT, "lib/insights/data", NAME);
 const EV = BASE.findings[0].evidence;
@@ -727,7 +727,8 @@ describe("no producer text reaches a printed surface (A2's attacks and the rest)
   });
 
   it("refuses an evidence key, a registered number's citation or a provenance field the arithmetic prints that is not of its registered form", () => {
-    expect(refusal(renamedEverywhere("R.windows.1.t0", "R.windows.1.t0 (Austin unbeaten)"))).toMatch(/\{t0\} reads "R\.windows\.1\.t0 \(Austin unbeaten\)", which is not an evidence key of a registered form/);
+    // Refused where the evidence is first read: every number's key must be of a registered form, printed or not.
+    expect(refusal(renamedEverywhere("R.windows.1.t0", "R.windows.1.t0 (Austin unbeaten)"))).toMatch(/evidence number "R\.windows\.1\.t0 \(Austin unbeaten\)" is not a key of a registered form/);
     expect(refusal(variant((p) => void (p.evidence.numbers["window.t0"].registered!.path = "flagship.window.start (Austin unbeaten)")))).toMatch(
       /registered number window\.t0 cites "registry\/prereg\.json flagship\.window\.start \(Austin unbeaten\)"/,
     );
@@ -776,6 +777,294 @@ describe("no producer text reaches a printed surface (A2's attacks and the rest)
     });
     expect(refusal(w)).toMatch(/robustness R's window "2019->2022 \(Austin\)" is not the window its numbers read \(R:2019->2022\.publishable\)/);
     expect(refusal(variant((p) => void (p.methods.robustness.rows.X1.windows["2019->2023"].subject = "C4522")))).toMatch(/robustness X1 2019->2023 is recomputed for "C4522", not the subject "C1242"/);
+  });
+});
+
+/** Everything the insight prints, as one string: the page's data, every canvas, both downloads, the JSON-LD and the feed. */
+function printedSurfaces(i: Insight): string {
+  return [
+    JSON.stringify(i),
+    ...CANVAS_IDS.map((c) => renderSvg(i.spec, c, "dark")),
+    insightCsv(i, { all: true }),
+    JSON.stringify(insightJson(i, { all: true })),
+    JSON.stringify(insightJsonLd(i)),
+    JSON.stringify(insightsFeedDoc([i], { self: "https://example.org/feed", home: "https://example.org/" })),
+  ].join("\n");
+}
+
+describe("every printed slot reads its registered evidence (A3's attacks)", () => {
+  const FREE = "no other large metro outgrew Austin on both";
+  const caveat = (p: Parts, id: string) => p.evidence.caveats.find((c) => c.id === id)!;
+
+  it("refuses a chart title whose years are row R's, though each is a true registered number (F8)", () => {
+    const b = variant((p) => {
+      p.evidence.chart.title.slots.t0 = { format: "year", number: "R.windows.1.t0", value: 2022 };
+      p.chart.headline = fill(p.evidence.chart.title.id as TemplateId, p.evidence.chart.title.slots);
+    });
+    expect((b.findings[0].chart as BubbleSpec).headline).toBe("No Major Metro Beat Austin on Both Office and Goods-and-Logistics Job Growth, 2022 to 2025");
+    expect(refusal(b)).toMatch(/chart title slot \{t0\} reads "R\.windows\.1\.t0", not window\.t0, the evidence its template registers/);
+  });
+
+  it("refuses the recency caveat and subtitle over the registered window instead of row R's (F9)", () => {
+    const b = variant((p) => {
+      const t0 = { format: "year" as const, number: "window.t0", value: 2019 };
+      caveat(p, "C1.caveat.recency").slots!.t0 = t0;
+      p.evidence.chart.dek.slots.t0 = t0;
+      p.chart.dek = fill(p.evidence.chart.dek.id as TemplateId, p.evidence.chart.dek.slots);
+    });
+    expect(refusal(b)).toMatch(/slot \{t0\} reads "window\.t0", not R\.windows\.1\.t0, the evidence its template registers/);
+  });
+
+  it("refuses a universe line, a benchmarked caveat or a methods line read off another window (F10, F12)", () => {
+    const universe = variant((p) => {
+      p.evidence.chart.universe_line.slots.t0 = { number: "R.windows.1.t0", value: 2022 };
+      p.chart.universe = fill("C1.chart_universe", p.evidence.chart.universe_line.slots);
+    });
+    expect(refusal(universe)).toMatch(/universe line slot \{t0\} reads "R\.windows\.1\.t0", not window\.t0/);
+    const benchmarked = variant((p) => void (caveat(p, "C1.caveat.benchmarked").slots!.t0 = { format: "year", number: "R.windows.1.t0", value: 2022 }));
+    expect(refusal(benchmarked)).toMatch(/caveat C1\.caveat\.benchmarked slot \{t0\} reads "R\.windows\.1\.t0", not window\.t0/);
+    // The universe's {N} is main.universe.n, not the publishable count, though both are counts of metros.
+    const n = variant((p) => {
+      p.evidence.chart.universe_line.slots.N = { number: "main:2019->2025.publishable", value: 149 };
+      p.chart.universe = fill("C1.chart_universe", p.evidence.chart.universe_line.slots);
+    });
+    expect(refusal(n)).toMatch(/universe line slot \{N\} reads "main:2019->2025\.publishable", not main\.universe\.n/);
+  });
+
+  it("refuses the manufacturing caveat on another metro's cells, real and published as they are (F11)", () => {
+    const b = variant((p) => {
+      const austin = p.evidence.numbers["cell.SMU48124203000000001|2022|M13"];
+      const cells: Array<[string, number, string]> = [
+        ["2022", 224.5, "v0"],
+        ["2023", 233.2, "v1"],
+      ];
+      const slots = caveat(p, "C1.caveat.ces_manufacturing").slots!;
+      for (const [year, value, slot] of cells) {
+        const key = `cell.SMU48264203000000001|${year}|M13`;
+        const [, , , , ...rest] = austin.provenance[0].split("|");
+        p.evidence.numbers[key] = { ...structuredClone(austin), value, provenance: [["SMU48264203000000001", year, "M13", value.toFixed(1), ...rest].join("|")] };
+        slots[slot] = { format: "num", number: key, value, digits: 1 };
+        slots[slot.replace("v", "y")] = { format: "year", number: key, value: Number(year), period: "M13" };
+      }
+    });
+    // The cells are Houston's as published: every number agrees with its cells; only the series is not the subject's.
+    expect(recomputeFromCells(b.findings[0].evidence)).toEqual([]);
+    expect(refusal(b)).toMatch(/caveat C1\.caveat\.ces_manufacturing slot \{v0\} reads "cell\.SMU48264203000000001\|2022\|M13", not cell\.SMU48124203000000001\|2022\|M13/);
+  });
+
+  it("refuses a slot in a format, with digits or a period the template does not register", () => {
+    expect(refusal(variant((p) => void ((p.evidence.headline.slots.r_a as { format: string }).format = "num")))).toMatch(/headline slot \{r_a\} prints as "num", not the registered "ordinal"/);
+    expect(refusal(variant((p) => void ((p.evidence.headline.slots.a as { digits: number }).digits = 3)))).toMatch(/headline slot \{a\} prints 3 digits, not the registered 1/);
+    expect(refusal(variant((p) => void ((caveat(p, "C1.caveat.ces_manufacturing").slots!.y0 as { period?: string }).period = undefined)))).toMatch(/slot \{y0\} is for the period null, not the registered "M13"/);
+  });
+
+  it("refuses a twins clause or a QCEW caveat that prints: neither has registered evidence for its slots", () => {
+    const qcew = variant((p) => {
+      const c = caveat(p, "C1.caveat.qcew_manufacturing");
+      c.printed = true;
+      delete c.reason;
+      c.slots = { qcew_period: { format: "year", number: "window.t1", value: 2025 }, t0: { format: "year", number: "window.t0", value: 2019 }, t1: { format: "year", number: "window.t1", value: 2025 } };
+    });
+    expect(refusal(qcew)).toMatch(/caveat C1\.caveat\.qcew_manufacturing uses template C1\.caveat\.qcew_manufacturing, which has no registered evidence for its slots/);
+    // The clauses in another order, or the H3b clause without the ranks it extends.
+    expect(refusal(variant((p) => void p.evidence.headline.clauses.reverse()))).toMatch(/the headline's clauses are \["C1\.H3\.twins","C1\.H3b","C1\.H3\.ranks"\], not the registered .* in that order/);
+    const alone = variant((p) => {
+      p.evidence.headline.clauses[0].printed = false;
+      p.methods.panel_a.headline.clauses["C1.H3.ranks"] = false;
+    });
+    expect(refusal(alone)).toMatch(/the H3b clause prints without the ranks clause it extends/);
+  });
+
+  it("refuses a rules_version the templates are not registered under, and prints its own (F1)", () => {
+    const sentence = variant((p) => {
+      (p.manifest as { rules_version: unknown }).rules_version = `4; ${FREE}`;
+      (p.evidence as { rules_version: unknown }).rules_version = `4; ${FREE}`;
+    });
+    expect(refusal(sentence)).toMatch(/manifest\.json names rules_version "4; no other large metro outgrew Austin on both"; the templates here are registered under rules_version 4/);
+    const five = variant((p) => void (p.manifest.rules_version = p.evidence.rules_version = p.methods.rules_version = 5));
+    expect(refusal(five)).toMatch(/manifest\.json names rules_version 5; the templates here are registered under rules_version 4/);
+    expect(refusal(variant((p) => void (p.methods.rules_version = 3)))).toMatch(/methods\.json names rules_version 3/);
+    expect(I.rulesVersion).toBe(4);
+    expect(insightCsv(I)).toContain("rules_version 4)");
+  });
+
+  it("refuses free text or an untied number in the precondition table, a name twice, and a passing row for a clause that does not print (F2)", () => {
+    const text = variant((p) => void p.evidence.preconditions.push({ ...structuredClone(p.evidence.preconditions.find((x) => x.name === "universe.nulls_named")!), value: FREE as never }));
+    expect(refusal(text)).toMatch(/precondition universe\.nulls_named's value "no other large metro outgrew Austin on both" is not a number or true or false/);
+    // The spec's own example: a second universe.n with no evidence number, at 151.
+    const n151 = variant((p) => void p.evidence.preconditions.push({ name: "universe.n", gates: "C1-raw", pass: true, threshold: "== 151 (prereg flagship.universe.largest_n)", value: 151 }));
+    expect(refusal(n151)).toMatch(/the evidence records precondition "universe\.n" more than once/);
+    // The twins row moved from its suppressed clause into the table, passing.
+    const twins = variant((p) => {
+      const row = p.evidence.suppressed[0].preconditions.pop()!;
+      p.evidence.preconditions.push({ ...row, pass: true, value: 0.9 });
+    });
+    expect(refusal(twins)).toMatch(/precondition h3\.twins_stable_in_80pct_of_draws passes and gates C1\.H3\.twins, which does not print/);
+    // A row reading another row's count, though its value matches.
+    const other = variant((p) => void (p.evidence.preconditions.find((x) => x.name === "h3b.no_metro_beat_both.E1")!.number = "E3:2019->2023.12420.beat_on_both"));
+    expect(refusal(other)).toMatch(/precondition h3b\.no_metro_beat_both\.E1 reads E3:2019->2023\.12420\.beat_on_both, not E1's beat_on_both for 12420/);
+    // The same on a suppressed clause's failing row, whose reason prints its name.
+    const suppressed = variant((p) => {
+      suppressedPath(p);
+      p.evidence.suppressed.find((s) => s.clause === "C1.H3b")!.preconditions[0].number = "E3:2019->2023.12420.beat_on_both";
+    });
+    expect(refusal(suppressed)).toMatch(/suppressed precondition h3b\.no_metro_beat_both\.P2 reads "E3:2019->2023\.12420\.beat_on_both" over "2019->2025", not "P2:2019->2025\.12420\.beat_on_both"/);
+    // What the table prints is this side's value and threshold for each row.
+    for (const p of I.preconditions) expect(typeof p.value === "number" || typeof p.value === "boolean", p.name).toBe(true);
+    expect(I.preconditions.map((p) => p.name)).toEqual(EV.preconditions.map((p) => p.name));
+  });
+
+  it("refuses a reason whose years, cells or window are not the registered ones, or not so of the cells (F3)", () => {
+    const notAbove = (y0: unknown, y1: unknown) =>
+      variant((p) => {
+        const c = caveat(p, "C1.caveat.ces_manufacturing");
+        c.printed = false;
+        c.slots!.y0 = { format: "year", value: y0 } as never;
+        c.slots!.y1 = { format: "year", value: y1 } as never;
+        c.reason = `the ${y1} value is not above the ${y0} one, so the caveat would say something the cells do not`;
+      });
+    const none = /caveat C1\.caveat\.ces_manufacturing gives the reason .*, which is none of its registered forms \(C1\.reason\.ces_not_above, C1\.reason\.ces_no_cell\) with the evidence's own values/;
+    expect(refusal(notAbove(2022, FREE))).toMatch(none);
+    expect(refusal(notAbove(1999, 2000))).toMatch(none);
+    // The registered years, but the 2023 cell is above the 2022 one: the reason is not so.
+    expect(refusal(notAbove(2022, 2023))).toMatch(none);
+    const noCell = variant((p) => {
+      const c = caveat(p, "C1.caveat.ces_manufacturing");
+      c.printed = false;
+      delete c.slots;
+      c.reason = "no published unfootnoted cell ['SMU48124203000000001|2023|M13']";
+    });
+    expect(refusal(noCell)).toMatch(none);
+    const both = variant((p) => {
+      const c = caveat(p, "C1.caveat.ces_manufacturing");
+      c.printed = false;
+      delete c.slots;
+      c.reason = "no published unfootnoted cell ['SMU48124203000000001|2022|M13', 'SMU48124203000000001|2023|M13']";
+    });
+    expect(refusal(both)).toMatch(none);
+    // The recency caveat's window as free text, on the path where the H3b clause does not print.
+    const window = variant((p) => {
+      suppressedPath(p);
+      const c = caveat(p, "C1.caveat.recency");
+      c.printed = false;
+      c.window = FREE;
+      c.reason = `row R's ${FREE} window is not in data/flagship/registered_rows.json`;
+    });
+    expect(refusal(window)).toMatch(/caveat C1\.caveat\.recency gives the reason "row R's no other large metro outgrew Austin on both window is not in data\/flagship\/registered_rows\.json", which is none of its registered forms/);
+    for (const reason of ["row R's 2022->2025 window is not in data/flagship/registered_rows.json", "the subject is not publishable in row R's window", "no metro beat the subject on both in row R's window, so the list the caveat names is empty"]) {
+      const b = variant((p) => {
+        suppressedPath(p);
+        const c = caveat(p, "C1.caveat.recency");
+        c.printed = false;
+        c.reason = reason;
+      });
+      expect(refusal(b), reason).toMatch(/caveat C1\.caveat\.recency gives the reason .*, which is none of its registered forms/);
+    }
+  });
+
+  it("refuses a metro's not-published code that its cells do not bear out, and prints one that they do (F3e)", () => {
+    const reasonAll = (p: Parts, reason: string) => {
+      p.evidence.chart.not_published[0].reason = reason;
+      ((caveat(p, "C1.caveat.not_published").slots!.metros as { metros: MetroRef[] }).metros[0] as MetroRef).reason = reason;
+      for (const a of ["office", "goods_logistics"]) p.evidence.sets[`main:2019->2025:${a}`].excluded!["45300"] = reason;
+    };
+    // Tampa's 2025 manufacturing cell is published (73.8): "no_value" on it is false.
+    const published = variant((p) => reasonAll(p, "no_value:SMU12453003000000001|2025|M13"));
+    expect(refusal(published)).toMatch(/Tampa-St\. Petersburg-Clearwater, FL is not published for the reason "no_value:SMU12453003000000001\|2025\|M13", which the evidence's published cells do not bear out/);
+    expect(refusal(variant((p) => reasonAll(p, "zero_base")))).toMatch(/for the reason "zero_base", which the evidence's published cells do not bear out/);
+    // Tampa publishes no supersector 15 cell: "no_value" on it is so, and prints.
+    const absent = buildInsight(
+      variant((p) => reasonAll(p, "no_value:SMU12453001500000001|2019|M13")),
+      "C1-raw",
+    );
+    expect(absent.notPublished[0].reason).toBe("no_value:SMU12453001500000001|2019|M13");
+  });
+
+  it("refuses row R's window moved to 2021 in its registered numbers, slots, methods and sidecar (F4)", () => {
+    const moved = variant((p) => {
+      p.evidence.numbers["R.windows.1.t0"].value = 2021;
+      for (const slots of [caveat(p, "C1.caveat.recency").slots!, p.evidence.chart.dek.slots]) (slots.t0 as { value: number }).value = 2021;
+      p.methods.robustness.rows.R.registered.windows![1].t0 = 2021;
+      p.chart.dek = fill(p.evidence.chart.dek.id as TemplateId, p.evidence.chart.dek.slots);
+    });
+    expect((moved.findings[0].chart as BubbleSpec).dek).toContain("2021 to 2025: Austin ranks 17th");
+    expect(refusal(moved)).toMatch(/the recency caveat reads row "R"'s "2022->2025" window, not row R's registered window 1 \("2021->2025"\)/);
+    // The R window's own keys and labels renamed to 2021 as well: its sets still read 2022 cells.
+    const renamed = (periods: boolean) =>
+      variant((p) => {
+        const swap = <T>(v: T): T => JSON.parse(JSON.stringify(v).split("R:2022->2025").join("R:2021->2025").split('"2022->2025"').join('"2021->2025"')) as T;
+        p.evidence = swap(p.evidence);
+        p.methods = swap(p.methods);
+        p.evidence.numbers["R.windows.1.t0"].value = 2021;
+        for (const slots of [caveat(p, "C1.caveat.recency").slots!, p.evidence.chart.dek.slots]) (slots.t0 as { value: number }).value = 2021;
+        p.methods.robustness.rows.R.registered.windows![1].t0 = 2021;
+        p.chart.dek = fill(p.evidence.chart.dek.id as TemplateId, p.evidence.chart.dek.slots);
+        if (periods) for (const a of ["office", "goods_logistics"]) p.evidence.sets[`R:2021->2025:${a}`].periods!.t0 = [[2021, "M13"]];
+      });
+    expect(refusal(renamed(false))).toMatch(/set R:2021->2025:goods_logistics reads .*, not the cells its window 2021->2025 names/);
+    // And the sets' periods moved too: the numbers read 2022 cells, which are not the window's.
+    expect(refusal(renamed(true))).toMatch(/the evidence's values disagree with the published cells they read: .*R:2021->2025/);
+  });
+
+  it("refuses an end-year row renamed to 2031 everywhere while its sets and cells read 2024 (F5)", () => {
+    const b = variant((p) => {
+      const swap = <T>(v: T): T => JSON.parse(JSON.stringify(v).split("E1:2019->2024").join("E1:2019->2031").split('"2019->2024"').join('"2019->2031"')) as T;
+      p.evidence = swap(p.evidence);
+      p.methods = swap(p.methods);
+      p.methods.robustness.rows.E1.registered.window!.t1 = 2031;
+    });
+    expect(refusal(b)).toMatch(/set E1:2019->2031:goods_logistics reads \{"t0":\[\[2019,"M13"\]\],"t1":\[\[2024,"M13"\]\]\}, not the cells its window 2019->2031 names/);
+    // A row evaluated over a window that is not its registered one.
+    expect(refusal(variant((p) => void (p.methods.robustness.rows.E3.registered.window!.t1 = 2022)))).toMatch(/robustness E3's window 2019->2023 is not its registered 2019 to 2022/);
+    expect(refusal(variant((p) => void (p.methods.robustness.rows.R.registered.windows![0].t1 = 2021)))).toMatch(/robustness row R is evaluated over \["2019->2022","2022->2025"\], not its registered windows \["2019->2021","2022->2025"\]/);
+  });
+
+  it("refuses an axis or a bubble in a unit, digits, step or domain the chart does not register (F6, F13)", () => {
+    expect(refusal(variant((p) => void (p.chart.x.format = "usd")))).toMatch(/the chart's horizontal axis is \{.*"format":"usd".*\}, not the registered \{.*"format":"signedPct"/);
+    expect(refusal(variant((p) => void (p.chart.size.format = "usd")))).toMatch(/the chart's bubble size is \{.*"format":"usd".*\}, not the registered \{.*"format":"num"/);
+    expect(refusal(variant((p) => void (p.chart.y.digits = 2)))).toMatch(/the chart's vertical axis is/);
+    expect(refusal(variant((p) => void (p.chart.x.step = 5)))).toMatch(/the chart's horizontal axis is/);
+    expect(refusal(variant((p) => void (p.chart.x.domain = [-10, 10])))).toMatch(/the chart's horizontal axis is/);
+    // As built, every format the chart prints is this side's.
+    const s = I.spec as BubbleSpec;
+    expect([s.x.format, s.x.digits, s.y.format, s.y.digits, s.size.format, s.size.digits]).toEqual(["signedPct", 0, "signedPct", 0, "num", 1]);
+  });
+
+  it("pins the bubble, the medians, the random-peer grid and every number's kind and sets to their keys", () => {
+    const bubble = variant((p) => {
+      p.evidence.chart.rows["12420"].size = "main:2019->2025.26420.total_nonfarm.change";
+      p.chart.data.find((d) => d.id === "12420")!.size = p.evidence.numbers["main:2019->2025.26420.total_nonfarm.change"].value;
+    });
+    expect(refusal(bubble)).toMatch(/chart row 12420's bubble reads main:2019->2025\.26420\.total_nonfarm\.change, not main:2019->2025's total nonfarm change of 12420/);
+    expect(refusal(variant((p) => void (p.evidence.chart.medians.office.number = "D2:2019->2025.office.median")))).toMatch(/the chart's office median reads "D2:2019->2025\.office\.median", not main:2019->2025\.office\.median/);
+    expect(refusal(variant((p) => void (p.evidence.random_peer.rule.k_grid = [5, 10, 30])))).toMatch(/over the grid \[5,10,30\]; registered, k = 10 \(random_peer\.k\) over \[5,10,20\]/);
+    expect(refusal(variant((p) => void (p.evidence.random_peer.grid["5"].number = "main:2019->2025.12420.random_peer.k10")))).toMatch(/the random-peer grid at k = 5 reads "main:2019->2025\.12420\.random_peer\.k10"/);
+    expect(refusal(variant((p) => void (p.evidence.numbers["main:2019->2025.12420.office.rank"].over = ["P2:2019->2025:office"])))).toMatch(
+      /evidence number main:2019->2025\.12420\.office\.rank runs over \["P2:2019->2025:office"\], not \["main:2019->2025:office"\], the sets its key names/,
+    );
+    expect(refusal(variant((p) => void (p.evidence.numbers["main:2019->2025.12420.office.rank"].kind = "count")))).toMatch(/evidence number main:2019->2025\.12420\.office\.rank is a "count"; a key of its form is a rank/);
+    // A CES growth stating the QCEW formula: registered text, wrong source.
+    expect(refusal(variant((p) => void (p.evidence.numbers["main:2019->2025.12420.office.growth_pct"].formula = formulaText("growth.qcew"))))).toMatch(
+      /evidence number main:2019->2025\.12420\.office\.growth_pct \(growth\) states the formula .*, not the registered growth\.ces/,
+    );
+  });
+
+  it("builds the committed bundle with every surface unchanged by the pins", () => {
+    const again = buildInsight(variant(() => undefined), "C1-raw");
+    expect(printedSurfaces(again)).toBe(printedSurfaces(I));
+    // The registered evidence of every printed slot, as the arithmetic lists it.
+    const keys = new Set(I.arithmetic.map((r) => `${r.where}|${r.slot}|${r.number}`));
+    for (const k of [
+      "Chart title|t0|window.t0",
+      "Chart subtitle|t0|R.windows.1.t0",
+      "Caveat: recency|t0|R.windows.1.t0",
+      "Caveat: benchmarked|t0|window.t0",
+      "Universe line|t0|window.t0",
+      "Universe line|N|main.universe.n",
+      "Caveat: ces_manufacturing|v0|cell.SMU48124203000000001|2022|M13",
+    ]) {
+      expect(keys.has(k), k).toBe(true);
+    }
   });
 });
 

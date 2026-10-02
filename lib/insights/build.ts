@@ -40,9 +40,27 @@
 //     cell), the universe formula (the window's start, the period, the two
 //     cutoff ranks and their cells) and the period each card's Source line
 //     prints for a cell (one the rows read, at an end of the window);
-//   - every slot that prints a number names an evidence number whose value is
-//     the slot's value, so the printed number carries that entry's formula
-//     and published cells; a probability's exact fraction is recomputed;
+//   - every slot that prints a number names the one evidence number its
+//     template registers for it (sentence.ts slotPins: the chart title's
+//     years are window.t0/t1, the recency caveat's are row R's registered
+//     window, the manufacturing caveat's cells are the subject's supersector
+//     30 at the registered years), in the registered format and digits, and
+//     its value is that number's, so the printed number carries that entry's
+//     formula and published cells; a template with no registered evidence
+//     for its slots does not print; a probability's exact fraction is
+//     recomputed, over the registered k grid;
+//   - every evidence number is the kind, over the sets, that its key says
+//     (sentence.ts numberForm); every comparison set reads the cells its
+//     window label names (recompute.ts setPeriodProblems), each robustness
+//     row is evaluated over its registered windows, and row R's registered
+//     years are methods.json's, so a window printed is the window computed;
+//   - the reason a caveat or a metro does not print is read back from this
+//     side's registered values and the evidence's sets and cells, never from
+//     the caveat's own slots: "no_value" names a cell the table does not
+//     publish, "not above" compares the registered cells;
+//   - the rules_version, the panel and the chart's axis and bubble formats
+//     (sentence.ts RULES_VERSION, FINDING_PANEL, CHART_AXES) are this side's,
+//     and the bundle's must equal them;
 //   - the chart sidecar is a valid ChartSpec whose title, subtitle, subject
 //     note, universe line, axis labels and estimate methods are the
 //     templates' output, whose rows are exactly the evidence's chart rows
@@ -64,9 +82,13 @@
 //     names, notes, dates, slug and as-of date, from records the sidecar's
 //     must equal (lib/insights/taint.test.ts appends a canary to every
 //     string of the bundle and finds none printed);
-//   - the precondition table's values are their evidence numbers' values and
-//     its results their values against their thresholds; the universe's size
-//     is one number in the set, main.universe.n and the registered largest_n;
+//   - the precondition table is printed as this side recomputes it, row by
+//     row (preconditionRow): each value recomputed or read from the one
+//     evidence number its name registers, the registered threshold, and the
+//     value against it; a name recorded twice, a passing row for a clause
+//     that does not print, or a value of neither kind refuses; the universe's
+//     size is one number in the set, main.universe.n and the registered
+//     largest_n;
 //   - every growth, change and cell the evidence holds, and every set
 //     member's growth, is recomputed from the published cells it reads
 //     (recompute.ts recomputeFromCells), and the peer rows ranked like the
@@ -85,16 +107,28 @@ import { LABEL_CAP, requestedLabels } from "./render/charts/bubble";
 import { isPlotted } from "./render/table";
 import { byteCompare, canonicalJson, parseChartSpec, toProvenance, type BubbleSpec, type ChartSpec, type SpecProvenance } from "./render/spec";
 import {
+  CHART_AXES,
   DEK_LADDER_RECENCY,
   DEK_LIMIT,
   FINDING_IDS,
+  FINDING_PANEL,
   GATING_ROWS_H3B,
+  MANUFACTURING,
   METHODS_IS,
   NOT_PUBLISHED_CODES,
   PREREG_FILE,
   METHODS_IS_NOT,
+  RANDOM_PEER_K_GRID,
+  RECENCY_R_WINDOW,
+  RULES_VERSION,
   TITLE_LADDER_H3B,
   asSentence,
+  axisParts,
+  numberForm,
+  pinnedKey,
+  rowAxes,
+  slotPins,
+  thresholdText,
   axisCopy,
   cellNote,
   fill,
@@ -124,7 +158,21 @@ import {
   type TemplateId,
   type TemplateRole,
 } from "./sentence";
-import { anchorMainToChart, recomputeFromCells, recomputeMedian, recomputePeers, recomputeRandomPeer, recomputeSpec } from "./recompute";
+import {
+  anchorMainToChart,
+  beatOnBoth,
+  monthsBetween,
+  partOf,
+  publishedCell,
+  recomputeFromCells,
+  recomputeMedian,
+  recomputePeers,
+  recomputeRandomPeer,
+  recomputeSpec,
+  seriesOfPart,
+  setPeriodProblems,
+  windowSets,
+} from "./recompute";
 import { cbsaOfQcew, metroName, qcewCode, qcewTitle } from "./metros";
 import { CES_SM, MONTHS, SHAPING, isoDateOf, sourceEntryProblems, sourceRefById } from "./sources";
 import type {
@@ -136,6 +184,8 @@ import type {
   Insight,
   Methods,
   MetroRef,
+  Precondition,
+  RobustnessRow,
   RobustnessSummary,
   ShapingSource,
   Slot,
@@ -328,22 +378,15 @@ const CES_RANKING = "CES total nonfarm, ";
  * words are not that form.
  */
 export function monthlyEnd(words: string): string[] | null {
-  const m = /^the mean of the (\d+) monthly values ([A-Z][a-z]{2}) (\d{4})-([A-Z][a-z]{2}) (\d{4})$/.exec(words);
-  if (!m) return null;
-  const month = (name: string) => Number(MONTHS[name.toLowerCase()]?.iso ?? NaN);
-  let y = Number(m[3]);
-  let mo = month(m[2]);
-  const endY = Number(m[5]);
-  const endMo = month(m[4]);
-  if (!Number.isInteger(mo) || !Number.isInteger(endMo)) return null;
-  const out: string[] = [];
-  while (y < endY || (y === endY && mo <= endMo)) {
-    out.push(`${y}|M${String(mo).padStart(2, "0")}`);
-    if (out.length > 120) return null;
-    mo += 1;
-    if (mo > 12) [y, mo] = [y + 1, 1];
-  }
-  return out.length === Number(m[1]) ? out : null;
+  const m = /^the mean of the (\d+) monthly values (.+)$/.exec(words);
+  const months = m ? monthsBetween(m[2]) : null;
+  return m && months && months.length === Number(m[1]) ? months : null;
+}
+
+/** The window label a robustness row's evidence keys carry for a monthly end ("2019->mean(Sep 2025-Aug 2026)"), from its registered words. */
+function monthlyLabel(t0: number, words: string): string | null {
+  const m = /^the mean of the \d+ monthly values (.+)$/.exec(words);
+  return m && monthlyEnd(words) ? `${t0}->mean(${m[1]})` : null;
 }
 
 /** A registered reason template and the check its captured slots must pass against the evidence. */
@@ -389,31 +432,53 @@ function qcewReasonHolds(ev: Evidence, methods: Methods, y0: string, y1: string)
   return all.length > 0 && all.every((y) => y <= Number(y1)) && canonicalJson(x1Years) === canonicalJson([Number(y0), Number(y1)]);
 }
 
-/** The registered forms of the reason a caveat gives when it does not print, by caveat. */
-function caveatReasonForms(c: Evidence["caveats"][number], ev: Evidence, methods: Methods): ReasonForm[] {
-  const yearOf = (name: string): string | null => {
-    const s = c.slots?.[name];
-    return s && "value" in s && s.format === "year" ? String(s.value) : null;
-  };
+/** What a caveat's reason is read back against: row R's registered window the recency caveat reads, and the manufacturing caveat's two cells. */
+interface ReasonContext {
+  /** prereg flagship.registered_rows.R.windows[RECENCY_R_WINDOW] as a window label, "2022->2025". */
+  recencyWindow?: string;
+  /** The subject's CES manufacturing cells at the registered years, "series|year|M13". */
+  manufacturing?: [string, string];
+}
+
+/**
+ * The registered forms of the reason a caveat gives when it does not print, by caveat. Each captured slot is
+ * read back from this side's registered values and the evidence's sets and cells, never from the caveat's own
+ * slots or fields: a reason is printed, so what it says has to be so.
+ */
+function caveatReasonForms(c: Evidence["caveats"][number], ev: Evidence, methods: Methods, ctx: ReasonContext): ReasonForm[] {
   switch (c.id) {
-    case RECENCY:
+    case RECENCY: {
+      const label = ctx.recencyWindow;
+      const prefix = label === undefined ? undefined : `R:${label}`;
+      // The window is the registered one, and the caveat says it reads it.
+      const registered = label !== undefined && c.row === "R" && c.window === label;
+      const evaluated = label !== undefined && (Object.hasOwn(methods.robustness.rows.R?.windows ?? {}, label) || rowAxes("R").some((a) => Object.hasOwn(ev.sets, `R:${label}:${a}`)));
+      const sets = prefix !== undefined && typeof windowSets(ev, prefix) !== "string";
+      const both = prefix === undefined ? null : beatOnBoth(ev, prefix, ev.subject);
       return [
-        ["C1.reason.recency_no_window", (m) => c.window !== undefined && m.window === c.window],
-        ["C1.reason.recency_subject", () => true],
-        ["C1.reason.recency_empty", () => c.slots?.beat_both?.format === "list" && c.slots.beat_both.metros.length === 0],
+        ["C1.reason.recency_no_window", (m) => registered && m.window === label && !evaluated],
+        ["C1.reason.recency_subject", () => registered && sets && both === null],
+        ["C1.reason.recency_empty", () => registered && both !== null && both.length === 0],
       ];
-    case "C1.caveat.ces_manufacturing":
+    }
+    case "C1.caveat.ces_manufacturing": {
+      const keys = ctx.manufacturing;
+      /** The cell's value when the table publishes it without a footnote, else null. */
+      const unfootnoted = (key: string | undefined): number | null => {
+        if (key === undefined) return null;
+        const [series, year, period] = key.split("|");
+        const cell = publishedCell(ev, series, `${year}|${period}`);
+        return cell && cell.footnote === "" ? Number(cell.value) : null;
+      };
+      const v0 = unfootnoted(keys?.[0]);
+      const v1 = unfootnoted(keys?.[1]);
+      const [y0, y1] = MANUFACTURING.years.map(String);
       return [
-        [
-          "C1.reason.ces_not_above",
-          (m) => {
-            const v0 = c.slots?.v0;
-            const v1 = c.slots?.v1;
-            return m.y0 === yearOf("y0") && m.y1 === yearOf("y1") && !!v0 && !!v1 && "value" in v0 && "value" in v1 && !(v1.value > v0.value);
-          },
-        ],
-        ["C1.reason.ces_no_cell", (m) => CELL_KEY_LIST.test(m.key)],
+        ["C1.reason.ces_not_above", (m) => m.y0 === y0 && m.y1 === y1 && v0 !== null && v1 !== null && !(v1 > v0)],
+        // The producer's Python repr of the two registered cells, one of which the table does not publish unfootnoted.
+        ["C1.reason.ces_no_cell", (m) => keys !== undefined && m.key === `[${keys.map((k) => `'${k}'`).join(", ")}]` && CELL_KEY_LIST.test(m.key) && (v0 === null || v1 === null)],
       ];
+    }
     case "C1.caveat.qcew_manufacturing":
       return [["C1.reason.qcew_manufacturing", (m) => qcewReasonHolds(ev, methods, m.y0, m.y1)]];
     default:
@@ -543,6 +608,66 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
   } catch (e) {
     refuse((e as Error).message);
   }
+  // The rules the texts here are registered under, and the panel the finding is: this side's, which the page prints;
+  // the bundle's are compared.
+  for (const [what, v] of [["manifest.json", manifest.rules_version], ["the evidence", ev.rules_version], ["methods.json", methods.rules_version]] as const) {
+    if (v !== RULES_VERSION) refuse(`${what} names rules_version ${JSON.stringify(v ?? null)}; the templates here are registered under rules_version ${RULES_VERSION}`);
+  }
+  if (f.panel !== FINDING_PANEL[findingId]) refuse(`the manifest lists it as panel ${JSON.stringify(f.panel)}; ${findingId} is registered as panel ${FINDING_PANEL[findingId]}`);
+
+  // Every evidence number is of a registered key form, and is the kind of number, over the sets, that its key says:
+  // the arithmetic prints each one's key, kind and sets.
+  for (const [key, n] of Object.entries(ev.numbers)) {
+    const form = numberForm(key) ?? refuse(`evidence number ${JSON.stringify(key)} is not a key of a registered form`);
+    if (n.kind !== form.kind) refuse(`evidence number ${key} is a ${JSON.stringify(n.kind)}; a key of its form is a ${form.kind}`);
+    if (canonicalJson(n.over ?? []) !== canonicalJson(form.over)) refuse(`evidence number ${key} runs over ${JSON.stringify(n.over ?? [])}, not ${JSON.stringify(form.over)}, the sets its key names`);
+  }
+  // Every set is the row, window and axis its key says, and reads the cells its window names.
+  const setProblems = setPeriodProblems(ev, (row) => (methods.robustness.rows[row]?.kind === "cross_source" ? "A" : "M13"));
+  if (setProblems.length) refuse(`the evidence's sets do not read the cells their windows name: ${setProblems.slice(0, 5).join("; ")}${setProblems.length > 5 ? `; and ${setProblems.length - 5} more` : ""}`);
+
+  // The registered window and k: registered numbers, read from the pre-registration (each prints with its citation).
+  // The window's years are the main specification's, whose sets read the cells of those years (above).
+  const registeredInt = (key: string): number => {
+    const n = ev.numbers[key];
+    if (!n || n.kind !== "registered" || typeof n.value !== "number" || !Number.isInteger(n.value)) return refuse(`evidence number ${key} is not a registered whole number`);
+    return n.value;
+  };
+  const window = { t0: registeredInt("window.t0"), t1: registeredInt("window.t1") };
+  if (!(window.t0 < window.t1)) refuse(`the registered window runs from ${window.t0} to ${window.t1}`);
+  const mainPrefix = `main:${window.t0}->${window.t1}`;
+  const peerK = registeredInt("random_peer.k");
+  // Row R's registered windows: each year a registered number states is the one methods.json registers there, and the
+  // recency caveat reads the registered window RECENCY_R_WINDOW (whose sets read that window's cells).
+  const rRow = methods.robustness.rows.R;
+  for (const [key, n] of Object.entries(ev.numbers)) {
+    const m = /^R\.windows\.(\d)\.(t[01])$/.exec(key);
+    if (!m) continue;
+    const reg = rRow?.registered.windows?.[Number(m[1])]?.[m[2] as "t0" | "t1"];
+    if (reg === undefined || n.value !== reg) refuse(`registered number ${key} is ${JSON.stringify(n.value)}; methods.json registers row R's window ${m[1]} ${m[2]} as ${JSON.stringify(reg ?? null)}`);
+  }
+  const rWin = rRow?.registered.windows?.[RECENCY_R_WINDOW];
+  const recencyWindow = rWin && Number.isInteger(rWin.t0) && Number.isInteger(rWin.t1) ? `${rWin.t0}->${rWin.t1}` : undefined;
+  // The subject's CES manufacturing cells at the registered years, in the state its own main series are published under.
+  const subjectStates = new Set(
+    ["office", "goods_logistics"]
+      .flatMap((a) => (ev.sets[`${mainPrefix}:${a}`]?.members[ev.subject] as { series?: string[] } | undefined)?.series ?? [])
+      .map((s) => /^SMU(\d{2})(\d{5})/.exec(s))
+      .filter((m): m is RegExpExecArray => m !== null && m[2] === ev.subject)
+      .map((m) => m[1]),
+  );
+  const mfgSeries = subjectStates.size === 1 ? `SMU${[...subjectStates][0]}${ev.subject}${MANUFACTURING.supersector}00000001` : undefined;
+  const manufacturing = mfgSeries === undefined ? undefined : (MANUFACTURING.years.map((y) => `${mfgSeries}|${y}|M13`) as [string, string]);
+  /** What a slot's registered evidence key is read with (sentence.ts slotPins). */
+  const pinContext: Record<string, string | undefined> = {
+    main: mainPrefix,
+    subject: ev.subject,
+    k: String(peerK),
+    ri: String(RECENCY_R_WINDOW),
+    recency: recencyWindow === undefined ? undefined : `R:${recencyWindow}`,
+    mfg0: manufacturing?.[0],
+    mfg1: manufacturing?.[1],
+  };
 
   // Preconditions: every one passes.
   if (ev.preconditions.length === 0) refuse("the evidence records no preconditions");
@@ -558,13 +683,16 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
     if (p.gates !== gates) refuse(`precondition ${p.name} gates ${JSON.stringify(p.gates)}; registered, it gates ${gates}`);
     if (matchTemplate(form.threshold, p.threshold) === null) refuse(`precondition ${p.name} states the threshold ${JSON.stringify(p.threshold)}, which is not its registered one (${form.threshold})`);
     if (p.number !== undefined && !isNumberKey(p.number)) refuse(`precondition ${p.name} reads ${JSON.stringify(p.number)}, which is not an evidence key of a registered form`);
+    if (p.value !== null && typeof p.value !== "number" && typeof p.value !== "boolean") refuse(`precondition ${p.name}'s value ${JSON.stringify(p.value)} is not a number or true or false`);
   }
-  for (const p of ev.preconditions) {
+  for (const p of [...ev.preconditions, ...ev.suppressed.flatMap((s) => s.preconditions ?? [])]) {
     // The result the row prints is its value against its threshold, where the threshold is a comparison.
     const form = preconditionForm(p.name) as NonNullable<ReturnType<typeof preconditionForm>>;
     const holds =
       form.threshold === "C1.threshold.zero" ? p.value === 0 : form.threshold === "C1.threshold.true" ? p.value === true : form.threshold === "C1.threshold.universe_n" ? String(p.value) === matchTemplate(form.threshold, p.threshold)?.N : undefined;
     if (holds !== undefined && holds !== p.pass) refuse(`precondition ${p.name} says it ${p.pass ? "passes" : "fails"}, but ${JSON.stringify(p.value)} against ${JSON.stringify(p.threshold)} ${holds ? "holds" : "does not hold"}`);
+  }
+  for (const p of ev.preconditions) {
     if (p.number === undefined) continue;
     const n = ev.numbers[p.number] ?? refuse(`precondition ${p.name} reads evidence number ${p.number}, which does not exist`);
     if (n.value !== p.value) refuse(`precondition ${p.name} prints ${JSON.stringify(p.value)}, but its evidence number ${p.number} is ${JSON.stringify(n.value)}`);
@@ -611,7 +739,44 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
     } else if ("value" in s && n.value !== s.value) bad(s.value);
     return n;
   };
+  /**
+   * Every placeholder's slot is the evidence its template registers for it (sentence.ts slotPins): the subject, the
+   * count a list names, or the one evidence key, in the registered format and digits. A slot that carries a true
+   * number of another key ("2022" in the chart title from row R's window) is a refusal, as is a template that has
+   * no registered evidence for its slots.
+   */
+  const pinSlots = (where: string, id: TemplateId, slots: Record<string, Slot>): void => {
+    const pins = slotPins(id) ?? refuse(`${where} uses template ${id}, which has no registered evidence for its slots, so it may not print`);
+    for (const name of placeholders(templateText(id))) {
+      const pin = pins[name] ?? refuse(`${where}: template ${id} registers no evidence for {${name}}`);
+      const s = slots[name] ?? refuse(`${where} has no slot {${name}}`);
+      if (pin.kind === "subject") {
+        if (s.format !== undefined || !("cbsa" in s) || s.cbsa !== ev.subject) refuse(`${where} slot {${name}} is not the subject ${ev.subject}`);
+        continue;
+      }
+      let key: string | null;
+      try {
+        key = pin.key === null ? null : pinnedKey(pin.key, pinContext);
+      } catch (e) {
+        return refuse(`${where} slot {${name}}: ${(e as Error).message}`);
+      }
+      if (pin.kind === "list") {
+        const got = s.format === "list" ? (s.number ?? null) : undefined;
+        if (got !== key) refuse(`${where} slot {${name}} lists ${JSON.stringify(got ?? null)}, not the metros of ${JSON.stringify(key)}, the evidence its template registers`);
+        continue;
+      }
+      const got = hasNumber(s) && !("cbsa" in s) ? s.number : null;
+      if (got !== key) refuse(`${where} slot {${name}} reads ${JSON.stringify(got)}, not ${key}, the evidence its template registers`);
+      const format = pin.format === "bare" ? undefined : pin.format;
+      if (s.format !== format) refuse(`${where} slot {${name}} prints as ${JSON.stringify(s.format ?? null)}, not the registered ${JSON.stringify(format ?? null)}`);
+      const { digits, period } = s as { digits?: number; period?: string };
+      const wantDigits = pin.format === "num" || pin.format === "signedPct" ? (pin.digits ?? 0) : undefined;
+      if ((wantDigits === undefined ? digits : (digits ?? 0)) !== wantDigits) refuse(`${where} slot {${name}} prints ${JSON.stringify(digits ?? null)} digits, not the registered ${JSON.stringify(wantDigits ?? null)}`);
+      if (period !== pin.period) refuse(`${where} slot {${name}} is for the period ${JSON.stringify(period ?? null)}, not the registered ${JSON.stringify(pin.period ?? null)}`);
+    }
+  };
   const checkSlots = (where: string, id: TemplateId, slots: Record<string, Slot>): string => {
+    pinSlots(where, id, slots);
     for (const [name, s] of Object.entries(slots)) {
       numberOf(where, name, s);
       if (s.format === undefined && "cbsa" in s && s.cbsa !== ev.subject) refuse(`${where} slot {${name}} is ${s.cbsa}, the subject is ${ev.subject}`);
@@ -643,6 +808,9 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
   if (!h.primary) refuse("its headline is not primary");
   const clauses = h.clauses.map((c) => ({ id: registered("headline", c.id, c.text, "headline clause"), printed: c.printed }));
   if (new Set(clauses.map((c) => c.id)).size !== clauses.length) refuse(`the headline lists a clause twice: ${clauses.map((c) => c.id).join(", ")}`);
+  // The clauses in their registered order, and the H3b clause only after the ranks it extends.
+  if (canonicalJson(clauses.map((c) => c.id)) !== canonicalJson(ROLE_TEMPLATES["headline clause"])) refuse(`the headline's clauses are ${JSON.stringify(clauses.map((c) => c.id))}, not the registered ${JSON.stringify(ROLE_TEMPLATES["headline clause"])} in that order`);
+  if (clauses.some((c) => c.id === H3B && c.printed) && !clauses.some((c) => c.id === "C1.H3.ranks" && c.printed)) refuse("the H3b clause prints without the ranks clause it extends");
   for (const c of clauses) {
     if (c.printed && !ev.preconditions.some((p) => p.gates === c.id)) refuse(`clause ${c.id} prints but no precondition gates it`);
     if (!c.printed && !ev.suppressed.some((s) => s.clause === c.id && s.reason)) refuse(`clause ${c.id} does not print and is not listed as suppressed`);
@@ -655,6 +823,9 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
   }
   for (const p of ev.preconditions) {
     if (p.gates !== findingId && !clauses.some((c) => c.id === p.gates)) refuse(`precondition ${p.name} gates ${JSON.stringify(p.gates)}, which is neither the finding nor a clause of its headline`);
+    // The table is the preconditions that hold for what prints: one that gates a clause that does not print belongs
+    // to that clause's suppressed entry, not to a row that says "pass".
+    if (p.gates !== findingId && !clauses.some((c) => c.id === p.gates && c.printed)) refuse(`precondition ${p.name} passes and gates ${p.gates}, which does not print`);
   }
   if (new Set(ev.caveats.map((c) => c.id)).size !== ev.caveats.length) refuse(`the evidence lists a caveat twice: ${ev.caveats.map((c) => c.id).join(", ")}`);
   const h3bPrinted = clauses.some((c) => c.id === H3B && c.printed);
@@ -680,14 +851,15 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
   if (!subject || subject.format !== undefined || !("cbsa" in subject) || subject.cbsa !== ev.subject) return refuse("the headline has no subject slot for the evidence's subject");
   const methodLine = templateText(registered("method line", h.method_line.id, h.method_line.text, "method line"));
 
-  // The registered window: both ends are registered numbers, read from the pre-registration.
-  const t0 = h.slots.t0;
-  const t1 = h.slots.t1;
-  for (const [name, s, key] of [["t0", t0, "window.t0"], ["t1", t1, "window.t1"]] as const) {
-    if (!s || s.format !== "year" || s.number !== key || ev.numbers[key]?.kind !== "registered") refuse(`the headline's {${name}} is not the registered ${key}`);
+  // The registered window: both ends are registered numbers, read from the pre-registration. The headline's slots are
+  // these (slotPins); the labels, the methods lines and the status note are filled with this side's.
+  for (const [name, key] of [["t0", "window.t0"], ["t1", "window.t1"]] as const) {
+    const s = h.slots[name];
+    if (!s || s.format !== "year" || s.number !== key) refuse(`the headline's {${name}} is not the registered ${key}`);
   }
+  const t0: Slot = { format: "year", number: "window.t0", value: window.t0 };
+  const t1: Slot = { format: "year", number: "window.t1", value: window.t1 };
   const windowSlots: Record<string, Slot> = { t0, t1 };
-  const window = { t0: (t0 as { value: number }).value, t1: (t1 as { value: number }).value };
 
   // main.universe.n's formula names the cells it ranks on ("2019 M13") and the two ranks either side of the cutoff
   // ("rank_150 and rank_151"): each is read back here, from the window, the universe set and the two cells it cites.
@@ -725,8 +897,22 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
   // the subject's ranks, the publishable count, the beat-on-both and not-publishable counts, the medians and the
   // random peer's m and n are what the sets say, not only what the evidence numbers say.
   const nSlot = h.slots.N;
-  const mainPrefix = nSlot && hasNumber(nSlot) && nSlot.number.endsWith(".publishable") ? nSlot.number.slice(0, -".publishable".length) : refuse("the headline's {N} is not a publishable count");
-  if (mainPrefix !== `main:${window.t0}->${window.t1}`) refuse(`the headline's {N} counts ${mainPrefix}, not the main specification over the registered window`);
+  const nCounts = nSlot && hasNumber(nSlot) && nSlot.number.endsWith(".publishable") ? nSlot.number.slice(0, -".publishable".length) : refuse("the headline's {N} is not a publishable count");
+  if (nCounts !== mainPrefix) refuse(`the headline's {N} counts ${nCounts}, not the main specification over the registered window`);
+  // The medians the reference lines print are the main sets', axis by axis.
+  if (canonicalJson(Object.keys(ev.chart.medians).sort(byteCompare)) !== canonicalJson(["goods_logistics", "office"])) refuse(`the chart's medians are for ${JSON.stringify(Object.keys(ev.chart.medians))}, not the office and goods-and-logistics axes`);
+  for (const [axisKey, m] of Object.entries(ev.chart.medians)) {
+    if (m.number !== `${mainPrefix}.${axisKey}.median`) refuse(`the chart's ${axisKey} median reads ${JSON.stringify(m.number)}, not ${mainPrefix}.${axisKey}.median`);
+  }
+  // The random peer's k and grid are the registered ones, and each grid entry is the subject's probability at its k in the main specification.
+  const rp0 = ev.random_peer;
+  if (rp0.rule.k !== peerK || canonicalJson(rp0.rule.k_grid) !== canonicalJson(RANDOM_PEER_K_GRID) || !RANDOM_PEER_K_GRID.includes(peerK)) {
+    refuse(`the random peer is drawn at k = ${JSON.stringify(rp0.rule.k)} over the grid ${JSON.stringify(rp0.rule.k_grid)}; registered, k = ${peerK} (random_peer.k) over ${JSON.stringify(RANDOM_PEER_K_GRID)}`);
+  }
+  if (canonicalJson(Object.keys(rp0.grid).sort(byteCompare)) !== canonicalJson(RANDOM_PEER_K_GRID.map(String).sort(byteCompare))) refuse(`the random-peer grid is at k = ${Object.keys(rp0.grid).join(", ")}, not the registered ${RANDOM_PEER_K_GRID.join(", ")}`);
+  for (const [kg, g] of Object.entries(rp0.grid)) {
+    if (g.number !== `${mainPrefix}.${ev.subject}.random_peer.k${kg}`) refuse(`the random-peer grid at k = ${kg} reads ${JSON.stringify(g.number)}, not ${mainPrefix}.${ev.subject}.random_peer.k${kg}`);
+  }
   const mainProblems = [
     ...anchorMainToChart(ev, mainPrefix, "office", "goods_logistics"),
     ...recomputeSpec(ev, mainPrefix, ev.subject),
@@ -757,6 +943,101 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
     if (!r || !hasNumber(r) || r.number !== `${mainPrefix}.${ev.subject}.${axis}.${what}`) refuse(`the headline's {${name}} is not the subject's ${axis} ${what} in ${mainPrefix}`);
   }
 
+  // The precondition table, row by row, as this side prints it: each value recomputed here (a count of the metros
+  // the chart names, a membership of the main sets, the subject's flagged cells) or read from the one evidence number
+  // its name registers (main.universe.n; a row's beat-on-both or not-publishable count, recomputed from that row's
+  // sets where its window is evaluated), the threshold the registered text and the result the value against it. A
+  // precondition with neither has no value this side can print, and refuses.
+  const universeCount = universeN.value as number;
+  /** The one window a row is evaluated over: the registered window for main, else the row's only window in methods.json. */
+  const rowWindow = (row: string): string | undefined => {
+    if (row === "main") return `${window.t0}->${window.t1}`;
+    const ws = Object.keys(methods.robustness.rows[row]?.windows ?? {});
+    return ws.length === 1 ? ws[0] : undefined;
+  };
+  const preconditionRow = (p: Precondition): Insight["preconditions"][number] => {
+    const form = preconditionForm(p.name) as NonNullable<ReturnType<typeof preconditionForm>>;
+    const reads = (key: string | undefined): void => {
+      if (p.number !== key) refuse(`precondition ${p.name} reads ${JSON.stringify(p.number ?? null)}, not ${JSON.stringify(key ?? null)}, the evidence its name registers`);
+    };
+    let value: number | boolean;
+    switch (p.name) {
+      case "universe.n":
+        reads("main.universe.n");
+        value = universeCount;
+        break;
+      case "universe.nulls_named":
+        reads(undefined);
+        value = ev.chart.not_published.length;
+        break;
+      case "universe.fail_closed_named":
+        reads(undefined);
+        value = ev.chart.fail_closed.length;
+        break;
+      case "h3.subject_publishable":
+      case "h3b.subject_publishable":
+        reads(undefined);
+        value = ["office", "goods_logistics"].every((a) => Object.hasOwn(ev.sets[`${mainPrefix}:${a}`]?.members ?? {}, ev.subject));
+        break;
+      case "h3.cells_not_annual_or_footnoted":
+        reads(undefined);
+        value = ["office", "goods_logistics"]
+          .flatMap((a) => ev.numbers[`${mainPrefix}.${ev.subject}.${a}.growth_pct`]?.provenance ?? [])
+          .filter((t) => {
+            const [, , period, , footnote] = t.split("|");
+            return period !== "M13" || footnote !== "";
+          }).length;
+        break;
+      case "h3b.recency_caveat_prints":
+        reads(undefined);
+        value = ev.caveats.some((c) => c.id === RECENCY && c.printed);
+        break;
+      default: {
+        if (!form.row) return refuse(`precondition ${p.name} has no value this side can recompute or read from the evidence, so it does not print`);
+        const w = rowWindow(form.row) ?? refuse(`precondition ${p.name} is for row ${form.row}, which methods.json does not evaluate over one window`);
+        if (p.window !== w) refuse(`precondition ${p.name} is for the window ${JSON.stringify(p.window ?? null)}; row ${form.row} is evaluated over ${w}`);
+        const key = `${form.row}:${w}.${ev.subject}.${p.name.startsWith("h3b.no_metro_beat_both.") ? "beat_on_both" : "not_publishable_could_beat_both"}`;
+        reads(key);
+        const n = ev.numbers[key] ?? refuse(`precondition ${p.name} reads ${key}, which the evidence does not have`);
+        // The count is recomputed from the row's sets (recomputeSpec, here and in the robustness rows below).
+        const recount = recomputeSpec(ev, `${form.row}:${w}`, ev.subject);
+        if (recount.length) refuse(`precondition ${p.name}: the evidence's counts disagree with its sets: ${recount.join("; ")}`);
+        if (typeof n.value !== "number") return refuse(`precondition ${p.name} reads ${key}, which has no value`);
+        value = n.value;
+      }
+    }
+    const threshold = thresholdText(form.threshold, universeCount);
+    const holds =
+      form.threshold === "C1.threshold.zero"
+        ? value === 0
+        : form.threshold === "C1.threshold.true"
+          ? value === true
+          : form.threshold === "C1.threshold.universe_n"
+            ? value === universeN.registered_n
+            : // Named-metro rows: the metros it names are the chart's (checked above), which is what its threshold asks.
+              form.threshold === "C1.threshold.nulls_named" || form.threshold === "C1.threshold.fail_closed_named";
+    if (p.value !== value) refuse(`precondition ${p.name} prints ${JSON.stringify(p.value)}, but the evidence gives ${JSON.stringify(value)}`);
+    if (p.threshold !== threshold) refuse(`precondition ${p.name} states the threshold ${JSON.stringify(p.threshold)}, not ${JSON.stringify(threshold)}`);
+    if (p.pass !== holds) refuse(`precondition ${p.name} says it ${p.pass ? "passes" : "fails"}, but ${JSON.stringify(value)} against ${JSON.stringify(threshold)} ${holds ? "holds" : "does not hold"}`);
+    return { name: p.name, gates: p.gates, value, threshold, pass: holds };
+  };
+  // Each precondition once, among those that pass and those a suppressed clause names: the table prints a row per
+  // entry, and a reason names each failing one once.
+  {
+    const names = [...ev.preconditions, ...ev.suppressed.flatMap((s) => s.preconditions ?? [])].map((p) => p.name);
+    const twice = [...new Set(names.filter((n, i) => names.indexOf(n) !== i))];
+    if (twice.length) refuse(`the evidence records precondition ${twice.map((n) => JSON.stringify(n)).join(", ")} more than once`);
+  }
+  const preconditionTable = ev.preconditions.map(preconditionRow);
+  // A suppressed clause's preconditions print only by name, in its reason: each one reads the evidence its name registers.
+  for (const p of ev.suppressed.flatMap((s) => s.preconditions ?? [])) {
+    const form = preconditionForm(p.name) as NonNullable<ReturnType<typeof preconditionForm>>;
+    if (!form.row) continue;
+    const w = rowWindow(form.row);
+    const key = w === undefined ? undefined : `${form.row}:${w}.${ev.subject}.${p.name.startsWith("h3b.no_metro_beat_both.") ? "beat_on_both" : "not_publishable_could_beat_both"}`;
+    if (p.number !== key || p.window !== w) refuse(`suppressed precondition ${p.name} reads ${JSON.stringify(p.number ?? null)} over ${JSON.stringify(p.window ?? null)}, not ${JSON.stringify(key ?? null)}, the evidence its name registers`);
+  }
+
   // Why a clause or a caveat does not print: one of the registered forms, each slot in it read back from the evidence.
   const reasonIs = (what: string, reason: string | undefined, forms: ReasonForm[]): void => {
     if (reason !== undefined && forms.some(([id, ok]) => {
@@ -779,8 +1060,23 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
   const caveats: Insight["caveats"] = [];
   const notPrinted: Insight["notPrinted"] = ev.suppressed.map((s) => ({ id: s.clause, reason: s.reason }));
   for (const c of ev.caveats) {
-    if (!c.printed) reasonIs(`caveat ${c.id}`, c.reason, caveatReasonForms(c, ev, methods));
+    if (!c.printed) reasonIs(`caveat ${c.id}`, c.reason, caveatReasonForms(c, ev, methods, { recencyWindow, manufacturing }));
     const id = registered(`caveat ${c.id}`, c.id, c.text, "caveat");
+    if (!c.printed && Object.keys(c.slots ?? {}).length) {
+      // Only its reason prints, but the slots a caveat that does not print carries are held to its registered evidence too.
+      pinSlots(`caveat ${c.id}`, id, c.slots ?? {});
+      for (const [name, s] of Object.entries(c.slots ?? {})) numberOf(`caveat ${c.id}`, name, s);
+    }
+    if (c.printed && id === RECENCY && (c.row !== "R" || c.window !== recencyWindow)) {
+      refuse(`the recency caveat reads row ${JSON.stringify(c.row ?? null)}'s ${JSON.stringify(c.window ?? null)} window, not row R's registered window ${RECENCY_R_WINDOW} (${JSON.stringify(recencyWindow ?? null)})`);
+    }
+    if (c.printed && id === "C1.caveat.ces_manufacturing") {
+      // "CES shows": both cells published, without a footnote.
+      for (const key of manufacturing ?? []) {
+        const [series, year, period] = key.split("|");
+        if (publishedCell(ev, series, `${year}|${period}`)?.footnote !== "") refuse(`caveat ${id} prints, but ${key} is not a published cell without a footnote`);
+      }
+    }
     if (c.printed) {
       if (id === "C1.caveat.not_published" || id === "C1.caveat.not_published.plural") {
         const m = c.slots?.metros;
@@ -807,9 +1103,8 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
   const rp = ev.random_peer;
   let randomPeer: string | null = null;
   const randomPeerGrid: Array<{ k: number; printed: string; number: string; arithmetic: string }> = [];
-  // n is the publishable metros other than the subject: the universe line's {n_pub} count, less one.
-  const nPub = ev.chart.universe_line.slots.n_pub;
-  const pubMain = nPub && hasNumber(nPub) ? ev.numbers[nPub.number] : undefined;
+  // n is the publishable metros other than the subject: the main specification's publishable count (the universe line's {n_pub}), less one.
+  const pubMain = ev.numbers[`${mainPrefix}.publishable`];
   const checkProbability = (key: string, k: number): { n: EvidenceNumber; arithmetic: string } => {
     const n = ev.numbers[key] ?? refuse(`random-peer number ${key} does not exist`);
     if (n.kind !== "probability" || n.k !== k || n.m == null || n.n == null || !n.exact || typeof n.value !== "number") return refuse(`${key} is not a probability at k = ${k}`);
@@ -826,7 +1121,7 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
     const p = rp.slots.p;
     if (!k || !("value" in k) || k.value !== rp.rule.k || !hasNumber(k) || ev.numbers[k.number]?.kind !== "registered") refuse("the random-peer k is not the registered k");
     if (!p || !hasNumber(p) || rp.grid[String(rp.rule.k)]?.number !== p.number) refuse("the random-peer probability is not the grid's entry at the registered k");
-    for (const kg of rp.rule.k_grid) {
+    for (const kg of RANDOM_PEER_K_GRID) {
       const g = rp.grid[String(kg)] ?? refuse(`the random-peer grid has no k = ${kg}`);
       if (!isNumberKey(g.number)) refuse(`the random-peer grid at k = ${kg} reads ${JSON.stringify(g.number)}, which is not an evidence key of a registered form`);
       const { n, arithmetic } = checkProbability(g.number, kg);
@@ -910,6 +1205,23 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
       if (r.label !== templateText("C1.chart.median_label")) refuse(`reference line on "${axis.label}" is labelled ${JSON.stringify(r.label)}`);
     }
   }
+  // The axes and the bubble as this side draws them: the registered labels, formats, digits and step (sentence.ts
+  // CHART_AXES; a format is the unit a printed number claims), and the evidence's median as each axis's one reference
+  // line. The sidecar's must be exactly these, so no format, digits, step or domain of the producer's is drawn.
+  const medianLabel = templateText("C1.chart.median_label");
+  const axisOf = (key: "x" | "y", axisKey: "office" | "goods_logistics", id: TemplateId): BubbleSpec["x"] => ({
+    label: fill(id, windowSlots),
+    format: CHART_AXES[key].format,
+    digits: CHART_AXES[key].digits,
+    step: CHART_AXES[key].step,
+    reference: [{ value: ch.medians[axisKey].value, label: medianLabel }],
+  });
+  const xAxis = axisOf("x", "office", "C1.chart.x_label");
+  const yAxis = axisOf("y", "goods_logistics", "C1.chart.y_label");
+  const sizeAxis: BubbleSpec["size"] = { label: fill("C1.chart.size_label", windowSlots), format: CHART_AXES.size.format, digits: CHART_AXES.size.digits, negative: CHART_AXES.size.negative };
+  for (const [what, got, want] of [["horizontal axis", bubble.x, xAxis], ["vertical axis", bubble.y, yAxis], ["bubble size", bubble.size, sizeAxis]] as const) {
+    if (canonicalJson(got) !== canonicalJson(want)) refuse(`the chart's ${what} is ${canonicalJson(got)}, not the registered ${canonicalJson(want)}`);
+  }
 
   // Rows and values.
   const rowIds = Object.keys(ch.rows).sort(byteCompare);
@@ -923,6 +1235,35 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
       if (n.value !== d[k]) refuse(`chart row ${d.id} ${k} is ${JSON.stringify(d[k])}, evidence number ${key} is ${JSON.stringify(n.value)}`);
     }
   }
+  /** The cells the main specification reads at its two ends, "year|period". */
+  const mainEnds = (["t0", "t1"] as const).flatMap((e) => (ev.sets[`${mainPrefix}:office`]?.periods?.[e] ?? []).map(([y, p]) => `${y}|${p}`));
+  /**
+   * Whether a not-published code is so of the evidence's cells: mlc_not_published, that the table has no series of
+   * the metro's supersector 15 and not both 10 and 20; no_value:{key}, that the key is a cell of one of the metro's
+   * registered parts at an end of the main window and the table has no such cell; zero_base, that one of the
+   * metro's main growths is null and the cells it reads at the window's start sum to 0.
+   */
+  const notPublishedHolds = (code: string, cbsa: string): boolean => {
+    if (matchTemplate("C1.reason.mlc_not_published", code)) {
+      const has = (part: string) => seriesOfPart(ev, cbsa, part).length > 0;
+      return !has("15") && !(has("10") && has("20"));
+    }
+    if (matchTemplate("C1.reason.zero_base", code)) {
+      return ["office", "goods_logistics"].some((a) => {
+        const n = ev.numbers[`${mainPrefix}.${cbsa}.${a}.growth_pct`];
+        const start = (n?.provenance ?? []).map((t) => t.split("|")).filter(([, y, p]) => `${y}|${p}` === mainEnds[0]);
+        return n !== undefined && n.value === null && start.length > 0 && start.reduce((s, t) => s + Number(t[3]), 0) === 0;
+      });
+    }
+    const g = matchTemplate("C1.reason.no_value", code);
+    if (g && CELL_KEY.test(g.key)) {
+      const [series, y, p] = g.key.split("|");
+      const part = partOf(series);
+      const parts = ["office", "goods_logistics"].flatMap((a) => axisParts("main", a)).flatMap((x) => (x === "MLC" ? ["15", "10", "20"] : [x]));
+      return part !== null && part.metro === cbsa && parts.includes(part.part) && mainEnds.includes(`${y}|${p}`) && publishedCell(ev, series, `${y}|${p}`) === null;
+    }
+    return false;
+  };
   const plotted = bubble.data.filter((d) => isPlotted(bubble, d)).length;
   if (plotted !== ch.plotted) refuse(`the chart plots ${plotted} rows, the evidence says ${ch.plotted}`);
   for (const m of ch.not_published) {
@@ -940,6 +1281,10 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
       .filter((s) => s.row === "main" && s.window === `${window.t0}->${window.t1}`)
       .map((s) => s.excluded?.[m.cbsa]);
     if (left.length === 0 || left.some((r) => r !== m.reason)) refuse(`${m.title}'s reason is not the one the main sets give for leaving it out`);
+    // And what each code says is so of the published cells: "no_value" names a cell the table does not publish.
+    for (const part of (m.reason ?? "").split("; ")) {
+      if (!notPublishedHolds(part, m.cbsa)) refuse(`${m.title} is not published for the reason ${JSON.stringify(part)}, which the evidence's published cells do not bear out`);
+    }
   }
 
   // Labels: exactly the evidence's request, in its order, which the renderer keeps, on canvases that can draw that many.
@@ -1074,8 +1419,6 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
   if (bubble.slug !== slug) refuse(`the chart's slug is ${JSON.stringify(bubble.slug)}, not the registered ${JSON.stringify(slug)}`);
   // The spec the cards, the page and the downloads draw: every word in it this side's (the checks above say the
   // sidecar's are the same), every number the sidecar's that the evidence gives.
-  const median = templateText("C1.chart.median_label");
-  const axisOf = (a: BubbleSpec["x"], id: TemplateId) => ({ ...a, label: fill(id, windowSlots), ...(a.reference ? { reference: a.reference.map((r) => ({ value: r.value, label: median })) } : {}) });
   try {
     spec = parseChartSpec({
       version: 1,
@@ -1088,9 +1431,9 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
       subject: ev.subject,
       ...(subjectNote !== null ? { subjectNotes: [subjectNote] } : {}),
       provenance: records,
-      x: axisOf(bubble.x, "C1.chart.x_label"),
-      y: axisOf(bubble.y, "C1.chart.y_label"),
-      size: { ...bubble.size, label: fill("C1.chart.size_label", windowSlots) },
+      x: xAxis,
+      y: yAxis,
+      size: sizeAxis,
       labels: { ids: requested, topBySize: 0, extremes: false },
       data,
     });
@@ -1227,6 +1570,7 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
 
   // The methods page's lines, rendered here and required to match.
   const methodSlots: Record<string, Slot> = { t0, t1, N: ch.universe_line.slots.N };
+  for (const id of [...METHODS_IS, ...METHODS_IS_NOT, "C1.methods.status" as const]) pinSlots(`the methods page's ${id}`, id, methodSlots);
   const is = METHODS_IS.map((id) => fill(id, methodSlots));
   const isNot = METHODS_IS_NOT.map((id) => fill(id, methodSlots));
   for (const id of METHODS_IS) addRows("Method: what this is", id, methodSlots);
@@ -1256,9 +1600,40 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
   const robustness: RobustnessSummary[] = [];
   /** How each robustness column is computed: the evidence's own formula, once per formula, with the rows that use it. */
   const formulas = new Map<string, { column: string; rows: Set<string> }>();
+  /**
+   * The windows a robustness row is registered over, as its evidence keys label them: a definition or peers row the
+   * registered window; an end-year row its registered start (the window's) to its registered end, a year or a run of
+   * months; row R its registered windows; the QCEW row its registered window. Its sets read those windows' cells
+   * (setPeriodProblems), so the window the table prints is the one the numbers were computed over.
+   */
+  const registeredWindows = (rid: string, row: RobustnessRow): string[] => {
+    const r = row.registered;
+    switch (row.kind) {
+      case "definition":
+      case "peers":
+        return [`${window.t0}->${window.t1}`];
+      case "end_year": {
+        const w = r.window;
+        if (!w || w.t0 !== window.t0) return refuse(`robustness row ${rid} is registered from ${JSON.stringify(w?.t0 ?? null)}, not the window's start ${window.t0}`);
+        if (typeof w.t1 === "number") return [`${w.t0}->${w.t1}`];
+        return [monthlyLabel(w.t0, w.t1) ?? refuse(`robustness row ${rid}'s end ${JSON.stringify(w.t1)} names no run of months`)];
+      }
+      case "disclosure":
+        return (r.windows ?? []).map((x) => `${x.t0}->${x.t1}`);
+      case "cross_source": {
+        const w = r.window;
+        if (!w || typeof w.t1 !== "number") return refuse(`robustness row ${rid} has no registered window of two years`);
+        return [`${w.t0}->${w.t1}`];
+      }
+      default:
+        return refuse(`robustness row ${rid} is of no registered kind`);
+    }
+  };
   for (const rid of Object.keys(methods.robustness.rows).sort(byteCompare)) {
     const row = methods.robustness.rows[rid];
     const cites = new Map<string, string>();
+    // What it gates is the registered list's, whether or not the clause prints.
+    if (canonicalJson(row.gates ?? []) !== canonicalJson(GATING_ROWS_H3B.includes(rid) ? [H3B] : [])) refuse(`robustness row ${rid} gates ${JSON.stringify(row.gates ?? [])}; registered, it gates ${GATING_ROWS_H3B.includes(rid) ? H3B : "nothing"}`);
     for (const w of Object.keys(row.windows).sort(byteCompare)) {
       const win = row.windows[w];
       const check = (column: string, key: string, value: number) => {
@@ -1286,6 +1661,7 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
       if (win.subject !== subjectId) refuse(`robustness ${rid} ${w} is recomputed for ${JSON.stringify(win.subject)}, not the subject ${JSON.stringify(subjectId)}`);
       const recomputed = recomputeSpec(ev, prefix, win.subject);
       if (recomputed.length) refuse(`robustness ${rid} ${w}: the evidence's counts disagree with its sets: ${recomputed.join("; ")}`);
+      if (win.axes && canonicalJson(Object.keys(win.axes).sort(byteCompare)) !== canonicalJson([...rowAxes(rid)].sort(byteCompare))) refuse(`robustness ${rid} ${w} prints the axes ${JSON.stringify(Object.keys(win.axes))}, not row ${rid}'s ${JSON.stringify(rowAxes(rid))}`);
       for (const [axis, a] of Object.entries(win.axes ?? {})) {
         if (a.growth_pct.number !== `${prefix}.${win.subject}.${axis}.growth_pct` || a.rank.number !== `${prefix}.${win.subject}.${axis}.rank`) refuse(`robustness ${rid} ${w}: its ${axis} numbers are not the subject's in ${prefix}`);
       }
@@ -1370,6 +1746,11 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
       }
       robustness.push({ ...base, axes, beatOnBoth: both ? { count: num(both.value), names, number: both.number } : null });
     }
+    // Its windows are the registered ones, each the window its numbers read (above), whose sets read its cells.
+    const windows = registeredWindows(rid, row);
+    if (canonicalJson(Object.keys(row.windows).sort(byteCompare)) !== canonicalJson([...windows].sort(byteCompare))) {
+      refuse(`robustness row ${rid} is evaluated over ${JSON.stringify(Object.keys(row.windows))}, not its registered windows ${JSON.stringify(windows)}`);
+    }
     // A peer set chosen by a file no number cites (row P1: the Census estimates) is cited too.
     for (const sid of row.registered.source_ids ?? []) {
       const s = shaping.find((x) => x.id === sid);
@@ -1400,9 +1781,9 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
     slug: spec.slug,
     bundle: bundle.name,
     release: manifest.release,
-    rulesVersion: manifest.rules_version,
+    rulesVersion: RULES_VERSION,
     status: manifest.status,
-    panel: f.panel,
+    panel: FINDING_PANEL[findingId],
     headline,
     description,
     chartTitle,
@@ -1424,8 +1805,8 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
     is,
     isNot,
     panelB: { text: panelBText, gate: methods.panel_b.gate.map((g) => ({ name: g.name, rule: g.rule, status: g.status })) },
-    // What the table prints of each, and nothing else of the producer's.
-    preconditions: ev.preconditions.map((p) => ({ name: p.name, gates: p.gates, value: p.value, threshold: p.threshold, pass: p.pass })),
+    // What the table prints of each, as this side recomputed it (preconditionRow), and nothing else of the producer's.
+    preconditions: preconditionTable,
     arithmetic,
     robustness,
     robustnessFormulas: [...formulas.entries()].map(([formula, f]) => ({ column: f.column, rows: [...f.rows].sort(byteCompare), formula })),
