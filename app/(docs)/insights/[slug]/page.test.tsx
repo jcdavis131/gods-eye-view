@@ -101,6 +101,8 @@ describe("the insight page", () => {
     expect(t).toContain("published cells and estimates computed from them");
     expect(t).not.toMatch(/every number (in it )?is a published cell/i);
     expect(html).toContain(`href="/insights/${SLUG}/data.csv?all=1"`);
+    // The card's size as the social route draws it (checked against the decoded PNG below).
+    expect(t).toContain("card (PNG, 1080 × 1350)");
     expect(html).toContain('<script type="application/ld+json">');
     expect(html).toContain('"isBasedOn"');
   });

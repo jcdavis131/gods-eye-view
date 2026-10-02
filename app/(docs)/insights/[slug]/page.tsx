@@ -32,6 +32,7 @@ import { insightBySlug, publishedInsights } from "@/lib/insights/build";
 import { ALL_ROWS_QUERY } from "@/lib/insights/downloads";
 import { insightPath } from "@/lib/insights/feed";
 import { insightJsonLd, insightTrail } from "@/lib/insights/jsonld";
+import { CANVASES } from "@/lib/insights/render/canvas";
 import { renderSvg } from "@/lib/insights/render/render";
 import { chartTable } from "@/lib/insights/render/table";
 import { gatesCopy, robustnessKind } from "@/lib/insights/sentence";
@@ -208,7 +209,7 @@ export default async function InsightPage({ params }: Params) {
           </a>
           {" · "}
           <a href={`${base}/social.png`} className="text-primary underline">
-            card (PNG, 1080 × 1350)
+            card (PNG, {CANVASES.social.width} × {CANVASES.social.height})
           </a>
         </p>
         <p className="mt-1 max-w-[48rem] text-[13px] leading-relaxed text-muted-foreground">
