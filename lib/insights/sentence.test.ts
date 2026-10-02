@@ -12,6 +12,7 @@ import { loadBundle } from "./load";
 import {
   DEK_LADDER_RECENCY,
   FORMULA_IDS,
+  ROLE_TEMPLATES,
   TEMPLATE_IDS,
   THRESHOLDS,
   TITLE_LADDER_H3B,
@@ -20,9 +21,12 @@ import {
   fillWords,
   formatSlot,
   formulaText,
+  gatesCopy,
+  h3bWordingPatterns,
   headlineSentence,
   isTemplateId,
   matchTemplate,
+  mayPrintAs,
   panelBGateTemplate,
   placeholders,
   registeredFormula,
@@ -205,6 +209,41 @@ describe("registered texts", () => {
     expect(matchTemplate("C1.reason.zero_base", "zero_base; zero_base")).toBeNull();
     expect(matchTemplate("C1.reason.precondition_fails", "a precondition fails: ")).toBeNull();
     expect(matchTemplate("C1.threshold.zero", "== 0.0")).toBeNull();
+  });
+});
+
+describe("where each template may print", () => {
+  const roles = Object.keys(ROLE_TEMPLATES) as Array<keyof typeof ROLE_TEMPLATES>;
+  it("gives no template two places, and the H3b clause the headline alone", () => {
+    const all = roles.flatMap((r) => [...ROLE_TEMPLATES[r]]);
+    expect(new Set(all).size).toBe(all.length);
+    for (const id of all) expect(isTemplateId(id), id).toBe(true);
+    expect(roles.filter((r) => mayPrintAs(r, "C1.H3b"))).toEqual(["headline clause"]);
+    for (const id of TITLE_LADDER_H3B) expect(roles.filter((r) => mayPrintAs(r, id)), id).toEqual(["chart title"]);
+  });
+  it("places every producer text the bundle prints where it prints", () => {
+    for (const c of H.clauses) expect(mayPrintAs("headline clause", c.id as TemplateId), c.id).toBe(true);
+    for (const c of EV.caveats) expect(mayPrintAs("caveat", c.id as TemplateId), c.id).toBe(true);
+    expect(mayPrintAs("random peer", EV.random_peer.id as TemplateId)).toBe(true);
+    expect(mayPrintAs("chart title", EV.chart.title.id as TemplateId)).toBe(true);
+    expect(mayPrintAs("chart subtitle", EV.chart.dek.id as TemplateId)).toBe(true);
+    expect(mayPrintAs("subject label", EV.chart.subject_note!.id as TemplateId)).toBe(true);
+    expect(mayPrintAs("universe line", EV.chart.universe_line.id as TemplateId)).toBe(true);
+    expect(mayPrintAs("method line", H.method_line.id as TemplateId)).toBe(true);
+  });
+  it("finds the H3b clause's words in any case and with any subject, and not the recency caveat's", () => {
+    const says = (t: string) => h3bWordingPatterns().some((re) => re.test(t));
+    expect(says(fill("C1.H3b", H.slots))).toBe(true);
+    expect(says("No major metro beat Houston on both.")).toBe(true);
+    expect(says(fill("C1.chart_title.h3b.2", EV.chart.title.slots))).toBe(true);
+    expect(says(fill("C1.caveat.recency", EV.caveats.find((c) => c.id === "C1.caveat.recency")!.slots!))).toBe(false);
+    expect(says(fill("C1.chart_title.raw", { ...EV.chart.title.slots, N: EV.chart.universe_line.slots.N }))).toBe(false);
+  });
+  it("quotes the H3b clause in the robustness table only when it prints", () => {
+    expect(gatesCopy(["C1.H3b"], () => true)).toBe('yes: the clause "no major metro beat it on both"');
+    expect(gatesCopy(["C1.H3b"], () => false)).toBe("yes: clause C1.H3b, which does not print");
+    expect(h3bWordingPatterns().some((re) => re.test(gatesCopy(["C1.H3b"], () => false)))).toBe(false);
+    expect(gatesCopy([], () => true)).toBe("no (reported only)");
   });
 });
 

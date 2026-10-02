@@ -92,6 +92,10 @@ describe("the insight page", () => {
     expect(t).toContain("not against each metro's 2019 twins.");
     expect(t).toContain("P2: Peer set");
     expect(t).toContain("99 of 100");
+    // The clause prints, so the captions and the robustness table may quote it (page.suppressed.test.tsx: when it does not, they name it by id).
+    expect(i.h3bPrinted).toBe(true);
+    expect(t).toContain("and the clause that no major metro beat Austin on both prints only because each of its rows does.");
+    expect(t).toContain('yes: the clause "no major metro beat it on both"');
     for (const f of i.robustnessFormulas) expect(t).toContain(f.formula);
     // The universe and P1 cite the files that pick the metros: OMB's delineation and the Census estimates.
     for (const s of i.shaping) expect(t).toContain(s.citation);

@@ -11,59 +11,25 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderRss } from "@/lib/feed/render";
-import { InsightRefused, buildInsight, h3bGate, insightBySlug, publishedInsights } from "./build";
+import { InsightRefused, buildInsight, h3bGate, h3bWordingAt, insightBySlug, publishedInsights } from "./build";
 import { insightCsv, insightJson } from "./downloads";
 import { insightsFeedDoc } from "./feed";
 import { HEADLINE_MAX, insightJsonLd, reportHeadline } from "./jsonld";
-import { loadBundle, readBundle, type LoadedBundle } from "./load";
+import { readBundle, type LoadedBundle } from "./load";
 import { CANVAS_IDS } from "./render/canvas";
 import { LABEL_CAP, layoutBubble } from "./render/charts/bubble";
 import { renderSvg } from "./render/render";
 import { parseChartSpec, type BubbleSpec } from "./render/spec";
 import { METHODS_IS, METHODS_IS_NOT, fill, formatSlot, templateText, type TemplateId } from "./sentence";
 import { THEMES } from "./render/tokens";
-import type { BundleManifest, Evidence, Methods } from "./types";
+import { BASE, NAME, ROOT, suppressH3b, suppressedPath, variant, type Parts } from "./testFixtures";
 
-const ROOT = path.resolve(__dirname, "../..");
-const NAME = "places-v0.1.1";
 const DIR = path.join(ROOT, "lib/insights/data", NAME);
-const BASE = loadBundle(NAME, ROOT);
 const EV = BASE.findings[0].evidence;
 const SIDECAR = JSON.parse(readFileSync(path.join(DIR, "charts/C1-raw.sidecar.json"), "utf8")) as BubbleSpec;
 const SLUG = "c1-raw-office-goods-job-growth-2019-2025";
 const TITLE = "No Major Metro Beat Austin on Both Office and Goods-and-Logistics Job Growth, 2019 to 2025";
 const P2_BOTH = "P2:2019->2025.12420.beat_on_both";
-
-interface Parts {
-  manifest: BundleManifest;
-  methods: Methods;
-  evidence: Evidence;
-  chart: BubbleSpec;
-  template: string;
-}
-
-/** The bundle with one change applied to deep copies of its documents. */
-function variant(change: (p: Parts) => void): LoadedBundle {
-  const f = BASE.findings[0];
-  const p: Parts = {
-    manifest: structuredClone(BASE.manifest),
-    methods: structuredClone(BASE.methods),
-    evidence: structuredClone(f.evidence),
-    chart: structuredClone(f.chart) as BubbleSpec,
-    template: f.template,
-  };
-  change(p);
-  return { ...BASE, manifest: p.manifest, methods: p.methods, findings: [{ ...f, evidence: p.evidence, chart: p.chart, template: p.template }] };
-}
-
-/** The H3b clause suppressed the way the producer suppresses it: a failing row named in the registered reason form. */
-function suppressH3b(p: Parts): void {
-  p.evidence.headline.clauses.find((c) => c.id === "C1.H3b")!.printed = false;
-  const failing = { ...structuredClone(p.evidence.preconditions.find((x) => x.name === "h3b.no_metro_beat_both.P2")!), pass: false, value: 1 };
-  p.evidence.suppressed.push({ clause: "C1.H3b", reason: "a precondition fails: h3b.no_metro_beat_both.P2", preconditions: [failing] });
-  p.evidence.preconditions = p.evidence.preconditions.filter((x) => x.gates !== "C1.H3b");
-  p.methods.panel_a.headline.clauses["C1.H3b"] = false;
-}
 
 function refusal(b: LoadedBundle): string {
   try {
@@ -399,6 +365,120 @@ describe("the H3b gate", () => {
   });
 });
 
+describe("the H3b clause's words print only through its gate", () => {
+  const H3B_TEXT = templateText("C1.H3b");
+  const SUBJECT = EV.headline.slots.subject;
+  /** The suppressed path with one more change: the H3b clause does not print, so its gate never runs. */
+  const suppressedAnd = (change: (p: Parts) => void) =>
+    variant((p) => {
+      suppressedPath(p);
+      change(p);
+    });
+
+  it("builds the suppressed path clean, and the printed path with the words in the headline, its description and the chart title only", () => {
+    expect(h3bWordingAt(buildInsight(variant(suppressedPath), "C1-raw"))).toEqual([]);
+    expect(I.h3bPrinted).toBe(true);
+    expect(h3bWordingAt(I).sort()).toEqual(["chartTitle", "description", "headline", "spec.headline"]);
+  });
+
+  it("refuses the H3b template as a caveat", () => {
+    const b = suppressedAnd((p) => void p.evidence.caveats.push({ id: "C1.H3b", printed: true, text: H3B_TEXT, slots: { subject: SUBJECT } }));
+    expect(refusal(b)).toMatch(/caveat C1\.H3b uses template C1\.H3b, which a caveat may not print \(only C1\.caveat\.recency, /);
+  });
+
+  it("refuses the H3b template as the random-peer sentence", () => {
+    const b = suppressedAnd((p) => {
+      p.evidence.random_peer.id = "C1.H3b";
+      p.evidence.random_peer.text = H3B_TEXT;
+    });
+    expect(refusal(b)).toMatch(/random peer uses template C1\.H3b, which a random peer may not print \(only C1\.random_peer\)/);
+  });
+
+  it("refuses an H3b title rung as an extra headline clause, gated by its own precondition", () => {
+    const b = suppressedAnd((p) => {
+      p.evidence.headline.clauses.push({ id: "C1.chart_title.h3b.2", text: templateText("C1.chart_title.h3b.2"), printed: true, slots: ["subject", "t0", "t1"] });
+      p.evidence.preconditions.push({ ...structuredClone(p.evidence.preconditions[0]), name: "extra.clause", gates: "C1.chart_title.h3b.2" });
+      p.methods.panel_a.headline.clauses["C1.chart_title.h3b.2"] = true;
+    });
+    expect(refusal(b)).toMatch(/headline uses template C1\.chart_title\.h3b\.2, which a headline clause may not print \(only C1\.H3\.ranks, C1\.H3b, C1\.H3\.twins\)/);
+  });
+
+  it("refuses the H3b clause listed twice in the headline", () => {
+    const b = suppressedAnd((p) => void p.evidence.headline.clauses.push({ ...structuredClone(p.evidence.headline.clauses.find((c) => c.id === "C1.H3b")!), printed: true }));
+    expect(refusal(b)).toMatch(/the headline lists a clause twice: C1\.H3\.ranks, C1\.H3b, C1\.H3\.twins, C1\.H3b/);
+  });
+
+  it("refuses the H3b template as the subject's label, the universe line or the method line", () => {
+    const asLabel = suppressedAnd((p) => {
+      const note = p.evidence.chart.subject_note!;
+      p.evidence.chart.subject_note = { ...note, id: "C1.H3b", text: H3B_TEXT, slots: { ...note.slots, subject: SUBJECT } };
+    });
+    expect(refusal(asLabel)).toMatch(/subject label uses template C1\.H3b, which a subject label may not print/);
+    const asUniverse = suppressedAnd((p) => void (p.evidence.chart.universe_line = { ...p.evidence.chart.universe_line, id: "C1.H3b", text: H3B_TEXT }));
+    expect(refusal(asUniverse)).toMatch(/universe line uses template C1\.H3b, which a universe line may not print/);
+    const asMethod = suppressedAnd((p) => void (p.evidence.headline.method_line = { id: "C1.H3b", text: H3B_TEXT }));
+    expect(refusal(asMethod)).toMatch(/method line uses template C1\.H3b, which a method line may not print/);
+  });
+
+  it("refuses a suppressed entry or a precondition for a clause the headline does not have", () => {
+    const suppressed = suppressedAnd((p) => {
+      const h3b = p.evidence.suppressed.find((s) => s.clause === "C1.H3b")!;
+      p.evidence.suppressed.push({ ...structuredClone(h3b), clause: "No major metro beat Austin on both" });
+    });
+    expect(refusal(suppressed)).toMatch(/the evidence suppresses "No major metro beat Austin on both", which is not a headline clause that does not print/);
+    const gates = suppressedAnd((p) => void (p.evidence.preconditions[0].gates = "C1.caveat.recency"));
+    expect(refusal(gates)).toMatch(/precondition universe\.n gates "C1\.caveat\.recency", which is neither the finding nor a clause of its headline/);
+  });
+
+  // The backstop: routes no template id governs, each carrying the words into the insight.
+  it("refuses the words as a precondition's name when the clause does not print", () => {
+    const b = suppressedAnd((p) => void p.evidence.preconditions.push({ ...structuredClone(p.evidence.preconditions[0]), name: "No major metro beat Austin on both" }));
+    expect(refusal(b)).toMatch(/the H3b clause does not print \(its gate did not hold\), but its words do, at preconditions\.\d+\.name$/);
+  });
+
+  it("refuses the words as a failing precondition's name in the reason the clause does not print", () => {
+    const name = "no major metro beat Austin on both";
+    const b = suppressedAnd((p) => {
+      const s = p.evidence.suppressed.find((x) => x.clause === "C1.H3b")!;
+      s.preconditions[0].name = name;
+      s.reason = `a precondition fails: ${name}`;
+    });
+    expect(refusal(b)).toMatch(/but its words do, at notPrinted\.\d+\.reason$/);
+  });
+
+  it("refuses the words as a metro's label on the chart", () => {
+    const b = suppressedAnd((p) => void (p.chart.data[2].label = "No major metro beat Austin on both"));
+    expect(refusal(b)).toMatch(/but its words do, at spec\.data\.2\.label$/);
+  });
+
+  it("refuses the words outside the headline, its description and the title when the clause prints", () => {
+    const b = variant((p) => void p.evidence.preconditions.push({ ...structuredClone(p.evidence.preconditions[0]), name: "No major metro beat Austin on both" }));
+    expect(refusal(b)).toMatch(/the H3b clause's words print outside the headline, its description and the chart title, at preconditions\.\d+\.name$/);
+  });
+
+  it("finds the words at every place the page prints from, in any case and spacing", () => {
+    const clean = buildInsight(variant(suppressedPath), "C1-raw");
+    const words = "No  Major\u00a0metro beat Austin on BOTH";
+    const places: Array<[string, (i: typeof clean) => void]> = [
+      ["headline", (i) => void (i.headline += ` ${words}`)],
+      ["description", (i) => void (i.description += ` ${words}`)],
+      ["caveats.0.text", (i) => void (i.caveats[0].text = words)],
+      ["randomPeer", (i) => void (i.randomPeer = words)],
+      ["chartTitle", (i) => void (i.chartTitle = words)],
+      ["dek", (i) => void (i.dek = words)],
+      ["spec.dek", (i) => void ((i.spec as BubbleSpec).dek = words)],
+      ["notPrinted.0.reason", (i) => void (i.notPrinted[0].reason = words)],
+      ["robustness.0.beatOnBoth.names.0", (i) => void (i.robustness[0].beatOnBoth = { count: "1", names: [words], number: "n" })],
+      ["methodNote.1", (i) => void (i.methodNote[1] = words)],
+    ];
+    for (const [at, put] of places) {
+      const i = structuredClone(clean);
+      put(i);
+      expect(h3bWordingAt(i), at).toEqual([at]);
+    }
+  });
+});
+
 describe("refusals", () => {
   it("refuses when any precondition does not pass", () => {
     const b = variant((p) => {
@@ -462,18 +542,14 @@ describe("refusals", () => {
   });
 
   it("builds the suppressed path: no H3b clause, the neutral title, the reason in its registered form", () => {
-    const b = variant((p) => {
-      suppressH3b(p);
-      const slots = { ...p.evidence.chart.title.slots, N: p.evidence.chart.universe_line.slots.N };
-      p.evidence.chart.title = { id: "C1.chart_title.raw", text: templateText("C1.chart_title.raw"), slots };
-      p.chart.headline = fill("C1.chart_title.raw", slots);
-    });
-    const i = buildInsight(b, "C1-raw");
+    const i = buildInsight(variant(suppressedPath), "C1-raw");
     expect(i.headline).toBe("From 2019 to 2025 Austin's office-industry jobs grew 36.0% and its goods-and-logistics jobs 38.6%, ranking 1st and 2nd of 149 major metros.");
     // With no claim in the headline or the title, the description is the headline alone.
     expect(i.description).toBe(i.headline);
     expect(i.chartTitle).toBe("Job Growth in Office and Goods-and-Logistics Industries, 150 Largest US Metros, 2019 to 2025");
     expect(i.notPrinted).toContainEqual({ id: "C1.H3b", reason: "a precondition fails: h3b.no_metro_beat_both.P2" });
+    expect(i.h3bPrinted).toBe(false);
+    expect(h3bWordingAt(i)).toEqual([]);
     // The same suppression with a reason that names a row that did not fail is refused.
     const wrong = variant((p) => {
       suppressH3b(p);

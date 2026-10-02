@@ -324,6 +324,12 @@ export interface Insight {
   description: string;
   /** The chart's own title (sidecar headline), from its template. */
   chartTitle: string;
+  /**
+   * Whether the H3b clause prints, which it does only when its gate held.
+   * When it does not, its words appear nowhere in the insight (build.ts
+   * refuses one that carries them) and the page names it only by its id.
+   */
+  h3bPrinted: boolean;
   dek: string;
   universe: string;
   subject: MetroRef;

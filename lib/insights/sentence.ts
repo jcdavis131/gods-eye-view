@@ -19,7 +19,8 @@
 // (robustnessRegistered), the reasons a clause or caveat does not print and
 // a metro is not published (each form the producer writes, its slots read
 // back from the evidence by build.ts), the precondition thresholds and every
-// formula (formulaText). The status note is this side's own sentence, keyed
+// formula (formulaText). Each text may print in its own place on the page
+// only (ROLE_TEMPLATES). The status note is this side's own sentence, keyed
 // by the bundle status.
 //
 // Slot formats. A template that carries its own unit ("grew {a}%", "from
@@ -268,27 +269,86 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/**
- * The slot strings that make `text` the registered template `id`, or null
- * when it is not that template. Each placeholder matches a non-empty run of
- * characters and the literal parts must match exactly. For texts whose slots
- * are not evidence numbers (precondition names, a cell key, a window label),
- * the caller checks each captured string against the evidence.
- */
-export function matchTemplate(id: TemplateId, text: string): Record<string, string> | null {
-  const t = templateText(id);
+/** A template's text as a regular expression source: its literal parts escaped, each placeholder a non-empty capture. */
+function patternOf(t: string): { source: string; names: string[] } {
   const names: string[] = [];
-  let pattern = "";
+  let source = "";
   let last = 0;
   for (const m of t.matchAll(PLACEHOLDER)) {
-    pattern += `${escapeRegExp(t.slice(last, m.index))}(.+?)`;
+    source += `${escapeRegExp(t.slice(last, m.index))}(.+?)`;
     names.push(m[1]);
     last = (m.index as number) + m[0].length;
   }
-  pattern += escapeRegExp(t.slice(last));
-  const got = new RegExp(`^${pattern}$`, "s").exec(text);
+  source += escapeRegExp(t.slice(last));
+  return { source, names };
+}
+
+/**
+ * The slot strings that make `text` the template text `t`, or null. Each
+ * placeholder matches a non-empty run of characters, the literal parts must
+ * match exactly, and a placeholder used twice must read the same both times.
+ */
+function matchText(t: string, text: string): Record<string, string> | null {
+  const { source, names } = patternOf(t);
+  const got = new RegExp(`^${source}$`, "s").exec(text);
   if (!got) return null;
-  return Object.fromEntries(names.map((n, i) => [n, got[i + 1]]));
+  const out: Record<string, string> = {};
+  for (const [i, n] of names.entries()) {
+    if (Object.hasOwn(out, n) && out[n] !== got[i + 1]) return null;
+    out[n] = got[i + 1];
+  }
+  return out;
+}
+
+/**
+ * The slot strings that make `text` the registered template `id`, or null
+ * when it is not that template. Each placeholder matches a non-empty run of
+ * characters, the literal parts must match exactly and a placeholder the
+ * template uses twice must read the same each time. For texts whose slots
+ * are not evidence numbers (precondition names, a cell key, a window label,
+ * a year), the caller checks each captured string against the evidence.
+ */
+export function matchTemplate(id: TemplateId, text: string): Record<string, string> | null {
+  return matchText(templateText(id), text);
+}
+
+// ---------------------------------------------------------------- where each template may print
+
+/**
+ * The templates each place on the page may print, and no other. A registered
+ * text in the wrong place is a refusal in build.ts: the H3b clause's words
+ * are registered for the headline alone (and its title rungs for the chart
+ * title), so they cannot reach the page as a caveat, the random-peer
+ * sentence, an extra headline clause or a label, where its gate would not
+ * run. No template belongs to two places (sentence.test.ts).
+ */
+export const ROLE_TEMPLATES = {
+  "headline clause": ["C1.H3.ranks", "C1.H3b", "C1.H3.twins"],
+  caveat: ["C1.caveat.recency", "C1.caveat.ces_manufacturing", "C1.caveat.qcew_manufacturing", "C1.caveat.not_published", "C1.caveat.not_published.plural", "C1.caveat.benchmarked"],
+  "random peer": ["C1.random_peer"],
+  "chart title": ["C1.chart_title.raw", "C1.chart_title.h3b.1", "C1.chart_title.h3b.2"],
+  "chart subtitle": ["C1.chart_dek", "C1.chart_dek.recency.1", "C1.chart_dek.recency.2"],
+  "subject label": ["C1.chart.subject_note"],
+  "universe line": ["C1.chart_universe"],
+  "method line": ["C1.method_line"],
+} as const satisfies Record<string, readonly TemplateId[]>;
+
+export type TemplateRole = keyof typeof ROLE_TEMPLATES;
+
+/** Whether template `id` may print as a `role`. */
+export function mayPrintAs(role: TemplateRole, id: TemplateId): boolean {
+  return (ROLE_TEMPLATES[role] as readonly TemplateId[]).includes(id);
+}
+
+/**
+ * The H3b clause's wording as patterns over any text: the clause itself and
+ * each title rung that states it, every slot any run of characters, letter
+ * case aside. build.ts refuses an insight in which any of them matches
+ * anywhere but the headline, its description and the chart title, and
+ * anywhere at all when the clause does not print.
+ */
+export function h3bWordingPatterns(): RegExp[] {
+  return (["C1.H3b", ...TITLE_LADDER_H3B] as TemplateId[]).map((id) => new RegExp(patternOf(templateText(id)).source, "is"));
 }
 
 // ---------------------------------------------------------------- formulas
@@ -583,14 +643,19 @@ export function robustnessChange(id: string, row: RobustnessRow, n: number): str
   }
 }
 
-/** What a row gates, as the robustness table says it: the clause it is a precondition of, or that it is reported only. */
-export function gatesCopy(gates: string[]): string {
+/**
+ * What a row gates, as the robustness table says it: the clause it is a
+ * precondition of, or that it is reported only. The H3b clause is quoted only
+ * when it prints (`printed`); otherwise the table names it by id and says it
+ * does not print, so its words never reach a page whose gate did not hold.
+ */
+export function gatesCopy(gates: string[], printed: (clause: string) => boolean): string {
   if (gates.length === 0) return "no (reported only)";
   return gates
     .map((g) => {
       switch (g) {
         case "C1.H3b":
-          return 'yes: the clause "no major metro beat it on both"';
+          return printed(g) ? 'yes: the clause "no major metro beat it on both"' : "yes: clause C1.H3b, which does not print";
         default:
           throw new Error(`no wording for a row that gates ${JSON.stringify(g)}`);
       }

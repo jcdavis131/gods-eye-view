@@ -146,7 +146,7 @@ export default async function InsightPage({ params }: Params) {
       ...[0, 1].map((k) => (r.axes[k] ? `${r.axes[k].label} ${r.axes[k].growth}, ${r.axes[k].rank}` : MISSING)),
       r.beatOnBoth ? (r.beatOnBoth.names.length ? `${r.beatOnBoth.count}: ${r.beatOnBoth.names.join("; ")}` : r.beatOnBoth.count) : MISSING,
       r.publishable,
-      gatesCopy(r.gates),
+      gatesCopy(r.gates, (clause) => clause === "C1.H3b" && i.h3bPrinted),
     ],
   }));
   const robustnessSources = [...new Set(i.robustness.flatMap((r) => r.sources))];
@@ -302,7 +302,9 @@ export default async function InsightPage({ params }: Params) {
             { key: "pass", label: "Result" },
           ]}
           rows={preconditionRows}
-          caption={`Every precondition recorded in the evidence for ${i.id}, with the evidence's own thresholds. The finding is published only because each one passes, and the clause that no major metro beat ${i.subject.label} on both prints only because each of its rows does.`}
+          caption={`Every precondition recorded in the evidence for ${i.id}, with the evidence's own thresholds. The finding is published only because each one passes${
+            i.h3bPrinted ? `, and the clause that no major metro beat ${i.subject.label} on both prints only because each of its rows does` : `; clause C1.H3b does not print, and why is under Caveats`
+          }.`}
         />
       </section>
 
@@ -320,7 +322,9 @@ export default async function InsightPage({ params }: Params) {
             { key: "gates", label: "Gates the headline" },
           ]}
           rows={robustnessRows}
-          caption={`The registered robustness rows, recomputed for ${i.subject.title}. Publishable: the evidence's count of the row's metros with a value on both axes, of all the metros its two sets cover (their members and the ones each leaves out with a reason), both read from the evidence. A row that gates the headline is a precondition of its clause that no major metro beat it on both; the others are reported only.`}
+          caption={`The registered robustness rows, recomputed for ${i.subject.title}. Publishable: the evidence's count of the row's metros with a value on both axes, of all the metros its two sets cover (their members and the ones each leaves out with a reason), both read from the evidence. ${
+            i.h3bPrinted ? "A row that gates the headline is a precondition of its clause that no major metro beat it on both" : "A row that gates the headline is a precondition of clause C1.H3b, which does not print"
+          }; the others are reported only.`}
         />
         <p className="mt-3 text-[14px] font-semibold text-foreground">How each column is computed (the evidence&rsquo;s formulas)</p>
         <ul className="mt-1 max-w-[48rem] list-disc space-y-1 pl-5 text-[13px] leading-relaxed text-muted-foreground">

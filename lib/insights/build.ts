@@ -23,11 +23,18 @@
 //     subject's ranks, the medians and the random peer's m and n are what
 //     those sets give; so is every count and rank of every robustness row;
 //   - every template text in the evidence equals the registered text in
-//     sentence.ts, each ladder is the registered ladder and the chosen rung
-//     is the one its rule picks (the title: the first that every canvas can
-//     set, measured here with render/canvas.ts; the subtitle: the first that
-//     fills to at most 240 characters), and the sentence uses none of the
-//     never-used words;
+//     sentence.ts and is one its place on the page may print
+//     (ROLE_TEMPLATES: the H3b clause in the headline alone, its title rungs
+//     in the chart title alone), each ladder is the registered ladder and
+//     the chosen rung is the one its rule picks (the title: the first that
+//     every canvas can set, measured here with render/canvas.ts; the
+//     subtitle: the first that fills to at most 240 characters), and the
+//     sentence uses none of the never-used words;
+//   - as a backstop to both, the H3b clause's words (in any case, with any
+//     subject) appear nowhere in the built insight unless the clause prints,
+//     and then only in the headline, its description and the chart title
+//     (h3bWordingAt), whatever route they took in: a caveat, the random
+//     peer, a label, a reason, a precondition's name;
 //   - every slot that prints a number names an evidence number whose value is
 //     the slot's value, so the printed number carries that entry's formula
 //     and published cells; a probability's exact fraction is recomputed;
@@ -68,11 +75,14 @@ import {
   fillWords,
   formatSlot,
   headlineSentence,
+  h3bWordingPatterns,
   isTemplateId,
   matchTemplate,
+  mayPrintAs,
   panelBGateTemplate,
   placeholders,
   registeredFormula,
+  ROLE_TEMPLATES,
   robustnessChange,
   robustnessRegistered,
   statusNote,
@@ -80,6 +90,7 @@ import {
   templateText,
   windowLabel,
   type TemplateId,
+  type TemplateRole,
 } from "./sentence";
 import { anchorMainToChart, recomputeMedian, recomputeRandomPeer, recomputeSpec } from "./recompute";
 import { MONTHS, SHAPING, sourceRefById } from "./sources";
@@ -226,6 +237,43 @@ export function h3bGate(ev: Evidence, methods: Methods): string[] {
 }
 
 // ---------------------------------------------------------------- reasons
+
+/** The places in an insight where the H3b clause's words may appear, and only while the clause prints. */
+const H3B_PLACES: ReadonlySet<string> = new Set(["headline", "description", "chartTitle", "spec.headline"]);
+
+/**
+ * Every place in `value` (an insight, walked down to each string, object keys
+ * included) whose text carries the H3b clause's words in any case
+ * (sentence.ts h3bWordingPatterns), as a path such as "caveats.2.text".
+ * Runs of whitespace read as one space and invisible characters as none.
+ */
+export function h3bWordingAt(value: unknown): string[] {
+  const patterns = h3bWordingPatterns();
+  const out: string[] = [];
+  const says = (text: string) => {
+    const t = text.replace(/[\u00ad\u200b-\u200d\u2060\ufeff]/g, "").replace(/\s+/g, " ");
+    return patterns.some((re) => re.test(t));
+  };
+  const walk = (v: unknown, at: string): void => {
+    if (typeof v === "string") {
+      if (says(v)) out.push(at);
+      return;
+    }
+    if (Array.isArray(v)) {
+      v.forEach((x, k) => walk(x, at ? `${at}.${k}` : String(k)));
+      return;
+    }
+    if (v !== null && typeof v === "object") {
+      for (const [k, x] of Object.entries(v)) {
+        const next = at ? `${at}.${k}` : k;
+        if (says(k)) out.push(`${next} (key)`);
+        walk(x, next);
+      }
+    }
+  };
+  walk(value, "");
+  return out;
+}
 
 /** A registered reason template and the check its captured slots must pass against the evidence. */
 type ReasonForm = [TemplateId, (slots: Record<string, string>) => boolean];
@@ -381,8 +429,10 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
       return refuse((e as Error).message);
     }
   };
-  const registered = (where: string, id: string, text: string): TemplateId => {
+  /** A producer text in its place on the page: a registered template, one that place may print (ROLE_TEMPLATES), word for word. */
+  const registered = (where: string, id: string, text: string, role: TemplateRole): TemplateId => {
     if (!isTemplateId(id)) return refuse(`${where} uses template ${id}, which has no registered text`);
+    if (!mayPrintAs(role, id)) refuse(`${where} uses template ${id}, which a ${role} may not print (only ${ROLE_TEMPLATES[role].join(", ")})`);
     if (text !== templateText(id)) refuse(`${where} template ${id} reads ${JSON.stringify(text)}, not the registered text`);
     return id;
   };
@@ -390,12 +440,22 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
   // The headline, and the H3b clause's own gate.
   const h = ev.headline;
   if (!h.primary) refuse("its headline is not primary");
-  const clauses = h.clauses.map((c) => ({ id: registered("headline", c.id, c.text), printed: c.printed }));
+  const clauses = h.clauses.map((c) => ({ id: registered("headline", c.id, c.text, "headline clause"), printed: c.printed }));
+  if (new Set(clauses.map((c) => c.id)).size !== clauses.length) refuse(`the headline lists a clause twice: ${clauses.map((c) => c.id).join(", ")}`);
   for (const c of clauses) {
     if (c.printed && !ev.preconditions.some((p) => p.gates === c.id)) refuse(`clause ${c.id} prints but no precondition gates it`);
     if (!c.printed && !ev.suppressed.some((s) => s.clause === c.id && s.reason)) refuse(`clause ${c.id} does not print and is not listed as suppressed`);
     if (methods.panel_a.headline?.clauses?.[c.id] !== c.printed) refuse(`the methods page and the evidence disagree on whether clause ${c.id} prints`);
   }
+  // A suppressed entry prints its clause id under "Not printed, and why", and a precondition its gates in the table:
+  // each is a clause of this headline (a suppressed one, one that does not print) or the finding itself.
+  for (const s of ev.suppressed) {
+    if (!clauses.some((c) => c.id === s.clause && !c.printed)) refuse(`the evidence suppresses ${JSON.stringify(s.clause)}, which is not a headline clause that does not print`);
+  }
+  for (const p of ev.preconditions) {
+    if (p.gates !== findingId && !clauses.some((c) => c.id === p.gates)) refuse(`precondition ${p.name} gates ${JSON.stringify(p.gates)}, which is neither the finding nor a clause of its headline`);
+  }
+  if (new Set(ev.caveats.map((c) => c.id)).size !== ev.caveats.length) refuse(`the evidence lists a caveat twice: ${ev.caveats.map((c) => c.id).join(", ")}`);
   const h3bPrinted = clauses.some((c) => c.id === H3B && c.printed);
   if (h3bPrinted) {
     const problems = h3bGate(ev, methods);
@@ -413,7 +473,7 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
   }
   const subject = h.slots.subject;
   if (!subject || subject.format !== undefined || !("cbsa" in subject) || subject.cbsa !== ev.subject) return refuse("the headline has no subject slot for the evidence's subject");
-  const methodLine = templateText(registered("method line", h.method_line.id, h.method_line.text));
+  const methodLine = templateText(registered("method line", h.method_line.id, h.method_line.text, "method line"));
 
   // The registered window: both ends are registered numbers, read from the pre-registration.
   const t0 = h.slots.t0;
@@ -475,7 +535,7 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
   const notPrinted: Insight["notPrinted"] = ev.suppressed.map((s) => ({ id: s.clause, reason: s.reason }));
   for (const c of ev.caveats) {
     if (!c.printed) reasonIs(`caveat ${c.id}`, c.reason, caveatReasonForms(c));
-    const id = registered(`caveat ${c.id}`, c.id, c.text);
+    const id = registered(`caveat ${c.id}`, c.id, c.text, "caveat");
     if (c.printed) {
       if (id === "C1.caveat.not_published" || id === "C1.caveat.not_published.plural") {
         const m = c.slots?.metros;
@@ -516,7 +576,7 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
     return { n, arithmetic: a.text };
   };
   {
-    const id = registered("random peer", rp.id, rp.text);
+    const id = registered("random peer", rp.id, rp.text, "random peer");
     const k = rp.slots.k;
     const p = rp.slots.p;
     if (!k || !("value" in k) || k.value !== rp.rule.k || !hasNumber(k) || ev.numbers[k.number]?.kind !== "registered") refuse("the random-peer k is not the registered k");
@@ -543,9 +603,9 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
   if (ch.sidecar !== f.chartFile) refuse(`the evidence describes ${ch.sidecar}, the manifest's chart is ${f.chartFile}`);
 
   // The title: the H3b ladder's first rung that every canvas can set, or the neutral title when H3b does not print.
-  const titleId = registered("chart title", ch.title.id, ch.title.text);
+  const titleId = registered("chart title", ch.title.id, ch.title.text, "chart title");
   if (h3bPrinted) {
-    const ladder = (ch.title.ladder ?? []).map((r) => registered("chart title ladder", r.id, r.text));
+    const ladder = (ch.title.ladder ?? []).map((r) => registered("chart title ladder", r.id, r.text, "chart title"));
     if (canonicalJson(ladder) !== canonicalJson(TITLE_LADDER_H3B)) refuse(`the chart title's ladder is ${JSON.stringify(ladder)}, not the registered ${JSON.stringify(TITLE_LADDER_H3B)}`);
     const fits = TITLE_LADDER_H3B.find((id) => headlineMisfits(checkSlots("chart title", id, ch.title.slots)).length === 0) ?? refuse("no rung of the H3b title ladder fits every canvas");
     if (titleId !== fits) refuse(`the chart title is ${titleId}, but ${fits} is the first rung every canvas can set`);
@@ -554,9 +614,9 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
   if (bubble.headline !== chartTitle) refuse("the chart title is not its template's output");
 
   // The subtitle: the recency ladder's first rung within DEK_LIMIT, with the recency caveat's own slots, or the neutral line.
-  const dekId = registered("chart subtitle", ch.dek.id, ch.dek.text);
+  const dekId = registered("chart subtitle", ch.dek.id, ch.dek.text, "chart subtitle");
   if (recency?.printed) {
-    const ladder = (ch.dek.ladder ?? []).map((r) => registered("chart subtitle ladder", r.id, r.text));
+    const ladder = (ch.dek.ladder ?? []).map((r) => registered("chart subtitle ladder", r.id, r.text, "chart subtitle"));
     if (canonicalJson(ladder) !== canonicalJson(DEK_LADDER_RECENCY)) refuse(`the chart subtitle's ladder is ${JSON.stringify(ladder)}, not the registered ${JSON.stringify(DEK_LADDER_RECENCY)}`);
     if (ch.dek.caveat !== RECENCY) refuse("the chart subtitle does not carry the recency caveat");
     for (const name of placeholders(templateText(dekId))) {
@@ -571,7 +631,7 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
   // The subject's label line: its two values, office-industry first.
   const subjectRow = ch.rows[ev.subject];
   if (ch.subject_note) {
-    const id = registered("subject label", ch.subject_note.id, ch.subject_note.text);
+    const id = registered("subject label", ch.subject_note.id, ch.subject_note.text, "subject label");
     const a = ch.subject_note.slots.a;
     const b = ch.subject_note.slots.b;
     if (!subjectRow || !a || !b || !hasNumber(a) || !hasNumber(b) || a.number !== subjectRow.x || b.number !== subjectRow.y) refuse("the subject's label values are not its chart row's x and y");
@@ -579,7 +639,7 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
     if (canonicalJson(bubble.subjectNotes ?? []) !== canonicalJson([note])) refuse("the chart's subject note is not its template's output");
   } else if ((bubble.subjectNotes ?? []).length) refuse("the chart carries a subject note the evidence does not");
 
-  if (bubble.universe !== checkSlots("universe line", registered("universe line", ch.universe_line.id, ch.universe_line.text), ch.universe_line.slots)) refuse("the chart's universe line is not its template's output");
+  if (bubble.universe !== checkSlots("universe line", registered("universe line", ch.universe_line.id, ch.universe_line.text, "universe line"), ch.universe_line.slots)) refuse("the chart's universe line is not its template's output");
   if (bubble.subject !== ev.subject) refuse(`the chart's subject is ${JSON.stringify(bubble.subject)}, the evidence's is ${ev.subject}`);
 
   // Axis, bubble and median labels and the estimate methods: registered texts over the registered window.
@@ -921,7 +981,7 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
   const hashes = { manifest: bundle.hashes["manifest.json"], chart: bundle.hashes[f.chartFile], evidence: bundle.hashes[f.evidenceFile], methods: bundle.hashes["methods.json"] };
 
   const subjectRef: MetroRef = { cbsa: subject.cbsa, label: subject.label, title: subject.title };
-  return {
+  const insight: Insight = {
     id: findingId,
     slug: spec.slug,
     bundle: bundle.name,
@@ -932,6 +992,7 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
     headline,
     description,
     chartTitle,
+    h3bPrinted,
     dek,
     universe: spec.universe,
     subject: subjectRef,
@@ -962,6 +1023,18 @@ export function buildInsight(bundle: LoadedBundle, findingId: string): Insight {
     hashes,
     contentId: stableHash(`${hashes.chart}|${hashes.evidence}|${hashes.methods}`),
   };
+  // The backstop behind the gate and the per-place templates: the H3b clause's words, by any route into the insight
+  // (a caveat, the random peer, a label, a reason, a precondition's name, a metro's title), print only with the clause,
+  // and then only in the headline, its description and the chart title.
+  const leaks = h3bWordingAt(insight).filter((at) => !h3bPrinted || !H3B_PLACES.has(at));
+  if (leaks.length) {
+    refuse(
+      h3bPrinted
+        ? `the H3b clause's words print outside the headline, its description and the chart title, at ${leaks.join(", ")}`
+        : `the H3b clause does not print (its gate did not hold), but its words do, at ${leaks.join(", ")}`,
+    );
+  }
+  return insight;
 }
 
 /** Every finding in the published bundles whose panel shipped, built; a refusal propagates. In slug order. */
