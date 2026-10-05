@@ -19,6 +19,8 @@ import { companiesLayer } from "./companies";
 import { banksLayer } from "./banks";
 import { spendingLayer } from "./spending";
 import { occupationsLayer } from "./occupations";
+import { gasPricesLayer } from "./gasPrices";
+import { gasForecastLayer } from "./gasForecast";
 import { weatherLayer } from "./weather";
 import { wildfireLayer } from "./wildfire";
 import { firesLayer } from "./fires";
@@ -59,6 +61,8 @@ export const LAYERS: LayerDefinition[] = [
   banksLayer,
   spendingLayer,
   occupationsLayer,
+  gasPricesLayer,
+  gasForecastLayer,
   weatherLayer,
   wildfireLayer,
   firesLayer,

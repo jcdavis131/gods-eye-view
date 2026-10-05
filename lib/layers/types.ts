@@ -26,6 +26,8 @@ export type LayerId =
   | "banks"
   | "spending"
   | "occupations"
+  | "gasprices"
+  | "gasforecast"
   | "weather"
   | "wildfire"
   | "fires"
@@ -80,6 +82,8 @@ export const LAYER_IDS: LayerId[] = [
   "banks",
   "spending",
   "occupations",
+  "gasprices",
+  "gasforecast",
   "weather",
   "wildfire",
   "fires",
