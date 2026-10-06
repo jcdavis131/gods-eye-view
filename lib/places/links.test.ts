@@ -3,14 +3,12 @@ import { MANIFEST, countyByFips, type CountyRef } from "./registry";
 import { parseComparePair, parseCountyParam, parseMetroParam, parseStateParam, type PlaceScope } from "./scope";
 import { SAME_STATE_MAX, graphCompleteness, linksFor, type LinkSets, type PlaceLink } from "./links";
 
-// The seed manifest carries no adjacency and no CBSA membership, so the two
-// groups that need the network pull are exercised through a scope whose ref
-// is hand-built - exactly the shape countyByFips will return once
-// scripts/places-data.mjs has run against a host with egress. Every geoid
-// used is a real county the seed already names, so the links resolve.
+// Most of these tests pin a ref by hand (Travis with a single neighbour) so
+// the assertions do not move when the Census republishes adjacency; the
+// "pulled manifest" tests below read the real tables instead.
 function withRef(fips: string, extra: Partial<CountyRef>): PlaceScope {
   const base = countyByFips(fips);
-  if (!base) throw new Error(`${fips} is missing from the seed manifest`);
+  if (!base) throw new Error(`${fips} is missing from the place manifest`);
   return { kind: "county", id: fips, ref: { ...base, ...extra }, provisional: false };
 }
 
@@ -82,27 +80,51 @@ describe("linksFor, county", () => {
     }
   });
 
-  it("returns a usable block for a county the incomplete manifest cannot name", () => {
-    // 48999 is structurally valid and absent from the seed: the provisional path.
-    const scope = parseCountyParam("48999");
-    expect(MANIFEST.countiesComplete).toBe(false);
-    expect(scope?.kind === "county" && scope.provisional).toBe(true);
-    const l = linksFor(scope!);
+  it("404s a code the complete manifest cannot name, and still links a provisional scope", () => {
+    // 48999 is structurally valid, with a known state prefix, and names no
+    // county: with the pulled manifest that is an exact 404, not a guess.
+    expect(MANIFEST.countiesComplete).toBe(true);
+    expect(parseCountyParam("48999")).toBeNull();
+    // A provisional scope can still be built by hand (and by any build that
+    // ships an incomplete table), and its link block must stay usable.
+    const scope: PlaceScope = { kind: "county", id: "48999", ref: null, provisional: true };
+    const l = linksFor(scope);
     expect(l.neighbours).toEqual([]);
     expect(l.sameMetro).toEqual([]);
-    expect(l.up.length).toBeGreaterThan(0);
+    expect(l.sameState.length).toBeGreaterThan(0);
     expect(l.up.map((u) => u.href)).toContain("/state/TX");
     expect(l.brief.href).toBe("/place/48999/brief");
     expect(l.breadcrumb[l.breadcrumb.length - 1].url).toBe("/place/48999");
   });
 
-  it("omits the metro and neighbour groups entirely while the manifest is a seed", () => {
-    const l = linksFor(parseCountyParam("48453")!);
-    expect(l.neighbours).toEqual([]);
+  it("fills the neighbour and metro groups from the pulled manifest, each county in one group only", () => {
+    const travisL = linksFor(parseCountyParam("48453")!);
+    expect(travisL.neighbours.map((n) => n.href).sort()).toEqual(["/place/48021", "/place/48031", "/place/48053", "/place/48055", "/place/48209", "/place/48491"]);
+    expect(travisL.up.map((u) => u.href)).toContain("/metro/12420");
+    expect(travisL.breadcrumb.map((b) => b.name)).toEqual(["United States", "Texas", "Austin-Round Rock-San Marcos, TX", "Travis County"]);
+    // Every other Austin county borders Travis, so all of them are claimed by
+    // the neighbour group and the metro group has nothing left to list.
+    expect(travisL.sameMetro).toEqual([]);
+
+    // Caldwell borders Bastrop, Hays and Travis but not Williamson.
+    const caldwell = linksFor(parseCountyParam("48055")!);
+    expect(caldwell.sameMetro.map((m) => m.href)).toEqual(["/place/48491"]);
+    const listed = [...caldwell.neighbours, ...caldwell.sameMetro, ...caldwell.sameState].map((x) => x.href);
+    expect(new Set(listed).size).toBe(listed.length);
+    expect(listed).not.toContain("/place/48055");
+
+    expect(graphCompleteness().adjacency).toBe(true);
+    expect(graphCompleteness().membership).toBe(true);
+    expect(graphCompleteness().note).toMatch(/manifest pull/);
+  });
+
+  it("gives a micropolitan county no metro link, because only metros have a page", () => {
+    // Anderson County, TX: the Palestine micropolitan area, 37300.
+    const l = linksFor(parseCountyParam("48001")!);
+    expect(l.up.map((u) => u.href).some((h) => h.startsWith("/metro/"))).toBe(false);
     expect(l.sameMetro).toEqual([]);
-    expect(l.sameState.length).toBeGreaterThan(0);
-    expect(graphCompleteness().adjacency).toBe(false);
-    expect(graphCompleteness().note).toMatch(/omitted rather than shown empty/);
+    expect(l.breadcrumb.map((b) => b.name)).toEqual(["United States", "Texas", "Anderson County"]);
+    expect(l.neighbours.length).toBeGreaterThan(0);
   });
 });
 
