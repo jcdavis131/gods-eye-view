@@ -272,10 +272,12 @@ export function canonicalJson(v: unknown): string {
 
 /**
  * The spec in canonical order: data by id, each datum's provenance keys
- * sorted, labels.ids sorted, references by value. Order in the input carries
- * no meaning (draw order and label priority are derived, never taken from
- * array position), so every renderer entry point starts here and a reordered
- * spec renders the same bytes.
+ * sorted, references by value. Order in those carries no meaning (draw order
+ * is derived, never taken from array position), so every renderer entry
+ * point starts here and a spec reordered in them renders the same bytes.
+ * labels.ids is the one ordered field, and it is kept as written: it is the
+ * label request in priority order (a bundle's registered label rule), and a
+ * canvas that draws fewer labels than requested drops them from its end.
  */
 export function canonicalSpec<S extends ChartSpec>(spec: S): S {
   const refs = (a: AxisSpec): AxisSpec => (a.reference ? { ...a, reference: [...a.reference].sort((p, q) => p.value - q.value || byteCompare(p.label ?? "", q.label ?? "")) } : a);
@@ -283,7 +285,7 @@ export function canonicalSpec<S extends ChartSpec>(spec: S): S {
   const provenance = Object.fromEntries(Object.keys(spec.provenance).sort(byteCompare).map((k) => [k, spec.provenance[k]]));
   switch (spec.kind) {
     case "bubble":
-      return { ...spec, provenance, x: refs(spec.x), y: refs(spec.y), labels: spec.labels?.ids ? { ...spec.labels, ids: [...spec.labels.ids].sort(byteCompare) } : spec.labels, data } as S;
+      return { ...spec, provenance, x: refs(spec.x), y: refs(spec.y), data } as S;
     case "slope":
     case "line":
       return { ...spec, provenance, y: refs(spec.y), data } as S;

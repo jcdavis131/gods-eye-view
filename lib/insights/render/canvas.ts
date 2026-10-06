@@ -2,8 +2,11 @@
 //
 //   social         1080 x 1350, the portrait card (the PNG download is this
 //                  SVG rasterised at 2160 wide, not a separate layout)
-//   og             1200 x 630, split: a 470 px text column on the left, the
-//                  plot on the right
+//   og             1200 x 630, split: a 470 px text column on the left
+//                  (headline, dek, source lines), the plot on the right. The
+//                  dek is drawn here too, so a title that makes a claim (the
+//                  H3b title) never travels without the caveat its subtitle
+//                  carries; the headline steps down its ladder to make room
 //   inline-wide    760 wide, on document pages
 //   inline-narrow  400 wide, on document pages under the phone breakpoint
 //
@@ -111,7 +114,7 @@ export const CANVASES: Record<CanvasId, CanvasPreset> = {
     column: 470,
     columnGap: 40,
     headline: { ladder: [46, 40, 34], maxLines: 5, lineHeight: 1.06, weight: 900 },
-    dek: null,
+    dek: R(14, 18 / 14),
     tick: R(15),
     axisTitle: B(15),
     legend: R(15, 1.45),
@@ -123,7 +126,7 @@ export const CANVASES: Record<CanvasId, CanvasPreset> = {
     subjectNote: B(15, 1.15),
     scale: 0.6,
     minPlot: 380,
-    gaps: { headline: 20, dek: 0, block: 16, tick: 8 },
+    gaps: { headline: 12, dek: 12, block: 16, tick: 8 },
   },
   "inline-wide": {
     id: "inline-wide",
