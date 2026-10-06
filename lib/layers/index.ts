@@ -22,6 +22,10 @@ import { spendingLayer } from "./spending";
 import { occupationsLayer } from "./occupations";
 import { gasPricesLayer } from "./gasPrices";
 import { gasForecastLayer } from "./gasForecast";
+import { ercotPricesLayer } from "./ercotPrices";
+import { usElectricityPricesLayer } from "./usElectricityPrices";
+import { globalGenerationLayer } from "./globalGeneration";
+import { datacentersLayer } from "./datacenters";
 import { weatherLayer } from "./weather";
 import { wildfireLayer } from "./wildfire";
 import { firesLayer } from "./fires";
@@ -65,6 +69,10 @@ export const LAYERS: LayerDefinition[] = [
   occupationsLayer,
   gasPricesLayer,
   gasForecastLayer,
+  ercotPricesLayer,
+  usElectricityPricesLayer,
+  globalGenerationLayer,
+  datacentersLayer,
   weatherLayer,
   wildfireLayer,
   firesLayer,
