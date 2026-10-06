@@ -68,18 +68,30 @@ export interface UsElectricityBundle {
   states: Record<string, StateElectricity>;
 }
 
-export interface CountryGeneration {
-  country: string;
-  lat: number;
-  lon: number;
+export interface CountryGenerationYear {
   year: number;
   total_twh: number;
   fuels: { fuel: string; twh: number; share_pct: number }[];
 }
 
+export interface CountryGeneration {
+  country: string;
+  lat: number;
+  lon: number;
+  /** Latest year (backwards-compatible snapshot of history's last entry). */
+  year: number;
+  total_twh: number;
+  fuels: { fuel: string; twh: number; share_pct: number }[];
+  /** Yearly history, ascending. Missing years stay missing: consumers must
+      step from the last known year, never interpolate. */
+  history: CountryGenerationYear[];
+}
+
 export interface GlobalGenerationBundle {
   meta: EnergyBundleMeta;
   asof_year: number;
+  /** [first, last] year present across country histories. */
+  history_years: [number, number];
   countries: CountryGeneration[];
   skipped_no_label_point: string[];
 }

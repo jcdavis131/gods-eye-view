@@ -184,6 +184,8 @@ export interface FetchContext {
   now: number;
   /** Epoch ms of the mission clock (wall clock + timeline offset). */
   missionTime?: number;
+  /** Playback year for time-aware layers; null when the time machine is off. */
+  playbackYear?: number | null;
   signal?: AbortSignal;
   /** Free-form layer options coming from the settings store (e.g. satellite groups). */
   options: Record<string, unknown>;

@@ -9,9 +9,10 @@ import type { GasForecastExtra } from "@/lib/layers/gasForecast";
 const GAS = "#FBBF24";
 const FORECAST = "#E879F9";
 
-/** Price colour against the national average: red = expensive. */
+/** Price colour against the national average: red = expensive. Non-finite
+ * (no observation yet in playback) draws neutral grey. */
 function priceColor(vsNational: number | null | undefined): string {
-  if (vsNational == null) return "#8A93A6";
+  if (vsNational == null || !Number.isFinite(vsNational)) return "#8A93A6";
   if (vsNational > 0.5) return "#F87171";
   if (vsNational > 0.15) return "#FB923C";
   if (vsNational < -0.15) return "#4ADE80";
@@ -32,7 +33,8 @@ export const gasPricesStyle: LayerStyle = {
   colorFor: (f: LayerFeature) => priceColor((f.properties.extra as GasPriceExtra | undefined)?.vsNational),
   label: (f: LayerFeature) => {
     const x = f.properties.extra as GasPriceExtra | undefined;
-    return x ? `${f.properties.name} · $${x.price.toFixed(2)}` : f.properties.name;
+    if (!x) return f.properties.name;
+    return Number.isFinite(x.price) ? `${f.properties.name} · $${x.price.toFixed(2)}` : `${f.properties.name} · no data yet`;
   },
   labelMax: 12,
   scaleByDistance: [3e5, 1.0, 8e6, 0.35],

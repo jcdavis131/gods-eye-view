@@ -13,41 +13,51 @@
 import type { Point } from "geojson";
 import type { FetchContext, FetchResult, LayerDefinition, LayerFeature } from "./types";
 import { globalGenerationBundle } from "@/lib/energy/energy";
+import { generationForYear } from "@/lib/globe/timeMachine";
 
 async function fetchGlobalGeneration(ctx: FetchContext): Promise<FetchResult> {
   const bundle = globalGenerationBundle();
-  const features: LayerFeature<Point>[] = bundle.countries.map((c) => ({
-    type: "Feature",
-    geometry: { type: "Point", coordinates: [c.lon, c.lat] },
-    properties: {
-      id: `gen-${c.country.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
-      layer: "globalgeneration",
-      name: c.country,
-      kind: "country",
-      altitude: 0,
-      source: "Ember",
-      details: {
-        "Total": `${c.total_twh.toLocaleString()} TWh`,
-        "Year": String(c.year),
-        ...Object.fromEntries(
-          c.fuels.map((f) => [`${f.fuel}`, `${f.twh.toLocaleString()} TWh (${f.share_pct}%)`]),
-        ),
+  // Time machine: step each country's history to the playback year.
+  const playback = ctx.playbackYear != null;
+  const features: LayerFeature<Point>[] = bundle.countries.map((c) => {
+    const snap = playback ? generationForYear(c, ctx.playbackYear as number) : null;
+    const year = snap ? snap.year : c.year;
+    const total = snap ? snap.total_twh : c.total_twh;
+    const fuels = snap ? snap.fuels : c.fuels;
+    return {
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [c.lon, c.lat] },
+      properties: {
+        id: `gen-${c.country.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+        layer: "globalgeneration",
+        name: c.country,
+        kind: "country",
+        altitude: 0,
+        source: "Ember",
+        details: {
+          "Total": `${total.toLocaleString()} TWh`,
+          "Year": playback && !snap ? `${ctx.playbackYear} (no data yet)` : String(year),
+          ...Object.fromEntries(
+            fuels.map((f) => [`${f.fuel}`, `${f.twh.toLocaleString()} TWh (${f.share_pct}%)`]),
+          ),
+        },
       },
-    },
-  }));
+    };
+  });
   return {
     collection: { type: "FeatureCollection", features },
     source: "Ember",
     fetchedAt: ctx.now,
     note: [
       `${features.length} countries · Ember yearly generation by fuel`,
-      `year ${bundle.asof_year} · label points approximate`,
-      `refresh: npm run data:energy`,
+      playback ? `playback year ${ctx.playbackYear} · stepped from last known` : `year ${bundle.asof_year}`,
+      `label points approximate · refresh: npm run data:energy`,
     ].join(" · "),
     meta: {
-      asofYear: bundle.asof_year,
+      asofYear: playback ? (ctx.playbackYear as number) : bundle.asof_year,
       count: features.length,
       provenance: bundle.meta.provenance,
+      playbackYear: playback ? ctx.playbackYear : undefined,
     },
   };
 }
