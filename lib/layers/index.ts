@@ -16,11 +16,16 @@ import { tradeLayer } from "./trade";
 import { commerceLayer } from "./commerce";
 import { realestateLayer } from "./realestate";
 import { companiesLayer } from "./companies";
+import { employersLayer } from "./employers";
 import { banksLayer } from "./banks";
 import { spendingLayer } from "./spending";
 import { occupationsLayer } from "./occupations";
 import { gasPricesLayer } from "./gasPrices";
 import { gasForecastLayer } from "./gasForecast";
+import { ercotPricesLayer } from "./ercotPrices";
+import { usElectricityPricesLayer } from "./usElectricityPrices";
+import { globalGenerationLayer } from "./globalGeneration";
+import { datacentersLayer } from "./datacenters";
 import { weatherLayer } from "./weather";
 import { wildfireLayer } from "./wildfire";
 import { firesLayer } from "./fires";
@@ -58,11 +63,16 @@ export const LAYERS: LayerDefinition[] = [
   commerceLayer,
   realestateLayer,
   companiesLayer,
+  employersLayer,
   banksLayer,
   spendingLayer,
   occupationsLayer,
   gasPricesLayer,
   gasForecastLayer,
+  ercotPricesLayer,
+  usElectricityPricesLayer,
+  globalGenerationLayer,
+  datacentersLayer,
   weatherLayer,
   wildfireLayer,
   firesLayer,

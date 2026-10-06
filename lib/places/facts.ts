@@ -47,7 +47,7 @@ import { entitySet, featureFor } from "@/lib/screener/sets";
 import { fieldsFor, type EntityKind, type FieldDef } from "@/lib/screener/fields";
 import type { LayerFeature } from "@/lib/layers/types";
 import { peerStats, type Cohort, type PeerStat } from "./percentiles";
-import { MANIFEST, countiesInMetro, metroForCounty, metrosInState } from "./registry";
+import { MANIFEST, countiesInMetro, metroByCbsa, metroForCounty, metrosInState, type MetroRef } from "./registry";
 import { scopeCentroid, scopeName, scopeShortName, type PlaceScope } from "./scope";
 
 /** How long any one upstream may hold up a section before it becomes a reason. */
@@ -83,8 +83,8 @@ export interface PlaceMembers {
 export interface MetroHousing {
   home: HomeValue | null;
   rent: HomeValue | null;
-  /** How the manifest resolved this metro's Zillow RegionID; 'short' means matched by name. */
-  matchedBy: "exact" | "short" | null;
+  /** How the manifest resolved this metro's Zillow RegionID; 'short' means matched by name, 'counties' by identical member counties. */
+  matchedBy: MetroRef["zillowMatchedBy"];
   state: SectionState;
 }
 
@@ -139,7 +139,7 @@ const NATIONAL_INDICATORS =
   "The indicator block is the NATIONAL set, filtered only by lens. None of these series is keyed to this place: they are United States, gauge, single-state or port series and they are shown as context, not as this place's own readings.";
 
 const NO_METRO_MARKET =
-  "There is no metro market report: MarketReport describes a county or a state, and BLS QCEW publishes no metro row at the aggregation levels this app reads. The metro page shows Zillow's own metro rows and a county-rollup employment estimate with its arithmetic instead.";
+  "There is no metro market report: MarketReport describes a county or a state, and BLS QCEW's own metro rows follow each year's delineation, so they are not used here. The metro page shows Zillow's own metro rows and a county-rollup employment estimate with its arithmetic instead.";
 
 const NO_STATE_WATER =
   "A 75 km disc around a state's centroid is not a state water report, so the water section is omitted at state scale rather than presented as one.";
@@ -450,7 +450,7 @@ export function placeFactsShell(scope: PlaceScope, opts: PlaceFactsOptions): Pla
   }
 
   if (scope.kind === "county" && scope.provisional) {
-    caveats.push(`County ${scope.id} is not in the offline place manifest yet (${MANIFEST.countyCount} of about 3,235 counties are), so its name and centroid have to come from upstream at request time.`);
+    caveats.push(`County ${scope.id} is not in the offline place manifest yet (${MANIFEST.countyCount} of the 3,222 counties and county equivalents are), so its name and centroid have to come from upstream at request time.`);
   }
 
   const provenance = jobs ? [oewsProvenance(OEWS_AS_OF, at, { msa: cbsa ?? undefined })] : [];
@@ -531,7 +531,11 @@ async function peerStatsFor(scope: PlaceScope): Promise<Record<string, PeerStat[
       const cohorts: Cohort[] = [{ kind: "national", of: "county" }];
       const usps = scope.ref?.stusab;
       if (usps) cohorts.push({ kind: "state", usps });
-      const cbsa = scope.ref?.cbsa ?? metroForCounty(scope.id)?.cbsa ?? null;
+      // Only a code with a metro page: a micropolitan county carries its CBSA
+      // code but has no metro to be ranked in, and a cohort for it would print
+      // "not in the place manifest" beside every ranked figure on the page.
+      const own = scope.ref?.cbsa ?? null;
+      const cbsa = (own && metroByCbsa(own) ? own : null) ?? metroForCounty(scope.id)?.cbsa ?? null;
       if (cbsa) cohorts.push({ kind: "metro", cbsa });
       return await budgeted(peerStats("county", scope.id, cohorts), "Rank context");
     }
@@ -687,6 +691,9 @@ async function metro(facts: PlaceFacts, scope: Extract<PlaceScope, { kind: "metr
   if (regionId && ref.zillowMatchedBy === "short") {
     facts.caveats.push(`Zillow's metro row was matched to this CBSA BY NAME (Zillow titles metros short, "Austin, TX", where the Census titles them long), not by a shared code. RegionID ${regionId}.`);
   }
+  if (regionId && ref.zillowMatchedBy === "counties") {
+    facts.caveats.push(`Zillow's metro row was matched to this CBSA BY ITS COUNTIES, not by name or code: Zillow still titles the area by an older delineation, and its county file puts exactly this metro's counties under that row. RegionID ${regionId}.`);
+  }
 
   // The county rollup: withheld counties are NAMED, never counted as zero.
   const member = countiesInMetro(ref.cbsa);
@@ -713,7 +720,7 @@ async function metro(facts: PlaceFacts, scope: Extract<PlaceScope, { kind: "metr
   }
   facts.rollup = { jobs: total, counties: counted.length, suppressed: [...withheld, ...missing], formula };
   if (total != null) {
-    facts.caveats.push("Metro employment is an ESTIMATE: BLS QCEW publishes no metro row at the aggregation levels this app reads, so it is the sum of the member counties BLS did publish. Withheld counties are named and excluded, never zeroed.");
+    facts.caveats.push("Metro employment is an ESTIMATE: the sum of the member counties BLS did publish, not BLS QCEW's own metro row, whose boundaries follow each year's delineation. Withheld counties are named and excluded, never zeroed.");
     facts.metricProvenance["jobs.emp"] = [estimateProvenance("bls-qcew", formula.join(" "), at, [`CBSA ${ref.cbsa}`])];
     facts.values["jobs.emp"] = total;
     if (qcew.value) facts.periods.current["jobs.emp"] = qcew.value.period;

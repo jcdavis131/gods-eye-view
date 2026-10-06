@@ -6,18 +6,21 @@ import {
   countyDeposits,
   countyFilter,
   fdicDate,
+  FDIC_BASE,
   fdicUrl,
   financialsSeries,
+  msaCode,
   parseBranch,
   parseFailure,
   parseFinancialsRow,
   parseInstitution,
   parseSodRow,
+  SOD_FIELDS,
   sodYears,
   unwrapFdic,
 } from "./fdic";
 
-// shape per https://banks.data.fdic.gov/docs/; unverified in sandbox
+// shape per https://api.fdic.gov/banks/docs/
 const INSTITUTIONS = {
   meta: { total: 1, parameters: { filters: "STALP:TX AND ACTIVE:1" } },
   data: [
@@ -163,7 +166,7 @@ describe("query helpers", () => {
   });
   it("builds a BankFind URL with json and the page cap by default", () => {
     const u = new URL(fdicUrl("sod", { filters: "STCNTYBR:48453 AND YEAR:2025", fields: "CERT" }));
-    expect(u.origin + u.pathname).toBe("https://banks.data.fdic.gov/api/sod");
+    expect(u.origin + u.pathname).toBe("https://api.fdic.gov/banks/sod");
     expect(u.searchParams.get("filters")).toBe("STCNTYBR:48453 AND YEAR:2025");
     expect(u.searchParams.get("format")).toBe("json");
     expect(u.searchParams.get("limit")).toBe("10000");
@@ -175,11 +178,60 @@ describe("query helpers", () => {
   });
 });
 
+// Real /sod responses, copied verbatim from https://api.fdic.gov/banks/sod (2026-10-01) with
+// fields=SOD_FIELDS, YEAR:2025, the largest office by deposits in Travis County TX (48453, Austin MSA)
+// and in Wilbarger County TX (48487, micropolitan Vernon, outside any MSA).
+const SOD_LIVE_TRAVIS = {"meta":{"total":233,"parameters":{"filters":"STCNTYBR:48453 AND YEAR:2025","fields":"CERT,NAMEFULL,BRNUM,UNINUMBR,DEPSUMBR,ASSET,STCNTYBR,CNTYNAMB,STALPBR,YEAR,SIMS_LATITUDE,SIMS_LONGITUDE,MSABR,MSANAMB","limit":"1"},"index":{"name":"sod_1789738734553","createTimestamp":"2026-09-18T13:38:54Z"}},"data":[{"data":{"STALPBR":"TX","MSABR":12420,"UNINUMBR":290600,"ASSET":31631701,"CNTYNAMB":"Travis","SIMS_LONGITUDE":-97.7427049808869,"YEAR":2025,"STCNTYBR":48453,"DEPSUMBR":10226484,"MSANAMB":"Austin-Round Rock-San Marcos, TX","NAMEFULL":"Texas Capital Bank","CERT":34383,"SIMS_LATITUDE":30.262331008102,"BRNUM":7,"ID":"2025_34383_7"},"score":0}],"totals":{"count":233}};
+const SOD_LIVE_WILBARGER = {"meta":{"total":6,"parameters":{"filters":"STCNTYBR:48487 AND YEAR:2025","fields":"CERT,NAMEFULL,BRNUM,UNINUMBR,DEPSUMBR,ASSET,STCNTYBR,CNTYNAMB,STALPBR,YEAR,SIMS_LATITUDE,SIMS_LONGITUDE,MSABR,MSANAMB","limit":"1"},"index":{"name":"sod_1789738734553","createTimestamp":"2026-09-18T13:38:54Z"}},"data":[{"data":{"STALPBR":"TX","MSABR":0,"UNINUMBR":3789,"ASSET":328967,"CNTYNAMB":"Wilbarger","SIMS_LONGITUDE":-99.285249001945,"YEAR":2025,"STCNTYBR":48487,"DEPSUMBR":256396,"MSANAMB":"","NAMEFULL":"The Waggoner National Bank of Vernon","CERT":5569,"SIMS_LATITUDE":34.1549189873761,"BRNUM":0,"ID":"2025_5569_0"},"score":0}],"totals":{"count":6}};
+
+describe("BankFind base and SOD metro fields", () => {
+  it("requests the current host; the old one answers 301 to it", () => {
+    expect(FDIC_BASE).toBe("https://api.fdic.gov/banks");
+    expect(fdicUrl("sod", {}).startsWith("https://api.fdic.gov/banks/sod?")).toBe(true);
+  });
+  it("asks SOD for the office's MSA code and title", () => {
+    const fields = SOD_FIELDS.split(",");
+    expect(fields).toContain("MSABR");
+    expect(fields).toContain("MSANAMB");
+  });
+  it("a live Travis County office carries its CBSA", () => {
+    const [row] = unwrapFdic<Record<string, string | number | null>>(SOD_LIVE_TRAVIS).rows.map(parseSodRow);
+    expect(row).toEqual({
+      cert: 34383,
+      name: "Texas Capital Bank",
+      brnum: 7,
+      uninum: 290600,
+      deposits: 10226484,
+      assets: 31631701,
+      fips: "48453",
+      county: "Travis",
+      state: "TX",
+      year: 2025,
+      lat: 30.262331008102,
+      lon: -97.7427049808869,
+      cbsa: "12420",
+      cbsaName: "Austin-Round Rock-San Marcos, TX",
+    });
+  });
+  it("an office outside any MSA (MSABR 0) has a null CBSA, never 00000", () => {
+    const [row] = unwrapFdic<Record<string, string | number | null>>(SOD_LIVE_WILBARGER).rows.map(parseSodRow);
+    expect(row).toMatchObject({ cert: 5569, fips: "48487", county: "Wilbarger", cbsa: null, cbsaName: null });
+  });
+  it("msaCode pads short codes and rejects blanks, zero and junk", () => {
+    expect(msaCode(12420)).toBe("12420");
+    expect(msaCode("12420")).toBe("12420");
+    expect(msaCode(0)).toBeNull();
+    expect(msaCode("")).toBeNull();
+    expect(msaCode(null)).toBeNull();
+    expect(msaCode("n/a")).toBeNull();
+  });
+});
+
 describe("countyDeposits", () => {
   const rows = unwrapFdic<Record<string, string | number | null>>(SOD)
     .rows.map(parseSodRow)
     .filter((r): r is NonNullable<typeof r> => !!r);
-  const d = countyDeposits("48453", 2025, rows, "https://banks.data.fdic.gov/api/sod?x", "2026-09-11T00:00:00Z");
+  const d = countyDeposits("48453", 2025, rows, "https://api.fdic.gov/banks/sod?x", "2026-09-11T00:00:00Z");
   it("totals in dollars, counts offices and banks, ranks the top list", () => {
     expect(d.total).toBe(1_500_000_000);
     expect(d.branches).toBe(3);

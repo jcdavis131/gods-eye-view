@@ -9,11 +9,11 @@
 // Everything that does need the network says so in words. Zillow's metro files
 // are keyed by RegionID and the manifest may not have resolved one, in which
 // case the housing section reads "unavailable" with that reason rather than
-// guessing a row by name. And BLS publishes no metro employment total at the
-// aggregation levels this app reads — qcewSectors handles SSCCC / SS000 /
-// US000 at agglvl 74 / 54 / 14 and nothing else — so the employment figure is
-// an explicit county rollup that prints its own arithmetic and NAMES the
-// counties it could not count instead of treating them as zero.
+// guessing a row by name. And the employment figure is an explicit county
+// rollup that prints its own arithmetic and NAMES the counties it could not
+// count instead of treating them as zero. BLS does publish a metro total
+// (agglvl 40, which qcewLatest keeps), but its boundaries follow each year's
+// delineation, so the page sums the member counties instead.
 //
 // Ethics: places and institutions only. Nothing here addresses a parcel, an
 // address, an owner, an officer or an insider.
@@ -198,7 +198,7 @@ export default async function MetroPage({ params }: Params) {
           label="Jobs, county rollup"
           display={num(rollup?.jobs ?? null)}
           asOf={facts.periods.current["jobs.emp"] ?? null}
-          basis="An estimate. BLS publishes no metro employment total at the aggregation levels this app reads, so this is the sum of the member counties it does publish. The arithmetic is printed below."
+          basis="An estimate: the sum of the member counties BLS publishes, not BLS's own metro row, whose boundaries follow each year's delineation. The arithmetic is printed below."
         />
         <Stat
           label="Typical home value"
@@ -274,7 +274,9 @@ export default async function MetroPage({ params }: Params) {
         basis={
           housing?.matchedBy === "short"
             ? "Zillow's metro row was matched to this CBSA BY NAME, not by a shared code: Zillow titles metros short (\"Austin, TX\") where the Census titles them long. Both series are Zillow's own smoothed indices of the middle third of the market, not sale prices."
-            : "Zillow Home Value Index and Observed Rent Index, metro files, joined by the RegionID recorded in the place manifest. Both are smoothed indices of the middle third of the market, not sale prices."
+            : housing?.matchedBy === "counties"
+              ? "Zillow's metro row was matched to this CBSA BY ITS COUNTIES, not by name or code: Zillow still titles the area by an older delineation, and its county file puts exactly this metro's counties under that row. Both series are Zillow's own smoothed indices of the middle third of the market, not sale prices."
+              : "Zillow Home Value Index and Observed Rent Index, metro files, joined by the RegionID recorded in the place manifest. Both are smoothed indices of the middle third of the market, not sale prices."
         }
       >
         {housing?.home ? (

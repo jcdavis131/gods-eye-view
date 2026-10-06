@@ -2,7 +2,7 @@
 
 The globe answers "what is happening here" for a point you are looking at. A place page answers the same question for a name somebody typed: *Travis County*, *San Antonio metro*, *Texas*. Same sources, same provenance envelope, same arithmetic printed next to every estimate — rendered as a document instead of a heads-up display, at a URL a search engine can index and a person can link.
 
-Every page is about a **place or an institution**: a county, a metro area, a state, a bank office, a federal award recipient, a listed company's headquarters county. No parcel, no street address, no owner, no officer, no insider appears anywhere in this surface, and no module here has a person-level field to leak.
+Every page is about a **place or an institution**: a county, a metro area, a state, a bank office, a federal award recipient, a listed company's headquarters county. No parcel, no street address, no owner, no officer, no insider appears anywhere in this surface, and no module here has a person-level field to leak. Insiders who file Forms 3, 4 and 5 are reached from a company's dossier, never from a place ([docs/PEOPLE.md](PEOPLE.md)).
 
 ## URL scheme
 
@@ -25,22 +25,22 @@ Metro and state carry the same `/brief`, `/brief/[lens]`, `feed.xml` and `feed.j
 
 ## What is indexable, and why so little of it is
 
-Roughly **3,680 indexable place URLs**: about 3,235 counties, 393 metros, 52 states, plus the three hubs. That is the acquisition surface. A place page carries the query intent — "San Antonio rent trend", "Travis County jobs" — and it is the only page with enough distinct content per URL to deserve the crawl budget.
+Roughly **3,670 indexable place URLs**: 3,222 counties and county equivalents, 393 metros, 52 states, plus the three hubs. That is the acquisition surface. A place page carries the query intent — "San Antonio rent trend", "Travis County jobs" — and it is the only page with enough distinct content per URL to deserve the crawl budget.
 
 Everything else is deliberately `index: false, follow: true`:
 
-- **Lens briefs.** 3,680 places × 7 lenses is 25,760 near-duplicate URLs over the same numbers. That is the doorway-page pattern, and shipping it would demote the 3,680 pages that matter.
-- **Compare pages.** 3,235² is roughly ten million URLs reachable by construction — a crawl trap. `follow: true` keeps the link equity flowing inward to the two place pages.
+- **Lens briefs.** 3,670 places × 7 lenses is 25,690 near-duplicate URLs over the same numbers. That is the doorway-page pattern, and shipping it would demote the 3,670 pages that matter.
+- **Compare pages.** 3,222² is roughly ten million URLs reachable by construction — a crawl trap. `follow: true` keeps the link equity flowing inward to the two place pages.
 - **A default brief with zero findings.** `generateMetadata` returns `index: false` when `brief.findings.length === 0`, so a quiet county never ships a thin page. The digest still renders, and the feeds still carry it.
 
-**No brief URL appears in any sitemap, ever.** Briefs are discovered by the in-content link on their place page, which passes equity and is the honest signal ("this page links to it") rather than "we listed 3,680 URLs that may render noindex". It also removes the contradiction of listing URLs whose indexability depends on whether an upstream answered.
+**No brief URL appears in any sitemap, ever.** Briefs are discovered by the in-content link on their place page, which passes equity and is the honest signal ("this page links to it") rather than "we listed 3,670 URLs that may render noindex". It also removes the contradiction of listing URLs whose indexability depends on whether an upstream answered.
 
 Sitemaps, all absolute URLs built with `absoluteUrl()` from `lib/seo/base.ts`:
 
 | file | contains |
 | --- | --- |
 | `app/sitemap.ts` → `/sitemap.xml` | `/`, `/place`, `/metro`, `/state` |
-| `app/(docs)/place/sitemap.ts` → `/place/sitemap/0.xml` … | counties, sharded 1,000 per file via `generateSitemaps()` |
+| `app/(docs)/place/sitemap.ts` → `/place/sitemap/0.xml` … `/place/sitemap/3.xml` | 3,222 counties, sharded 1,000 per file via `generateSitemaps()` (four shards) |
 | `app/(docs)/metro/sitemap.ts` → `/metro/sitemap.xml` | 393 metros |
 | `app/(docs)/state/sitemap.ts` → `/state/sitemap.xml` | 52 states |
 
@@ -55,8 +55,8 @@ Two version traps live in the sharded sitemap and are handled in `app/(docs)/pla
 | table | rows | complete | derived from |
 | --- | --- | --- | --- |
 | `states.json` | 52 | **yes** | hand-maintained: 50 states, DC, PR, with approximate centres. Public knowledge, not a pull. |
-| `metros.json` | 393 | **yes** | `lib/economy/data/msa_index.json`, the bundled BLS OEWS metro index, regenerated offline |
-| `counties.json` | 21 | **no** (`complete: false`) | a seed: the union of `lib/screener/fixtures.ts` `COUNTY_POINTS` and the distinct `countyFips` in the companies bundle |
+| `metros.json` | 393 | **yes** | `lib/economy/data/msa_index.json`, the bundled BLS OEWS metro index, regenerated offline; `counties[]` from OMB's July 2023 delineation and `zillowRegionId` from Zillow's metro files, both written by the network pull |
+| `counties.json` | 3,222 | **yes** (pulled 2026-10-01) | TIGERweb `Generalized_ACS2023/State_County` layer 13; CBSA membership from OMB `list1_2023.xlsx`; neighbours from the Census 2023 county adjacency file |
 
 `MANIFEST` (from `lib/places/registry.ts`) exposes `pulled`, `countiesComplete`, `metrosComplete`, `countyCount`, `metroCount`, `stateCount` and `cbsaMethod`. Pages print those numbers rather than implying a completeness the tables do not have.
 
@@ -64,22 +64,40 @@ Two version traps live in the sharded sitemap and are handled in `app/(docs)/pla
 
 ```bash
 node scripts/places-data.mjs --offline   # states.json + metros.json, no network at all; byte-idempotent
-node scripts/places-data.mjs             # the full pull; needs egress, cannot run in the dev sandbox
+node scripts/places-data.mjs             # the full pull; needs egress (keyless: TIGERweb, www2.census.gov, Zillow)
 ```
 
-The full pull additionally: pages the TIGERweb county layer to build all ~3,235 counties; assigns each county's CBSA by point-in-polygon of its Census internal point against the TIGERweb CBSA polygon layer; derives `adj[]` from the Census county adjacency file; and resolves each metro's Zillow `RegionID` by name match, recording `zillowMatchedBy` as `exact`, `short` or `null`. It **refuses** to overwrite `counties.json` if the new count is more than 2 percent below the existing count, and refuses to write fewer than 1,100 counties with a CBSA — a silently truncated pull is worse than no pull.
+The full pull reads, in order, and writes nothing until every read has succeeded:
+
+1. **OMB's July 2023 delineation**, `list1_2023.xlsx`, read by a stdlib zip + XML reader inside the script (no dependency). 935 CBSAs: 393 metropolitan, 542 micropolitan, covering 1,915 counties. This is where membership comes from; it is published, so it is not inferred.
+2. **The counties**, TIGERweb `Generalized_ACS2023/State_County` layer 13 (Counties 20M): 3,222 rows. That is the 3,144 county equivalents of the 50 states and DC, with Connecticut as its nine planning regions (09110-09190), plus the 78 Puerto Rico municipios. Layers 11 and 12 carry 13 more, the island areas, which the state table does not name. Each row's point is the Census internal point (`INTPTLON`/`INTPTLAT`), rounded to four decimals on write.
+3. **A cross-check of the membership**: point-in-polygon of every county's internal point, at full precision, against TIGERweb `Generalized_ACS2023/CBSA` layers 21 (Metropolitan Statistical Areas 20M) and 25 (Micropolitan Statistical Areas 20M), unioned. Layer 0 is a "Labels" group that answers 400, and the 500K layers 7 and 8 return no geometry, which is why the 20M pair is used. The pull of 2026-10-01 found **0 disagreements** in 935 polygons. More than 10 fails the pull, because that many means the spreadsheet was misread.
+4. **Adjacency**, `county_adjacency/county_adjacency2023.txt` (the old path without the `county_adjacency/` directory 404s). The 2023 file matches the January 2023 county layer; the 2024 file differs only by dropping the Juneau-Petersburg pair and adding Midway. Three Hawaii counties (Hawaii, Honolulu, Kauai) have no neighbours, which is true.
+5. **Zillow region ids**, from the union of Zillow's metro ZHVI and ZORI files (Dayton, Poughkeepsie and Prescott Valley are only in ZORI). Each metro is matched `exact` (Zillow's RegionName is the title), then `short` (first principal city and state, "Austin, TX"), then `counties`: the 2023 title no longer names Zillow's row, but Zillow's county file puts exactly the same counties under one Zillow metro. Wildwood-The Villages, FL and Kiryas Joel-Poughkeepsie-Newburgh, NY are matched that way. A name match whose Zillow counties share none of OMB's is refused as the wrong entity.
+
+The 2026-10-01 pull filled `zillowRegionId` for **382 of 393** metros (215 exact, 165 short, 2 counties). The other 11 are listed in `metros.json` `meta.zillowUnmatched` with the reason: the 6 Puerto Rico metros (Zillow publishes no Puerto Rico rows), and 5 metros the 2023 delineation created or reshaped that Zillow, still on the 2020 delineation, does not carry. Four it folds into a neighbour: Amherst Town-Northampton, MA (Hampshire County is in Zillow's Springfield, MA), Kenosha, WI (in Zillow's Chicago), Slidell-Mandeville-Covington, LA (in Zillow's New Orleans) and Waterbury-Shelton, CT (Zillow files Connecticut by its old counties, so there is no Naugatuck Valley row). The fifth, Lexington Park, MD, is the near miss: Zillow's "California, MD" is St. Mary's County alone, and the 2023 metro adds Calvert County, so the county sets differ and nothing is matched.
+
+`county.cbsa` holds the OMB code of either kind. Only the 393 metropolitan codes have a metro page, so code that wants a metro goes through `metroForCounty` or `metroByCbsa`, which return null for a micropolitan code; `placeFacts` offers a metro rank cohort only when there is a metro.
+
+The script **refuses** to write if the new county count is more than 2 percent below the existing one, if fewer than 1,100 counties land in a CBSA, if `list1` names a county the county layer does not, if OMB's 393 metropolitan codes differ from `msa_index.json`'s, or if any metro ends up with no counties. A silently truncated pull is worse than no pull. `--offline` stays byte-idempotent and keeps what the last pull wrote.
+
+The script sends `embedding-atlas/0.1 (+https://eye.jcamd.com; open-source globe)` as its user agent: no repository URL and no contact address, because none of these hosts is SEC.
 
 `MANIFEST.cbsaMethod` is written by the script and is meant to be quoted on a page. Today it reads:
 
-> none: seed rows carry cbsa null. Run scripts/places-data.mjs on a host with egress to assign CBSA membership by point-in-polygon.
+> OMB July 2023 delineation (https://www2.census.gov/programs-surveys/metro-micro/geographies/reference-files/2023/delineation-files/list1_2023.xlsx): 1915 counties in 935 CBSAs, 393 metropolitan and 542 micropolitan; cbsa holds either kind, and only the metropolitan codes have a metro page. Cross-checked by point-in-polygon of each county's Census internal point (INTPTLON/INTPTLAT) against https://tigerweb.geo.census.gov/arcgis/rest/services/Generalized_ACS2023/CBSA/MapServer layers 21 (Metropolitan Statistical Areas 20M) and 25 (Micropolitan Statistical Areas 20M), 935 polygons: 0 disagreements.
 
-After a pull it names the service, the layer id and the polygon count, e.g. *"point-in-polygon of each county's Census internal point (CENTLON/CENTLAT) against &lt;service&gt; layer &lt;n&gt;, &lt;k&gt; CBSA polygons"*. The script also prints per-CBSA membership counts so a human can eyeball them before committing.
+### What the complete county table changed
 
-### What `countiesComplete: false` changes
+The table shipped as a 21-row seed with `complete: false` until the pull of 2026-10-01. Flipping it to `complete: true` changed three things, and the third has a cost.
 
-**URL validation.** `parseCountyParam` accepts a five-digit FIPS whose last three digits are not `000` (that form is a state row in QCEW, never a county). If the manifest names it, the scope carries a `CountyRef`. If the manifest does not, and `countiesComplete` is false, and the two-digit prefix is one of the 52 known states, the scope resolves **provisionally**: accepted, `ref: null`, `provisional: true`, and the page gets its name and centroid from upstream at request time. So every real county stays reachable today. When the pull has run and `countiesComplete` flips to true, the provisional branch stops firing and an unknown FIPS becomes an exact 404 — the same URLs, stricter.
+**URL validation is exact.** `parseCountyParam` accepts a five-digit FIPS whose last three digits are not `000` (that form is a state row in QCEW, never a county). If the manifest names it, the scope carries a `CountyRef`; if it does not, the URL is a 404. That now includes the eight old Connecticut counties (09001-09015), which the planning regions replaced in 2022. The provisional branch is still in the code for a build that ever ships an incomplete table: there, a structurally valid FIPS with one of the 52 known state prefixes resolves with `ref: null`, `provisional: true`, and the page gets its name and centroid from upstream at request time.
 
-**The sitemap.** It lists what the manifest can name, so it is 21 counties today and about 3,235 after a pull. `generateSitemaps()` sizes itself from `Math.ceil(allCountyFips().length / 1000)` with a minimum of one shard, so the seed yields one file and a full pull yields four with no code change. The `/place` hub says in one honest sentence that the county table is a seed, and still links all 52 states.
+**The link graph fills in.** Neighbours and same-metro links come from `adj[]` and `cbsa`, so every county page now links its bordering counties and the rest of its metro, and `graphCompleteness()` reports both as pulled.
+
+**The sitemap grows from 21 county URLs to 3,222.** `generateSitemaps()` sizes itself from `Math.ceil(allCountyFips().length / 1000)`, so it went from one shard to four with no code change, and `app/robots.ts` lists all four. The `/place` hub reads only the manifest, so it is unaffected; it no longer prints the seed sentence or the list of named counties.
+
+**Crawl load is the cost.** Every one of those 3,222 URLs is a `force-dynamic` render of `placeFacts`, and a cold one fans out to the market report (TIGERweb plus two Zillow CSVs plus a full-US QCEW quarter), the water report, FDIC and USAspending. There is no CDN HTML cache in front of a dynamic page, so a crawler working through the sitemap pays that per URL; what absorbs repeats is `cached()` in `lib/server/cache.ts`, which only helps inside one warm server process. Before this, the sitemap advertised 21 counties and a crawler found the rest only through links. Watch function invocations and upstream error rates after the first crawl, and if they hurt, the lever is giving the fetchers a cacheable path (see the migration note below), not shrinking the sitemap.
 
 **Metros are unaffected**, because the metro table is complete: an unknown CBSA is a real 404 today.
 

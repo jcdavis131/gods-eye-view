@@ -28,6 +28,10 @@ export type LayerId =
   | "occupations"
   | "gasprices"
   | "gasforecast"
+  | "ercotprices"
+  | "uselectricity"
+  | "globalgeneration"
+  | "datacenters"
   | "weather"
   | "wildfire"
   | "fires"
@@ -62,7 +66,8 @@ export type LayerId =
   | "sports"
   | "constructs"
   | "field"
-  | "alerts";
+  | "alerts"
+  | "employers";
 
 export const LAYER_IDS: LayerId[] = [
   "aircraft",
@@ -84,6 +89,10 @@ export const LAYER_IDS: LayerId[] = [
   "occupations",
   "gasprices",
   "gasforecast",
+  "ercotprices",
+  "uselectricity",
+  "globalgeneration",
+  "datacenters",
   "weather",
   "wildfire",
   "fires",
@@ -119,6 +128,7 @@ export const LAYER_IDS: LayerId[] = [
   "constructs",
   "field",
   "alerts",
+  "employers",
 ];
 
 /** Properties every feature carries, whatever the layer. */
@@ -174,6 +184,8 @@ export interface FetchContext {
   now: number;
   /** Epoch ms of the mission clock (wall clock + timeline offset). */
   missionTime?: number;
+  /** Playback year for time-aware layers; null when the time machine is off. */
+  playbackYear?: number | null;
   signal?: AbortSignal;
   /** Free-form layer options coming from the settings store (e.g. satellite groups). */
   options: Record<string, unknown>;

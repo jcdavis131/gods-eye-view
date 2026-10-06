@@ -68,6 +68,8 @@ export interface ClockState {
   multiplier: number;
   /** Whether the Cesium clock advances. */
   animate: boolean;
+  /** Time machine engaged: layers redraw for the playback year instead of latest. */
+  timeMachine: boolean;
 }
 
 interface GlobeState {
@@ -95,6 +97,10 @@ interface GlobeState {
 
   clock: ClockState;
   setClock: (patch: Partial<ClockState>) => void;
+
+  /** Playback year the time-aware layers are drawn for; null when live. */
+  playbackYear: number | null;
+  setPlaybackYear: (year: number | null) => void;
 
   log: LogEntry[];
   pushLog: (entry: Omit<LogEntry, "t">) => void;
@@ -166,8 +172,11 @@ export const useGlobe = create<GlobeState>()((set) => ({
   view: { lon: -97.74, lat: 30.27, height: 12_000_000, heading: 0, pitch: -90 },
   setView: (view) => set({ view }),
 
-  clock: { offsetMs: 0, multiplier: 1, animate: true },
+  clock: { offsetMs: 0, multiplier: 1, animate: true, timeMachine: false },
   setClock: (patch) => set((s) => ({ clock: { ...s.clock, ...patch } })),
+
+  playbackYear: null,
+  setPlaybackYear: (playbackYear) => set({ playbackYear }),
 
   log: [],
   pushLog: (entry) =>

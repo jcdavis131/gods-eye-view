@@ -224,8 +224,19 @@ export default function CesiumGlobe() {
           arbitrateLabels(viewer!, allRenderers());
         }
         const st = useGlobe.getState();
+        // Time machine: slow spin while history plays; pauses on camera
+        // input, resumes after 5 s idle. Never fights the operator.
+        const timeMachineSpin = st.clock.timeMachine && st.clock.animate;
         if (st.following) {
           followTick();
+        } else if (
+          timeMachineSpin &&
+          !isMobileViewport() &&
+          now - lastInput > 5_000 &&
+          !st.settingsOpen &&
+          !st.searchOpen
+        ) {
+          cinematicTick(dt);
         } else if (
           useSettings.getState().prefs.cinematic &&
           !isMobileViewport() &&

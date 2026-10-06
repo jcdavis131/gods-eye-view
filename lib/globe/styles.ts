@@ -15,6 +15,12 @@ import { commerceStyle, realestateStyle, tradeStyle } from "./economyStyles";
 import { companiesStyle } from "./companyStyles";
 import { bankStyle, spendingStyle } from "./financeStyles";
 import { gasForecastStyle, gasPricesStyle } from "./gasStyles";
+import {
+  datacentersStyle,
+  ercotPricesStyle,
+  globalGenerationStyle,
+  usElectricityPricesStyle,
+} from "./energyStyles";
 import { constructsStyle } from "./constructStyles";
 import { fieldStyle } from "./fieldStyles";
 import { alertsStyle } from "./alertStyles";
@@ -402,6 +408,10 @@ export const STYLES: Partial<Record<LayerId, LayerStyle>> = {
   occupations: occupationsStyle,
   gasprices: gasPricesStyle,
   gasforecast: gasForecastStyle,
+  ercotprices: ercotPricesStyle,
+  uselectricity: usElectricityPricesStyle,
+  globalgeneration: globalGenerationStyle,
+  datacenters: datacentersStyle,
   weather: weatherStyle,
   wildfire: wildfireStyle,
   fires: firesStyle,
@@ -455,11 +465,16 @@ export const FOLLOW_RANGE: Record<LayerId, number> = {
   commerce: 150_000,
   realestate: 150_000,
   companies: 20_000,
+  employers: 20_000,
   banks: 20_000,
   spending: 150_000,
   occupations: 400_000,
   gasprices: 400_000,
   gasforecast: 400_000,
+  ercotprices: 400_000,
+  uselectricity: 400_000,
+  globalgeneration: 400_000,
+  datacenters: 20_000,
   weather: 500_000,
   wildfire: 60_000,
   fires: 20_000,

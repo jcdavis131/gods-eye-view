@@ -404,6 +404,57 @@ describe("placeFacts, metro", () => {
     expect(f.housing?.state.reason).toContain("RegionID");
     expect(zillow).not.toHaveBeenCalled();
   });
+
+  it("says when the Zillow row was matched by its counties rather than by name", async () => {
+    // Wildwood-The Villages, FL (48680) is Zillow's "The Villages, FL": the
+    // 2023 title no longer names Zillow's row, Sumter County ties them.
+    const row = homeRow("395153", 410_000, "2026-08-31", [["2026-08-31", 410_000]]);
+    const table = { kind: "zhviMetro", asOf: "2026-08-31", rows: new Map([["395153", row]]), byName: new Map(), byShort: new Map() };
+    anyFn(zillow).mockResolvedValue(table);
+    anyFn(qcewLatest).mockResolvedValue({ year: 2026, qtr: 1, period: "2026 Q1", counties: new Map(), states: new Map() });
+    anyFn(peerStats).mockResolvedValue({});
+    anyFn(getIndicators).mockResolvedValue({ items: [], generatedAt: "x" });
+
+    const ref = metroRef({ cbsa: "48680", name: "Wildwood-The Villages, FL", short: "wildwood|FL", states: ["FL"], zillowRegionId: "395153", zillowMatchedBy: "counties" });
+    const f = await placeFacts({ kind: "metro", id: "48680", ref }, { now: NOW });
+    expect(f.housing?.matchedBy).toBe("counties");
+    expect(f.housing?.home?.latest).toBe(410_000);
+    const said = f.caveats.join(" ");
+    expect(said).toContain("BY ITS COUNTIES");
+    expect(said).toContain("395153");
+    expect(said).not.toContain("BY NAME");
+  });
+});
+
+describe("placeFacts, rank cohorts", () => {
+  function cohortsOf(call: unknown[]): Array<{ kind: string; cbsa?: string }> {
+    return call[2] as Array<{ kind: string; cbsa?: string }>;
+  }
+  async function rank(scope: PlaceScope) {
+    anyFn(marketReportForCounty).mockResolvedValue(market());
+    anyFn(waterReportAt).mockResolvedValue(water());
+    anyFn(financeFor).mockResolvedValue(finance());
+    anyFn(entitySet).mockResolvedValue(setOf([]));
+    anyFn(peerStats).mockResolvedValue({});
+    anyFn(getIndicators).mockResolvedValue({ items: [], generatedAt: "x" });
+    anyFn(companiesSection).mockReturnValue(null);
+    await placeFacts(scope, { now: NOW });
+    const calls = (peerStats as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+    expect(calls).toHaveLength(1);
+    return cohortsOf(calls[0]);
+  }
+
+  it("ranks a metropolitan county inside its metro", async () => {
+    const cohorts = await rank(countyScope({ cbsa: "12420" }));
+    expect(cohorts.map((c) => c.kind)).toEqual(["national", "state", "metro"]);
+    expect(cohorts[2].cbsa).toBe("12420");
+  });
+
+  it("never offers a metro cohort for a micropolitan county, which has no metro page", async () => {
+    // Brown County, SD carries the Aberdeen micropolitan code 10100.
+    const cohorts = await rank(countyScope({ geoid: "46013", name: "Brown County", stusab: "SD", stateFips: "46", stateName: "South Dakota", cbsa: "10100" }));
+    expect(cohorts.map((c) => c.kind)).toEqual(["national", "state"]);
+  });
 });
 
 describe("placeFacts, state", () => {

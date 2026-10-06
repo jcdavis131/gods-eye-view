@@ -32,7 +32,7 @@ const NOW = new Date("2026-03-01T00:00:00Z");
 /** 20 Oct 2025 is 20 days after FY2025 closed, inside the lag. */
 const JUST_CLOSED = new Date("2025-10-20T00:00:00Z");
 
-const sodRow = (cert: number, name: string, deposits: number): SodRow => ({ cert, name, brnum: 0, uninum: null, deposits, assets: null, fips: FIPS, county: "Travis", state: "TX", year: 2025, lat: null, lon: null });
+const sodRow = (cert: number, name: string, deposits: number): SodRow => ({ cert, name, brnum: 0, uninum: null, deposits, assets: null, fips: FIPS, county: "Travis", state: "TX", year: 2025, lat: null, lon: null, cbsa: null, cbsaName: null });
 
 const OBLIGATIONS: AreaObligations = { fy: 2025, byGroup: { contracts: 1_000_000_000, grants: 250_000_000, loans: null, direct: 0 }, total: 1_250_000_000 };
 
@@ -72,7 +72,7 @@ function qcew(row: JobsRow | null) {
 
 /** Everything answers, unless a test overrides one of them. */
 function happy() {
-  up.latestSod.mockResolvedValue({ year: 2025, rows: [sodRow(1, "Big Bank", 600_000), sodRow(2, "Mid Bank", 400_000)], url: "https://banks.data.fdic.gov/api/sod?x" });
+  up.latestSod.mockResolvedValue({ year: 2025, rows: [sodRow(1, "Big Bank", 600_000), sodRow(2, "Mid Bank", 400_000)], url: "https://api.fdic.gov/banks/sod?x" });
   up.obligationsByArea.mockResolvedValue(table([[FIPS, OBLIGATIONS]]));
   up.qcewLatest.mockResolvedValue(qcew(jobsRow(false)));
   up.countySpendingDetail.mockResolvedValue(DETAIL);

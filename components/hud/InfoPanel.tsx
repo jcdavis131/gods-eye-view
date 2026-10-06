@@ -22,6 +22,7 @@ import { useSettings } from "@/lib/store/settings";
 import { turbidityHex } from "@/lib/water/overlay";
 import EconomyAside from "./EconomyAsides";
 import CompanyAside from "./CompanyAside";
+import EmployerAside from "./EmployerAside";
 import FinanceAside from "./FinanceAsides";
 import ConstructAside, { ConstructContext } from "./ConstructAside";
 import { requiredDisclaimer } from "@/lib/civic/terms";
@@ -118,7 +119,7 @@ export default function InfoPanel() {
   const details = Object.entries(p.details ?? {}).filter(([, v]) => v != null && v !== "" && v !== false);
   const isLiveLayer =
     !p.simulated &&
-    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "banks", "spending", "constructs", "field", "flood", "wetlands", "publiclands", "relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "transmission", "pipelines", "plants", "rail", "airports", "dams", "faults", "landslides", "geology", "plss", "parcels", "zoning", "permits", "licences", "envpermits"].includes(p.layer);
+    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "employers", "banks", "spending", "constructs", "field", "flood", "wetlands", "publiclands", "relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "transmission", "pipelines", "plants", "rail", "airports", "dams", "faults", "landslides", "geology", "plss", "parcels", "zoning", "permits", "licences", "envpermits"].includes(p.layer);
   const banner = BANNER[p.layer];
   const iss = p.layer === "satellites" && p.id === "25544";
   const construct = p.layer === "constructs" || p.layer === "field" || p.layer === "alerts";
@@ -226,6 +227,7 @@ export default function InfoPanel() {
         {sat && <SatPasses key={sat.NORAD_CAT_ID} omm={sat} />}
         {economy && <EconomyAside key={p.id} feature={feature} />}
         {p.layer === "companies" && <CompanyAside key={p.id} feature={feature} />}
+        {p.layer === "employers" && <EmployerAside key={p.id} feature={feature} />}
         {(p.layer === "banks" || p.layer === "spending") && <FinanceAside key={p.id} feature={feature} />}
         {parcel && <ParcelAside key={p.id} feature={feature} />}
         {construct ? <ConstructAside key={p.id} feature={feature} /> : <ConstructContext key={`ctx:${p.layer}:${p.id}`} feature={feature} />}

@@ -13,6 +13,7 @@
 import type { Point } from "geojson";
 import type { FetchContext, FetchResult, LayerDefinition, LayerFeature } from "./types";
 import { fmtGal, fmtGalChange, gasPrices, statePriceList } from "@/lib/gas/gas";
+import { gasWeekForDate, missionTimeForYear } from "@/lib/globe/timeMachine";
 
 export interface GasPriceExtra {
   code: string;
@@ -23,49 +24,74 @@ export interface GasPriceExtra {
 
 async function fetchGasPrices(ctx: FetchContext): Promise<FetchResult> {
   const bundle = gasPrices();
+  // Time machine: nearest weekly observation <= the playback date.
+  // Before a series' first observation there is no data — never invented.
+  const playback = ctx.playbackYear != null;
+  const playbackMs = playback
+    ? (ctx.missionTime ?? missionTimeForYear(ctx.playbackYear as number))
+    : null;
+  const seriesAt = (hist: { history: [string, number][] }, fallback: { current: number; prevWeek: number | null; changeWow: number | null; asof: string }) => {
+    if (!playback || playbackMs == null) return fallback;
+    const found = gasWeekForDate(hist.history, playbackMs);
+    if (!found) return { current: NaN, prevWeek: null, changeWow: null, asof: `no EIA data yet` };
+    const prev = found.prev;
+    return {
+      current: found.point[1],
+      prevWeek: prev ? prev[1] : null,
+      changeWow: prev ? found.point[1] - prev[1] : null,
+      asof: found.point[0],
+    };
+  };
+  const nationalW = seriesAt(bundle.national, bundle.national);
+  const national = nationalW.current;
   const states = statePriceList();
-  const national = bundle.national.current;
-  const features: LayerFeature<Point>[] = states.map((s) => ({
-    type: "Feature",
-    geometry: { type: "Point", coordinates: [s.lon, s.lat] },
-    properties: {
-      id: `gas-${s.code}`,
-      layer: "gasprices",
-      name: s.name,
-      kind: "state",
-      altitude: 0,
-      observedAt: Date.parse(`${s.asof}T12:00:00Z`),
-      source: "U.S. Energy Information Administration",
-      details: {
-        "Regular": fmtGal(s.current),
-        "Week ago": fmtGal(s.prevWeek),
-        "WoW change": fmtGalChange(s.changeWow),
-        "vs national": fmtGalChange(s.current - national),
-        "As of": s.asof,
-        "National avg": fmtGal(national),
+  const features: LayerFeature<Point>[] = states.map((s) => {
+    const w = seriesAt(s, s);
+    const hasData = Number.isFinite(w.current);
+    return {
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [s.lon, s.lat] },
+      properties: {
+        id: `gas-${s.code}`,
+        layer: "gasprices",
+        name: s.name,
+        kind: "state",
+        altitude: 0,
+        observedAt: hasData ? Date.parse(`${w.asof}T12:00:00Z`) : undefined,
+        source: "U.S. Energy Information Administration",
+        details: {
+          "Regular": fmtGal(hasData ? w.current : null),
+          "Week ago": fmtGal(w.prevWeek),
+          "WoW change": fmtGalChange(w.changeWow),
+          "vs national": !hasData || !Number.isFinite(national) ? "n/a" : fmtGalChange(w.current - national),
+          "As of": w.asof,
+          "National avg": fmtGal(Number.isFinite(national) ? national : null),
+        },
+        extra: {
+          code: s.code,
+          price: hasData ? w.current : NaN,
+          changeWow: w.changeWow,
+          vsNational: hasData && Number.isFinite(national) ? w.current - national : NaN,
+        } satisfies GasPriceExtra,
       },
-      extra: {
-        code: s.code,
-        price: s.current,
-        changeWow: s.changeWow,
-        vsNational: s.current - national,
-      } satisfies GasPriceExtra,
-    },
-  }));
+    };
+  });
   return {
     collection: { type: "FeatureCollection", features },
     source: "U.S. Energy Information Administration",
     fetchedAt: ctx.now,
     note: [
       `${features.length} states · EIA weekly retail regular`,
-      `as of ${bundle.national.asof} · national ${fmtGal(national)}`,
+      playback ? `playback ${nationalW.asof} · nearest week ≤ playback date` : `as of ${bundle.national.asof}`,
+      `national ${fmtGal(Number.isFinite(national) ? national : null)}`,
       `refresh: npm run data:gas`,
     ].join(" · "),
     meta: {
-      asof: bundle.national.asof,
-      national: national,
+      asof: nationalW.asof,
+      national: Number.isFinite(national) ? national : null,
       count: features.length,
       provenance: bundle.meta.provenance,
+      playbackYear: playback ? ctx.playbackYear : undefined,
     },
   };
 }

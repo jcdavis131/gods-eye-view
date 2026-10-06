@@ -13,11 +13,15 @@
 // exactly one US World Port Index entry carries its city name; the rest are
 // geocoded through Nominatim (one request per second) and stamped as such;
 // river districts that name no city are left out rather than pinned to a town.
+//
+// The User-Agent comes from lib/server/ua.ts so the routes and this script
+// send the same one. Node 22.18+ / 23.6+ strips the (absent) types when it
+// imports the .ts file; Node 24.1 prints an ExperimentalWarning for it.
 
 import fs from "node:fs";
 import path from "node:path";
+import { USER_AGENT as UA } from "../lib/server/ua.ts";
 
-const UA = "embedding-atlas/0.1 (+https://github.com/jcdavis131/gods-eye-view; open-source globe)";
 const OUT = path.resolve("lib/economy/data");
 fs.mkdirSync(OUT, { recursive: true });
 
