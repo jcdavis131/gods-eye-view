@@ -52,6 +52,7 @@ next-env.d.ts
 # per-user watchlists and alert state written by /api/watch
 /data/watch/
 .tmp-wbd/
+__pycache__/
 
 # energy collector raw outputs (bundles are committed)
 lib/energy/data/raw/
