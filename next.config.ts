@@ -20,6 +20,15 @@ const nextConfig: NextConfig = {
       "@spz-loader/core": SPZ_STUB,
     },
   },
+  // The insight PNGs (lib/insights/render/raster.ts) are drawn by resvg's
+  // WebAssembly build with the vendored Geist files as its only fonts. Both
+  // are read from disk at run time, relative to the project root, so nothing
+  // imports them and the file tracer would leave them out of the functions
+  // that serve /insights/**. These are the paths raster.ts reads; keep the
+  // two in step.
+  outputFileTracingIncludes: {
+    "/insights/**": ["./node_modules/@resvg/resvg-wasm/index_bg.wasm", "./lib/insights/render/fonts/*.ttf"],
+  },
   webpack: (config) => {
     config.resolve = config.resolve ?? {};
     config.resolve.alias = {
