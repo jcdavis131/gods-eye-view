@@ -6,7 +6,7 @@ compact, versioned JSON bundles under lib/energy/data/:
 
   ercot_prices.json        ERCOT real-time + day-ahead hub/zone prices, weather-zone load
   us_electricity_prices.json  EIA SEDS state annual retail prices by sector, 1970-2024
-  global_generation.json   Ember yearly generation by fuel, top countries, latest year
+  global_generation.json   Ember yearly generation by fuel, top countries, latest year + yearly history
   datacenters.json         OSM operating + under-construction data centers
 
 Every bundle carries meta: built timestamp, sources, retrieval dates,
@@ -245,6 +245,13 @@ def build_us_prices(raw, out):
     return bundle
 
 
+def top_fuels(fuels):
+    """Top 6 fuels by TWh, dropping <1% share slivers. Real values only."""
+    ranked = sorted(fuels.items(), key=lambda kv: kv[1]["twh"], reverse=True)
+    kept = [(k, v) for k, v in ranked if v["share_pct"] >= 1.0][:6]
+    return [{"fuel": k, "twh": v["twh"], "share_pct": v["share_pct"]} for k, v in kept]
+
+
 def build_global_generation(raw, out):
     path = os.path.join(raw, "ember_generation_yearly_global.csv")
     rows = read_csv(path)
@@ -252,45 +259,66 @@ def build_global_generation(raw, out):
                  if r.get("Area type") == "Country or economy"
                  and r.get("Is aggregated source") == "False"]
     latest_year = max(int(r["Year"]) for r in countries)
+    # per country -> per year -> fuels. Published values as Ember sent them;
+    # missing years stay missing (the site steps from the last known year).
     per_country = {}
     for r in countries:
-        if int(r["Year"]) != latest_year:
-            continue
-        c = per_country.setdefault(r["Area"], {"fuels": {}})
         try:
+            year = int(r["Year"])
             twh = float(r.get("Generation (TWh)") or 0)
             share = float(r.get("Share of generation (%)") or 0)
         except ValueError:
             continue
-        if twh > 0:
-            c["fuels"][r["Electricity source"]] = {"twh": round(twh, 1), "share_pct": round(share, 1)}
+        if twh <= 0:
+            continue
+        c = per_country.setdefault(r["Area"], {})
+        c.setdefault(year, {})[r["Electricity source"]] = {
+            "twh": round(twh, 1), "share_pct": round(share, 1)}
     ranked = sorted(per_country.items(),
-                    key=lambda kv: sum(f["twh"] for f in kv[1]["fuels"].values()),
+                    key=lambda kv: sum(f["twh"] for f in kv[1].get(latest_year, {}).values()),
                     reverse=True)
     out_countries = []
     skipped = []
-    for name, c in ranked[:60]:
+    for name, by_year in ranked[:60]:
         if name not in COUNTRY_CENTROIDS:
             skipped.append(name)
             continue
         lon, lat = COUNTRY_CENTROIDS[name]
-        total = round(sum(f["twh"] for f in c["fuels"].values()), 1)
-        top = sorted(c["fuels"].items(), key=lambda kv: kv[1]["twh"], reverse=True)[:6]
+        history = []
+        for year in sorted(by_year):
+            fuels = top_fuels(by_year[year])
+            history.append({
+                "year": year,
+                "total_twh": round(sum(f["twh"] for f in by_year[year].values()), 1),
+                "fuels": fuels,
+            })
+        latest = history[-1]
         out_countries.append({
             "country": name, "lat": lat, "lon": lon,
-            "year": latest_year, "total_twh": total,
-            "fuels": [{"fuel": k, "twh": v["twh"], "share_pct": v["share_pct"]} for k, v in top],
+            "year": latest_year, "total_twh": latest["total_twh"],
+            "fuels": latest["fuels"],
+            "history": history,
         })
     bundle = {
         "meta": meta(
             {"Ember Electricity Data Explorer": "https://ember-energy.org/data/electricity-data-explorer/"},
-            caveats=["Country label points are approximate; only countries with a label point are drawn."],
+            caveats=[
+                "Country label points are approximate; only countries with a label point are drawn.",
+                "Yearly history 1985-latest; pre-2000 coverage is sparser and some countries "
+                "enter the record late. Missing years stay missing: the time machine steps "
+                "from the last known year, never interpolates.",
+                "Top 60 countries by latest-year generation; per-year top 6 fuels, <1% share dropped.",
+            ],
             freshness="Annual data; latest year in bundle is the most recent Ember release.",
         ),
         "asof_year": latest_year,
         "countries": out_countries,
         "skipped_no_label_point": skipped,
     }
+    # year span actually present across countries (min/max of history starts)
+    starts = [c["history"][0]["year"] for c in out_countries if c["history"]]
+    ends = [c["history"][-1]["year"] for c in out_countries if c["history"]]
+    bundle["history_years"] = [min(starts), max(ends)] if starts else [latest_year, latest_year]
     return bundle
 
 

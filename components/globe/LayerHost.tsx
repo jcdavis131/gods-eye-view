@@ -11,6 +11,7 @@ import { viewKey, type FetchResult, type LayerDefinition } from "@/lib/layers/ty
 import { getViewer } from "@/lib/globe/cesium";
 import { LayerRenderer } from "@/lib/globe/renderer";
 import { getRenderer, registerRenderer, unregisterRenderer } from "@/lib/globe/registry";
+import { PLAYBACK_HIDDEN_LAYER_IDS, TIME_AWARE_LAYER_IDS } from "@/lib/globe/timeMachine";
 import { STYLES } from "@/lib/globe/styles";
 import { satWorker } from "@/lib/globe/satWorker";
 import { useGlobe } from "@/lib/store/globe";
@@ -85,6 +86,13 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
   const prefs = useSettings((s) => s.prefs);
   const labels = prefs.labels;
   const clockOffset = useGlobe((s) => s.clock.offsetMs);
+  const timeMachine = useGlobe((s) => s.clock.timeMachine);
+  const playbackYear = useGlobe((s) => s.playbackYear);
+  // Time-aware layers (energy history) re-fetch when the playback year
+  // changes; other layers keep their keys untouched.
+  const playbackKey = (TIME_AWARE_LAYER_IDS as readonly string[]).includes(def.id) && timeMachine
+    ? playbackYear
+    : null;
   // Time-dependent layers (satellite scenes) re-fetch when the mission clock
   // crosses into another UTC day; a coarse minute tick is plenty for that.
   const minute = useNow(60_000);
@@ -121,10 +129,13 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
   }, [def.id, def.label]);
 
   useEffect(() => {
-    if (rendererRef.current) rendererRef.current.show = enabled;
+    if (!rendererRef.current) return;
+    // ERCOT is live-only: hidden while the time machine is engaged.
+    const hidden = timeMachine && (PLAYBACK_HIDDEN_LAYER_IDS as readonly string[]).includes(def.id);
+    rendererRef.current.show = enabled && !hidden;
     // The satellite propagation worker only needs to run while the layer shows.
     if (def.id === "satellites") satWorker.setEnabled(enabled);
-  }, [enabled, def.id]);
+  }, [enabled, def.id, timeMachine]);
 
   useEffect(() => {
     rendererRef.current?.setLabelsEnabled(labels);
@@ -150,7 +161,7 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
   // TanStack re-reads queryFn on every render, so the closure always carries
   // the latest settled view, keys and prefs without touching refs in render.
   const query = useQuery({
-    queryKey: ["layer", def.id, vk, optionsKey, missionDay],
+    queryKey: ["layer", def.id, vk, optionsKey, missionDay, playbackKey],
     // Each answer carries the view key it was fetched for, so one kept on screen while
     // the next view loads (keepPreviousData) still says which view it describes, and the
     // view itself: an interval refetch under the same key asks with the latest view.
@@ -161,6 +172,7 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
           view,
           now: Date.now(),
           missionTime: Date.now() + useGlobe.getState().clock.offsetMs,
+          playbackYear: playbackKey,
           signal,
           options: { ...prefs } as unknown as Record<string, unknown>,
         })
