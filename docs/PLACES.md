@@ -2,7 +2,7 @@
 
 The globe answers "what is happening here" for a point you are looking at. A place page answers the same question for a name somebody typed: *Travis County*, *San Antonio metro*, *Texas*. Same sources, same provenance envelope, same arithmetic printed next to every estimate — rendered as a document instead of a heads-up display, at a URL a search engine can index and a person can link.
 
-Every page is about a **place or an institution**: a county, a metro area, a state, a bank office, a federal award recipient, a listed company's headquarters county. No parcel, no street address, no owner, no officer, no insider appears anywhere in this surface, and no module here has a person-level field to leak.
+Every page is about a **place or an institution**: a county, a metro area, a state, a bank office, a federal award recipient, a listed company's headquarters county. No parcel, no street address, no owner, no officer, no insider appears anywhere in this surface, and no module here has a person-level field to leak. Insiders who file Forms 3, 4 and 5 are reached from a company's dossier, never from a place ([docs/PEOPLE.md](PEOPLE.md)).
 
 ## URL scheme
 
