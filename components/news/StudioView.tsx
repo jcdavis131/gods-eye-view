@@ -57,7 +57,8 @@ export function TopBar({ nowMs }: { nowMs: number | null }) {
         LIVE
       </span>
       <p className="m-0 ml-auto font-mono text-[13px] tabular-nums text-[var(--bright)]">
-        <time dateTime={nowMs == null ? undefined : new Date(nowMs).toISOString()} aria-label="Studio clock, UTC">
+        <span className="sr-only">Studio clock: </span>
+        <time dateTime={nowMs == null ? undefined : new Date(nowMs).toISOString()}>
           {nowMs == null ? "--:--:--" : utcHms(nowMs)}
         </time>{" "}
         <span className="text-[10px] text-muted-foreground">UTC</span>
@@ -84,7 +85,7 @@ function anchorPose(id: PersonaId, air: OnAir | null, nowMs: number | null, anim
 /** Seat centres in the stage's 960 x 540 drawing. */
 const SEAT_X: Record<PersonaId, number> = { brack: 230, plume: 480, ledgerly: 730 };
 
-export function Stage({ air, nowMs, animate, children }: { air: OnAir | null; nowMs: number | null; animate: boolean; children?: React.ReactNode }) {
+export function Stage({ air, nowMs, animate }: { air: OnAir | null; nowMs: number | null; animate: boolean }) {
   const speaker = air?.speaker ?? null;
   const p = speaker ? PERSONAS[speaker] : null;
   const segTitle = air?.segment.title ?? "";
@@ -133,8 +134,6 @@ export function Stage({ air, nowMs, animate, children }: { air: OnAir | null; no
         </g>
       </svg>
 
-      {children}
-
       {/* lower third: who has the floor and what segment this is */}
       <div className="absolute bottom-[6%] left-[3%] max-w-[70%]" aria-hidden={p ? undefined : "true"}>
         <div className="news-lower-third flex h-[clamp(34px,9vw,54px)] flex-col justify-center border-l-4 border-[var(--signal)] bg-[rgba(4,8,13,0.9)] px-2.5">
@@ -175,7 +174,7 @@ export function captionFor(air: OnAir | null, schedule: ScheduleData | null, err
 export function Captions({ caption }: { caption: { who: string | null; text: string; recap: boolean } }) {
   // Only the whole line goes into the live region, once per line; the mouth's letter-by-letter motion never does.
   return (
-    <section aria-label="Captions" className="news-captions h-[10.5rem] overflow-y-auto border border-[var(--hairline)] bg-[rgba(4,8,13,0.92)] px-3 py-2 sm:h-[7.25rem]">
+    <section aria-label="Captions" tabIndex={0} className="news-captions h-[10.5rem] overflow-y-auto border border-[var(--hairline)] bg-[rgba(4,8,13,0.92)] px-3 py-2 sm:h-[7.25rem]">
       <p aria-live="polite" aria-atomic="true" className="m-0 text-[15px] leading-[1.4] text-[var(--bright)] sm:text-[16px]">
         {caption.recap && <span className="mr-2 bg-white/10 px-1 text-[10px] font-bold tracking-widest text-[var(--warn)]">RECAP</span>}
         {caption.who && <span className="mr-1 font-bold uppercase tracking-wide text-[var(--signal)]">{caption.who}:</span>}
@@ -364,7 +363,7 @@ export function SourcesCard({ segment, segmentTitle, rundown, currentFactIds }: 
       <p className="m-0 mt-1 text-[11px] leading-snug text-muted-foreground">
         Every fact the anchors state in this segment, as its publisher sent it. {rundown ? rundown.disclosure.writer : DISCLOSURE.scripts}
       </p>
-      <div className="mt-1 min-h-0 flex-1 overflow-y-auto" tabIndex={0} aria-label="Facts behind this segment">
+      <div className="mt-1 min-h-0 flex-1 overflow-y-auto" tabIndex={0} role="region" aria-label="Facts behind this segment">
         {!rundown ? (
           <p className="m-0 py-2 text-[12px] text-muted-foreground">Loading the facts…</p>
         ) : !card || (!card.facts.length && !card.missing.length) ? (
@@ -403,15 +402,12 @@ export function StudioView({ nowMs, air, rundown, wire, schedule, animate, error
       <DisclosureBanner />
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="flex min-w-0 flex-col gap-3">
-          <Stage air={air} nowMs={nowMs} animate={animate}>
-            <div className="absolute right-[2.5%] top-[4%] w-[34%] max-w-[17rem]">
-              <MapInset view={view} animate={animate} />
-            </div>
-          </Stage>
+          <Stage air={air} nowMs={nowMs} animate={animate} />
           <Captions caption={caption} />
           <Ticker wire={wire} animate={animate} error={errors?.wire} />
         </div>
         <div className="flex min-w-0 flex-col gap-3">
+          <MapInset view={view} animate={animate} />
           <UpNextRail nowMs={nowMs} />
           {/* On wide screens the card fills the rail beside the stage and scrolls inside it, so it never sets the row's height. */}
           <div className="relative h-[26rem] lg:h-auto lg:min-h-[16rem] lg:flex-1">
