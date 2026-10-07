@@ -81,6 +81,10 @@
       "description": "News events: GDELT 2.0 conflict events folded into the cities they were coded at; no actors, no article links."
     },
     {
+      "name": "news",
+      "description": "The newsroom: facts from the Atlas's own live feeds, a credited headline wire from outlets' RSS feeds, the rundown the fictional anchors read and the 30-minute broadcast wheel. Scripts are written by a local AI or by templates, strictly from the listed facts."
+    },
+    {
       "name": "meta",
       "description": "This description."
     },
@@ -3254,6 +3258,83 @@
         ],
         "summary": "CORS preflight",
         "operationId": "eventsOptions",
+        "responses": {
+          "204": {
+            "description": "No content."
+          }
+        }
+      }
+    },
+    "/api/news": {
+      "get": {
+        "summary": "The newsroom: live-signal facts, the headline wire, the anchors' rundown and the broadcast wheel",
+        "description": "op=facts: every fact the anchors may state now, each with the publisher's own words (`headline_fields`), numbers (`numbers`), place, time, link and provenance: NWS alerts rated Severe or Extreme (with an outline) and a count of them, USGS M4.5+ quakes of the past day, the largest NIFC WFIGS wildfires, Launch Library launches with a NET in the next 48 hours, GFZ Kp (latest and the day's highest), NASA DONKI M- and X-class flares, FRED series, release-calendar windows in the next week, Open-Meteo model conditions at the lead quake and fire, and wire headlines. Ids are built from the upstreams' own ids and are stable across fetches. Feeds that did not answer are listed in `failed`. op=wire: headlines from outlets' own RSS feeds (NPR, BBC News, DW, ABC Australia, Al Jazeera, France 24, UN News): title, link, outlet and time only, last 24 hours, de-duplicated. op=rundown: the script for this half hour. The local model's rundown published at NEWS_RUNDOWN_URL is used when it is under two hours old, not expired, valid against the Rundown schema, cites only current fact ids and every line passes the claim check (numbers and mid-sentence proper nouns must come from the cited facts); otherwise the template writer's, with the reasons in `rejected`. op=schedule: the fixed 30-minute wheel (offsets from :00 and :30 UTC), the playhead at `serverNow`, each slot's wall-clock times, and the news segments that will not play and why. Every answer carries the disclosure: the anchors are fictional cartoon characters, scripts are written by a local AI or by templates strictly from the listed facts, and viewers should check the original sources.",
+        "tags": [
+          "news"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "facts",
+                "wire",
+                "rundown",
+                "schedule"
+              ]
+            },
+            "description": "facts: every fact with provenance. wire: outlet headlines. rundown: the script for this half hour. schedule: the wheel and the playhead."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope for the op.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/Cors"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/NewsFactsResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/NewsWireResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/NewsRundownResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/NewsScheduleResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/Upstream"
+          }
+        }
+      },
+      "options": {
+        "tags": [
+          "news"
+        ],
+        "summary": "CORS preflight",
+        "operationId": "newsOptions",
         "responses": {
           "204": {
             "description": "No content."
@@ -7912,6 +7993,688 @@
           }
         ],
         "x-op": "conflict"
+      },
+      "NewsFact": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "headline_fields",
+          "numbers",
+          "place",
+          "time",
+          "link",
+          "provenance"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Stable across fetches: built from the upstream's own id (quake:<USGS id>, alert:<NWS id>, fire:wfigs:<IRWIN id>, launch:<LL2 id>, fred:<series>:<date>, wire:<hash of the link>, ...)."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "quake",
+              "alert",
+              "alert-count",
+              "wildfire",
+              "launch",
+              "kp",
+              "flare",
+              "indicator",
+              "release",
+              "weather",
+              "wire"
+            ]
+          },
+          "headline_fields": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Words as the publisher wrote them; only fields it sent."
+          },
+          "numbers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            },
+            "description": "Numbers as the publisher published them."
+          },
+          "place": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "lat": {
+                "type": "number"
+              },
+              "lon": {
+                "type": "number"
+              }
+            }
+          },
+          "time": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "link": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/Provenance"
+          }
+        }
+      },
+      "NewsRundown": {
+        "type": "object",
+        "required": [
+          "generatedAt",
+          "writer",
+          "expires",
+          "segments"
+        ],
+        "description": "The schema NEWS_RUNDOWN_URL must publish (lib/news/rundown.ts RundownSchema).",
+        "properties": {
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "writer": {
+            "type": "string",
+            "enum": [
+              "qwen3:8b",
+              "template"
+            ]
+          },
+          "expires": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "segments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "title",
+                "anchor",
+                "lines",
+                "facts",
+                "location"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "enum": [
+                    "top",
+                    "planet-watch",
+                    "bumper-1",
+                    "liftoff",
+                    "money-desk",
+                    "bumper-2",
+                    "the-wire",
+                    "sign-off"
+                  ]
+                },
+                "title": {
+                  "type": "string"
+                },
+                "anchor": {
+                  "type": "string",
+                  "enum": [
+                    "plume",
+                    "brack",
+                    "ledgerly"
+                  ]
+                },
+                "lines": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "anchor",
+                      "text",
+                      "factIds"
+                    ],
+                    "properties": {
+                      "anchor": {
+                        "type": "string",
+                        "enum": [
+                          "plume",
+                          "brack",
+                          "ledgerly"
+                        ]
+                      },
+                      "text": {
+                        "type": "string",
+                        "maxLength": 600
+                      },
+                      "factIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "maxItems": 12
+                      }
+                    }
+                  }
+                },
+                "facts": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "The segment's source card: every fact id its lines cite, rebuilt from the current facts."
+                },
+                "location": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "lat": {
+                      "type": "number"
+                    },
+                    "lon": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "NewsFactsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "facts": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/NewsFact"
+                    }
+                  },
+                  "failed": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "source": {
+                          "type": "string"
+                        },
+                        "error": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "answered": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "assembledAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              },
+              "facts": {
+                "type": "integer"
+              }
+            }
+          }
+        ],
+        "x-op": "facts"
+      },
+      "NewsWireResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "link": {
+                          "type": "string"
+                        },
+                        "outletId": {
+                          "type": "string"
+                        },
+                        "outlet": {
+                          "type": "string"
+                        },
+                        "publishedAt": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "date-time"
+                        }
+                      }
+                    }
+                  },
+                  "outlets": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "outlet": {
+                          "type": "string"
+                        },
+                        "sourceId": {
+                          "type": "string"
+                        },
+                        "feedUrl": {
+                          "type": "string"
+                        },
+                        "ok": {
+                          "type": "boolean"
+                        },
+                        "items": {
+                          "type": "integer"
+                        },
+                        "error": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "items": {
+                "type": "integer"
+              }
+            }
+          }
+        ],
+        "x-op": "wire"
+      },
+      "NewsRundownResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "rundown": {
+                    "$ref": "#/components/schemas/NewsRundown"
+                  },
+                  "chosen": {
+                    "type": "string",
+                    "enum": [
+                      "qwen3:8b",
+                      "template"
+                    ]
+                  },
+                  "rejected": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Why the published model rundown was not used, when it was not."
+                  },
+                  "published": {
+                    "type": "object",
+                    "properties": {
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "unset",
+                          "invalid-url",
+                          "error",
+                          "ok"
+                        ]
+                      },
+                      "fetchedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    }
+                  },
+                  "disclosure": {
+                    "type": "object",
+                    "properties": {
+                      "fictional": {
+                        "type": "string"
+                      },
+                      "writer": {
+                        "type": "string"
+                      },
+                      "check": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "anchors": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "roleTitle": {
+                          "type": "string"
+                        },
+                        "species": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "facts": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/NewsFact"
+                    },
+                    "description": "Every fact the rundown cites."
+                  }
+                }
+              },
+              "writer": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "x-op": "rundown"
+      },
+      "NewsScheduleResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "wheelS": {
+                    "type": "integer",
+                    "example": 1800
+                  },
+                  "serverNow": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "playhead": {
+                    "type": "object",
+                    "properties": {
+                      "segment": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "news",
+                              "bumper"
+                            ]
+                          },
+                          "startS": {
+                            "type": "integer"
+                          },
+                          "durS": {
+                            "type": "integer"
+                          },
+                          "anchor": {
+                            "type": "string"
+                          },
+                          "factKinds": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "blurb": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "index": {
+                        "type": "integer"
+                      },
+                      "offsetS": {
+                        "type": "integer"
+                      },
+                      "remainingS": {
+                        "type": "integer"
+                      },
+                      "wheelStartedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "segmentStartedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      "next": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "news",
+                              "bumper"
+                            ]
+                          },
+                          "startS": {
+                            "type": "integer"
+                          },
+                          "durS": {
+                            "type": "integer"
+                          },
+                          "anchor": {
+                            "type": "string"
+                          },
+                          "factKinds": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "blurb": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "nextStartsAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    }
+                  },
+                  "slots": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "segment": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "title": {
+                              "type": "string"
+                            },
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "news",
+                                "bumper"
+                              ]
+                            },
+                            "startS": {
+                              "type": "integer"
+                            },
+                            "durS": {
+                              "type": "integer"
+                            },
+                            "anchor": {
+                              "type": "string"
+                            },
+                            "factKinds": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "blurb": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "startsAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "endsAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "on",
+                            "empty",
+                            "standing-by"
+                          ]
+                        },
+                        "facts": {
+                          "type": "integer"
+                        },
+                        "note": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "skipped": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "note": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "wheel": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "news",
+                            "bumper"
+                          ]
+                        },
+                        "startS": {
+                          "type": "integer"
+                        },
+                        "durS": {
+                          "type": "integer"
+                        },
+                        "anchor": {
+                          "type": "string"
+                        },
+                        "factKinds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "blurb": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "schedule"
       }
     }
   }
