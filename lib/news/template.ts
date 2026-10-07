@@ -116,7 +116,8 @@ export function netPhrase(f: Fact): string {
   return `no earlier than ${utcClock(f.time)} on ${utcDay(f.time)}`;
 }
 
-export function launchLine(f: Fact): string {
+/** `asOf` (epoch ms, the rundown's own time): a NET already past with no outcome posted is said as such. */
+export function launchLine(f: Fact, asOf?: number): string {
   const h = f.headline_fields;
   const who = h.provider ?? "A launch provider";
   const what = h.mission ?? h.name ?? "a mission";
@@ -124,7 +125,9 @@ export function launchLine(f: Fact): string {
   const from = h.location ? ` from ${h.location}` : "";
   const status = h.status ? ` Launch Library lists its status as ${h.status}.` : "";
   // The upcoming list keeps launches of the last hours; one that has flown is reported as flown.
-  if (f.time && /success|failure|in flight/i.test(h.status ?? "")) return `${who} launched ${what}${on}${from}, at ${utcClock(f.time)} on ${utcDay(f.time)}.${status}`;
+  if (f.time && /success|failure|in flight|payload deployed/i.test(h.status ?? "")) return `${who} launched ${what}${on}${from}, at ${utcClock(f.time)} on ${utcDay(f.time)}.${status}`;
+  if (f.time && asOf != null && Date.parse(f.time) < asOf)
+    return `Launch Library last listed ${who}'s launch of ${what}${on}${from} for ${netPhrase(f)}, with its status as ${h.status ?? "not given"}; it has not posted an outcome yet.`;
   return `${who} is scheduled to launch ${what}${on}${from}, ${netPhrase(f)}.${status}`;
 }
 
@@ -192,7 +195,7 @@ function segment(seg: WheelSegment, lines: RundownLine[]): RundownSegment {
 
 const SEG = Object.fromEntries(WHEEL.map((s) => [s.id, s])) as Record<WheelSegment["id"], WheelSegment>;
 
-function topSegment(facts: Fact[], failed: ReadonlySet<string>, seed: string): RundownSegment {
+function topSegment(facts: Fact[], failed: ReadonlySet<string>, seed: string, asOf: number): RundownSegment {
   const seg = SEG.top;
   const picks = [byKind(facts, "alert-count")[0], byKind(facts, "quake")[0], byKind(facts, "wildfire")[0], byKind(facts, "launch")[0]].filter((f): f is Fact => !!f);
   if (picks.length < 3) picks.push(...byKind(facts, "wire").slice(0, 3 - picks.length));
@@ -200,12 +203,12 @@ function topSegment(facts: Fact[], failed: ReadonlySet<string>, seed: string): R
   const open = pick([`Hello from the Atlas desk. I'm ${o.name}. ${o.catchphrases[0]}`, `This is the Atlas desk, and I'm ${o.name}. ${o.catchphrases[1]}`, `I'm ${o.name} at the Atlas desk. ${o.catchphrases[2]}`], seed + ":top");
   if (!picks.length) return segment(seg, [line("plume", open), emptyCard(seg, failed, ["usgs-earthquakes", "nws-api", "nifc-wfigs", "launch-library-2"])]);
   const lines = [line("plume", open)];
-  for (const f of picks) lines.push(line("plume", sentenceFor(f), [f]));
+  for (const f of picks) lines.push(line("plume", sentenceFor(f, asOf), [f]));
   lines.push(line("plume", pick(["Tully, over to you at the map wall.", "Let's go to Tully at the map wall.", "First, Planet Watch. Tully?"], seed + ":toss")));
   return segment(seg, lines);
 }
 
-function sentenceFor(f: Fact): string {
+function sentenceFor(f: Fact, asOf?: number): string {
   switch (f.kind) {
     case "quake":
       return quakeLine(f);
@@ -216,7 +219,7 @@ function sentenceFor(f: Fact): string {
     case "wildfire":
       return fireLine(f);
     case "launch":
-      return launchLine(f);
+      return launchLine(f, asOf);
     case "kp":
       return kpLine(f);
     case "flare":
@@ -232,7 +235,7 @@ function sentenceFor(f: Fact): string {
   }
 }
 
-function planetSegment(facts: Fact[], failed: ReadonlySet<string>, seed: string): RundownSegment {
+function planetSegment(facts: Fact[], failed: ReadonlySet<string>, seed: string, asOf: number): RundownSegment {
   const seg = SEG["planet-watch"];
   const quakes = byKind(facts, "quake").slice(0, 3);
   const count = byKind(facts, "alert-count").slice(0, 1);
@@ -244,7 +247,7 @@ function planetSegment(facts: Fact[], failed: ReadonlySet<string>, seed: string)
   if (!body.length) return segment(seg, [open, emptyCard(seg, failed, ["usgs-earthquakes", "nws-api", "nifc-wfigs"])]);
   const lines = [open];
   for (const f of body) {
-    lines.push(line("brack", sentenceFor(f), [f]));
+    lines.push(line("brack", sentenceFor(f, asOf), [f]));
     const w = wx.find((x) => x.headline_fields.about === f.id);
     if (w) lines.push(line("brack", weatherLine(w), [w]));
   }
@@ -252,20 +255,20 @@ function planetSegment(facts: Fact[], failed: ReadonlySet<string>, seed: string)
   return segment(seg, lines);
 }
 
-function liftoffSegment(facts: Fact[], failed: ReadonlySet<string>, seed: string): RundownSegment {
+function liftoffSegment(facts: Fact[], failed: ReadonlySet<string>, seed: string, asOf: number): RundownSegment {
   const seg = SEG.liftoff;
   const body = [...byKind(facts, "launch"), ...byKind(facts, "kp"), ...byKind(facts, "flare").slice(0, 2)];
   const open = line("ledgerly", pick(["Ears up. This is Liftoff.", "Mott Ledgerly with Liftoff. No earlier than, never exactly.", "Liftoff, from the space desk. Let's check the ledger."], seed + ":lo"));
   if (!body.length) return segment(seg, [open, emptyCard(seg, failed, ["launch-library-2", "gfz-kp", "nasa-donki"])]);
-  return segment(seg, [open, ...body.map((f) => line("ledgerly", sentenceFor(f), [f]))]);
+  return segment(seg, [open, ...body.map((f) => line("ledgerly", sentenceFor(f, asOf), [f]))]);
 }
 
-function moneySegment(facts: Fact[], failed: ReadonlySet<string>, seed: string): RundownSegment {
+function moneySegment(facts: Fact[], failed: ReadonlySet<string>, seed: string, asOf: number): RundownSegment {
   const seg = SEG["money-desk"];
   const body = [...byKind(facts, "indicator"), ...byKind(facts, "release").slice(0, 4)];
   const open = line("ledgerly", pick(["Money Desk. Let's check the ledger.", "On the Money Desk, the latest published numbers.", "Money Desk, and a window is not a date."], seed + ":md"));
   if (!body.length) return segment(seg, [open, emptyCard(seg, failed, ["fred"])]);
-  return segment(seg, [open, ...body.map((f) => line("ledgerly", sentenceFor(f), [f]))]);
+  return segment(seg, [open, ...body.map((f) => line("ledgerly", sentenceFor(f, asOf), [f]))]);
 }
 
 function wireSegment(facts: Fact[], failed: ReadonlySet<string>, seed: string): RundownSegment {
@@ -315,11 +318,11 @@ export function templateRundown(facts: Fact[], generatedAt: string, failedSource
     writer: "template",
     expires: new Date(t + 30 * 60_000).toISOString(),
     segments: [
-      topSegment(facts, failed, seed),
-      planetSegment(facts, failed, seed),
+      topSegment(facts, failed, seed, t),
+      planetSegment(facts, failed, seed, t),
       bumper(SEG["bumper-1"], seed, 0),
-      liftoffSegment(facts, failed, seed),
-      moneySegment(facts, failed, seed),
+      liftoffSegment(facts, failed, seed, t),
+      moneySegment(facts, failed, seed, t),
       bumper(SEG["bumper-2"], seed, 1),
       wireSegment(facts, failed, seed),
       signOff(seed),

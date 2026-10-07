@@ -122,6 +122,13 @@ describe("alertFacts", () => {
     expect(firstAreas("A; B; C; D")).toBe("A; B; C");
     expect(firstAreas(" A ;; B")).toBe("A; B");
   });
+  it("reads one of two messages with the same event, areas, sender and end", () => {
+    const a = alerts.find((x) => x.rings)!;
+    const twin = { ...a, id: a.id + ".twin" };
+    const placed = alertFacts([a, twin], RA, "u").filter((f) => f.kind === "alert");
+    expect(placed).toHaveLength(1);
+    expect(alertFacts([a, twin], RA, "u").find((f) => f.kind === "alert-count")!.numbers.inForce).toBe(2);
+  });
   it("answers nothing for no alerts (no count of zero is invented)", () => {
     expect(alertFacts([], RA, "u")).toEqual([]);
   });

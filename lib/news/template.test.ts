@@ -69,6 +69,11 @@ describe("sentences", () => {
     const flown: Fact = { ...base, headline_fields: { ...base.headline_fields, status: "Launch Successful" } };
     expect(launchLine(flown)).toBe("Korea Aerospace Research Institute launched NeonSat-2 to 6 on a KSLV-2 Nuri from Naro Space Center, South Korea, at 03:25 UTC on 7 October. Launch Library lists its status as Launch Successful.");
     expect(checkLine(launchLine(flown), [flown])).toEqual([]);
+    const deployed: Fact = { ...base, headline_fields: { ...base.headline_fields, status: "Payload Deployed" } };
+    expect(launchLine(deployed, Date.parse("2026-10-07T04:30:00Z"))).toMatch(/^Korea Aerospace Research Institute launched NeonSat-2 to 6 .* Launch Library lists its status as Payload Deployed\.$/);
+    const late = launchLine(base, Date.parse("2026-10-07T04:30:00Z"));
+    expect(late).toBe("Launch Library last listed Korea Aerospace Research Institute's launch of NeonSat-2 to 6 on a KSLV-2 Nuri from Naro Space Center, South Korea for no earlier than 03:25 UTC on 7 October, with its status as Go for Launch; it has not posted an outcome yet.");
+    expect(checkLine(late, [base])).toEqual([]);
   });
   it("flares, Kp, FRED and the release calendar", () => {
     expect(allLines.find((l) => l.text.includes("M1.8"))!.text).toBe("NASA's DONKI database logged an M1.8 solar flare that peaked at 08:05 UTC on 6 October, from active region 14549.");

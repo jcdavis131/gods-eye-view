@@ -146,6 +146,8 @@ export function alertFacts(alerts: AlertItem[], retrievedAt: string, upstreamUrl
     .map((a) => ({ a, c: a.rings ? ringCentroid(a.rings) : null }))
     .filter((x): x is { a: AlertItem; c: [number, number] } => x.c != null)
     .sort((x, y) => alertRank(y.a) - alertRank(x.a) || (x.a.onset ?? "").localeCompare(y.a.onset ?? "") || x.a.id.localeCompare(y.a.id))
+    // NWS can carry two messages with the same event, areas, sender and end (an update beside its original): read one.
+    .filter((x, i, all) => all.findIndex((y) => alertKey(y.a) === alertKey(x.a)) === i)
     .slice(0, max);
   for (const { a, c } of placed) {
     const area = firstAreas(a.areaDesc);
@@ -171,6 +173,10 @@ export function alertFacts(alerts: AlertItem[], retrievedAt: string, upstreamUrl
     });
   }
   return out;
+}
+
+function alertKey(a: AlertItem): string {
+  return [a.event, a.areaDesc, a.sender, a.ends ?? a.expires ?? ""].join("|");
 }
 
 function round(v: number, d: number): number {
