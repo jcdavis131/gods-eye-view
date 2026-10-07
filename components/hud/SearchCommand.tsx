@@ -2,10 +2,11 @@
 // ⌘K palette: find a flight / ship / satellite / camera by callsign, name or
 // id among loaded objects, geocode a place, find a Public Land Survey System
 // township or section by its description ("T12N R3W S33"), or run a cockpit
-// command. The PLSS lookup reads survey numbers only (lib/infra/plss.ts).
+// command (one of them opens the news studio). The PLSS lookup reads survey
+// numbers only (lib/infra/plss.ts).
 
 import { useEffect, useMemo, useState } from "react";
-import { Grid3x3, MapPin, Radar, Terminal } from "lucide-react";
+import { Grid3x3, MapPin, Radar, Terminal, Tv } from "lucide-react";
 import {
   Command,
   CommandEmpty,
@@ -24,6 +25,7 @@ import type { LayerFeature } from "@/lib/layers/types";
 import { matchScore } from "@/lib/search/allowlist";
 import { parseTrs, type PlssCandidate } from "@/lib/infra/plss";
 import { openHere } from "@/lib/whatshere/here";
+import { NETWORK_NAME, NEWS_PATH } from "@/lib/news/network";
 
 export interface GeocodeHit {
   name: string;
@@ -239,6 +241,18 @@ export default function SearchCommand() {
           <CommandItem value="cmd:home view" onSelect={() => (homeView(), close())} className="font-mono text-[11px]">
             <Terminal className="size-3.5 text-muted-foreground" />
             Home view
+          </CommandItem>
+          {/* The news studio is its own page (a separate root layout), so this is a full navigation. */}
+          <CommandItem
+            value={`cmd:news watch ${NETWORK_NAME.toLowerCase()} live news anchors headlines wire tv broadcast`}
+            onSelect={() => {
+              close();
+              window.location.assign(NEWS_PATH);
+            }}
+            className="font-mono text-[11px]"
+          >
+            <Tv className="size-3.5 text-muted-foreground" />
+            Watch {NETWORK_NAME}
           </CommandItem>
         </CommandGroup>
       </CommandList>

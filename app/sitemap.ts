@@ -2,12 +2,14 @@ import type { MetadataRoute } from "next";
 
 import { MANIFEST } from "@/lib/places/registry";
 import { absoluteUrl } from "@/lib/seo/base";
+import { NEWS_PATH } from "@/lib/news/network";
 
-// The top of the sitemap tree: the globe and the three hubs, by hand.
+// The top of the sitemap tree: the globe, the three hubs and the news studio,
+// by hand.
 //
 // Everything else is sharded into its own segment — /place/sitemap/N.xml,
 // /metro/sitemap.xml, /state/sitemap.xml — and enumerated from app/robots.ts.
-// This file stays four lines long on purpose, because it is the one a person
+// This file stays this short on purpose, because it is the one a person
 // opens to check the deployment is pointing at the right origin.
 //
 // No brief URL appears in any sitemap, here or in a shard. A brief with no
@@ -31,5 +33,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: absoluteUrl("/place"), lastModified: LAST_MODIFIED, changeFrequency: "weekly", priority: 0.9 },
     { url: absoluteUrl("/metro"), lastModified: LAST_MODIFIED, changeFrequency: "weekly", priority: 0.9 },
     { url: absoluteUrl("/state"), lastModified: LAST_MODIFIED, changeFrequency: "weekly", priority: 0.9 },
+    // The studio is a shell whose content the browser fetches every half hour, so it carries the same stamp as the rest.
+    { url: absoluteUrl(NEWS_PATH), lastModified: LAST_MODIFIED, changeFrequency: "hourly", priority: 0.8 },
   ];
 }
