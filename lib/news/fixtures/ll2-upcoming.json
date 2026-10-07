@@ -1,0 +1,263 @@
+{
+ "count": 471,
+ "results": [
+  {
+   "id": "e0741415-6c63-4236-9736-24a6c04485bc",
+   "name": "Nuri | NeonSat-2 to 6",
+   "url": "https://ll.thespacedevs.com/2.3.0/launches/e0741415-6c63-4236-9736-24a6c04485bc/",
+   "status": {
+    "id": 1,
+    "name": "Go for Launch",
+    "abbrev": "Go"
+   },
+   "net": "2026-10-07T03:25:00Z",
+   "net_precision": {
+    "name": "Minute",
+    "abbrev": "MIN"
+   },
+   "window_start": "2026-10-07T03:23:00Z",
+   "window_end": "2026-10-07T04:23:00Z",
+   "launch_service_provider": {
+    "name": "Korea Aerospace Research Institute"
+   },
+   "rocket": {
+    "configuration": {
+     "name": "Nuri",
+     "full_name": "KSLV-2 Nuri"
+    }
+   },
+   "mission": {
+    "name": "NeonSat-2 to 6",
+    "type": "Earth Science",
+    "orbit": {
+     "name": "Sun-Synchronous Orbit",
+     "abbrev": "SSO"
+    }
+   },
+   "pad": {
+    "name": "LC-2",
+    "latitude": 34.431867,
+    "longitude": 127.535069,
+    "location": {
+     "name": "Naro Space Center, South Korea"
+    }
+   },
+   "webcast_live": true
+  },
+  {
+   "id": "da43dc2c-00af-4cc1-8ef1-90a60b2eb9e5",
+   "name": "Falcon 9 Block 5 | SDA Tranche 1 Transport Layer A",
+   "url": "https://ll.thespacedevs.com/2.3.0/launches/da43dc2c-00af-4cc1-8ef1-90a60b2eb9e5/",
+   "status": {
+    "id": 1,
+    "name": "Go for Launch",
+    "abbrev": "Go"
+   },
+   "net": "2026-10-08T07:54:00Z",
+   "net_precision": {
+    "name": "Minute",
+    "abbrev": "MIN"
+   },
+   "window_start": "2026-10-08T07:54:00Z",
+   "window_end": "2026-10-08T07:54:00Z",
+   "launch_service_provider": {
+    "name": "SpaceX"
+   },
+   "rocket": {
+    "configuration": {
+     "name": "Falcon 9",
+     "full_name": "Falcon 9 Block 5"
+    }
+   },
+   "mission": {
+    "name": "SDA Tranche 1 Transport Layer A",
+    "type": "Government/Top Secret",
+    "orbit": {
+     "name": "Polar Orbit",
+     "abbrev": "PO"
+    }
+   },
+   "pad": {
+    "name": "Space Launch Complex 4E",
+    "latitude": 34.632,
+    "longitude": -120.611,
+    "location": {
+     "name": "Vandenberg SFB, CA, USA"
+    }
+   },
+   "webcast_live": false
+  },
+  {
+   "id": "a1bb0984-19d4-4b47-9bba-706d225573e2",
+   "name": "Long March 12 | Unknown Payload",
+   "url": "https://ll.thespacedevs.com/2.3.0/launches/a1bb0984-19d4-4b47-9bba-706d225573e2/",
+   "status": {
+    "id": 1,
+    "name": "Go for Launch",
+    "abbrev": "Go"
+   },
+   "net": "2026-10-09T19:25:00Z",
+   "net_precision": {
+    "name": "Hour",
+    "abbrev": "HR"
+   },
+   "window_start": "2026-10-09T19:20:00Z",
+   "window_end": "2026-10-09T19:49:00Z",
+   "launch_service_provider": {
+    "name": "China Aerospace Science and Technology Corporation"
+   },
+   "rocket": {
+    "configuration": {
+     "name": "Long March 12",
+     "full_name": "Long March 12"
+    }
+   },
+   "mission": {
+    "name": "Unknown Payload",
+    "type": "Unknown",
+    "orbit": {
+     "name": "Unknown",
+     "abbrev": "N/A"
+    }
+   },
+   "pad": {
+    "name": "Commercial LC-2",
+    "latitude": 19.59755,
+    "longitude": 110.936481,
+    "location": {
+     "name": "Wenchang Space Launch Site, People's Republic of China"
+    }
+   },
+   "webcast_live": false
+  },
+  {
+   "id": "97c6f5e1-299e-4652-b72d-9618ac047076",
+   "name": "Falcon 9 Block 5 | Starlink Group 15-25",
+   "url": "https://ll.thespacedevs.com/2.3.0/launches/97c6f5e1-299e-4652-b72d-9618ac047076/",
+   "status": {
+    "id": 1,
+    "name": "Go for Launch",
+    "abbrev": "Go"
+   },
+   "net": "2026-10-10T23:00:00Z",
+   "net_precision": {
+    "name": "Minute",
+    "abbrev": "MIN"
+   },
+   "window_start": "2026-10-10T23:00:00Z",
+   "window_end": "2026-10-11T03:00:00Z",
+   "launch_service_provider": {
+    "name": "SpaceX"
+   },
+   "rocket": {
+    "configuration": {
+     "name": "Falcon 9",
+     "full_name": "Falcon 9 Block 5"
+    }
+   },
+   "mission": {
+    "name": "Starlink Group 15-25",
+    "type": "Communications",
+    "orbit": {
+     "name": "Low Earth Orbit",
+     "abbrev": "LEO"
+    }
+   },
+   "pad": {
+    "name": "Space Launch Complex 4E",
+    "latitude": 34.632,
+    "longitude": -120.611,
+    "location": {
+     "name": "Vandenberg SFB, CA, USA"
+    }
+   },
+   "webcast_live": false
+  },
+  {
+   "id": "bf2c3027-a314-403e-a416-2bfd5d165ad1",
+   "name": "Falcon 9 Block 5 | Dragon CRS-2 SpX-35",
+   "url": "https://ll.thespacedevs.com/2.3.0/launches/bf2c3027-a314-403e-a416-2bfd5d165ad1/",
+   "status": {
+    "id": 1,
+    "name": "Go for Launch",
+    "abbrev": "Go"
+   },
+   "net": "2026-10-13T10:33:44Z",
+   "net_precision": {
+    "name": "Second",
+    "abbrev": "SEC"
+   },
+   "window_start": "2026-10-13T10:33:44Z",
+   "window_end": "2026-10-13T10:33:44Z",
+   "launch_service_provider": {
+    "name": "SpaceX"
+   },
+   "rocket": {
+    "configuration": {
+     "name": "Falcon 9",
+     "full_name": "Falcon 9 Block 5"
+    }
+   },
+   "mission": {
+    "name": "Dragon CRS-2 SpX-35",
+    "type": "Resupply",
+    "orbit": {
+     "name": "Low Earth Orbit",
+     "abbrev": "LEO"
+    }
+   },
+   "pad": {
+    "name": "Space Launch Complex 40",
+    "latitude": 28.56194122,
+    "longitude": -80.57735736,
+    "location": {
+     "name": "Cape Canaveral SFS, FL, USA"
+    }
+   },
+   "webcast_live": false
+  },
+  {
+   "id": "df88cfbf-f504-4e11-8370-e33dd6280b5b",
+   "name": "Falcon 9 Block 5 | USSF-xxx (\"TH-2\")",
+   "url": "https://ll.thespacedevs.com/2.3.0/launches/df88cfbf-f504-4e11-8370-e33dd6280b5b/",
+   "status": {
+    "id": 8,
+    "name": "To Be Confirmed",
+    "abbrev": "TBC"
+   },
+   "net": "2026-10-15T23:44:00Z",
+   "net_precision": {
+    "name": "Minute",
+    "abbrev": "MIN"
+   },
+   "window_start": "2026-10-15T23:44:00Z",
+   "window_end": "2026-10-16T03:44:00Z",
+   "launch_service_provider": {
+    "name": "SpaceX"
+   },
+   "rocket": {
+    "configuration": {
+     "name": "Falcon 9",
+     "full_name": "Falcon 9 Block 5"
+    }
+   },
+   "mission": {
+    "name": "USSF-xxx (\"TH-2\")",
+    "type": "Government/Top Secret",
+    "orbit": {
+     "name": "Polar Orbit",
+     "abbrev": "PO"
+    }
+   },
+   "pad": {
+    "name": "Space Launch Complex 4E",
+    "latitude": 34.632,
+    "longitude": -120.611,
+    "location": {
+     "name": "Vandenberg SFB, CA, USA"
+    }
+   },
+   "webcast_live": false
+  }
+ ]
+}

@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:media="http://search.yahoo.com/mrss/">
+  <!-- This is a rebuild of News RSS. If you notice any issues please contact DG-NewsWeb@abc.net.au -->
+  <channel>
+    <title>Just In</title>
+    <category>Australian Broadcasting Corporation: All content</category>
+    <link>https://www.abc.net.au/news/justin/</link>
+    <atom:link href="https://www.abc.net.au/news/justin/" rel="self" type="application/rss+xml" />
+    <language>en-AU</language>
+    <copyright>Copyright 2026, Australian Broadcasting Corporation. All Rights Reserved.</copyright>
+    <pubDate>Wed, 07 Oct 2026 02:30:23 +0000</pubDate>
+    <lastBuildDate>Wed, 07 Oct 2026 02:30:23 +0000</lastBuildDate>
+    <docs>http://blogs.law.harvard.edu/tech/rss</docs>
+    <managingEditor>Newson1ine@abc.net.au (ABC News)</managingEditor>
+    <image>
+      <title>Just In</title>
+      <url>https://live-production.wcms.abc-cdn.net.au/6f61ef606af0bbbcbdaa7c6173a677e2?impolicy=wcms_crop_resize&amp;cropH=144&amp;cropW=144&amp;xPos=0&amp;yPos=0&amp;width=862&amp;height=862</url>
+      <link>https://www.abc.net.au/news/justin/</link>
+    </image>
+    <item>
+      <title>Breaking: Former Broome bishop jailed for sexually abusing young men</title>
+      <link>https://www.abc.net.au/news/2026-10-07/ex-broome-bishop-christopher-saunders-sentenced-for-sexual-abuse/107236542</link>
+      <dc:creator>David Weber</dc:creator>
+      <pubDate>Wed, 07 Oct 2026 02:30:23 +0000</pubDate>
+      <guid isPermaLink="true">https://www.abc.net.au/news/2026-10-07/ex-broome-bishop-christopher-saunders-sentenced-for-sexual-abuse/107236542</guid>
+      <category>Sexual Offences</category>
+      <category>Courts</category>
+      <category>Crime</category>
+      <category>Churches</category>
+    </item>
+    <item>
+      <title>Are Test cricket batters getting worse? The stats say yes</title>
+      <link>https://www.abc.net.au/news/2026-10-07/statistics-show-test-bowling-winning-against-test-batting/107175886</link>
+      <dc:creator>David Mark</dc:creator>
+      <pubDate>Wed, 07 Oct 2026 02:22:30 +0000</pubDate>
+      <guid isPermaLink="true">https://www.abc.net.au/news/2026-10-07/statistics-show-test-bowling-winning-against-test-batting/107175886</guid>
+      <category>Cricket</category>
+      <category>Sport</category>
+    </item>
+    <item>
+      <title>Man who murdered uncle spoke of desire to kill him days before attack</title>
+      <link>https://www.abc.net.au/news/2026-10-07/jethro-curtis-stephen-curtis-maffra-murder-sentence/107195072</link>
+      <dc:creator>Bec Symons</dc:creator>
+      <pubDate>Wed, 07 Oct 2026 02:06:56 +0000</pubDate>
+      <guid isPermaLink="true">https://www.abc.net.au/news/2026-10-07/jethro-curtis-stephen-curtis-maffra-murder-sentence/107195072</guid>
+      <category>Courts</category>
+    </item>
+    <item>
+      <title>News anchor Richard Morecroft remembered as a 'great Australian'</title>
+      <link>https://www.abc.net.au/news/2026-10-07/nsw-journalists-pay-tribute-to-news-anchor-richard-morecroft/107237684</link>
+      <pubDate>Wed, 07 Oct 2026 02:00:20 +0000</pubDate>
+      <guid isPermaLink="true">https://www.abc.net.au/news/2026-10-07/nsw-journalists-pay-tribute-to-news-anchor-richard-morecroft/107237684</guid>
+      <category>Media Industry</category>
+      <category>Journalism</category>
+    </item>
+    <item>
+      <title>Eva Marie Saint, last star of Hollywood's Golden Age, dies at 102</title>
+      <link>https://www.abc.net.au/news/2026-10-07/eva-marie-saint-hollywood-golden-age-102/106538974</link>
+      <pubDate>Wed, 07 Oct 2026 01:42:46 +0000</pubDate>
+      <guid isPermaLink="true">https://www.abc.net.au/news/2026-10-07/eva-marie-saint-hollywood-golden-age-102/106538974</guid>
+      <category>Movies</category>
+      <category>Television</category>
+      <category>Actor</category>
+    </item>
+    <item>
+      <title>Grieving veterans say training safety a delicate balance after fatality</title>
+      <link>https://www.abc.net.au/news/2026-10-07/soldier-death-mount-bundey-veterans-training-safety-realism/107237642</link>
+      <dc:creator>Jane Bardon</dc:creator>
+      <pubDate>Wed, 07 Oct 2026 01:35:43 +0000</pubDate>
+      <guid isPermaLink="true">https://www.abc.net.au/news/2026-10-07/soldier-death-mount-bundey-veterans-training-safety-realism/107237642</guid>
+      <category>Defence Forces</category>
+      <category>Army</category>
+      <category>Workplace Accidents and Incidents</category>
+    </item>
+</channel>
+</rss>

@@ -1,0 +1,113 @@
+{
+ "capturedAt": "2026-10-07T02:40:01.668Z",
+ "files": [
+  {
+   "file": "donki-flr.json",
+   "url": "https://ccmc.gsfc.nasa.gov/DONKI-API/get/FLR?startDate=2026-09-30&endDate=2026-10-07",
+   "capturedAt": "2026-10-07T02:40:48.295Z",
+   "note": "6 flares in seven days, at the DONKI API base CCMC moved to in September 2026 (the old kauai.ccmc.gsfc.nasa.gov/DONKI/WS answers 301 to a news page)"
+  },
+  {
+   "file": "fred-DCOILWTICO.csv",
+   "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DCOILWTICO",
+   "capturedAt": "2026-10-07T02:40:01.668Z",
+   "note": "header and the last six rows"
+  },
+  {
+   "file": "fred-MORTGAGE30US.csv",
+   "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=MORTGAGE30US",
+   "capturedAt": "2026-10-07T02:40:01.668Z",
+   "note": "header and the last six rows"
+  },
+  {
+   "file": "fred-UNRATE.csv",
+   "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=UNRATE",
+   "capturedAt": "2026-10-07T02:40:01.668Z",
+   "note": "header and the last six rows"
+  },
+  {
+   "file": "gfz-kp.json",
+   "url": "https://kp.gfz.de/app/json/?start=2026-10-04T02:00:00Z&end=2026-10-07T02:00:00Z&index=Kp",
+   "capturedAt": "2026-10-07T02:40:01.668Z",
+   "note": "three days of Kp"
+  },
+  {
+   "file": "ll2-upcoming.json",
+   "url": "https://ll.thespacedevs.com/2.3.0/launches/upcoming/?limit=30&mode=detailed&hide_recent_previous=false",
+   "capturedAt": "2026-10-07T02:40:01.668Z",
+   "note": "30 launches at capture; first 6 kept, fields trimmed to what the news builders read"
+  },
+  {
+   "file": "nws-alerts-severe.json",
+   "url": "https://api.weather.gov/alerts/active?status=actual&severity=Extreme,Severe",
+   "capturedAt": "2026-10-07T02:40:01.668Z",
+   "note": "54 alerts at capture; 4 with a polygon and 3 without kept, properties trimmed to the fields parseAlerts reads"
+  },
+  {
+   "file": "open-meteo-current.json",
+   "url": "https://api.open-meteo.com/v1/forecast?latitude=34.05,-6.2&longitude=-118.24,106.85&current=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms&timezone=auto&forecast_days=1",
+   "capturedAt": "2026-10-07T02:40:01.668Z",
+   "note": "current conditions at two points"
+  },
+  {
+   "file": "rss-abc.xml",
+   "url": "https://www.abc.net.au/news/feed/51120/rss.xml",
+   "capturedAt": "2026-10-07T02:40:01.668Z",
+   "note": "25 items at capture; first 6 kept, descriptions and media removed"
+  },
+  {
+   "file": "rss-aljazeera.xml",
+   "url": "https://www.aljazeera.com/xml/rss/all.xml",
+   "capturedAt": "2026-10-07T02:40:01.668Z",
+   "note": "25 items at capture; first 6 kept, descriptions and media removed"
+  },
+  {
+   "file": "rss-bbc.xml",
+   "url": "https://feeds.bbci.co.uk/news/world/rss.xml",
+   "capturedAt": "2026-10-07T02:40:01.668Z",
+   "note": "30 items at capture; first 6 kept, descriptions and media removed"
+  },
+  {
+   "file": "rss-dw.xml",
+   "url": "https://rss.dw.com/xml/rss-en-world",
+   "capturedAt": "2026-10-07T02:40:01.668Z",
+   "note": "12 items at capture; first 6 kept, descriptions and media removed"
+  },
+  {
+   "file": "rss-france24.xml",
+   "url": "https://www.france24.com/en/rss",
+   "capturedAt": "2026-10-07T02:40:01.668Z",
+   "note": "24 items at capture; first 6 kept, descriptions and media removed"
+  },
+  {
+   "file": "rss-npr.xml",
+   "url": "https://feeds.npr.org/1001/rss.xml",
+   "capturedAt": "2026-10-07T02:40:01.668Z",
+   "note": "10 items at capture; first 6 kept, descriptions and media removed"
+  },
+  {
+   "file": "rss-unnews.xml",
+   "url": "https://news.un.org/feed/subscribe/en/news/all/rss.xml",
+   "capturedAt": "2026-10-07T02:40:01.668Z",
+   "note": "30 items at capture; first 6 kept, descriptions and media removed"
+  },
+  {
+   "file": "usgs-4.5_day.json",
+   "url": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson",
+   "capturedAt": "2026-10-07T02:40:48.295Z",
+   "note": "18 events at capture (fetched over IPv4); first 8 kept"
+  },
+  {
+   "file": "wfigs-incidents.json",
+   "url": "https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Incident_Locations_Current/FeatureServer/0/query?f=geojson&where=1%3D1&outFields=IncidentName%2CIncidentTypeCategory%2CIncidentSize%2CPercentContained%2CFireDiscoveryDateTime%2CModifiedOnDateTime_dt%2CIrwinID%2CPOOState%2CPOOCounty%2CFireCauseGeneral%2CTotalIncidentPersonnel%2CGACC%2CPOOProtectingAgency%2CUniqueFireIdentifier&returnGeometry=true&outSR=4326&orderByFields=IncidentSize+DESC&resultRecordCount=8",
+   "capturedAt": "2026-10-07T02:40:01.668Z",
+   "note": "the eight largest current incident points"
+  },
+  {
+   "file": "wfigs-perimeters.json",
+   "url": "https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/WFIGS_Interagency_Perimeters_Current/FeatureServer/0/query?f=geojson&where=1%3D1&outFields=poly_IncidentName%2Cpoly_GISAcres%2Cpoly_PolygonDateTime%2Cpoly_DateCurrent%2Cpoly_IRWINID%2Cattr_IrwinID%2Cattr_IncidentName%2Cattr_IncidentTypeCategory%2Cattr_PercentContained%2Cattr_FireDiscoveryDateTime%2Cattr_IncidentSize%2Cattr_POOState%2Cattr_POOCounty%2Cattr_FireCauseGeneral%2Cattr_TotalIncidentPersonnel%2Cattr_GACC%2Cattr_POOProtectingAgency%2Cattr_ModifiedOnDateTime_dt%2Cattr_UniqueFireIdentifier&returnGeometry=true&outSR=4326&maxAllowableOffset=0.01&geometryPrecision=3&orderByFields=poly_GISAcres+DESC&resultRecordCount=4",
+   "capturedAt": "2026-10-07T02:40:01.668Z",
+   "note": "the four largest current perimeters, simplified to 0.01 deg for the fixture; vertices rounded to 0.01 deg after capture to keep the fixture small"
+  }
+ ]
+}

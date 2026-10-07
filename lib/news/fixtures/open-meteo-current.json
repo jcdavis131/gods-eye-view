@@ -1,0 +1,69 @@
+[
+ {
+  "latitude": 34.060257,
+  "longitude": -118.23433,
+  "generationtime_ms": 0.19025802612304688,
+  "utc_offset_seconds": -25200,
+  "timezone": "America/Los_Angeles",
+  "timezone_abbreviation": "GMT-7",
+  "elevation": 87,
+  "current_units": {
+   "time": "iso8601",
+   "interval": "seconds",
+   "temperature_2m": "°C",
+   "apparent_temperature": "°C",
+   "relative_humidity_2m": "%",
+   "precipitation": "mm",
+   "weather_code": "wmo code",
+   "cloud_cover": "%",
+   "wind_speed_10m": "m/s",
+   "wind_direction_10m": "°"
+  },
+  "current": {
+   "time": "2026-10-06T19:30",
+   "interval": 900,
+   "temperature_2m": 29,
+   "apparent_temperature": 29.6,
+   "relative_humidity_2m": 41,
+   "precipitation": 0,
+   "weather_code": 0,
+   "cloud_cover": 0,
+   "wind_speed_10m": 1.57,
+   "wind_direction_10m": 284
+  }
+ },
+ {
+  "latitude": -6.221441,
+  "longitude": 106.856186,
+  "generationtime_ms": 0.12624263763427734,
+  "utc_offset_seconds": 25200,
+  "timezone": "Asia/Jakarta",
+  "timezone_abbreviation": "GMT+7",
+  "elevation": 14,
+  "location_id": 1,
+  "current_units": {
+   "time": "iso8601",
+   "interval": "seconds",
+   "temperature_2m": "°C",
+   "apparent_temperature": "°C",
+   "relative_humidity_2m": "%",
+   "precipitation": "mm",
+   "weather_code": "wmo code",
+   "cloud_cover": "%",
+   "wind_speed_10m": "m/s",
+   "wind_direction_10m": "°"
+  },
+  "current": {
+   "time": "2026-10-07T09:30",
+   "interval": 900,
+   "temperature_2m": 31.7,
+   "apparent_temperature": 37.6,
+   "relative_humidity_2m": 56,
+   "precipitation": 0,
+   "weather_code": 1,
+   "cloud_cover": 44,
+   "wind_speed_10m": 0.05,
+   "wind_direction_10m": 180
+  }
+ }
+]

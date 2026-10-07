@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:npr="https://www.npr.org/rss/" xmlns:nprml="https://api.npr.org/nprml" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:media="http://search.yahoo.com/mrss/" version="2.0">
+  <channel>
+    <title>NPR Topics: News</title>
+    <link>https://www.npr.org/templates/story/story.php?storyId=1001</link>
+    <language>en</language>
+    <copyright>Copyright 2024 NPR - For Personal Use Only</copyright>
+    <generator>Story API Shim 1.2.24</generator>
+    <lastBuildDate>Tue, 06 Oct 2026 22:37:17 -0400</lastBuildDate>
+    <image>
+      <url>https://media.npr.org/images/podcasts/primary/npr_generic_image_300.jpg?s=200</url>
+      <title>NPR Topics: News</title>
+      <link>https://www.npr.org/sections/news/</link>
+    </image>
+    <item>
+      <title>Actress Eva Marie Saint, who won an Oscar for &apos;On the Waterfront,&apos; dies at 102</title>
+      <pubDate>Tue, 06 Oct 2026 18:45:00 -0400</pubDate>
+      <link>https://www.npr.org/2026/10/06/462030457/eva-marie-saint-on-the-waterfront-dead-102</link>
+      <guid>https://www.npr.org/2026/10/06/462030457/eva-marie-saint-on-the-waterfront-dead-102</guid>
+      <dc:creator>Jacki Lyden</dc:creator>
+    </item>
+    <item>
+      <title>Cornell names former acting U.S. attorney general to review rape case</title>
+      <pubDate>Tue, 06 Oct 2026 14:31:45 -0400</pubDate>
+      <link>https://www.npr.org/2026/10/06/nx-s1-5992799/cornell-yates-rape-case-updates-review</link>
+      <guid>https://www.npr.org/2026/10/06/nx-s1-5992799/cornell-yates-rape-case-updates-review</guid>
+      <dc:creator>Jaclyn Diaz</dc:creator>
+    </item>
+    <item>
+      <title>France&apos;s police fire tear gas and water cannons as school protests sweep the country</title>
+      <pubDate>Tue, 06 Oct 2026 14:05:44 -0400</pubDate>
+      <link>https://www.npr.org/2026/10/06/nx-s1-5992819/france-student-protests-schools</link>
+      <guid>https://www.npr.org/2026/10/06/nx-s1-5992819/france-student-protests-schools</guid>
+      <dc:creator>The Associated Press</dc:creator>
+    </item>
+    <item>
+      <title>Here are the finalists for the 2026 National Book Awards</title>
+      <pubDate>Tue, 06 Oct 2026 10:30:20 -0400</pubDate>
+      <link>https://www.npr.org/2026/10/06/nx-s1-5991463/2026-national-book-award-shortlist-finalists</link>
+      <guid>https://www.npr.org/2026/10/06/nx-s1-5991463/2026-national-book-award-shortlist-finalists</guid>
+      <dc:creator>Andrew Limbong</dc:creator>
+    </item>
+    <item>
+      <title>What to know about nationwide protests in India over voter list changes</title>
+      <pubDate>Tue, 06 Oct 2026 07:44:06 -0400</pubDate>
+      <link>https://www.npr.org/2026/10/06/g-s1-146636/what-to-know-about-nationwide-protests-in-india-over-voter-list-changes</link>
+      <guid>https://www.npr.org/2026/10/06/g-s1-146636/what-to-know-about-nationwide-protests-in-india-over-voter-list-changes</guid>
+      <dc:creator>The Associated Press</dc:creator>
+    </item>
+    <item>
+      <title>Vietnamese police arrest 12 suspected of prowling city streets at night, snatching cats for meat</title>
+      <pubDate>Tue, 06 Oct 2026 07:38:48 -0400</pubDate>
+      <link>https://www.npr.org/2026/10/06/g-s1-146634/vietnamese-police-arrest-12-suspected-of-prowling-city-streets-at-night-snatching-cats-for-meat</link>
+      <guid>https://www.npr.org/2026/10/06/g-s1-146634/vietnamese-police-arrest-12-suspected-of-prowling-city-streets-at-night-snatching-cats-for-meat</guid>
+      <dc:creator>The Associated Press</dc:creator>
+    </item>
+</channel>
+</rss>

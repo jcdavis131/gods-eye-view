@@ -1,0 +1,165 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "id": "us6000u0nb",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     153.3699,
+     48.1853,
+     108.743
+    ]
+   },
+   "properties": {
+    "mag": 4.6,
+    "place": "Kuril Islands",
+    "time": 1791337145561,
+    "tsunami": 0,
+    "alert": null,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000u0nb"
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "us6000u0le",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     139.5723,
+     -3.9438,
+     80.203
+    ]
+   },
+   "properties": {
+    "mag": 4.9,
+    "place": "189 km SW of Abepura, Indonesia",
+    "time": 1791323803985,
+    "tsunami": 0,
+    "alert": null,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000u0le"
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "us6000u0km",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     116.218,
+     -8.4933,
+     144.45
+    ]
+   },
+   "properties": {
+    "mag": 4.6,
+    "place": "14 km NE of Mataram, Indonesia",
+    "time": 1791317728171,
+    "tsunami": 0,
+    "alert": null,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000u0km"
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "us6000u0k2",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     101.8914,
+     -3.6796,
+     73.115
+    ]
+   },
+   "properties": {
+    "mag": 4.5,
+    "place": "43 km WNW of Bengkulu, Indonesia",
+    "time": 1791313319145,
+    "tsunami": 0,
+    "alert": null,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000u0k2"
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "aka2026tuxgky",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -153.609,
+     58.802,
+     87.6
+    ]
+   },
+   "properties": {
+    "mag": 5.5,
+    "place": "92 km NNW of Aleneva, Alaska",
+    "time": 1791311671760,
+    "tsunami": 0,
+    "alert": "green",
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/aka2026tuxgky"
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "us6000u0jq",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     88.2203,
+     42.2039,
+     10
+    ]
+   },
+   "properties": {
+    "mag": 4.9,
+    "place": "114 km SW of Turpan, China",
+    "time": 1791310534402,
+    "tsunami": 0,
+    "alert": null,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000u0jq"
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "us6000u0ji",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     147.7419,
+     44.0053,
+     35
+    ]
+   },
+   "properties": {
+    "mag": 4.8,
+    "place": "85 km ENE of Shikotan, Russia",
+    "time": 1791308824306,
+    "tsunami": 0,
+    "alert": null,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000u0ji"
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "us6000u0hz",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     79.6148,
+     30.1171,
+     10
+    ]
+   },
+   "properties": {
+    "mag": 5.1,
+    "place": "34 km NNW of Bāgeshwar, India",
+    "time": 1791305591296,
+    "tsunami": 0,
+    "alert": "green",
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000u0hz"
+   }
+  }
+ ]
+}

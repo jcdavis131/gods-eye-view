@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?><rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom" version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+    <channel>
+        <title><![CDATA[BBC News]]></title>
+        <link>https://www.bbc.co.uk/news/world</link>
+        <image>
+            <url>https://news.bbcimg.co.uk/nol/shared/img/bbc_news_120x60.gif</url>
+            <title>BBC News</title>
+            <link>https://www.bbc.co.uk/news/world</link>
+        </image>
+        <generator>RSS for Node</generator>
+        <lastBuildDate>Wed, 07 Oct 2026 02:40:04 GMT</lastBuildDate>
+        <atom:link href="https://feeds.bbci.co.uk/news/world/rss.xml" rel="self" type="application/rss+xml"/>
+        <copyright><![CDATA[Copyright: (C) British Broadcasting Corporation, see https://www.bbc.co.uk/usingthebbc/terms-of-use/#15metadataandrssfeeds for terms and conditions of reuse.]]></copyright>
+        <language><![CDATA[en-gb]]></language>
+        <ttl>15</ttl>
+        <item>
+            <title><![CDATA[US death row inmate Christa Pike awake and speaking after failed execution, lawyers say]]></title>
+            <link>https://www.bbc.co.uk/news/articles/c8kgezxn54qko?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.co.uk/news/articles/c8kgezxn54qko#0</guid>
+            <pubDate>Wed, 07 Oct 2026 00:56:59 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Tear gas in Paris and Marseille as school protests grow across France]]></title>
+            <link>https://www.bbc.co.uk/news/articles/c8x23706pvz3o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.co.uk/news/articles/c8x23706pvz3o#0</guid>
+            <pubDate>Tue, 06 Oct 2026 18:03:19 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Former German spy chief arrested for espionage and treason]]></title>
+            <link>https://www.bbc.co.uk/news/articles/c58jzyer1kr0o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.co.uk/news/articles/c58jzyer1kr0o#0</guid>
+            <pubDate>Tue, 06 Oct 2026 10:05:42 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[A beautiful Himalayan bird is changing its voice due to human activity, research shows]]></title>
+            <link>https://www.bbc.co.uk/news/articles/cq9868z88rexo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.co.uk/news/articles/cq9868z88rexo#0</guid>
+            <pubDate>Tue, 06 Oct 2026 23:07:44 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Lawyer for one of Cornell 7 calls for special prosecutor to be removed over previous comments]]></title>
+            <link>https://www.bbc.co.uk/news/articles/c9p8gxygvpg6o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.co.uk/news/articles/c9p8gxygvpg6o#0</guid>
+            <pubDate>Tue, 06 Oct 2026 18:05:53 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Finland orders halt to work on two Google data centres]]></title>
+            <link>https://www.bbc.co.uk/news/articles/cvj6jkx6g1r0o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.co.uk/news/articles/cvj6jkx6g1r0o#0</guid>
+            <pubDate>Tue, 06 Oct 2026 17:15:46 GMT</pubDate>
+        </item>
+</channel>
+</rss>

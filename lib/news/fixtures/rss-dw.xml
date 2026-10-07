@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:georss="http://www.georss.org/georss" xmlns:atom="http://www.w3.org/2005/Atom">
+ <channel>
+  <title>World | Deutsche Welle</title>
+  <link>https://www.dw.com/english/?maca=en-rss-en-world-4025-xml-mrss</link>
+  <language>en</language>
+  <copyright>2026 DW</copyright>
+  <pubDate>Wed, 7 Oct 2026 02:36:04 GMT</pubDate>
+  <lastBuildDate>Wed, 7 Oct 2026 02:36:04 GMT</lastBuildDate>
+  <atom:link href="https://rss.dw.com/xml/rss-en-world" rel="self"/>
+  <image>
+   <url>https://rss.dw.com/images/DW-L-RGB_whitebg.png</url>
+   <title>World | Deutsche Welle</title>
+   <link>https://www.dw.com/english/?maca=en-rss-en-world-4025-xml-mrss</link>
+   <width>98</width>
+   <height>64</height>
+  </image>
+  <ttl>10</ttl>
+  <item>
+   <guid isPermaLink="false">79567297</guid>
+   <pubDate>Tue, 6 Oct 2026 18:02:00 GMT</pubDate>
+   <title>EU seeks ways to make expansion more palatable to members</title>
+   <link>https://www.dw.com/en/eu-seeks-ways-to-make-expansion-more-palatable-to-members/a-79567297?maca=en-rss-en-world-4025-xml-mrss</link>
+   <category>News</category>
+  </item>
+  <item>
+   <guid isPermaLink="false">79563475</guid>
+   <pubDate>Tue, 6 Oct 2026 16:49:00 GMT</pubDate>
+   <title>France’s conundrum: How to cut spending amid protests</title>
+   <link>https://www.dw.com/en/france-s-conundrum-how-to-cut-spending-amid-protests/a-79563475?maca=en-rss-en-world-4025-xml-mrss</link>
+   <category>World</category>
+  </item>
+  <item>
+   <guid isPermaLink="false">79565762</guid>
+   <pubDate>Tue, 6 Oct 2026 14:18:00 GMT</pubDate>
+   <title>Paramount and Warner Bros merge into one Hollywood giant</title>
+   <link>https://www.dw.com/en/paramount-and-warner-bros-merge-into-one-hollywood-giant/a-79565762?maca=en-rss-en-world-4025-xml-mrss</link>
+   <category>News</category>
+  </item>
+  <item>
+   <guid isPermaLink="false">79564962</guid>
+   <pubDate>Tue, 6 Oct 2026 13:50:00 GMT</pubDate>
+   <title>As more Iranian women reject hijab rules, regime looks at new ways to force compliance</title>
+   <link>https://www.dw.com/en/as-more-iranian-women-reject-hijab-rules-regime-looks-at-new-ways-to-force-compliance/a-79564962?maca=en-rss-en-world-4025-xml-mrss</link>
+   <category>World</category>
+  </item>
+  <item>
+   <guid isPermaLink="false">79562957</guid>
+   <pubDate>Tue, 6 Oct 2026 13:32:00 GMT</pubDate>
+   <title>Tigray war may spill over to Eritrea — helped by Prime Minister Abiy Ahmed&#039;s rhetoric</title>
+   <link>https://www.dw.com/en/tigray-war-may-spill-over-to-eritrea-helped-by-prime-minister-abiy-ahmed-s-rhetoric/a-79562957?maca=en-rss-en-world-4025-xml-mrss</link>
+   <category>World</category>
+  </item>
+  <item>
+   <guid isPermaLink="false">79560752</guid>
+   <pubDate>Tue, 6 Oct 2026 11:07:00 GMT</pubDate>
+   <title>Fact check: Misleading claims spark plague fears in Russia</title>
+   <link>https://www.dw.com/en/fact-check-misleading-claims-spark-plague-fears-in-russia/a-79560752?maca=en-rss-en-world-4025-xml-mrss</link>
+   <category>World</category>
+  </item>
+</channel>
+</rss>

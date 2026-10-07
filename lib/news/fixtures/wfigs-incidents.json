@@ -1,0 +1,222 @@
+{
+ "type": "FeatureCollection",
+ "crs": {
+  "type": "name",
+  "properties": {
+   "name": "EPSG:4326"
+  }
+ },
+ "properties": {
+  "exceededTransferLimit": true
+ },
+ "features": [
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -120.316745958803,
+     44.8101316573827
+    ]
+   },
+   "properties": {
+    "IncidentName": "ROWE CREEK COMPLEX",
+    "IncidentTypeCategory": "CX",
+    "IncidentSize": 373928.6,
+    "PercentContained": 100,
+    "FireDiscoveryDateTime": 1784157600000,
+    "ModifiedOnDateTime_dt": 1790983589350,
+    "IrwinID": "{B8431C26-6A9B-4EF0-88D8-F7EA9A3F56C3}",
+    "POOState": "US-OR",
+    "POOCounty": "Wheeler",
+    "FireCauseGeneral": null,
+    "TotalIncidentPersonnel": 73,
+    "GACC": "NWCC",
+    "POOProtectingAgency": "BLM",
+    "UniqueFireIdentifier": "2026-ORPRD-000491"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -120.199180937817,
+     44.8033386684882
+    ]
+   },
+   "properties": {
+    "IncidentName": "0445 CROSSWHITE",
+    "IncidentTypeCategory": "WF",
+    "IncidentSize": 342923,
+    "PercentContained": 100,
+    "FireDiscoveryDateTime": 1784163114000,
+    "ModifiedOnDateTime_dt": 1790983597947,
+    "IrwinID": "{1B0219EE-5298-4FEF-9927-C2666D9D53FC}",
+    "POOState": "US-OR",
+    "POOCounty": "Wheeler",
+    "FireCauseGeneral": null,
+    "TotalIncidentPersonnel": 39,
+    "GACC": "NWCC",
+    "POOProtectingAgency": "BLM",
+    "UniqueFireIdentifier": "2026-ORPRD-000445"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -120.846631747952,
+     48.0162228019826
+    ]
+   },
+   "properties": {
+    "IncidentName": "LITTLE GIANT",
+    "IncidentTypeCategory": "WF",
+    "IncidentSize": 172904,
+    "PercentContained": 93,
+    "FireDiscoveryDateTime": 1784164674000,
+    "ModifiedOnDateTime_dt": 1791334898487,
+    "IrwinID": "{091081ED-BD23-4610-AE4A-270F95D1711E}",
+    "POOState": "US-WA",
+    "POOCounty": "Chelan",
+    "FireCauseGeneral": null,
+    "TotalIncidentPersonnel": 350,
+    "GACC": "NWCC",
+    "POOProtectingAgency": "USFS",
+    "UniqueFireIdentifier": "2026-WAOWF-260406"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -119.693131719711,
+     48.7046229687453
+    ]
+   },
+   "properties": {
+    "IncidentName": "SINLAHEKIN",
+    "IncidentTypeCategory": "WF",
+    "IncidentSize": 166007,
+    "PercentContained": 99,
+    "FireDiscoveryDateTime": 1785100320000,
+    "ModifiedOnDateTime_dt": 1791336308243,
+    "IrwinID": "{78D35D3B-F791-4961-AE36-C6D1A4DFF5A0}",
+    "POOState": "US-WA",
+    "POOCounty": "Okanogan",
+    "FireCauseGeneral": null,
+    "TotalIncidentPersonnel": 122,
+    "GACC": "NWCC",
+    "POOProtectingAgency": "DNR",
+    "UniqueFireIdentifier": "2026-WANES-001791"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -118.958652442971,
+     48.1167830142472
+    ]
+   },
+   "properties": {
+    "IncidentName": "Kaiser Canyon",
+    "IncidentTypeCategory": "WF",
+    "IncidentSize": 138293,
+    "PercentContained": 100,
+    "FireDiscoveryDateTime": 1784205000000,
+    "ModifiedOnDateTime_dt": 1790352457670,
+    "IrwinID": "{B5597100-D6C9-49F9-BC74-6B8FC4432E92}",
+    "POOState": "US-WA",
+    "POOCounty": "Okanogan",
+    "FireCauseGeneral": null,
+    "TotalIncidentPersonnel": 14,
+    "GACC": "NWCC",
+    "POOProtectingAgency": "BIA",
+    "UniqueFireIdentifier": "2026-WACOA-260140"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -119.439180587863,
+     43.6086726552229
+    ]
+   },
+   "properties": {
+    "IncidentName": "Second Flat",
+    "IncidentTypeCategory": "WF",
+    "IncidentSize": 105854,
+    "PercentContained": 99,
+    "FireDiscoveryDateTime": 1784933580000,
+    "ModifiedOnDateTime_dt": 1791243281973,
+    "IrwinID": "{D1885386-0825-4EB4-8BEC-B4C0274C5BBD}",
+    "POOState": "US-OR",
+    "POOCounty": "Harney",
+    "FireCauseGeneral": null,
+    "TotalIncidentPersonnel": 2,
+    "GACC": "NWCC",
+    "POOProtectingAgency": "BLM",
+    "UniqueFireIdentifier": "2026-ORBUD-002693"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -105.0712779393,
+     38.0193211711361
+    ]
+   },
+   "properties": {
+    "IncidentName": "Aspen Acres",
+    "IncidentTypeCategory": "WF",
+    "IncidentSize": 102007,
+    "PercentContained": 82,
+    "FireDiscoveryDateTime": 1782734686000,
+    "ModifiedOnDateTime_dt": 1791331266160,
+    "IrwinID": "{1CDF5E5A-F22E-4352-A582-C2A47663B93D}",
+    "POOState": "US-CO",
+    "POOCounty": "Custer",
+    "FireCauseGeneral": null,
+    "TotalIncidentPersonnel": 2,
+    "GACC": "RMCC",
+    "POOProtectingAgency": "C&L",
+    "UniqueFireIdentifier": "2026-COCUX-001160"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -121.510147242498,
+     45.2529725674808
+    ]
+   },
+   "properties": {
+    "IncidentName": "GRASSHOPPER",
+    "IncidentTypeCategory": "WF",
+    "IncidentSize": 93972,
+    "PercentContained": 98,
+    "FireDiscoveryDateTime": 1784860860000,
+    "ModifiedOnDateTime_dt": 1791255638193,
+    "IrwinID": "{6AA4C355-AD18-472F-AAAB-78BAA9DE31B1}",
+    "POOState": "US-OR",
+    "POOCounty": "Wasco",
+    "FireCauseGeneral": null,
+    "TotalIncidentPersonnel": 198,
+    "GACC": "NWCC",
+    "POOProtectingAgency": "USFS",
+    "UniqueFireIdentifier": "2026-ORMHF-000688"
+   }
+  }
+ ]
+}
