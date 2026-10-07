@@ -17,6 +17,7 @@
 // fails is named in `failed` and its facts are missing, not absent.
 
 import { cached, type Cached } from "@/lib/server/cache";
+import type { SourceId } from "@/lib/provenance/sources";
 import { polite, upstream, upstreamJson } from "@/lib/server/upstream";
 import { ALERTS_URL, QUAKES_URL, liveFeed } from "@/lib/live/fetch";
 import { WFIGS_INCIDENTS_URL, WFIGS_PERIMETERS_URL, wfigs } from "@/lib/hazards/sources";
@@ -188,7 +189,7 @@ async function assembleFacts(): Promise<NewsFacts> {
     facts.push(...wireFacts(wire.value.items, fetchedAt(wire.age, now)));
   } else {
     const f = failed.find((x) => x.source === "wire")!;
-    failed.splice(failed.indexOf(f), 1, ...WIRE_OUTLETS.map((o) => ({ source: o.sourceId as string, error: f.error })));
+    failed.splice(failed.indexOf(f), 1, ...WIRE_OUTLETS.map((o) => ({ source: o.sourceId, error: f.error })));
   }
 
   // Weather at the lead quake and the lead fire: what it is like where the story is.
@@ -214,7 +215,7 @@ export function newsFacts(): Promise<Cached<NewsFacts>> {
 
 export interface WireFeed {
   items: WireItem[];
-  outlets: Array<{ id: string; outlet: string; sourceId: string; feedUrl: string; ok: boolean; items: number; error?: string }>;
+  outlets: Array<{ id: string; outlet: string; sourceId: SourceId; feedUrl: string; ok: boolean; items: number; error?: string }>;
 }
 
 async function fetchWire(): Promise<WireFeed> {

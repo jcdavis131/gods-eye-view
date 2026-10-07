@@ -45,9 +45,9 @@
   },
   {
    "file": "open-meteo-current.json",
-   "url": "https://api.open-meteo.com/v1/forecast?latitude=34.05,-6.2&longitude=-118.24,106.85&current=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms&timezone=auto&forecast_days=1",
-   "capturedAt": "2026-10-07T02:40:01.668Z",
-   "note": "current conditions at two points"
+   "url": "https://api.open-meteo.com/v1/forecast?latitude=58.80,48.02&longitude=-153.61,-120.85&current=temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms&timezone=auto&forecast_days=1",
+   "capturedAt": "2026-10-07T02:55:48.429Z",
+   "note": "current conditions at the lead quake (USGS aka2026tuxgky) and the lead fire (LITTLE GIANT incident point) in the other fixtures, the two points lib/news/sources.ts asks for, in the URL format it builds"
   },
   {
    "file": "rss-abc.xml",

@@ -227,14 +227,15 @@ describe("economy facts", () => {
 describe("weatherFacts", () => {
   it("attaches Open-Meteo's current values to the fact it was asked for, labelled as model output", () => {
     const at: Fact[] = [
-      { id: "quake:a", kind: "quake", headline_fields: {}, numbers: {}, place: { name: "A", lat: 34.05, lon: -118.24 }, time: null, link: null, provenance: { source: SOURCES["usgs-earthquakes"], retrievedAt: RA, kind: "published" } },
-      { id: "fire:b", kind: "wildfire", headline_fields: {}, numbers: {}, place: { name: "B", lat: -6.2, lon: 106.85 }, time: null, link: null, provenance: { source: SOURCES["nifc-wfigs"], retrievedAt: RA, kind: "snapshot" } },
+      { id: "quake:a", kind: "quake", headline_fields: {}, numbers: {}, place: { name: "A", lat: 58.8, lon: -153.61 }, time: null, link: null, provenance: { source: SOURCES["usgs-earthquakes"], retrievedAt: RA, kind: "published" } },
+      { id: "fire:b", kind: "wildfire", headline_fields: {}, numbers: {}, place: { name: "B", lat: 48.02, lon: -120.85 }, time: null, link: null, provenance: { source: SOURCES["nifc-wfigs"], retrievedAt: RA, kind: "snapshot" } },
     ];
     const facts = noClock(() => weatherFacts(meteo, at, RA, "https://api.open-meteo.com/v1/forecast"));
     wellFormed(facts);
     expect(facts).toHaveLength(2);
-    expect(facts[0].id).toBe("wx:quake:a:2026-10-06T19:30");
-    expect(facts[0].numbers.tempC).toBe(29);
+    expect(facts[0].id).toBe("wx:quake:a:2026-10-06T18:45");
+    expect(facts[0].numbers.tempC).toBe(-2.2);
+    expect(facts[1].numbers).toMatchObject({ tempC: 13.8, humidityPct: 39, windMs: 0.4 });
     expect(facts[0].headline_fields.basis).toMatch(/model/);
     expect(facts[0].place).toEqual(at[0].place);
     expect(weatherFacts([], at, RA, "u")).toEqual([]);
