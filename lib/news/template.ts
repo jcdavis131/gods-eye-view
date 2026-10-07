@@ -123,6 +123,8 @@ export function launchLine(f: Fact): string {
   const on = h.rocket ? ` on a ${h.rocket}` : "";
   const from = h.location ? ` from ${h.location}` : "";
   const status = h.status ? ` Launch Library lists its status as ${h.status}.` : "";
+  // The upcoming list keeps launches of the last hours; one that has flown is reported as flown.
+  if (f.time && /success|failure|in flight/i.test(h.status ?? "")) return `${who} launched ${what}${on}${from}, at ${utcClock(f.time)} on ${utcDay(f.time)}.${status}`;
   return `${who} is scheduled to launch ${what}${on}${from}, ${netPhrase(f)}.${status}`;
 }
 

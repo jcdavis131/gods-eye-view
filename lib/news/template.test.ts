@@ -3,7 +3,7 @@ import { factIndex, type Fact } from "./facts";
 import { fixtureFacts, CAPTURED_AT } from "./fixtureFacts";
 import { checkLine, RundownSchema } from "./rundown";
 import { WHEEL } from "./schedule";
-import { calendarDate, figure, netPhrase, readName, templateRundown, utcClock, utcDay } from "./template";
+import { calendarDate, figure, launchLine, netPhrase, readName, templateRundown, utcClock, utcDay } from "./template";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -66,6 +66,9 @@ describe("sentences", () => {
     expect(netPhrase(at("Hour"))).toBe("no earlier than 03:25 UTC on 7 October, to within the hour");
     expect(netPhrase(at("Day"))).toBe("no earlier than 7 October, to within the day");
     expect(netPhrase(at("Month"))).toBe("no earlier than sometime in October");
+    const flown: Fact = { ...base, headline_fields: { ...base.headline_fields, status: "Launch Successful" } };
+    expect(launchLine(flown)).toBe("Korea Aerospace Research Institute launched NeonSat-2 to 6 on a KSLV-2 Nuri from Naro Space Center, South Korea, at 03:25 UTC on 7 October. Launch Library lists its status as Launch Successful.");
+    expect(checkLine(launchLine(flown), [flown])).toEqual([]);
   });
   it("flares, Kp, FRED and the release calendar", () => {
     expect(allLines.find((l) => l.text.includes("M1.8"))!.text).toBe("NASA's DONKI database logged an M1.8 solar flare that peaked at 08:05 UTC on 6 October, from active region 14549.");
