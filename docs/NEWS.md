@@ -99,7 +99,7 @@ Nothing about a fact is taken from the published file but its id: each segment's
 
 The claim check cannot catch a claim written entirely in lower-case words with no number ("a big storm is coming"). The model's instructions must forbid any statement not backed by a cited fact; the template writer never makes one.
 
-A rundown that cites a count that has since changed (the alert count, under the one id `alerts:count`) fails the number check and falls back to the template, by design.
+A rundown that cites a count that has since changed (the alert count, under the one id `alerts:count`) fails the number check and falls back to the template, by design. Weather fact ids carry Open-Meteo's own observation time (`wx:<fact id>:<time>`), which moves every 15 minutes, so a rundown that cites one is usually rejected after that; the model writer should leave weather to the template or cite it only when it publishes within the quarter hour.
 
 ## Disclosure
 

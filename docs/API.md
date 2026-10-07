@@ -158,6 +158,7 @@ TTLs follow upstream cadence:
 | Agency cameras (`/api/cameras`) | 2 min (LTA) to 1 h (DriveBC) | 2 min (LTA) to 6 h (DriveBC); Caltrans 1 h |
 | Air quality (`/api/air`) | 10 min | 20 min per hourly file |
 | News events (`/api/events`) | 10 min | 6 h per 15-minute export file; lastupdate.txt 5 min |
+| Newsroom (`/api/news`) | facts 2 min (1 min while a feed is down), wire 5 min (2 min while an outlet is down), rundown 1 min, schedule 30 s | facts 2 min; outlet feeds 10 min; the published model rundown 2 min; Launch Library 15 min (shared with `/api/launches`) |
 | Zoning (point, districts) | 1 h (5 min for a New York answer whose tax-lot lookup failed) | 1 day per point or snapped box; the Census place 30 days |
 | Building permits | 15 min (2 min while a city is down) | 30 min per city and box (Los Angeles 6 h) |
 | Business licences | 30 min (2 min while a registry is down) | 1 h per registry and box (Los Angeles 6 h) |

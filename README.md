@@ -429,6 +429,18 @@ curl "https://eye.jcamd.com/api/air?op=sites&bbox=-99,29,-98,30"
 curl "https://eye.jcamd.com/api/events?op=conflict&hours=3"
 ```
 
+`/api/news` is the newsroom behind the fictional anchors ([docs/NEWS.md](docs/NEWS.md)): every fact they may state, with its provenance, the credited headline wire, the rundown they read and the broadcast wheel.
+
+```bash
+# Facts from the live feeds (alerts, quakes, fires, launches, Kp, flares, FRED, release windows, wire headlines), each with provenance
+curl "https://eye.jcamd.com/api/news?op=facts"
+
+# Outlet headlines (title, link, outlet, time), last 24 h; the script for this half hour and why it was chosen; the 30-minute wheel
+curl "https://eye.jcamd.com/api/news?op=wire"
+curl "https://eye.jcamd.com/api/news?op=rundown"
+curl "https://eye.jcamd.com/api/news?op=schedule"
+```
+
 `/api/zoning` and `/api/permits` do the same for the zoning, permits and licences layers. Every permits answer carries `coverage`: each source the box meets with its state (covered, partial, error, stale, no-feed, token-required, not-wired) and the reason:
 
 ```bash
