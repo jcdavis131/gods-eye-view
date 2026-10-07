@@ -22,7 +22,9 @@ import { retrying } from "@/lib/server/net";
 import { donkiSummary, issStreamFrom, parseKp, type GfzKpJson, type IssStream, type OEmbed, type SpaceWeather } from "./weather";
 
 const MIN = 60_000;
-const DONKI = "https://kauai.ccmc.gsfc.nasa.gov/DONKI/WS/get";
+// CCMC moved the DONKI API in September 2026 (https://ccmc.gsfc.nasa.gov/news/major-updates): the old
+// kauai.ccmc.gsfc.nasa.gov/DONKI/WS base answers 301 to that news page; parameters and responses are unchanged.
+const DONKI = "https://ccmc.gsfc.nasa.gov/DONKI-API/get";
 
 const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 
