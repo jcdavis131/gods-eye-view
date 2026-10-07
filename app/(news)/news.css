@@ -1,0 +1,94 @@
+/* The news studio's motion: anchors breathing, the map inset's zoom, the
+   wire ticker and the LIVE dot. Every animation stops under
+   prefers-reduced-motion (the studio also stops its lip movement, blinks,
+   the otter's anemometer and the ticker's second copy in script). */
+
+.news-breathe {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: news-breathe 4.2s ease-in-out infinite;
+}
+.news-breathe-b {
+  animation-duration: 3.6s;
+  animation-delay: -1.2s;
+}
+.news-breathe-c {
+  animation-duration: 4.8s;
+  animation-delay: -2.5s;
+}
+@keyframes news-breathe {
+  0%,
+  100% {
+    transform: translateY(0) scaleY(1);
+  }
+  50% {
+    transform: translateY(-1.2px) scaleY(1.008);
+  }
+}
+
+/* The inset zooms in on each new place: the detail layer grows from a
+   quarter size at the centre (where the place is) while it fades in. */
+.news-fly {
+  transform-origin: 50% 50%;
+  animation: news-fly 1.4s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@keyframes news-fly {
+  from {
+    transform: scale(0.25);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* The wire: two copies of the list scroll left as one; hovering or tabbing
+   into it stops the scroll and turns it into a plain scrollable row, so a
+   keyboard user lands on a link that holds still. */
+.news-ticker-window {
+  scrollbar-width: none;
+}
+.news-ticker-window::-webkit-scrollbar {
+  display: none;
+}
+.news-ticker-run {
+  animation: news-ticker var(--ticker-s, 120s) linear infinite;
+}
+.news-ticker:hover .news-ticker-run,
+.news-ticker:focus-within .news-ticker-run {
+  animation-play-state: paused;
+}
+.news-ticker:focus-within .news-ticker-run {
+  animation: none;
+  transform: none;
+}
+@keyframes news-ticker {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.news-live-dot {
+  animation: news-live 1.6s ease-in-out infinite;
+}
+@keyframes news-live {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .news-breathe,
+  .news-fly,
+  .news-ticker-run,
+  .news-live-dot {
+    animation: none;
+  }
+  .news-ticker-run {
+    transform: none;
+  }
+}
