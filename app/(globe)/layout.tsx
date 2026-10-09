@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "../globals.css";
 import { Providers } from "../providers";
+import { FlyingCarCursor } from "@/components/cursor/FlyingCarCursor";
 import { BASE_METADATA, BASE_DESCRIPTION } from "@/lib/seo/base";
 
 const mono = Geist_Mono({
@@ -46,6 +47,7 @@ export default function GlobeLayout({ children }: { children: React.ReactNode })
         <link rel="stylesheet" href="/cesium/Widgets/widgets.css" />
       </head>
       <body className="h-full overflow-hidden bg-background font-mono text-foreground">
+        <FlyingCarCursor />
         <Providers>{children}</Providers>
       </body>
     </html>
