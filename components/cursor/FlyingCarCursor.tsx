@@ -29,7 +29,7 @@ export function FlyingCarCursor() {
   const [enabled, setEnabled] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const carRef = useRef<HTMLDivElement | null>(null);
-  const flameRef = useRef<SVGGElement | null>(null);
+  const flameRef = useRef<HTMLDivElement | null>(null);
   const ringRef = useRef<SVGCircleElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -162,22 +162,21 @@ export function FlyingCarCursor() {
         `rotate(${angle + bank * 0.12}rad) scale(${scale},${scale * bankSquash})`;
 
       // Thruster flame: grows with speed, flickers, flares on boost.
+      // The flame lives in its own layer (see .fcc-flame) so it is never
+      // clipped by the car body's viewBox.
       if (flame) {
         const base = 0.45 + Math.min(speed / 900, 1.1);
         const flicker =
           1 + 0.16 * Math.sin(now / 31) + 0.09 * Math.sin(now / 17 + 1.3);
         const s = base * flicker * (boosting ? 1.7 : 1);
-        flame.setAttribute(
-          "transform",
-          `translate(12 44) scale(${s.toFixed(3)} 1) translate(-12 -44)`,
-        );
+        flame.style.transform = `scaleX(${s.toFixed(3)})`;
       }
 
       // Exhaust trail particles.
       if (speed > 60 && visible && !inField) {
         spawnAcc += dt * clamp(speed / 40, 0, 22);
-        const rx = px - Math.cos(angle) * (CAR_W * 0.34);
-        const ry = py - Math.sin(angle) * (CAR_W * 0.34);
+        const rx = px - Math.cos(angle) * 56;
+        const ry = py - Math.sin(angle) * 56;
         while (spawnAcc >= 1 && parts.length < 240) {
           spawnAcc -= 1;
           const j = () => (Math.random() - 0.5) * 40;
@@ -244,6 +243,40 @@ export function FlyingCarCursor() {
     <div ref={rootRef} aria-hidden="true" className="fcc-root">
       <canvas ref={canvasRef} className="fcc-trail" />
       <div ref={carRef} className="fcc-car">
+        <div ref={flameRef} className="fcc-flame" aria-hidden="true">
+          <svg
+            width="260"
+            height="88"
+            viewBox="0 0 260 88"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <defs>
+              <linearGradient
+                id="fcc-flame"
+                x1="260"
+                y1="0"
+                x2="160"
+                y2="0"
+                gradientUnits="userSpaceOnUse"
+              >
+                <stop stopColor="#e0faff" />
+                <stop offset="0.35" stopColor="#67e8f9" />
+                <stop offset="1" stopColor="#22d3ee" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <path
+              d="M260 44 C 232 40, 208 40, 176 44 C 208 48, 232 48, 260 44 Z"
+              fill="url(#fcc-flame)"
+              opacity="0.85"
+            />
+            <path
+              d="M260 44 C 246 42.5, 234 42.5, 220 44 C 234 45.5, 246 45.5, 260 44 Z"
+              fill="#f0fdff"
+              opacity="0.95"
+            />
+          </svg>
+        </div>
         <svg
           width={CAR_W}
           height={CAR_H}
@@ -276,18 +309,6 @@ export function FlyingCarCursor() {
               <stop offset="0.5" stopColor="#0e7490" />
               <stop offset="1" stopColor="#083344" />
             </linearGradient>
-            <linearGradient
-              id="fcc-flame"
-              x1="12"
-              y1="0"
-              x2="-46"
-              y2="0"
-              gradientUnits="userSpaceOnUse"
-            >
-              <stop stopColor="#e0faff" />
-              <stop offset="0.35" stopColor="#67e8f9" />
-              <stop offset="1" stopColor="#22d3ee" stopOpacity="0" />
-            </linearGradient>
             <filter id="fcc-blur6" x="-80%" y="-80%" width="260%" height="260%">
               <feGaussianBlur stdDeviation="6" />
             </filter>
@@ -319,20 +340,6 @@ export function FlyingCarCursor() {
             strokeDasharray="6 10"
             opacity="0"
           />
-
-          {/* thruster exhaust (scaled per-frame by speed) */}
-          <g ref={flameRef}>
-            <path
-              d="M12 44 C -4 40.5, -22 40, -46 44 C -22 48, -4 47.5, 12 44 Z"
-              fill="url(#fcc-flame)"
-              opacity="0.85"
-            />
-            <path
-              d="M12 44 C 2 42.8, -8 42.8, -22 44 C -8 45.2, 2 45.2, 12 44 Z"
-              fill="#f0fdff"
-              opacity="0.95"
-            />
-          </g>
 
           {/* swept wing fins */}
           <path

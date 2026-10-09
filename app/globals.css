@@ -1118,6 +1118,16 @@
   height: 88px;
   will-change: transform;
 }
+.fcc-flame {
+  position: absolute;
+  left: -248px;
+  top: 0;
+  width: 260px;
+  height: 88px;
+  transform-origin: 260px 44px;
+  will-change: transform;
+  pointer-events: none;
+}
 .fcc-ring {
   transition: opacity 0.2s ease;
   transform-box: fill-box;
