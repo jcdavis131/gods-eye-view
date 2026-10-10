@@ -27,6 +27,7 @@ import { usElectricityPricesLayer } from "./usElectricityPrices";
 import { globalGenerationLayer } from "./globalGeneration";
 import { datacentersLayer } from "./datacenters";
 import { weatherLayer } from "./weather";
+import { windFlowLayer, oceanFlowLayer } from "./flows";
 import { wildfireLayer } from "./wildfire";
 import { firesLayer } from "./fires";
 import { hazardsLayer } from "./hazards";
@@ -74,6 +75,8 @@ export const LAYERS: LayerDefinition[] = [
   globalGenerationLayer,
   datacentersLayer,
   weatherLayer,
+  windFlowLayer,
+  oceanFlowLayer,
   wildfireLayer,
   firesLayer,
   hazardsLayer,
