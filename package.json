@@ -16,6 +16,7 @@
     "test:coverage": "vitest run --coverage",
     "mcp": "node scripts/mcp-stdio.mjs",
     "data:gas": "node scripts/gas-data.mjs",
+    "data:natgas": "node scripts/natgas-data.mjs",
     "data:energy": "node scripts/energy-data.mjs",
     "data:flows": "node scripts/flows-data.mjs",
     "data:ops": "python3 dataops/dataops.py",
