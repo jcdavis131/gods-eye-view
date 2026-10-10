@@ -511,4 +511,8 @@ export const FOLLOW_RANGE: Record<LayerId, number> = {
   constructs: 150_000,
   field: 400_000,
   alerts: 600_000,
+  // Particle-flow layers have no followable objects; a global view is the
+  // only sensible follow range (unreachable in practice: nothing to select).
+  windflow: 20_000_000,
+  oceanflow: 20_000_000,
 };

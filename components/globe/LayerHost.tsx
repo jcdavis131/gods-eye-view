@@ -11,6 +11,7 @@ import { viewKey, type FetchResult, type LayerDefinition } from "@/lib/layers/ty
 import { getViewer } from "@/lib/globe/cesium";
 import { LayerRenderer } from "@/lib/globe/renderer";
 import { getRenderer, registerRenderer, unregisterRenderer } from "@/lib/globe/registry";
+import type { LayerRendererLike } from "@/lib/globe/rendererTypes";
 import { PLAYBACK_HIDDEN_LAYER_IDS, TIME_AWARE_LAYER_IDS } from "@/lib/globe/timeMachine";
 import { STYLES } from "@/lib/globe/styles";
 import { satWorker } from "@/lib/globe/satWorker";
@@ -98,13 +99,21 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
   const minute = useNow(60_000);
   const missionDay = def.timeDependent ? Math.floor((minute + clockOffset) / 86_400_000) : 0;
 
-  const rendererRef = useRef<LayerRenderer | null>(null);
+  const rendererRef = useRef<LayerRendererLike | null>(null);
 
   useEffect(() => {
     const viewer = getViewer();
-    const style = STYLES[def.id];
-    if (!viewer || !style) return;
-    const r = new LayerRenderer(viewer, def.id, style);
+    if (!viewer) return;
+    // Particle-flow layers bring their own canvas renderer; everything else
+    // goes through the GeoJSON LayerRenderer (which needs a STYLES entry).
+    const r = def.createRenderer
+      ? def.createRenderer(viewer)
+      : (() => {
+          const style = STYLES[def.id];
+          if (!style) return null;
+          return new LayerRenderer(viewer, def.id, style);
+        })();
+    if (!r) return;
     r.show = useGlobe.getState().layers[def.id];
     r.setLabelsEnabled(useSettings.getState().prefs.labels);
     r.setTileAlpha(useSettings.getState().prefs.tileAlpha?.[def.id] ?? null);
@@ -125,8 +134,10 @@ function LayerBridge({ def }: { def: LayerDefinition }) {
       r.destroy();
       rendererRef.current = null;
     };
-    // A layer's id and label never change; listed so the tile-health callback reads the right label.
-  }, [def.id, def.label]);
+    // The whole `def` object is the dep (not def.id/def.createRenderer): it is
+    // a stable module-level reference, so this never re-fires spuriously.
+    // The tile-health callback reads the layer label from it.
+  }, [def]);
 
   useEffect(() => {
     if (!rendererRef.current) return;

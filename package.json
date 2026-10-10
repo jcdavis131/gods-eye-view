@@ -17,6 +17,7 @@
     "mcp": "node scripts/mcp-stdio.mjs",
     "data:gas": "node scripts/gas-data.mjs",
     "data:energy": "node scripts/energy-data.mjs",
+    "data:flows": "node scripts/flows-data.mjs",
     "data:ops": "python3 dataops/dataops.py",
     "ml:train": "python3 ml/multitower/train.py",
     "ml:eval": "python3 ml/multitower/evaluate.py",

@@ -8,7 +8,8 @@
 import type * as CesiumNS from "cesium";
 import { getCesium } from "./cesium";
 import { labelBudget, placeLabels, type LabelCandidate, type Rect } from "./labelBudget";
-import type { LabelSlot, LayerRenderer } from "./renderer";
+import type { LabelSlot } from "./renderer";
+import type { LayerRendererLike } from "./rendererTypes";
 
 const scratch: { c2?: CesiumNS.Cartesian2 } = {};
 
@@ -23,7 +24,7 @@ function occluders(): Rect[] {
   return out;
 }
 
-export function arbitrateLabels(viewer: CesiumNS.Viewer, renderers: Iterable<LayerRenderer>): void {
+export function arbitrateLabels(viewer: CesiumNS.Viewer, renderers: Iterable<LayerRendererLike>): void {
   const C = getCesium();
   const scene = viewer.scene;
   const canvas = scene.canvas;
