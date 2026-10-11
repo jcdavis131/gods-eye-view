@@ -4,7 +4,10 @@
 // (financials) or annually (SOD, as of June 30 each year, published in the
 // autumn).
 //
-// shape per https://banks.data.fdic.gov/docs/; unverified in sandbox
+// Docs: https://api.fdic.gov/banks/docs/. The old base,
+// https://banks.data.fdic.gov/api, answers 301 to https://api.fdic.gov/banks/
+// (checked 2026-10-01), so requests go to the new base directly. The SOD
+// fields below, MSABR and MSANAMB included, were read live from /sod that day.
 
 import { cached } from "@/lib/server/cache";
 import { polite, upstreamJson } from "@/lib/server/upstream";
@@ -15,7 +18,7 @@ import { chunk } from "./api";
 import { hhi, marketShares } from "./estimates";
 import type { BankFailure, BankProfile, Branch, CountyDeposits, FinancialsRow, Institution, SodRow } from "./types";
 
-export const FDIC_BASE = "https://banks.data.fdic.gov/api";
+export const FDIC_BASE = "https://api.fdic.gov/banks";
 const H = 3600_000;
 /** FDIC caps a page at 10,000 rows; we never page, so a full page means "more exist". */
 export const FDIC_PAGE = 10_000;
@@ -25,7 +28,8 @@ export const COUNTIES_PER_CALL = 25;
 export const INSTITUTION_FIELDS = "CERT,NAME,CITY,STALP,ZIP,ASSET,DEP,NETINC,ROA,ROE,OFFICES,STMULT,BKCLASS,ACTIVE,REPDTE,LATITUDE,LONGITUDE,COUNTY";
 // OFFNUM is the office number the Summary of Deposits calls BRNUM; UNINUM is the FDIC office id.
 export const LOCATION_FIELDS = "CERT,NAME,OFFNAME,OFFNUM,UNINUM,ADDRESS,CITY,STALP,ZIP,STCNTYBR,LATITUDE,LONGITUDE,SERVTYPE,ESTYMD";
-export const SOD_FIELDS = "CERT,NAMEFULL,BRNUM,UNINUMBR,DEPSUMBR,ASSET,STCNTYBR,CNTYNAMB,STALPBR,YEAR,SIMS_LATITUDE,SIMS_LONGITUDE";
+// MSABR is the CBSA code of the office's metropolitan statistical area (0 outside one); MSANAMB its title.
+export const SOD_FIELDS = "CERT,NAMEFULL,BRNUM,UNINUMBR,DEPSUMBR,ASSET,STCNTYBR,CNTYNAMB,STALPBR,YEAR,SIMS_LATITUDE,SIMS_LONGITUDE,MSABR,MSANAMB";
 export const FINANCIALS_FIELDS = "REPDTE,ASSET,DEP,NETINC,LNLSNET,NCLNLS,NPTLA,ROA,ROE,EQ";
 export const FAILURE_FIELDS = "NAME,CITYST,FAILDATE,QBFASSET,QBFDEP,COST,RESTYPE";
 
@@ -86,6 +90,13 @@ export function fdicDate(v: Cell): string | null {
 /** STCNTYBR is numeric upstream, so a leading zero (Alabama 01xxx) may be gone. */
 function fips5(v: Cell): string {
   return str(v).replace(/\D/g, "").padStart(5, "0").slice(-5);
+}
+
+/** MSABR as a five-digit CBSA code; FDIC writes 0 for an office outside any metropolitan statistical area, which is null here. */
+export function msaCode(v: Cell): string | null {
+  const n = cell(v);
+  if (n == null || !Number.isInteger(n) || n <= 0 || n > 99999) return null;
+  return String(n).padStart(5, "0");
 }
 
 // ---- parsers (pure)
@@ -155,6 +166,8 @@ export function parseSodRow(r: Row): SodRow | null {
     year,
     lat: cell(r.SIMS_LATITUDE),
     lon: cell(r.SIMS_LONGITUDE),
+    cbsa: msaCode(r.MSABR),
+    cbsaName: msaCode(r.MSABR) ? strOrNull(r.MSANAMB) : null,
   };
 }
 

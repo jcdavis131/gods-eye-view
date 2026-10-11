@@ -133,9 +133,9 @@ function distributions(f: PlaceFacts): Array<Record<string, unknown>> {
       csv("/api/screen?kind=state&format=csv", "Every US state in the screener, with housing and jobs joins"),
     ];
   }
-  // A metro has no CSV op of its own: BLS publishes no QCEW row at the
-  // aggregation levels this app reads for a C-prefixed CBSA, so the member
-  // counties in the county table are the honest distribution.
+  // A metro has no CSV op of its own: /api/economy?op=sectors takes county
+  // and state codes only, and the page itself is a county rollup, so the
+  // member counties in the county table are the honest distribution.
   const state = stateByUsps(f.scope.ref.states[0] ?? "");
   return [
     csv("/api/screen?kind=county&format=csv", `Every US county in the screener, including the counties of ${f.name}`),

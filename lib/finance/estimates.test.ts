@@ -3,7 +3,7 @@ import { hhi, hhiLabel, marketShares, perJob, sharePct } from "./estimates";
 import type { SodRow } from "./types";
 
 function sod(cert: number, name: string, brnum: number, deposits: number | null): SodRow {
-  return { cert, name, brnum, uninum: null, deposits, assets: null, fips: "48453", county: "Travis", state: "TX", year: 2025, lat: null, lon: null };
+  return { cert, name, brnum, uninum: null, deposits, assets: null, fips: "48453", county: "Travis", state: "TX", year: 2025, lat: null, lon: null, cbsa: null, cbsaName: null };
 }
 
 describe("marketShares", () => {

@@ -6,12 +6,15 @@
 // produced here, so every signal on screen is inspectable in one place.
 
 import type { Feature, FeatureCollection, Geometry } from "geojson";
+import type * as CesiumNS from "cesium";
+import type { LayerRendererLike } from "@/lib/globe/rendererTypes";
 import type { ApiKeyId } from "@/lib/store/settings";
 
 export type LayerId =
   | "aircraft"
   | "ships"
   | "satellites"
+  | "iss"
   | "earthquakes"
   | "cameras"
   | "traffic"
@@ -26,6 +29,12 @@ export type LayerId =
   | "banks"
   | "spending"
   | "occupations"
+  | "gasprices"
+  | "gasforecast"
+  | "ercotprices"
+  | "uselectricity"
+  | "globalgeneration"
+  | "datacenters"
   | "weather"
   | "wildfire"
   | "fires"
@@ -60,12 +69,16 @@ export type LayerId =
   | "sports"
   | "constructs"
   | "field"
-  | "alerts";
+  | "alerts"
+  | "employers"
+  | "windflow"
+  | "oceanflow";
 
 export const LAYER_IDS: LayerId[] = [
   "aircraft",
   "ships",
   "satellites",
+  "iss",
   "earthquakes",
   "cameras",
   "traffic",
@@ -80,6 +93,12 @@ export const LAYER_IDS: LayerId[] = [
   "banks",
   "spending",
   "occupations",
+  "gasprices",
+  "gasforecast",
+  "ercotprices",
+  "uselectricity",
+  "globalgeneration",
+  "datacenters",
   "weather",
   "wildfire",
   "fires",
@@ -115,6 +134,9 @@ export const LAYER_IDS: LayerId[] = [
   "constructs",
   "field",
   "alerts",
+  "employers",
+  "windflow",
+  "oceanflow",
 ];
 
 /** Properties every feature carries, whatever the layer. */
@@ -170,6 +192,8 @@ export interface FetchContext {
   now: number;
   /** Epoch ms of the mission clock (wall clock + timeline offset). */
   missionTime?: number;
+  /** Playback year for time-aware layers; null when the time machine is off. */
+  playbackYear?: number | null;
   signal?: AbortSignal;
   /** Free-form layer options coming from the settings store (e.g. satellite groups). */
   options: Record<string, unknown>;
@@ -260,6 +284,13 @@ export interface LayerDefinition {
   estimate?: string;
   attribution: string;
   fetch: (ctx: FetchContext) => Promise<FetchResult>;
+  /**
+   * Custom renderer factory. When present, LayerHost builds this instead of
+   * the GeoJSON LayerRenderer (used by the particle-flow layers, which draw a
+   * canvas overlay rather than primitives). The factory's result must satisfy
+   * LayerRendererLike.
+   */
+  createRenderer?: (viewer: CesiumNS.Viewer) => LayerRendererLike;
 }
 
 /**

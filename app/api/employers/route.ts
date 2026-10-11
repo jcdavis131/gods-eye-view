@@ -110,6 +110,7 @@ export async function GET(req: NextRequest) {
                 state: e.hq_state || e.state,
                 zip: e.zip,
                 metro: e.metro,
+                ticker: e.ticker ?? null,
                 source: e.source,
               },
             })),

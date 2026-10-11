@@ -67,9 +67,9 @@ const COUNTY: readonly PlaceThreshold[] = [
   { metric: "yearsOfWages", level: "watch", op: ">=", value: 90, on: "pct", label: "years of wages in the top tenth of US counties", citation: `position among the counties that published both a ZHVI value and a QCEW average weekly wage; ${OURS}` },
 ];
 
-// Metros get a reduced set: qcewSectors handles only SSCCC / SS000 / US000 at
-// agglvl 74/54/14, so there is no QCEW path for a C-prefixed MSA code and the
-// metro page ships a county rollup instead. Nothing here may depend on it.
+// Metros get a reduced set: the metro page reads no QCEW metro row (level-40
+// boundaries follow each year's delineation) and ships a county rollup
+// instead. Nothing here may depend on it.
 const METRO: readonly PlaceThreshold[] = [
   { metric: "home.yoyPct", level: "watch", op: "<", value: 0, on: "yoyPct", label: "typical home value below a year ago", citation: `${ZHVI}; ${OURS}` },
   { metric: "home.yoyPct", level: "alert", op: "<=", value: -5, on: "yoyPct", label: "typical home value at least 5 percent below a year ago", citation: `${ZHVI}; ${CONVENTION}` },

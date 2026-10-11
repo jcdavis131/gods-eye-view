@@ -77,18 +77,18 @@ curl "http://localhost:3000/api/series?op=get&ids=snapshot:gauge:07032000:00065,
 
 ## The GitHub Action
 
-`.github/workflows/snapshot.yml` runs at minute 17 of every third hour and on demand (`workflow_dispatch`, with `only` and `listen` inputs). It checks out the branch, `npm ci --ignore-scripts`, runs `node scripts/snapshot.mjs`, and if `data/series` changed it commits as `gev-snapshot[bot]` and pushes with the built-in `GITHUB_TOKEN` (`permissions: contents: write`). No personal token is needed. Pushes made with `GITHUB_TOKEN` do not trigger other workflows, and the commit message carries `[skip ci]` for any CI added later and for hosts that honour it. A concurrency group keeps two runs from racing on the same files; a `git pull --rebase` before the push handles a human commit that landed mid-sample.
+`.github/workflows/snapshot.yml` runs at minute 17 of every third hour and on demand (`workflow_dispatch`, with `only` and `listen` inputs). It checks out the code, `npm ci --ignore-scripts`, restores `data/series` from the `series` branch (`scripts/snapshot-branch.sh restore`), runs `node scripts/snapshot.mjs`, and if anything changed commits the files to the `series` branch as `gev-snapshot[bot]` and pushes with the built-in `GITHUB_TOKEN` (`permissions: contents: write`; `scripts/snapshot-branch.sh publish`). `series` is an orphan branch that holds only `data/series` and a `vercel.json` that turns deployments of that branch off. master is protected (pull requests only, admins included), and pushing samples to it failed 56 of 56 times between 2026-09-16 and 2026-09-29. No personal token is needed. Pushes made with `GITHUB_TOKEN` do not trigger other workflows, and the commit message carries `[skip ci]` for any CI added later and for hosts that honour it. A concurrency group keeps two runs from racing on the same files; a `git pull --rebase` before the push handles a human commit that landed mid-sample.
 
 To cover the non-Baltic ports, add a repository secret `AISSTREAM_KEY` (free at aisstream.io). Without it the port collector still runs and writes the Baltic ports; the other ports are simply absent, not zero.
 
-If the default branch is protected, allow the Actions bot to push to it or point the workflow at an unprotected data branch and set `GEV_SERIES_RAW_BASE` to that branch.
+The first run creates the `series` branch. Point `GEV_SERIES_RAW_BASE` at it (below) so the deployed app reads what the cron has written.
 
 ## Serving the series from a host that is not the repo
 
 On Vercel (or any host whose filesystem is a build-time copy), set
 
 ```
-GEV_SERIES_RAW_BASE=https://raw.githubusercontent.com/jcdavis131/gods-eye-view/master/data/series
+GEV_SERIES_RAW_BASE=https://raw.githubusercontent.com/jcdavis131/gods-eye-view/series/data/series
 ```
 
 `defaultStore()` then layers a read-only HTTP adapter under the file store: reads merge whatever the checkout has with whatever the branch has now, writes still go to the file store. The adapter fetches `<base>/<file>.json` and `<base>/index.json`, caches each for five minutes (raw.githubusercontent.com is itself CDN-cached for about that long), and serves the last good copy while the origin is down.

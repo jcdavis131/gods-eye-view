@@ -94,7 +94,9 @@ describe("metros table", () => {
       expect(m.lon, m.name).toBeLessThan(EAST);
       expect(m.lat, m.name).toBeGreaterThan(SOUTH);
       expect(m.lat, m.name).toBeLessThan(NORTH);
-      expect(["exact", "short", null]).toContain(m.zillowMatchedBy);
+      expect(["exact", "short", "counties", null]).toContain(m.zillowMatchedBy);
+      if (m.zillowMatchedBy) expect(m.zillowRegionId, m.name).toMatch(/^[0-9]+$/);
+      else expect(m.zillowRegionId, m.name).toBeNull();
     }
   });
 
@@ -150,7 +152,7 @@ describe("counties table", () => {
   });
 
   // Everything below is only meaningful once scripts/places-data.mjs has run
-  // against a host with egress; the seed build has no adjacency and no CBSA.
+  // against a host with egress; a seed build has no adjacency and no CBSA.
   it("holds every county with symmetric adjacency once pulled", () => {
     if (!MANIFEST.countiesComplete) {
       expect(fips.length).toBeGreaterThan(0);
@@ -177,11 +179,47 @@ describe("counties table", () => {
     for (const cbsa of allCbsa()) {
       const m = metroByCbsa(cbsa);
       if (!m) continue;
-      for (const g of m.counties) expect(countyByFips(g), `${cbsa} -> ${g}`).not.toBeNull();
+      // Every one of the 393 OMB metros has member counties, and each of them
+      // points back at the metro.
+      expect(m.counties.length, cbsa).toBeGreaterThan(0);
+      for (const g of m.counties) {
+        expect(countyByFips(g), `${cbsa} -> ${g}`).not.toBeNull();
+        expect(countyByFips(g)?.cbsa, `${g} -> ${cbsa}`).toBe(cbsa);
+      }
     }
-    expect(countiesInMetro("41700").map((c) => c.geoid)).toContain("48453");
+    // Travis is Austin (12420), not San Antonio (41700); Bexar is San Antonio.
+    expect(countiesInMetro("12420").map((c) => c.geoid).sort()).toEqual(["48021", "48055", "48209", "48453", "48491"]);
+    expect(countiesInMetro("41700").map((c) => c.geoid)).toContain("48029");
     expect(countiesInMetro("31080").map((c) => c.geoid)).toContain("06037");
-    expect(metroForCounty("48453")?.cbsa).toBe("41700");
+    expect(metroForCounty("48453")?.cbsa).toBe("12420");
+    expect(metroForCounty("48029")?.cbsa).toBe("41700");
     expect(metroForCounty("06037")?.cbsa).toBe("31080");
+  });
+
+  it("is the full 2023 county-equivalent universe, Connecticut as planning regions", () => {
+    if (!MANIFEST.countiesComplete) return;
+    // 3,144 county equivalents in the 50 states and DC, plus 78 Puerto Rico
+    // municipios. The island areas are not in the state table.
+    expect(fips.length).toBe(3222);
+    expect(countiesInState("PR")).toHaveLength(78);
+    expect(fips.filter((g) => g.slice(0, 2) !== "72")).toHaveLength(3144);
+    expect(countiesInState("CT").map((c) => c.geoid).sort()).toEqual(["09110", "09120", "09130", "09140", "09150", "09160", "09170", "09180", "09190"]);
+    expect(countyByFips("09001")).toBeNull();
+    expect(MANIFEST.pulled).toMatch(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/);
+  });
+
+  it("carries micropolitan membership without inventing a metro for it", () => {
+    if (!MANIFEST.countiesComplete) return;
+    const assigned = fips.map((g) => countyByFips(g)!).filter((c) => c.cbsa);
+    // OMB July 2023: 1,252 metropolitan and 663 micropolitan counties.
+    expect(assigned).toHaveLength(1915);
+    expect(assigned.filter((c) => metroByCbsa(c.cbsa!))).toHaveLength(1252);
+    // Brown County, SD is the Aberdeen micropolitan area: a CBSA, not a metro.
+    expect(countyByFips("46013")?.cbsa).toBe("10100");
+    expect(metroByCbsa("10100")).toBeNull();
+    expect(metroForCounty("46013")).toBeNull();
+    // Blanco County, TX is outside every CBSA.
+    expect(countyByFips("48031")?.cbsa).toBeNull();
+    expect(metroForCounty("48031")).toBeNull();
   });
 });

@@ -79,6 +79,14 @@ export interface SodRow {
   year: number;
   lat: number | null;
   lon: number | null;
+  /**
+   * CBSA code of the metropolitan statistical area FDIC assigns the office to
+   * (SOD MSABR, e.g. "12420" Austin). Null outside any MSA: FDIC writes 0 there,
+   * micropolitan counties included.
+   */
+  cbsa: string | null;
+  /** That MSA's title as FDIC writes it (MSANAMB); null with `cbsa`. */
+  cbsaName: string | null;
 }
 
 /** A bank's share of a county's deposits. */

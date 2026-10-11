@@ -7,6 +7,7 @@ import type { LayerId } from "@/lib/layers/types";
 import type { LayerStyle } from "./renderer";
 import { destination } from "./geo";
 import { periodMs, satPosition, type SatExtra } from "@/lib/layers/satellites";
+import { issPositionAt, type IssExtra } from "@/lib/layers/iss";
 import { satWorker } from "./satWorker";
 import type { LaunchExtra } from "@/lib/layers/launches";
 import { vehiclePosition, type VehicleExtra } from "@/lib/layers/traffic";
@@ -14,6 +15,13 @@ import { groundwaterStyle, turbidityStyle, waterStyle } from "./waterStyles";
 import { commerceStyle, realestateStyle, tradeStyle } from "./economyStyles";
 import { companiesStyle } from "./companyStyles";
 import { bankStyle, spendingStyle } from "./financeStyles";
+import { gasForecastStyle, gasPricesStyle } from "./gasStyles";
+import {
+  datacentersStyle,
+  ercotPricesStyle,
+  globalGenerationStyle,
+  usElectricityPricesStyle,
+} from "./energyStyles";
 import { constructsStyle } from "./constructStyles";
 import { fieldStyle } from "./fieldStyles";
 import { alertsStyle } from "./alertStyles";
@@ -225,6 +233,32 @@ export const satellitesStyle: LayerStyle = {
   },
 };
 
+export const issStyle: LayerStyle = {
+  color: "#FFFFFF",
+  icon: () => "sat",
+  iconSize: 24,
+  label: (f) => f.properties.name,
+  labelMax: 10,
+  // The orbit trail is the renderer's recorded position history; positions
+  // between the 10 s polls are interpolated so the trail draws smoothly.
+  trail: true,
+  tickMs: 1000,
+  scaleByDistance: [1e6, 1.0, 2e7, 0.35],
+  position: (f, t) => {
+    const x = f.properties.extra as IssExtra | undefined;
+    if (!x) return null;
+    // Reduced motion: hold the latest real fix, never animate between polls.
+    if (
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return [x.cur.lon, x.cur.lat, x.cur.altM];
+    }
+    return issPositionAt(x, t);
+  },
+};
+
 const SHIP_COLORS: Record<string, string> = {
   military: "#FFB000",
   "law-enforcement": "#FFB000",
@@ -385,6 +419,7 @@ export const STYLES: Partial<Record<LayerId, LayerStyle>> = {
   aircraft: aircraftStyle,
   ships: shipsStyle,
   satellites: satellitesStyle,
+  iss: issStyle,
   earthquakes: earthquakesStyle,
   cameras: camerasStyle,
   traffic: trafficStyle,
@@ -399,6 +434,12 @@ export const STYLES: Partial<Record<LayerId, LayerStyle>> = {
   banks: bankStyle,
   spending: spendingStyle,
   occupations: occupationsStyle,
+  gasprices: gasPricesStyle,
+  gasforecast: gasForecastStyle,
+  ercotprices: ercotPricesStyle,
+  uselectricity: usElectricityPricesStyle,
+  globalgeneration: globalGenerationStyle,
+  datacenters: datacentersStyle,
   weather: weatherStyle,
   wildfire: wildfireStyle,
   fires: firesStyle,
@@ -441,6 +482,7 @@ export const FOLLOW_RANGE: Record<LayerId, number> = {
   aircraft: 30_000,
   ships: 10_000,
   satellites: 2_500_000,
+  iss: 1_500_000,
   earthquakes: 250_000,
   cameras: 2_500,
   traffic: 2_000,
@@ -452,9 +494,16 @@ export const FOLLOW_RANGE: Record<LayerId, number> = {
   commerce: 150_000,
   realestate: 150_000,
   companies: 20_000,
+  employers: 20_000,
   banks: 20_000,
   spending: 150_000,
   occupations: 400_000,
+  gasprices: 400_000,
+  gasforecast: 400_000,
+  ercotprices: 400_000,
+  uselectricity: 400_000,
+  globalgeneration: 400_000,
+  datacenters: 20_000,
   weather: 500_000,
   wildfire: 60_000,
   fires: 20_000,
@@ -491,4 +540,8 @@ export const FOLLOW_RANGE: Record<LayerId, number> = {
   constructs: 150_000,
   field: 400_000,
   alerts: 600_000,
+  // Particle-flow layers have no followable objects; a global view is the
+  // only sensible follow range (unreachable in practice: nothing to select).
+  windflow: 20_000_000,
+  oceanflow: 20_000_000,
 };

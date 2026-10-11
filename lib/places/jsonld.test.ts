@@ -14,7 +14,7 @@ const OFF: SectionState = { status: "unavailable", asOf: null, retrievedAt: RETR
 
 function countyScope(fips: string, extra: Partial<CountyRef> = {}): PlaceScope {
   const base = countyByFips(fips);
-  if (!base) throw new Error(`${fips} is missing from the seed manifest`);
+  if (!base) throw new Error(`${fips} is missing from the place manifest`);
   return { kind: "county", id: fips, ref: { ...base, ...extra }, provisional: false };
 }
 
@@ -164,10 +164,28 @@ describe("placeJsonLd", () => {
   });
 
   it("chains a county with no CBSA straight to its state", () => {
-    const [place] = nodesFor(facts(countyScope("48453", { cbsa: null })));
+    // Blanco County, TX lies outside every CBSA in the pulled manifest.
+    expect(countyByFips("48031")?.cbsa).toBeNull();
+    const [place] = nodesFor(facts(countyScope("48031")));
     const state = place.containedInPlace as Record<string, unknown>;
     expect(state.name).toBe("Texas");
     expect((state.containedInPlace as Record<string, unknown>).name).toBe("United States");
+  });
+
+  it("chains a micropolitan county straight to its state too, since only metros have a page", () => {
+    // Anderson County, TX: the Palestine micropolitan area, 37300.
+    expect(countyByFips("48001")?.cbsa).toBe("37300");
+    const [place] = nodesFor(facts(countyScope("48001")));
+    const state = place.containedInPlace as Record<string, unknown>;
+    expect(state.name).toBe("Texas");
+  });
+
+  it("chains a metropolitan county through its metro from the manifest alone", () => {
+    const [place] = nodesFor(facts(countyScope("48453")));
+    const metro = place.containedInPlace as Record<string, unknown>;
+    expect(metro.name).toBe("Austin-Round Rock-San Marcos, TX");
+    expect(metro.url).toBe("https://eye.jcamd.com/metro/12420");
+    expect((metro.containedInPlace as Record<string, unknown>).name).toBe("Texas");
   });
 
   it("offers real CSV distributions with absolute URLs", () => {

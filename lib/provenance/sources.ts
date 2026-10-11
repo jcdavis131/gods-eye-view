@@ -5,6 +5,8 @@ import type { SourceRef } from "./types";
 export const SOURCES = {
   "bls-oews": { id: "bls-oews", name: "Occupational Employment and Wage Statistics", publisher: "U.S. Bureau of Labor Statistics", url: "https://www.bls.gov/oes/", license: "public domain" },
   "bls-qcew": { id: "bls-qcew", name: "Quarterly Census of Employment and Wages", publisher: "U.S. Bureau of Labor Statistics", url: "https://www.bls.gov/cew/", license: "public domain" },
+  "bls-ces-sm": { id: "bls-ces-sm", name: "Current Employment Statistics, State and Metro Area", publisher: "U.S. Bureau of Labor Statistics", url: "https://www.bls.gov/sae/", license: "public domain" },
+  "census-popest": { id: "census-popest", name: "Population Estimates Program, metro and micro totals", publisher: "U.S. Census Bureau", url: "https://www.census.gov/programs-surveys/popest.html", license: "public domain" },
   "zillow-zhvi": { id: "zillow-zhvi", name: "Zillow Home Value Index (ZHVI)", publisher: "Zillow Research", url: "https://www.zillow.com/research/data/", license: "free for public use with attribution" },
   "zillow-zori": { id: "zillow-zori", name: "Zillow Observed Rent Index (ZORI)", publisher: "Zillow Research", url: "https://www.zillow.com/research/data/", license: "free for public use with attribution" },
   fred: { id: "fred", name: "FRED Economic Data", publisher: "Federal Reserve Bank of St. Louis", url: "https://fred.stlouisfed.org/", license: "FRED terms; series from their original publishers" },
@@ -27,7 +29,7 @@ export const SOURCES = {
   aisstream: { id: "aisstream", name: "AISStream", publisher: "AISStream.io", url: "https://aisstream.io/", license: "free key; AISStream terms" },
   celestrak: { id: "celestrak", name: "GP element sets", publisher: "CelesTrak", url: "https://celestrak.org/", license: "CelesTrak terms" },
   "sec-edgar": { id: "sec-edgar", name: "EDGAR company filings and XBRL APIs", publisher: "U.S. Securities and Exchange Commission", url: "https://www.sec.gov/search-filings/edgar-application-programming-interfaces", license: "public domain; fair-access policy (10 req/s, User-Agent)" },
-  "fdic-bankfind": { id: "fdic-bankfind", name: "BankFind Suite API", publisher: "Federal Deposit Insurance Corporation", url: "https://banks.data.fdic.gov/docs/", license: "public domain" },
+  "fdic-bankfind": { id: "fdic-bankfind", name: "BankFind Suite API", publisher: "Federal Deposit Insurance Corporation", url: "https://api.fdic.gov/banks/docs/", license: "public domain" },
   usaspending: { id: "usaspending", name: "USAspending API", publisher: "U.S. Department of the Treasury", url: "https://api.usaspending.gov/", license: "public domain" },
   "census-zcta-county": { id: "census-zcta-county", name: "ZCTA to county relationship file (2020)", publisher: "U.S. Census Bureau", url: "https://www.census.gov/geographies/reference-files/time-series/geo/relationship-files.html", license: "public domain" },
   "sentinel-2": { id: "sentinel-2", name: "Copernicus Sentinel-2 L2A", publisher: "ESA via Element 84 Earth Search", url: "https://earth-search.aws.element84.com/v1", license: "free and open (Copernicus)" },

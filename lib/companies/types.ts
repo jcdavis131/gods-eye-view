@@ -8,10 +8,12 @@
 //   CompanyProfile  the live dossier assembled from the submissions and
 //                   companyfacts APIs when a company is selected.
 //
-// Company-level public filings are in scope. Nothing about private
-// individuals is: no officer or insider names (Forms 3/4/5), no shareholder
-// names, no mailing addresses. Only the business address a filer registers
-// with the Commission is used, and only to place the company.
+// Company-level public filings are in scope. These types carry nothing about
+// a person: no shareholder names, no mailing addresses. The people who file
+// Forms 3, 4 and 5 about a company are kept apart, by CIK, in the server-only
+// store in lib/people, and are reached from the company, never from a place
+// (docs/PEOPLE.md). Only the business address a filer registers with the
+// Commission is used, and only to place the company.
 
 import type { Provenance } from "@/lib/provenance/types";
 

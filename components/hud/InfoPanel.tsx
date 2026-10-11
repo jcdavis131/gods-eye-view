@@ -22,11 +22,56 @@ import { useSettings } from "@/lib/store/settings";
 import { turbidityHex } from "@/lib/water/overlay";
 import EconomyAside from "./EconomyAsides";
 import CompanyAside from "./CompanyAside";
+import EmployerAside from "./EmployerAside";
 import FinanceAside from "./FinanceAsides";
 import ConstructAside, { ConstructContext } from "./ConstructAside";
 import { requiredDisclaimer } from "@/lib/civic/terms";
 import ParcelAside from "./ParcelAside";
 import { flyTo } from "@/lib/globe/camera";
+import dynamic from "next/dynamic";
+import PowerWaterAside from "./PowerWaterAside";
+
+const ChipViewer = dynamic(() => import("./ChipViewer"), {
+  ssr: false,
+  loading: () => (
+    <div className="mx-3 my-2 rounded-sm border border-border/60 p-4 text-center text-[12px] text-muted-foreground">
+      Loading 3D…
+    </div>
+  ),
+});
+
+/** "Inside the racks" — data-center dossier extras: power/water context + 3D chip viewer. */
+function InsideRacks({ lat, lon }: { lat: number; lon: number }) {
+  const [open, setOpen] = useState(() =>
+    typeof window === "undefined" ? true : !window.matchMedia("(max-width: 700px)").matches,
+  );
+  return (
+    <div className="border-t border-border/60">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex min-h-[48px] w-full items-center justify-between px-3 text-left"
+      >
+        <span className="hud-label text-[9px]">INSIDE THE RACKS</span>
+        <span className="text-[11px] text-muted-foreground" aria-hidden>
+          {open ? "▾" : "▸"}
+        </span>
+      </button>
+      {open && (
+        <div className="pb-1">
+          <p className="px-3 pb-1 text-[10px] leading-snug text-muted-foreground">
+            This is what&apos;s computing inside buildings like this one — the server CPU, the AI
+            GPU, and the DPU that moves the bits.
+          </p>
+          <PowerWaterAside lat={lat} lon={lon} />
+          <div className="hud-label px-3 pb-1 pt-2 text-[9px]">CHIP VIEWER</div>
+          <ChipViewer defaultChip="gpu" />
+        </div>
+      )}
+    </div>
+  );
+}
 
 function useRefresh(ms: number) {
   const [, set] = useState(0);
@@ -118,7 +163,7 @@ export default function InfoPanel() {
   const details = Object.entries(p.details ?? {}).filter(([, v]) => v != null && v !== "" && v !== false);
   const isLiveLayer =
     !p.simulated &&
-    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "banks", "spending", "constructs", "field", "flood", "wetlands", "publiclands", "relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "transmission", "pipelines", "plants", "rail", "airports", "dams", "faults", "landslides", "geology", "plss", "parcels", "zoning", "permits", "licences", "envpermits"].includes(p.layer);
+    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "employers", "banks", "spending", "constructs", "field", "flood", "wetlands", "publiclands", "relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "transmission", "pipelines", "plants", "rail", "airports", "dams", "faults", "landslides", "geology", "plss", "parcels", "zoning", "permits", "licences", "envpermits"].includes(p.layer);
   const banner = BANNER[p.layer];
   const iss = p.layer === "satellites" && p.id === "25544";
   const construct = p.layer === "constructs" || p.layer === "field" || p.layer === "alerts";
@@ -218,6 +263,10 @@ export default function InfoPanel() {
           ))}
         </dl>
 
+        {p.layer === "datacenters" && lonlat && (
+          <InsideRacks key={`racks:${p.id}`} lat={lonlat[1]} lon={lonlat[0]} />
+        )}
+
         {disclaimer && <p className="border-t border-border/60 px-3 py-2 text-[9px] leading-snug text-muted-foreground">{disclaimer}</p>}
 
         {gauge?.primary && (
@@ -226,6 +275,7 @@ export default function InfoPanel() {
         {sat && <SatPasses key={sat.NORAD_CAT_ID} omm={sat} />}
         {economy && <EconomyAside key={p.id} feature={feature} />}
         {p.layer === "companies" && <CompanyAside key={p.id} feature={feature} />}
+        {p.layer === "employers" && <EmployerAside key={p.id} feature={feature} />}
         {(p.layer === "banks" || p.layer === "spending") && <FinanceAside key={p.id} feature={feature} />}
         {parcel && <ParcelAside key={p.id} feature={feature} />}
         {construct ? <ConstructAside key={p.id} feature={feature} /> : <ConstructContext key={`ctx:${p.layer}:${p.id}`} feature={feature} />}

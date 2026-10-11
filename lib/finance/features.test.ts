@@ -29,7 +29,7 @@ function branch(over: Partial<Branch>): Branch {
   return { cert: 3511, officeNum: 1234, uninum: 200456, name: "WELLS FARGO BANK, NATIONAL ASSOCIATION", office: "CONGRESS AVENUE BRANCH", address: "111 Congress Ave", city: "AUSTIN", state: "TX", zip: "78701", fips: "48453", serviceType: "11", established: "1998-01-15", lat: 30.2652, lon: -97.7431, ...over };
 }
 function sod(over: Partial<SodRow>): SodRow {
-  return { cert: 3511, name: "Wells Fargo Bank, National Association", brnum: 1234, uninum: 200456, deposits: 812_345, assets: null, fips: "48453", county: "Travis", state: "TX", year: 2025, lat: null, lon: null, ...over };
+  return { cert: 3511, name: "Wells Fargo Bank, National Association", brnum: 1234, uninum: 200456, deposits: 812_345, assets: null, fips: "48453", county: "Travis", state: "TX", year: 2025, lat: null, lon: null, cbsa: null, cbsaName: null, ...over };
 }
 
 describe("buildBranches", () => {

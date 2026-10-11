@@ -3,11 +3,11 @@
 // code can reach any layer without prop drilling through React.
 
 import type { LayerId, LayerFeature } from "@/lib/layers/types";
-import type { LayerRenderer } from "./renderer";
+import type { LayerRendererLike } from "./rendererTypes";
 
-const renderers = new Map<LayerId, LayerRenderer>();
+const renderers = new Map<LayerId, LayerRendererLike>();
 
-export function registerRenderer(id: LayerId, r: LayerRenderer) {
+export function registerRenderer(id: LayerId, r: LayerRendererLike) {
   renderers.set(id, r);
 }
 
@@ -15,11 +15,11 @@ export function unregisterRenderer(id: LayerId) {
   renderers.delete(id);
 }
 
-export function getRenderer(id: LayerId): LayerRenderer | undefined {
+export function getRenderer(id: LayerId): LayerRendererLike | undefined {
   return renderers.get(id);
 }
 
-export function allRenderers(): IterableIterator<LayerRenderer> {
+export function allRenderers(): IterableIterator<LayerRendererLike> {
   return renderers.values();
 }
 

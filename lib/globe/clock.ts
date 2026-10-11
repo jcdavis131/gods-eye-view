@@ -43,7 +43,8 @@ export function goLive() {
   viewer.clock.currentTime = C.JulianDate.now();
   viewer.clock.multiplier = 1;
   viewer.clock.shouldAnimate = true;
-  useGlobe.getState().setClock({ offsetMs: 0, multiplier: 1, animate: true });
+  useGlobe.getState().setClock({ offsetMs: 0, multiplier: 1, animate: true, timeMachine: false });
+  useGlobe.getState().setPlaybackYear(null);
   for (const r of allRenderers()) r.refreshSelectedLines();
 }
 

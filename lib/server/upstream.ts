@@ -1,8 +1,9 @@
 // Helpers for talking to upstream public APIs from route handlers.
 import { NextResponse } from "next/server";
+import { USER_AGENT } from "./ua";
 
-export const USER_AGENT =
-  "embedding-atlas/0.1 (+https://github.com/jcdavis131/gods-eye-view; open-source globe)";
+// Defined in ./ua (no next/* import) so plain-Node runners can share it.
+export { USER_AGENT };
 
 export class UpstreamError extends Error {
   constructor(

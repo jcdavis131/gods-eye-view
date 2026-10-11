@@ -4,6 +4,7 @@
 import type { LayerDefinition, LayerId } from "./types";
 import { aircraftLayer } from "./aircraft";
 import { satellitesLayer } from "./satellites";
+import { issLayer } from "./iss";
 import { shipsLayer } from "./ships";
 import { earthquakesLayer } from "./earthquakes";
 import { camerasLayer } from "./cameras";
@@ -16,10 +17,18 @@ import { tradeLayer } from "./trade";
 import { commerceLayer } from "./commerce";
 import { realestateLayer } from "./realestate";
 import { companiesLayer } from "./companies";
+import { employersLayer } from "./employers";
 import { banksLayer } from "./banks";
 import { spendingLayer } from "./spending";
 import { occupationsLayer } from "./occupations";
+import { gasPricesLayer } from "./gasPrices";
+import { gasForecastLayer } from "./gasForecast";
+import { ercotPricesLayer } from "./ercotPrices";
+import { usElectricityPricesLayer } from "./usElectricityPrices";
+import { globalGenerationLayer } from "./globalGeneration";
+import { datacentersLayer } from "./datacenters";
 import { weatherLayer } from "./weather";
+import { windFlowLayer, oceanFlowLayer } from "./flows";
 import { wildfireLayer } from "./wildfire";
 import { firesLayer } from "./fires";
 import { hazardsLayer } from "./hazards";
@@ -45,6 +54,7 @@ export const LAYERS: LayerDefinition[] = [
   aircraftLayer,
   shipsLayer,
   satellitesLayer,
+  issLayer,
   earthquakesLayer,
   camerasLayer,
   trafficLayer,
@@ -56,10 +66,19 @@ export const LAYERS: LayerDefinition[] = [
   commerceLayer,
   realestateLayer,
   companiesLayer,
+  employersLayer,
   banksLayer,
   spendingLayer,
   occupationsLayer,
+  gasPricesLayer,
+  gasForecastLayer,
+  ercotPricesLayer,
+  usElectricityPricesLayer,
+  globalGenerationLayer,
+  datacentersLayer,
   weatherLayer,
+  windFlowLayer,
+  oceanFlowLayer,
   wildfireLayer,
   firesLayer,
   hazardsLayer,

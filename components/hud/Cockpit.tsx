@@ -17,6 +17,7 @@ import WhatsHerePanel from "./WhatsHerePanel";
 import IndicatorsPanel from "./IndicatorsPanel";
 import ReleasesPanel from "./ReleasesPanel";
 import WatchlistPanel from "./WatchlistPanel";
+import InsightsPanel from "./InsightsPanel";
 import ScreenerPanel from "./ScreenerPanel";
 import DeskLayout from "./DeskLayout";
 import MobileTopBar from "./MobileTopBar";
@@ -35,6 +36,8 @@ import AscendCaption from "./AscendCaption";
 import { useStrata } from "@/lib/fabric/strataStore";
 import { applyShare, parseShare, startUrlSync } from "@/lib/globe/share";
 import Timeline from "./Timeline";
+import TimeScrubber from "./TimeScrubber";
+import TimeMachineTicker from "@/components/globe/TimeMachineTicker";
 import SettingsDialog from "./SettingsDialog";
 import SearchCommand from "./SearchCommand";
 import TitleCard from "./TitleCard";
@@ -174,6 +177,7 @@ export default function Cockpit({ initialMobile = false }: { initialMobile?: boo
       )}
       <CesiumGlobe />
       <LayerHost />
+      <TimeMachineTicker />
       <HudFrame />
       {!embed && <TitleCard />}
       {embed ? (
@@ -199,10 +203,12 @@ export default function Cockpit({ initialMobile = false }: { initialMobile?: boo
               <IndicatorsPanel />
               <ReleasesPanel />
               <WatchlistPanel />
+              <InsightsPanel />
               <ScreenerPanel />
               <InfoPanel />
             </MobileSheet>
             <Timeline compact />
+            <TimeScrubber />
             <MobileNav />
           </div>
           <TourCaption />
@@ -235,10 +241,14 @@ export default function Cockpit({ initialMobile = false }: { initialMobile?: boo
             <IndicatorsPanel />
             <ReleasesPanel />
             <WatchlistPanel />
+            <InsightsPanel />
             <InfoPanel />
           </div>
           <div data-hud-occluder className="pointer-events-none absolute bottom-16 right-3 z-30 max-w-[calc(100vw-24px)]">
             <ScreenerPanel />
+          </div>
+          <div className="absolute bottom-3 left-3 z-30 w-[320px] max-w-[calc(100vw-24px)]">
+            <TimeScrubber />
           </div>
           <Timeline />
           <TourCaption />

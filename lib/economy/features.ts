@@ -40,14 +40,14 @@ export interface JobsRow {
   /** "2026 Q1". */
   period: string;
   estabs: number | null;
-  /** Third-month employment level of the quarter. */
+  /** Third-month employment level of the quarter (the annual average when read from an annual slice). */
   emp: number | null;
-  /** Total quarterly wages, dollars. */
+  /** Total wages for the period, dollars. */
   wages: number | null;
   avgWeeklyWage: number | null;
   /** Over-the-year percent changes as BLS publishes them. */
   yoy: { estabs: number | null; emp: number | null; wages: number | null; avgWeeklyWage: number | null };
-  /** BLS withheld the cell (disclosure code N); every value above is null. */
+  /** BLS withheld the cell: any non-blank disclosure code (N, or the undocumented "-" that carries zeros). Every value above is null. */
   suppressed: boolean;
 }
 

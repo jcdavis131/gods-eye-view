@@ -2,13 +2,15 @@
 // /compare/48453-vs-06037 are allowed to mean, and the one shape every page,
 // route handler, brief and feed passes around afterwards.
 //
-// The load-bearing rule is in parseCountyParam. While counties.json is a seed
-// (MANIFEST.countiesComplete === false) a county the manifest cannot name is
-// still a real county, so a structurally valid FIPS whose state prefix is one
-// of the 52 known states resolves PROVISIONALLY: the scope is accepted, ref is
-// null, and the caller must get the name and the centroid from upstream at
-// request time. Once the full pull has run, countiesComplete flips to true, the
-// provisional branch stops firing, and an unknown FIPS becomes an exact 404.
+// The load-bearing rule is in parseCountyParam. The committed counties.json is
+// the full pull (MANIFEST.countiesComplete === true, 3,222 county
+// equivalents), so an unknown FIPS is an exact 404 - including the eight old
+// Connecticut counties, which the 2022 planning regions (09110-09190)
+// replaced. The provisional branch exists for a build that ever ships an
+// incomplete table: there, a county the manifest cannot name is still a real
+// county, so a structurally valid FIPS whose state prefix is one of the 52
+// known states resolves PROVISIONALLY - accepted, ref null, and the caller
+// gets the name and the centroid from upstream at request time.
 // Anything else - a four-digit code, an SSCCC form ending 000, an array from a
 // repeated query parameter - is rejected in both worlds.
 //
