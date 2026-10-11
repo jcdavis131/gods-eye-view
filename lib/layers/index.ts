@@ -4,6 +4,7 @@
 import type { LayerDefinition, LayerId } from "./types";
 import { aircraftLayer } from "./aircraft";
 import { satellitesLayer } from "./satellites";
+import { issLayer } from "./iss";
 import { shipsLayer } from "./ships";
 import { earthquakesLayer } from "./earthquakes";
 import { camerasLayer } from "./cameras";
@@ -53,6 +54,7 @@ export const LAYERS: LayerDefinition[] = [
   aircraftLayer,
   shipsLayer,
   satellitesLayer,
+  issLayer,
   earthquakesLayer,
   camerasLayer,
   trafficLayer,

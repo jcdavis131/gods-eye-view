@@ -14,6 +14,7 @@ export type LayerId =
   | "aircraft"
   | "ships"
   | "satellites"
+  | "iss"
   | "earthquakes"
   | "cameras"
   | "traffic"
@@ -77,6 +78,7 @@ export const LAYER_IDS: LayerId[] = [
   "aircraft",
   "ships",
   "satellites",
+  "iss",
   "earthquakes",
   "cameras",
   "traffic",
