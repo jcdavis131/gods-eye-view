@@ -1090,3 +1090,19 @@
     transition: none;
   }
 }
+
+/* ---- "Inside the racks" chip viewer ---- */
+.chips-viewer canvas { cursor: grab; }
+.chips-viewer canvas:active { cursor: grabbing; }
+.chips-label-layer {
+  position: absolute; inset: 0; overflow: hidden; pointer-events: none;
+}
+.chips-label {
+  position: absolute; transform: translate(-50%, -130%);
+  display: flex; align-items: center; gap: 5px;
+  font-size: 10px; line-height: 1.2; white-space: nowrap;
+  color: #e8e2d5; background: rgba(14, 12, 9, 0.72);
+  border: 1px solid rgba(232, 226, 213, 0.18);
+  border-radius: 3px; padding: 2px 6px;
+}
+.chips-dot { width: 6px; height: 6px; border-radius: 9999px; flex-shrink: 0; }
