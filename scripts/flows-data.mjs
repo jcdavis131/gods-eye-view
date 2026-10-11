@@ -26,7 +26,7 @@ import { fileURLToPath } from "node:url";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = path.join(HERE, "..", "lib", "flows", "data");
 const BATCH = 100; // locations per Open-Meteo request
-const PAUSE_MS = 1200; // politeness pause between batches; the free API 429s bursts
+const PAUSE_MS = 2000; // politeness pause between batches; the free API 429s bursts and resets sockets on rapid batches
 const MAX_RETRIES = 6;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -50,7 +50,19 @@ function uv(speed, dirDeg) {
 async function fetchBatch(url) {
   let lastErr = null;
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const res = await fetch(url, { headers: { "user-agent": "eye.jcamd.com flows-data" } });
+    let res;
+    try {
+      res = await fetch(url, { headers: { "user-agent": "eye.jcamd.com flows-data" } });
+    } catch (err) {
+      // Socket/reset/timeout errors: Open-Meteo occasionally drops rapid
+      // sequential batch connections (observed: deterministic reset on the
+      // 2nd rapid multi-location batch). Retry with backoff, like 429/5xx.
+      lastErr = err;
+      const wait = Math.min(30000, 2000 * 2 ** attempt);
+      console.log(`  socket error (${err.cause?.code || err.message}), retrying in ${wait / 1000}s…`);
+      await sleep(wait);
+      continue;
+    }
     if (res.ok) return res.json();
     lastErr = new Error(`HTTP ${res.status} for ${url.slice(0, 120)}…`);
     if (res.status !== 429 && res.status < 500) throw lastErr;
