@@ -3260,6 +3260,173 @@
           }
         }
       }
+    },
+    "/api/rsu": {
+      "get": {
+        "summary": "RSU event calendar from parsed SEC Form 4 filings, and the blackout-window status",
+        "description": "op=blackout (the default): corporate blackout and trading-window dates are internal policy, not in SEC filings, so the answer is always `not_publicly_disclosed` and they are never inferred. op=events: the point-in-time RSU event calendar built by scripts/rsu-events.py from real parsed Form 4 filings, filtered by issuer ticker, event_date range and event type. Every event carries `event_date` (the transaction) and `knowable_date` (the filing date, when it became public); use knowable_date for any analysis, and `knowable_estimated` flags an estimated one. The calendar is empty until filings are parsed; nothing is synthesized. Reporting owners withheld under docs/PEOPLE.md G16 are left out with no count and no marker. Nothing here is a trading signal.",
+        "tags": [
+          "companies"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "blackout",
+                "events"
+              ],
+              "default": "blackout"
+            },
+            "description": "blackout: the disclosure status of blackout windows. events: the RSU event calendar."
+          },
+          {
+            "name": "ticker",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 10
+            },
+            "description": "events: issuer ticker, case-insensitive."
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "events: earliest event_date, YYYY-MM-DD."
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "events: latest event_date, YYYY-MM-DD."
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "grant",
+                "vest",
+                "sale",
+                "tax_withhold",
+                "disposition",
+                "projected_vest",
+                "other"
+              ]
+            },
+            "description": "events: one event type. projected_vest dates are inferred, not reported."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "op=events: Envelope { data: RSU events, provenance[], generatedAt, caveats, meta { op, count, total } }. op=blackout: { status, note, whereToLook, generatedAt }.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/Cors"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "500": {
+            "description": "Internal error, including a malformed people-withholding setting, which fails the answer closed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Extract RSU transactions from one SEC Form 4 XML document",
+        "description": "Body { xml }: a Form 4 ownershipDocument obtained from EDGAR (the server does not fetch EDGAR). Returns the RSU rows found by security-title keyword match, classified by transaction code (A grant, M vest, S sale, F tax withholding, D disposition), with counts. Vesting schedules and blackout windows are not inferred.",
+        "tags": [
+          "companies"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "xml"
+                ],
+                "properties": {
+                  "xml": {
+                    "type": "string",
+                    "description": "Form 4 ownershipDocument XML"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Envelope { data { transactions, summary }, provenance[], caveats, generatedAt }.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/Cors"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "body.xml is missing or is not a Form 4 ownershipDocument.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Parse error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
