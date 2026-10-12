@@ -429,7 +429,7 @@ async function opCritHab(lon: number, lat: number): Promise<OpResult> {
   if (!species.length && final && proposed) caveats.push("No designated critical habitat contains this point. That is not a finding that no listed species is here: most listed species have no designation, and range is not habitat.");
   if (!final) caveats.push("FWS's final critical habitat layer did not answer this time (final: null); final designations here are unknown, not absent.");
   if (!proposed) caveats.push("FWS's proposed critical habitat layer did not answer this time (proposed: null); proposed designations here are unknown, not absent.");
-  const prov = [];
+  const prov: Provenance[] = [];
   if (final) prov.push(provenance(source("usfws-crithab"), { kind: "published", seriesId: "USFWS_Critical_Habitat FeatureServer layer 0 (final)", upstreamUrl: `${CRITHAB}/0`, retrievedAt: fetchedAt(age), notes: [`point ${x},${y}`] }));
   if (proposed) prov.push(provenance(source("usfws-crithab"), { kind: "published", seriesId: "USFWS_Critical_Habitat FeatureServer layer 2 (proposed)", upstreamUrl: `${CRITHAB}/2`, retrievedAt: fetchedAt(age), notes: [`point ${x},${y}`] }));
   return {
