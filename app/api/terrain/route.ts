@@ -30,6 +30,7 @@ import { provenance } from "@/lib/provenance/types";
 import { source } from "@/lib/provenance/sources";
 import {
   DIRECT_SOURCES,
+  NWI_RASTER_CAVEAT,
   RENDER_PRODUCTS,
   SLR_CAVEAT,
   SLR_FEET,
@@ -38,7 +39,7 @@ import {
   WHP_CAVEAT,
   isRenderProduct,
 } from "@/lib/terrain/products";
-import { NLCD_CLASSES, SLR_LEGEND, WHP_CLASSES } from "@/lib/terrain/classes";
+import { NLCD_CLASSES, NWI_RASTER_CLASSES, SLR_LEGEND, WHP_CLASSES } from "@/lib/terrain/classes";
 import { validTile } from "@/lib/terrain/webmercator";
 import { nlcdAt, renderTile, slopeAt, whpAt } from "@/lib/terrain/sources";
 
@@ -156,9 +157,9 @@ function opProducts(): Response {
   return ok(
     {
       products: [...rendered, ...direct],
-      classes: { firehazard: WHP_CLASSES, landcover: NLCD_CLASSES, sealevel: SLR_LEGEND },
+      classes: { firehazard: WHP_CLASSES, landcover: NLCD_CLASSES, sealevel: SLR_LEGEND, wetlands: NWI_RASTER_CLASSES },
       sealevelFeet: SLR_FEET,
-      caveats: { firehazard: WHP_CAVEAT, sealevel: SLR_CAVEAT, soils: SOIL_CAVEAT },
+      caveats: { firehazard: WHP_CAVEAT, sealevel: SLR_CAVEAT, soils: SOIL_CAVEAT, wetlands: NWI_RASTER_CAVEAT },
       terrainAttribution: TERRARIUM_ATTRIBUTION,
     },
     { ttlS: 3600, provenance: [], caveats: ["The catalog of terrain pictures; each product's own source and caveat is on it."] },

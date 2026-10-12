@@ -7,6 +7,8 @@
 import type { LayerStyle } from "./renderer";
 import type { TileSpec } from "./tiles";
 import {
+  NWI_RASTER_MAX_ZOOM,
+  NWI_RASTER_TEMPLATE,
   RELIEF_TILES,
   RENDER_PRODUCTS,
   SDM_WMS,
@@ -26,11 +28,13 @@ import {
   SOILS_MAX_HEIGHT_M,
 } from "@/lib/layers/terrain";
 import { FLOOD_MAX_HEIGHT_M } from "@/lib/layers/flood";
+import { WETLANDS_MAX_HEIGHT_M } from "@/lib/layers/wetlands";
 
 /** Stacking among pictures, bottom to top: relief under everything, lines on top. */
 export const TILE_Z = {
   relief: 10,
   landcover: 20,
+  wetlands: 25,
   firehazard: 30,
   soils: 40,
   slope: 50,
@@ -134,6 +138,24 @@ export const sealevelStyle = picture("#4895E5", ({ meta }) => {
     },
   ];
 });
+
+/**
+ * NWI's national wetlands raster, drawn only above WETLANDS_MAX_HEIGHT_M, where the Wetlands
+ * layer's clickable polygons are not loaded (the inverse of the FEMA map under flood zones).
+ * Classes, so magnified without smoothing; no rectangle, since NWI maps Alaska, Hawaii and
+ * the territories too.
+ */
+export const WETLANDS_PICTURE: TileSpec = {
+  key: "wetlands:nwi-raster-v5",
+  kind: "xyz",
+  url: NWI_RASTER_TEMPLATE,
+  maximumLevel: NWI_RASTER_MAX_ZOOM,
+  nearest: true,
+  alpha: 0.7,
+  z: TILE_Z.wetlands,
+  minHeight: WETLANDS_MAX_HEIGHT_M,
+  credit: "Wetlands raster: U.S. Fish and Wildlife Service, National Wetlands Inventory",
+};
 
 /** FEMA's own map of the flood zones, drawn under the clickable zones of the Flood zones layer. */
 export const FLOOD_PICTURE: TileSpec = routeSpec("floodmap", {

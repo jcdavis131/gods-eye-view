@@ -2,13 +2,14 @@
 // Styles for the three land layers: FEMA flood zones, NWI wetlands and PAD-US
 // public & protected lands. All ground polygons with thin outlines, plus the
 // dashed outline of the box the flood and wetland layers loaded. Flood zones
-// also draw FEMA's own map of the zones under them, across the whole view.
+// also draw FEMA's own map of the zones under them, across the whole view;
+// wetlands draw NWI's national raster above 10 km, where no polygons load.
 
 import type { LayerStyle } from "./renderer";
 import type { LayerFeature } from "@/lib/layers/types";
 import type { Access, FloodZoneExtra, PublicLandExtra, WetlandExtra } from "@/lib/land/features";
 import { polyFills, polyOutlines, UNRATED } from "./hazardStyles";
-import { FLOOD_PICTURE } from "./terrainStyles";
+import { FLOOD_PICTURE, WETLANDS_PICTURE } from "./terrainStyles";
 
 // ---------------------------------------------------------------- loaded box
 
@@ -85,6 +86,8 @@ export const wetlandsStyle: LayerStyle = {
   labelWhen: (f) => !isLoadedBox(f),
   polygons: (f) => (isLoadedBox(f) ? null : polyFills(f, wetlandColor(f), 0.38)),
   lines: (f) => (isLoadedBox(f) ? polyOutlines(f, LOADED_BOX, 0.7, 1.5, true) : polyOutlines(f, wetlandColor(f), 0.7, 1)),
+  // NWI's national raster above 10 km, where no polygons are loaded (lib/globe/terrainStyles.ts).
+  tiles: () => [WETLANDS_PICTURE],
 };
 
 // ---------------------------------------------------------------- public & protected lands

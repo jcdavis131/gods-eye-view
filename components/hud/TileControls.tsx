@@ -1,16 +1,16 @@
 "use client";
 // Controls under a picture layer's row in the layer panel: its opacity, the
 // sea level rise scenario, and the class legend the publisher's own service
-// lists (WHP, NLCD, NOAA's sea level rise), so a colour on the globe can be
-// read without leaving the panel.
+// lists (WHP, NLCD, NOAA's sea level rise, NWI's wetlands raster), so a colour
+// on the globe can be read without leaving the panel.
 
 import { useSettings } from "@/lib/store/settings";
 import type { LayerId } from "@/lib/layers/types";
-import { NLCD_CLASSES, SLR_LEGEND, WHP_CLASSES } from "@/lib/terrain/classes";
+import { NLCD_CLASSES, NWI_RASTER_CLASSES, SLR_LEGEND, WHP_CLASSES } from "@/lib/terrain/classes";
 import { SLR_DEFAULT_FT, SLR_FEET, isSlrFeet } from "@/lib/terrain/products";
 
 /** Layers that draw a tiled picture (their own, or the FEMA map under flood zones). */
-export const PICTURE_LAYERS = new Set<LayerId>(["relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "flood", "geology"]);
+export const PICTURE_LAYERS = new Set<LayerId>(["relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "flood", "wetlands", "geology"]);
 
 const DEFAULT_ALPHA: Partial<Record<LayerId, number>> = {
   relief: 0.55,
@@ -21,6 +21,7 @@ const DEFAULT_ALPHA: Partial<Record<LayerId, number>> = {
   landcover: 0.7,
   sealevel: 0.75,
   flood: 0.8,
+  wetlands: 0.7,
   geology: 0.55,
 };
 
@@ -50,7 +51,7 @@ export default function TileControls({ id }: { id: LayerId }) {
   return (
     <div className="mt-1.5 space-y-1 pl-4 text-[10px] text-muted-foreground md:text-[9px]">
       <label className="flex items-center gap-2">
-        <span className="w-14 shrink-0 uppercase tracking-widest">{id === "flood" ? "FEMA map" : "Opacity"}</span>
+        <span className="w-14 shrink-0 uppercase tracking-widest">{id === "flood" ? "FEMA map" : id === "wetlands" ? "Raster" : "Opacity"}</span>
         <input
           type="range"
           min={0.1}
@@ -85,6 +86,12 @@ export default function TileControls({ id }: { id: LayerId }) {
       {id === "landcover" && <Swatches items={NLCD_CLASSES.filter((c) => !/AK only/.test(c.label))} />}
       {id === "slope" && <div>USGS&apos;s colours: yellow to red is steeper; click the ground for the slope in degrees.</div>}
       {id === "soils" && <div>Map units outlined with their symbols; click the ground for the soil.</div>}
+      {id === "wetlands" && (
+        <>
+          <div>Above 10 km: NWI&apos;s national raster, about 100 m, so small wetlands can be missing. Below 10 km: the polygons, to click.</div>
+          <Swatches items={NWI_RASTER_CLASSES} />
+        </>
+      )}
     </div>
   );
 }

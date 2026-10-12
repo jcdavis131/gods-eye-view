@@ -54,6 +54,22 @@ export const NLCD_CLASSES: ClassEntry[] = [
   { code: 95, label: "Emergent Herbaceous Wetlands", color: "#70A3BA" },
 ];
 
+/**
+ * USFWS NWI national wetlands raster (Wetlands_Raster_v5), eight wetland types, as the
+ * ImageServer's own rasterAttributeTable lists them (value, WETLAND_TYPE, Red/Green/Blue).
+ * Pixel value 0 is not a class: the tiles ask for it as NoData, so it draws clear.
+ */
+export const NWI_RASTER_CLASSES: ClassEntry[] = [
+  { code: 1, label: "Estuarine and Marine Deepwater", color: "#007C88" },
+  { code: 2, label: "Estuarine and Marine Wetland", color: "#66C2A5" },
+  { code: 3, label: "Freshwater Emergent Wetland", color: "#7FC31C" },
+  { code: 4, label: "Freshwater Forested/Shrub Wetland", color: "#008837" },
+  { code: 5, label: "Freshwater Pond", color: "#688CC0" },
+  { code: 6, label: "Lake", color: "#13007C" },
+  { code: 7, label: "Other", color: "#B28656" },
+  { code: 8, label: "Riverine", color: "#0190BF" },
+];
+
 /** NOAA OCM sea level rise tiles, as the slr_Nft MapServer /legend lists them. */
 export const SLR_LEGEND: Array<{ label: string; color: string; meaning: string }> = [
   { label: "Low-lying Areas", color: "#55FF00", meaning: "NOAA's \"Low-lying Areas\" layer" },

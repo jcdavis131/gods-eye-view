@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import nlcdLegend from "./fixtures/nlcd-legend.json";
 import whpLegend from "./fixtures/whp-legend.json";
 import slrLegend from "./fixtures/slr-legend.json";
+import nwiRat from "./fixtures/nwi-raster-rat.json";
 import whpDt from "./fixtures/whp-identify-dt.json";
 import whpLake from "./fixtures/whp-identify-lake.json";
 import whpNw from "./fixtures/whp-identify-nw.json";
@@ -13,9 +14,19 @@ import nlcdLake from "./fixtures/nlcd-gfi-lake.json";
 import nlcdNw from "./fixtures/nlcd-gfi-nw.json";
 import slopeDt from "./fixtures/slope-identify-dt.json";
 import slopeNw from "./fixtures/slope-identify-nw.json";
-import { classFor, NLCD_CLASSES, parseNlcdFeatureInfo, parseSlopeIdentify, parseWhpIdentify, SLR_LEGEND, WHP_CLASSES } from "./classes";
+import { classFor, NLCD_CLASSES, NWI_RASTER_CLASSES, parseNlcdFeatureInfo, parseSlopeIdentify, parseWhpIdentify, SLR_LEGEND, WHP_CLASSES } from "./classes";
 
 describe("class tables match what each service's own legend serves", () => {
+  it("NWI raster: eight wetland types with the colours of the ImageServer's raster attribute table (captured 2026-10-12)", () => {
+    const rows = nwiRat.features.map((f) => f.attributes);
+    expect(NWI_RASTER_CLASSES.map((c) => c.code)).toEqual(rows.map((r) => r.Value));
+    expect(NWI_RASTER_CLASSES.map((c) => c.label)).toEqual(rows.map((r) => r.WETLAND_TYPE));
+    const hex = (n: number) => n.toString(16).padStart(2, "0").toUpperCase();
+    expect(NWI_RASTER_CLASSES.map((c) => c.color)).toEqual(rows.map((r) => `#${hex(r.Red)}${hex(r.Green)}${hex(r.Blue)}`));
+    // The tiles ask for 0 as NoData so it draws clear; that is only safe while 0 is no class.
+    expect(rows.map((r) => r.Value)).not.toContain(0);
+  });
+
   it("WHP: seven classes in code order, labels and swatches from the ImageServer /legend", () => {
     const served = whpLegend.layers[0].legend;
     expect(WHP_CLASSES.map((c) => c.label)).toEqual(served.map((l) => l.label));

@@ -34,6 +34,18 @@ export const MACROSTRAT_TILES = "https://tiles.macrostrat.org/carto/{z}/{x}/{y}.
  */
 export const WHP_TEMPLATE = `${WHP_IMAGE}/exportImage?bbox={westProjected},{southProjected},{eastProjected},{northProjected}&bboxSR=3857&imageSR=3857&size=256,256&format=png&renderingRule=${encodeURIComponent(JSON.stringify({ rasterFunction: "WHP_CLS_2023_8bit" }))}&f=image`;
 
+/** USFWS NWI national wetlands raster, version 5 (pinned: a new version is a new service name). */
+export const NWI_RASTER = "https://fwspublicservices.wim.usgs.gov/wetlandsmapservice/rest/services/Wetlands_Raster_v5/ImageServer";
+/**
+ * One Web Mercator tile of the NWI raster: exportImage for the tile's projected box. NWI's
+ * PNG keys 253,253,253 as transparent and paints NoData black, so `noData=0` is asked for
+ * (0 is not one of the raster's eight classes): the PNG then keys black, and land with no
+ * mapped wetland draws clear (27,441 of 65,536 pixels of a Louisiana tile, 2026-10-12).
+ */
+export const NWI_RASTER_TEMPLATE = `${NWI_RASTER}/exportImage?bbox={westProjected},{southProjected},{eastProjected},{northProjected}&bboxSR=3857&imageSR=3857&size=256,256&format=png&transparent=true&noData=0&f=image`;
+/** NWI's raster pixels are about 100 m; past level 11 the globe magnifies them. */
+export const NWI_RASTER_MAX_ZOOM = 11;
+
 /** Deepest terrarium zoom published (about 4.8 m a pixel at the equator). */
 export const TERRARIUM_MAX_ZOOM = 15;
 
@@ -136,7 +148,7 @@ export function routeTileUrl(product: RenderProductId, z: number | string, x: nu
 // ---------------------------------------------------------------- direct sources
 
 export interface DirectSource {
-  id: "relief" | "soils" | "firehazard" | "sealevel" | "terrain" | "geology";
+  id: "relief" | "soils" | "firehazard" | "sealevel" | "terrain" | "geology" | "wetlands";
   title: string;
   source: SourceId;
   /** Host the browser fetches from (CSP img-src / connect-src must allow it). */
@@ -201,7 +213,20 @@ export const DIRECT_SOURCES: DirectSource[] = [
     maxZoom: 16,
     note: "512 px tiles from Macrostrat's compilation, which changes map scale with zoom; the Geology layer's click answer comes from its geologic_units/map API through /api/infra.",
   },
+  {
+    id: "wetlands",
+    title: "NWI wetlands, national raster v5 (USFWS, ImageServer exportImage)",
+    source: "usfws-nwi",
+    host: "fwspublicservices.wim.usgs.gov",
+    template: NWI_RASTER_TEMPLATE,
+    maxZoom: NWI_RASTER_MAX_ZOOM,
+    note: "About 100 m pixels in eight wetland types, drawn only above 10 km, where the Wetlands layer's polygons are not loaded; small wetlands can be missing at this scale.",
+  },
 ];
+
+/** What the NWI raster is not (the Wetlands layer's note and the README). */
+export const NWI_RASTER_CAVEAT =
+  "Above 10 km the Wetlands layer draws NWI's national raster: about 100 m pixels in eight wetland types, generalised from the same inventory, so small wetlands can be missing at that scale. A habitat map from dated imagery, not a jurisdictional delineation.";
 
 /** Sea level rise scenarios offered (whole feet above MHHW; NOAA also publishes half feet). */
 export const SLR_FEET = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
