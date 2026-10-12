@@ -66,7 +66,7 @@ vi.mock("@/lib/civic/request", () => ({
 
 const { GET } = await import("./route");
 
-type Body = Record<string, unknown> & { data: { features: Array<{ properties: Record<string, unknown> }> }; caveats?: string[]; coverage: Array<{ name: string; state: string; count: number; reason?: string }> };
+type Body = Record<string, unknown> & { data: { features: Array<{ properties: Record<string, unknown> }> }; caveats?: string[]; coverage: Array<{ name: string; state: string; count: number | null; reason?: string }> };
 async function get(qs: string) {
   const res = await GET(new NextRequest(`http://localhost/api/permits?${qs}`));
   return { status: res.status, body: (await res.json()) as Body, res };
@@ -200,6 +200,7 @@ describe("/api/permits?op=contaminants", () => {
     const down = await get("op=contaminants&bbox=-95.3,29.7,-95.15,29.8");
     expect(down.status).toBe(200);
     expect(down.body.coverage.every((c) => c.state === "error")).toBe(true);
+    expect(down.body.coverage.every((c) => c.count === null)).toBe(true);
     expect(down.body.caveats?.join(" ")).toMatch(/missing from this answer, not absent/);
   });
 });

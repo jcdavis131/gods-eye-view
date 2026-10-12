@@ -59,7 +59,8 @@ export interface CoverageEntry {
   id: string;
   name: string;
   state: CoverageState;
-  count: number;
+  /** Records returned; null where the source did not answer (missing, not none). */
+  count: number | null;
   /** Why a source is stale, has no feed, is not wired or failed. */
   reason?: string;
   /** How often the source updates, as its portal states. */
@@ -320,7 +321,9 @@ export async function contaminants(b: Bbox): Promise<ContaminantsAnswer> {
       try {
         const r = await cached(`emef:${l.id}:${b.join(",")}`, 6 * 60 * MIN, async () => {
           const rows = await runRows("epa-emef", { kind: "arcgis", layer: `${EMEF}/${l.layer}`, params: emefParams(b) }, 25_000);
-          return { features: buildContaminants(l.id, rows.features), capped: rows.truncated || rows.features.length >= EMEF_MAX };
+          // `more`: EMEF said it held more than it sent. Exactly EMEF_MAX rows without
+          // that flag is capped too, but there may be nothing beyond it.
+          return { features: buildContaminants(l.id, rows.features), capped: rows.truncated || rows.features.length >= EMEF_MAX, more: rows.truncated };
         });
         return { l, ok: true as const, ...r.value, age: r.age };
       } catch (err) {
@@ -335,7 +338,7 @@ export async function contaminants(b: Bbox): Promise<ContaminantsAnswer> {
   for (const r of results) {
     const name = `EPA ${r.l.short}`;
     if (!r.ok) {
-      coverage.push({ id: r.l.id, name, state: "error", count: 0, reason: r.error });
+      coverage.push({ id: r.l.id, name, state: "error", count: null, reason: r.error });
       continue;
     }
     features.push(...r.features);
@@ -345,7 +348,11 @@ export async function contaminants(b: Bbox): Promise<ContaminantsAnswer> {
       name,
       state: r.capped ? "partial" : "covered",
       count: r.features.length,
-      reason: r.capped ? `the first ${EMEF_MAX.toLocaleString("en-US")} of more in this box` : undefined,
+      reason: r.capped
+        ? r.more
+          ? `the first ${EMEF_MAX.toLocaleString("en-US")} of more in this box`
+          : `the first ${EMEF_MAX.toLocaleString("en-US")} in this box; there may be more`
+        : undefined,
       cadence: "as EPA's program systems update Envirofacts",
     });
     prov.push(
