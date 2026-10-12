@@ -149,7 +149,7 @@ describe("National Register listings (captured from NPS around the National Mall
   const pts = buildHistoric(nrhpPoints.features as unknown as Parameters<typeof buildHistoric>[0], "point");
   const bnd = buildHistoric(nrhpBoundaries.features as unknown as Parameters<typeof buildHistoric>[0], "boundary");
 
-  it("names a listing by its NRIS number and type, the property's name in the dossier only", () => {
+  it("names a listing by its NRIS number and type, the property's name kept out of the searchable name", () => {
     expect(pts).toHaveLength(60);
     const urn = pts.find((f) => (f.properties.extra as HistoricExtra).refnum === "07001053")!;
     expect(urn.properties.name).toBe("NRHP 07001053 · object");

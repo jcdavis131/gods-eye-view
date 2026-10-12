@@ -386,7 +386,9 @@ export function parseCertDate(v: unknown): string | undefined {
  * National Register listings as NPS publishes them: points (layer 0) or boundaries
  * (layer 1). The feature is named by its NRIS number and type, so the search palette
  * (which matches names) never goes from a person's name to a place: a property's name
- * can be one ("Milam, Ben, Statue") and is shown in the dossier only.
+ * can be one ("Milam, Ben, Statue"). That name is shown in the dossier and drawn as
+ * the globe's label (lib/globe/landStyles.ts historicLabel), as NPS lists it, but it is
+ * never the feature's name and never searched.
  */
 export function buildHistoric(
   rows: Array<{ id?: number | string; geometry: GeoJSON.Geometry | null; properties: Record<string, unknown> | null }>,

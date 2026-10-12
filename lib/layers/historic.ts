@@ -8,8 +8,10 @@
 //
 // Only what NPS publishes as non-restricted: archaeological sites whose
 // locations are withheld under NHPA section 304 / ARPA are left out of the
-// source itself, so nothing restricted can reach this layer, and absence on
-// the map is not absence on the ground. No address is requested. A feature is
+// source itself. The boundary layer does still hold a few listings whose
+// Address reads "Address Restricted"; /api/land filters those out in its where
+// clause, so they never reach this layer. Absence on the map is not absence on
+// the ground. No address is requested. A feature is
 // named by its NRIS number and type; the property's name (which can be a
 // person's) is in the dossier and on the globe's label, never searched
 // (lib/search/allowlist.ts). Listings load inside a dashed box.
