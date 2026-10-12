@@ -46,6 +46,13 @@ export const NWI_RASTER_TEMPLATE = `${NWI_RASTER}/exportImage?bbox={westProjecte
 /** NWI's raster pixels are about 100 m; past level 11 the globe magnifies them. */
 export const NWI_RASTER_MAX_ZOOM = 11;
 
+/** USFWS critical habitat tile caches (ArcGIS Online), final and proposed; cached to level 14 (maxScale 36,111.9). */
+export const CRITHAB_TILES = {
+  final: "https://tiles.arcgis.com/tiles/QVENGdaPbd4LUkLV/arcgis/rest/services/usfws_critical_habitat_final/MapServer/tile/{z}/{y}/{x}",
+  proposed: "https://tiles.arcgis.com/tiles/QVENGdaPbd4LUkLV/arcgis/rest/services/usfws_critical_habitat_proposed/MapServer/tile/{z}/{y}/{x}",
+} as const;
+export const CRITHAB_MAX_ZOOM = 14;
+
 /** Deepest terrarium zoom published (about 4.8 m a pixel at the equator). */
 export const TERRARIUM_MAX_ZOOM = 15;
 
@@ -148,7 +155,7 @@ export function routeTileUrl(product: RenderProductId, z: number | string, x: nu
 // ---------------------------------------------------------------- direct sources
 
 export interface DirectSource {
-  id: "relief" | "soils" | "firehazard" | "sealevel" | "terrain" | "geology" | "wetlands";
+  id: "relief" | "soils" | "firehazard" | "sealevel" | "terrain" | "geology" | "wetlands" | "crithab";
   title: string;
   source: SourceId;
   /** Host the browser fetches from (CSP img-src / connect-src must allow it). */
@@ -221,6 +228,15 @@ export const DIRECT_SOURCES: DirectSource[] = [
     template: NWI_RASTER_TEMPLATE,
     maxZoom: NWI_RASTER_MAX_ZOOM,
     note: "About 100 m pixels in eight wetland types, drawn only above 10 km, where the Wetlands layer's polygons are not loaded; small wetlands can be missing at this scale.",
+  },
+  {
+    id: "crithab",
+    title: "Critical habitat, final and proposed (USFWS tile caches usfws_critical_habitat_final / _proposed)",
+    source: "usfws-crithab",
+    host: "tiles.arcgis.com",
+    template: CRITHAB_TILES.final,
+    maxZoom: CRITHAB_MAX_ZOOM,
+    note: "Two caches in FWS's own symbology, to level 14; a 404 is no tile there. The click answer comes from FWS's FeatureServer through /api/land?op=crithab.",
   },
 ];
 

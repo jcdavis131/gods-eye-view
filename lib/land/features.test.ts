@@ -4,10 +4,15 @@ import nwiWetlands from "./fixtures/nwi-wetlands-mitchell.json";
 import nwiCodeRows from "./fixtures/nwi-codes-mitchell.json";
 import nrhpPoints from "./fixtures/nrhp-points-dc.json";
 import nrhpBoundaries from "./fixtures/nrhp-polygons-dc.json";
+import chProposedPecos from "./fixtures/crithab-2-pecos.json";
 import {
   buildFloodZones,
   buildHistoric,
   buildPublicLands,
+  critHabText,
+  FWS_PLACEHOLDER,
+  fwsDate,
+  parseCritHab,
   buildWetlands,
   floodZoneMeaning,
   NRHP_FIELDS,
@@ -187,6 +192,30 @@ describe("National Register listings (captured from NPS around the National Mall
     // A blank CertDate in the capture stays blank.
     const undated = pts.filter((f) => (f.properties.extra as HistoricExtra).listed === undefined);
     expect(undated.length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------- USFWS critical habitat
+
+describe("critical habitat at a point", () => {
+  it("reads FWS's placeholder text as no value, never as a value", () => {
+    // FWS fills unitname with this on every final row (2026-10-12); the route does not ask for it,
+    // and any field that carries it reads as absent.
+    const [s] = parseCritHab([{ properties: { comname: "Austin blind Salamander", sciname: "Eurycea waterlooensis", listing_status: "Endangered", status: "Final", fedreg: FWS_PLACEHOLDER, pubdate: FWS_PLACEHOLDER } }]);
+    expect(s.fedreg).toBeUndefined();
+    expect(s.published).toBeUndefined();
+    expect(fwsDate("20130820")).toBe("2013-08-20");
+    expect(fwsDate("2013")).toBeUndefined();
+  });
+
+  it("says PROPOSED on a proposed designation, with the rule as FWS cites it", () => {
+    const [s] = parseCritHab(chProposedPecos.features);
+    expect(critHabText(s)).toBe("Pecos pupfish (Cyprinodon pecosensis) · Proposed Threatened · PROPOSED critical habitat (not final) · 89 FR 92744 92785, published 2024-11-22");
+  });
+
+  it("lists a species once per rule when its habitat comes back as several units", () => {
+    const row = chProposedPecos.features[0];
+    expect(parseCritHab([row, row])).toHaveLength(1);
   });
 });
 

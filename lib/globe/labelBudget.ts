@@ -171,5 +171,6 @@ export const LAYER_LABEL_PRIORITY: Record<string, number> = {
   firehazard: 2,
   landcover: 2,
   sealevel: 2,
+  crithab: 2,
   geology: 2,
 };

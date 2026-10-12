@@ -104,3 +104,10 @@ describe("voice words for the heritage, species, contamination and imagery layer
     expect(layerOf("hide landmarks")).toMatchObject({ layer: "historic", on: false });
   });
 });
+
+describe("voice words for critical habitat", () => {
+  it("hears critical habitat and endangered species", () => {
+    expect(layerOf("show critical habitat")).toMatchObject({ layer: "crithab" });
+    expect(layerOf("show endangered species near austin")).toMatchObject({ layer: "crithab", place: "austin" });
+  });
+});

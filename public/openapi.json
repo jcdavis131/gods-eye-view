@@ -2242,8 +2242,8 @@
     },
     "/api/land": {
       "get": {
-        "summary": "Flood zones, wetlands, historic places, public and protected lands in a box, or the ground elevation at a point",
-        "description": "op=flood: FEMA National Flood Hazard Layer flood hazard zones (layer 28) with FEMA's meaning of each zone, whether the ground is in the special flood hazard area, and the base flood elevation where FEMA published one (the -9999 sentinel is dropped). A regulatory map, not a forecast; a box with no zone is not a finding of no risk. Boxes are clamped to 0.08° and snapped to a 0.02° grid. op=wetlands: USFWS National Wetlands Inventory polygons with their Cowardin code, type, acres, the system, class and water regime names from NWI's code table (`codesDecoded` false when it did not answer), and the year of the imagery each was mapped from (`imageYears`, null when NWI's source layer did not answer); same box rules, at most 500 polygons a query. op=historic: National Register of Historic Places listings as NPS's public spatial data publishes them (STATUS 'Listed'): NRIS number, the property's name as NPS lists it (it can include a person's name; it is not a search key), resource type, National Historic Landmark flag, listing date (NPS's partial CertDate, e.g. 2007-10), city, county, state and the National Archives nomination link. Points always; with polygons=1 the district and site boundaries too. No street address is requested. Archaeological sites whose locations are restricted under NHPA section 304 / ARPA are not in NPS's public data, so absence is not absence on the ground, and this is not a Section 106 review. Boxes are clamped to 0.12° and snapped to 0.02°; at most 2,000 per layer. op=publiclands: USGS PAD-US 4.1 fee, easement, designation and proclamation areas with owner, manager, local owner, easement holder, public access, GAP status and IUCN category as PAD-US publishes them; boxes up to 2°, snapped to 0.25°; a box taller than 1.5° keeps the largest 600 units, generalised. op=elevation: USGS 3DEP ground elevation (EPQS) in metres with the source DEM resolution; outside 3DEP coverage `metres` is absent and `note` carries what EPQS said. Only the returned `bbox` is loaded.",
+        "summary": "Flood zones, wetlands, historic places, public and protected lands in a box, or the ground elevation or critical habitat at a point",
+        "description": "op=flood: FEMA National Flood Hazard Layer flood hazard zones (layer 28) with FEMA's meaning of each zone, whether the ground is in the special flood hazard area, and the base flood elevation where FEMA published one (the -9999 sentinel is dropped). A regulatory map, not a forecast; a box with no zone is not a finding of no risk. Boxes are clamped to 0.08° and snapped to a 0.02° grid. op=wetlands: USFWS National Wetlands Inventory polygons with their Cowardin code, type, acres, the system, class and water regime names from NWI's code table (`codesDecoded` false when it did not answer), and the year of the imagery each was mapped from (`imageYears`, null when NWI's source layer did not answer); same box rules, at most 500 polygons a query. op=historic: National Register of Historic Places listings as NPS's public spatial data publishes them (STATUS 'Listed'): NRIS number, the property's name as NPS lists it (it can include a person's name; it is not a search key), resource type, National Historic Landmark flag, listing date (NPS's partial CertDate, e.g. 2007-10), city, county, state and the National Archives nomination link. Points always; with polygons=1 the district and site boundaries too. No street address is requested. Archaeological sites whose locations are restricted under NHPA section 304 / ARPA are not in NPS's public data, so absence is not absence on the ground, and this is not a Section 106 review. Boxes are clamped to 0.12° and snapped to 0.02°; at most 2,000 per layer. op=crithab: the USFWS designated critical habitat, final (`final`) and proposed (`proposed`), that contains lon, lat: species common and scientific name, listing status, whether the designation is Final or Proposed, the Federal Register citation and its publication date. FWS's placeholder text (\"Please check current species specific shapefile\") is read as no value. A layer that did not answer is null (unknown, not absent). Regulatory designations, not range or occurrence; FWS says its GIS files are not the legal boundary; NOAA Fisheries' marine and anadromous species are not included. op=publiclands: USGS PAD-US 4.1 fee, easement, designation and proclamation areas with owner, manager, local owner, easement holder, public access, GAP status and IUCN category as PAD-US publishes them; boxes up to 2°, snapped to 0.25°; a box taller than 1.5° keeps the largest 600 units, generalised. op=elevation: USGS 3DEP ground elevation (EPQS) in metres with the source DEM resolution; outside 3DEP coverage `metres` is absent and `note` carries what EPQS said. Only the returned `bbox` is loaded.",
         "tags": [
           "land"
         ],
@@ -2258,11 +2258,12 @@
                 "flood",
                 "wetlands",
                 "historic",
+                "crithab",
                 "publiclands",
                 "elevation"
               ]
             },
-            "description": "flood: FEMA NFHL zones. wetlands: USFWS NWI polygons with imagery years. historic: NPS National Register listings (public, non-restricted). publiclands: USGS PAD-US 4.1 units with owners and access. elevation: USGS 3DEP EPQS at lon, lat."
+            "description": "flood: FEMA NFHL zones. wetlands: USFWS NWI polygons with imagery years. historic: NPS National Register listings (public, non-restricted). crithab: USFWS critical habitat (final and proposed) at lon, lat. publiclands: USGS PAD-US 4.1 units with owners and access. elevation: USGS 3DEP EPQS at lon, lat."
           },
           {
             "name": "bbox",
@@ -2291,7 +2292,7 @@
               "minimum": -180,
               "maximum": 180
             },
-            "description": "op=elevation: longitude of the point."
+            "description": "op=elevation, crithab: longitude of the point."
           },
           {
             "name": "lat",
@@ -2301,7 +2302,7 @@
               "minimum": -90,
               "maximum": 90
             },
-            "description": "op=elevation: latitude of the point."
+            "description": "op=elevation, crithab: latitude of the point."
           }
         ],
         "responses": {
@@ -2327,6 +2328,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/LandHistoricResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/LandCrithabResponse"
                     },
                     {
                       "$ref": "#/components/schemas/LandPubliclandsResponse"
@@ -6976,6 +6980,77 @@
           }
         ],
         "x-op": "wetlands"
+      },
+      "LandCrithabResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "lon": {
+                    "type": "number"
+                  },
+                  "lat": {
+                    "type": "number"
+                  },
+                  "final": {
+                    "type": [
+                      "array",
+                      "null"
+                    ],
+                    "items": {
+                      "$ref": "#/components/schemas/CritHabSpecies"
+                    },
+                    "description": "Final designations containing the point; null when FWS's final layer did not answer."
+                  },
+                  "proposed": {
+                    "type": [
+                      "array",
+                      "null"
+                    ],
+                    "items": {
+                      "$ref": "#/components/schemas/CritHabSpecies"
+                    },
+                    "description": "Proposed designations containing the point; null when FWS's proposed layer did not answer."
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "crithab"
+      },
+      "CritHabSpecies": {
+        "type": "object",
+        "properties": {
+          "common": {
+            "type": "string"
+          },
+          "scientific": {
+            "type": "string"
+          },
+          "listing": {
+            "type": "string",
+            "description": "Listing status as FWS publishes it, e.g. Endangered, Threatened, Proposed Threatened."
+          },
+          "designation": {
+            "type": "string",
+            "description": "Final or Proposed: the critical habitat designation's status."
+          },
+          "fedreg": {
+            "type": "string",
+            "description": "Federal Register citation of the rule, as FWS records it (e.g. 78FR51328 51379)."
+          },
+          "published": {
+            "type": "string",
+            "format": "date"
+          }
+        }
       },
       "LandHistoricResponse": {
         "allOf": [

@@ -433,6 +433,75 @@ export function buildHistoric(
   return out;
 }
 
+// ---------------------------------------------------------------- USFWS critical habitat
+
+/** What a critical habitat designation is and is not (route caveat, picture note, README). */
+export const CRITHAB_CAVEAT =
+  "USFWS designated critical habitat, final and proposed: regulatory designations under the Endangered Species Act, not species range or occurrence. Many listed species have no designation, and a polygon does not mean the species is present. FWS says these GIS files are not the legal boundary; the Federal Register rule and 50 CFR 17 are. Marine and anadromous species under NOAA Fisheries are not included.";
+
+/** FWS fills some text fields with this instead of a value; it is no value, never shown. */
+export const FWS_PLACEHOLDER = "Please check current species specific shapefile";
+
+export interface CritHabSpecies {
+  common?: string;
+  scientific?: string;
+  /** Listing status as FWS publishes it: "Endangered", "Threatened", "Proposed Threatened"... */
+  listing?: string;
+  /** "Final" or "Proposed" (the designation, not the listing). */
+  designation?: string;
+  /** Federal Register citation of the rule, e.g. "78FR51328 51379". */
+  fedreg?: string;
+  /** Publication date of that rule, YYYY-MM-DD. */
+  published?: string;
+}
+
+/** FWS's text with its placeholder (and blanks) read as no value. */
+function fwsText(v: unknown): string | undefined {
+  const s = str(v);
+  if (!s || s.toLowerCase().startsWith(FWS_PLACEHOLDER.toLowerCase())) return undefined;
+  return s;
+}
+
+/** "20130820" -> "2013-08-20"; anything else is no date. */
+export function fwsDate(v: unknown): string | undefined {
+  const s = fwsText(v);
+  const m = s?.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (!m) return undefined;
+  if (Number(m[2]) < 1 || Number(m[2]) > 12 || Number(m[3]) < 1 || Number(m[3]) > 31) return undefined;
+  return `${m[1]}-${m[2]}-${m[3]}`;
+}
+
+/** Point-query rows from FWS's final (layer 0) or proposed (layer 2) critical habitat, one per species and rule. */
+export function parseCritHab(rows: Array<{ properties: Record<string, unknown> | null }>): CritHabSpecies[] {
+  const out: CritHabSpecies[] = [];
+  const seen = new Set<string>();
+  for (const r of rows) {
+    const p = r.properties ?? {};
+    const sp: CritHabSpecies = {
+      common: fwsText(p.comname),
+      scientific: fwsText(p.sciname),
+      listing: fwsText(p.listing_status),
+      designation: fwsText(p.status),
+      fedreg: fwsText(p.fedreg),
+      published: fwsDate(p.pubdate),
+    };
+    // A species' habitat can come back as several units of the same rule: one line each rule.
+    const key = [sp.scientific, sp.common, sp.designation, sp.fedreg].join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(sp);
+  }
+  return out;
+}
+
+/** One species' line in the ground dossier: proposed designations always say so. */
+export function critHabText(s: CritHabSpecies): string {
+  const name = [s.common, s.scientific ? `(${s.scientific})` : undefined].filter(Boolean).join(" ") || "species not named by FWS";
+  const designation = s.designation?.toLowerCase() === "proposed" ? "PROPOSED critical habitat (not final)" : s.designation?.toLowerCase() === "final" ? "final critical habitat" : `critical habitat (${s.designation ?? "designation status not published"})`;
+  const rule = [s.fedreg ? `${s.fedreg.replace(/^(\d+)FR(\d+)/, "$1 FR $2")}` : undefined, s.published ? `published ${s.published}` : undefined].filter(Boolean).join(", ");
+  return `${name} · ${s.listing ?? "listing status not published"} · ${designation}${rule ? ` · ${rule}` : ""}`;
+}
+
 // ---------------------------------------------------------------- USGS PAD-US
 
 export type Access = "open" | "restricted" | "closed" | "unknown";

@@ -43,6 +43,7 @@ export type LayerId =
   | "wetlands"
   | "publiclands"
   | "historic"
+  | "crithab"
   | "relief"
   | "slope"
   | "contours"
@@ -108,6 +109,7 @@ export const LAYER_IDS: LayerId[] = [
   "wetlands",
   "publiclands",
   "historic",
+  "crithab",
   "relief",
   "slope",
   "contours",

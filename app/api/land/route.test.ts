@@ -9,6 +9,10 @@ import nwiCodes from "@/lib/land/fixtures/nwi-codes-mitchell.json";
 import nwiSource from "@/lib/land/fixtures/nwi-source-mitchell.json";
 import nrhpPoints from "@/lib/land/fixtures/nrhp-points-dc.json";
 import nrhpBoundaries from "@/lib/land/fixtures/nrhp-polygons-dc.json";
+import chFinalBarton from "@/lib/land/fixtures/crithab-0-barton.json";
+import chProposedBarton from "@/lib/land/fixtures/crithab-2-barton.json";
+import chFinalPecos from "@/lib/land/fixtures/crithab-0-pecos.json";
+import chProposedPecos from "@/lib/land/fixtures/crithab-2-pecos.json";
 
 vi.mock("@/lib/server/cache", () => ({
   cached: async <T,>(_k: string, _ttl: number, produce: () => Promise<T>) => ({ value: await produce(), age: 0, hit: false }),
@@ -134,6 +138,49 @@ describe("op=historic", () => {
     calls.length = 0;
     const bad = await get("op=historic&bbox=1,2,3");
     expect(bad.status).toBe(400);
+    expect(calls).toEqual([]);
+  });
+});
+
+describe("op=crithab", () => {
+  const fws = (place: "barton" | "pecos") => (u: string) => {
+    if (u.includes("/USFWS_Critical_Habitat/FeatureServer/0/query")) return json(place === "barton" ? chFinalBarton : chFinalPecos);
+    if (u.includes("/USFWS_Critical_Habitat/FeatureServer/2/query")) return json(place === "barton" ? chProposedBarton : chProposedPecos);
+    return null;
+  };
+
+  it("asks both FWS layers at the point for named fields and no geometry, and reads a final designation", async () => {
+    answer = fws("barton");
+    const { status, body } = await get("op=crithab&lon=-97.7713&lat=30.2638");
+    expect(status).toBe(200);
+    expect(calls).toHaveLength(2);
+    for (const u of calls) {
+      expect(param(u, "returnGeometry")).toBe("false");
+      expect(param(u, "outFields")).toBe("comname,sciname,listing_status,status,fedreg,pubdate");
+      expect(param(u, "geometry")).toBe("-97.7713,30.2638");
+    }
+    const d = body.data as unknown as { final: Array<Record<string, string>>; proposed: unknown[] };
+    expect(d.final).toEqual([{ common: "Austin blind Salamander", scientific: "Eurycea waterlooensis", listing: "Endangered", designation: "Final", fedreg: "78FR51328 51379", published: "2013-08-20" }]);
+    expect(d.proposed).toEqual([]);
+    expect(body.caveats?.join(" ")).toMatch(/not species range or occurrence/);
+  });
+
+  it("labels a proposed designation as proposed", async () => {
+    answer = fws("pecos");
+    const { body } = await get("op=crithab&lon=-104.30215&lat=33.17766");
+    const d = body.data as unknown as { final: unknown[]; proposed: Array<Record<string, string>> };
+    expect(d.final).toEqual([]);
+    expect(d.proposed).toEqual([expect.objectContaining({ common: "Pecos pupfish", listing: "Proposed Threatened", designation: "Proposed", published: "2024-11-22" })]);
+  });
+
+  it("names a layer that failed as unknown, not absent, and refuses a point without lon and lat", async () => {
+    answer = (u) => (u.includes("/FeatureServer/2/query") ? new Response("down", { status: 503 }) : fws("barton")(u));
+    const { status, body } = await get("op=crithab&lon=-97.7713&lat=30.2638");
+    expect(status).toBe(200);
+    expect((body.data as unknown as { proposed: unknown }).proposed).toBeNull();
+    expect(body.caveats?.join(" ")).toMatch(/proposed critical habitat layer did not answer/);
+    calls.length = 0;
+    expect((await get("op=crithab&lon=-97.7")).status).toBe(400);
     expect(calls).toEqual([]);
   });
 });

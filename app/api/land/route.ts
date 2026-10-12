@@ -22,6 +22,10 @@
 //                                          degrees, snapped to 0.02; 2,000 per layer at most.
 //                                          Never an address; archaeological sites withheld
 //                                          under NHPA s.304 / ARPA are not in the source.
+//   /api/land?op=crithab&lon=..&lat=..     USFWS designated critical habitat (final and
+//                                          proposed) containing a point: species, listing
+//                                          status, Federal Register rule and date. Regulatory
+//                                          polygons only; no occurrence data of any kind.
 //   /api/land?op=publiclands&bbox=w,s,e,n  USGS PAD-US 4.1 fee, easement, designation and
 //                                          proclamation areas with manager, owner agency,
 //                                          local owner, easement holder, public access and
@@ -46,6 +50,7 @@ import { source } from "@/lib/provenance/sources";
 import {
   buildFloodZones,
   buildHistoric,
+  CRITHAB_CAVEAT,
   buildPublicLands,
   buildWetlands,
   NRHP_CAVEAT,
@@ -55,6 +60,7 @@ import {
   nwiImagerySummary,
   PADUS_CATEGORIES,
   PADUS_FIELDS,
+  parseCritHab,
   parseEpqs,
   parseNwiCodes,
   parseNwiSources,
@@ -90,6 +96,14 @@ const PADUS = "https://services.arcgis.com/v01gqwM5QqNysAAi/arcgis/rest/services
 const NRHP = "https://mapservices.nps.gov/arcgis/rest/services/cultural_resources/nrhp_locations/MapServer";
 /** Listings asked for per layer and box; past it the answer says so. */
 const NRHP_MAX = 2000;
+/** USFWS critical habitat: layer 0 final designations, layer 2 proposed. */
+const CRITHAB = "https://services.arcgis.com/QVENGdaPbd4LUkLV/arcgis/rest/services/USFWS_Critical_Habitat/FeatureServer";
+/**
+ * The fields asked for. unitname, effectdate and accuracy are left out: on the final layer
+ * unitname is FWS's placeholder ("Please check current species specific shapefile") on all
+ * 803 rows, and leadoffice is a numeric office code, not a name.
+ */
+const CRITHAB_FIELDS = "comname,sciname,listing_status,status,fedreg,pubdate";
 const EPQS = "https://epqs.nationalmap.gov/v1/json";
 
 const DAY = 24 * 3600_000;
@@ -379,6 +393,54 @@ async function opHistoric(bbox: Bbox, boundaries: boolean): Promise<OpResult> {
   };
 }
 
+/**
+ * Which designated critical habitat (final and proposed) contains a point: one query per
+ * layer, no geometry back, cached a day per point (5 decimals). A layer that fails is named
+ * as missing; both failing is an upstream error.
+ */
+async function opCritHab(lon: number, lat: number): Promise<OpResult> {
+  const x = Number(lon.toFixed(5));
+  const y = Number(lat.toFixed(5));
+  const ask = (layer: 0 | 2) =>
+    cached(`crithab:${layer}:${x},${y}`, DAY, async () => {
+      const fc = await arcgisQuery(
+        "usfws-crithab",
+        `${CRITHAB}/${layer}`,
+        {
+          where: "1=1",
+          geometry: `${x},${y}`,
+          geometryType: "esriGeometryPoint",
+          inSR: "4326",
+          spatialRel: "esriSpatialRelIntersects",
+          outFields: CRITHAB_FIELDS,
+          returnGeometry: "false",
+        },
+        { gate: "usfws-crithab", minIntervalMs: 300, timeoutMs: 20_000, tries: 2 },
+      );
+      return parseCritHab(fc.features);
+    });
+  const [fin, prop] = await Promise.all([ask(0).catch((e: unknown) => e as Error), ask(2).catch((e: unknown) => e as Error)]);
+  if (fin instanceof Error && prop instanceof Error) throw fin;
+  const final = fin instanceof Error ? null : fin.value;
+  const proposed = prop instanceof Error ? null : prop.value;
+  const age = Math.max(fin instanceof Error ? 0 : fin.age, prop instanceof Error ? 0 : prop.age);
+  const species = [...(final ?? []), ...(proposed ?? [])];
+  const caveats = [CRITHAB_CAVEAT];
+  if (!species.length && final && proposed) caveats.push("No designated critical habitat contains this point. That is not a finding that no listed species is here: most listed species have no designation, and range is not habitat.");
+  if (!final) caveats.push("FWS's final critical habitat layer did not answer this time (final: null); final designations here are unknown, not absent.");
+  if (!proposed) caveats.push("FWS's proposed critical habitat layer did not answer this time (proposed: null); proposed designations here are unknown, not absent.");
+  const prov = [];
+  if (final) prov.push(provenance(source("usfws-crithab"), { kind: "published", seriesId: "USFWS_Critical_Habitat FeatureServer layer 0 (final)", upstreamUrl: `${CRITHAB}/0`, retrievedAt: fetchedAt(age), notes: [`point ${x},${y}`] }));
+  if (proposed) prov.push(provenance(source("usfws-crithab"), { kind: "published", seriesId: "USFWS_Critical_Habitat FeatureServer layer 2 (proposed)", upstreamUrl: `${CRITHAB}/2`, retrievedAt: fetchedAt(age), notes: [`point ${x},${y}`] }));
+  return {
+    data: { lon: x, lat: y, final, proposed },
+    meta: { source: "U.S. Fish and Wildlife Service, critical habitat (final and proposed)", cacheAge: age },
+    ttlS: final && proposed ? 3600 : 300,
+    provenance: prov,
+    caveats,
+  };
+}
+
 let padusDomains: Promise<Map<string, Map<string, string>>> | null = null;
 function padusLookup(): Promise<Map<string, Map<string, string>>> {
   if (!padusDomains) {
@@ -572,6 +634,12 @@ export async function GET(req: NextRequest) {
         if (!b) return badRequest(BBOX_HELP);
         return respond(await opHistoric(b, q.get("polygons") === "1"));
       }
+      case "crithab": {
+        const lon = numParam(q.get("lon"));
+        const lat = numParam(q.get("lat"));
+        if (lon == null || lat == null || Math.abs(lat) > 90 || Math.abs(lon) > 180) return badRequest("lon and lat required, e.g. lon=-97.7713&lat=30.2638");
+        return respond(await opCritHab(lon, lat));
+      }
       case "publiclands": {
         const b = parseBbox(q.get("bbox"), 2, 0.25);
         if (!b) return badRequest(BBOX_HELP);
@@ -584,7 +652,7 @@ export async function GET(req: NextRequest) {
         return respond(await opElevation(lon, lat));
       }
       default:
-        return badRequest("unknown op: flood | wetlands | historic | publiclands | elevation");
+        return badRequest("unknown op: flood | wetlands | historic | crithab | publiclands | elevation");
     }
   } catch (err) {
     return withCors(jsonError(err));

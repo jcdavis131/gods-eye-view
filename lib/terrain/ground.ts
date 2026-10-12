@@ -13,6 +13,8 @@
 //   contours                                 source DEM's resolution
 //   geology     /api/infra?op=geology        Macrostrat map unit, age, lithology
 //                                            and the map it comes from
+//   crithab     /api/land?op=crithab         USFWS critical habitat (final and
+//                                            proposed) containing the point
 //
 // Only the layers that are on are asked, and only below GROUND_MAX_HEIGHT_M,
 // so a click from orbit still just deselects.
@@ -26,11 +28,12 @@ import { GROUND_LAYERS } from "@/lib/layers/terrain";
 import type { ClassAnswer } from "./classes";
 import { nccpiText, type SoilAnswer } from "./soil";
 import { ageRange, type GeologyAnswer } from "@/lib/infra/geology";
+import { critHabText, type CritHabSpecies } from "@/lib/land/features";
 
 /** Above this camera height a ground click is not a question about the ground. */
 export const GROUND_MAX_HEIGHT_M = 150_000;
 
-export type GroundPart = "soils" | "firehazard" | "landcover" | "slope" | "elevation" | "geology";
+export type GroundPart = "soils" | "firehazard" | "landcover" | "slope" | "elevation" | "geology" | "crithab";
 
 export interface PartState {
   loading: boolean;
@@ -64,6 +67,7 @@ const PART_OF: Partial<Record<LayerId, GroundPart>> = {
   contours: "elevation",
   relief: "elevation",
   geology: "geology",
+  crithab: "crithab",
 };
 
 /** The parts to ask for, given which layers are on (each once, in a fixed order). */
@@ -92,6 +96,7 @@ const SOURCE_OF: Record<GroundPart, string> = {
   slope: "USGS 3DEP",
   elevation: "USGS 3DEP EPQS",
   geology: "Macrostrat",
+  crithab: "USFWS critical habitat",
 };
 
 type Details = NonNullable<LayerFeature["properties"]["details"]>;
@@ -167,6 +172,16 @@ export function groundDetails(p: Pick<GroundPick, "lon" | "lat" | "parts">): Det
       if (coarser.length) d["on coarser maps"] = coarser.join("; ");
     }
   }
+  const ch = p.parts.crithab;
+  if (ch && !waiting(d, "critical habitat", ch, "USFWS")) {
+    const a = ch.data as { final: CritHabSpecies[] | null; proposed: CritHabSpecies[] | null } | null;
+    const all = [...(a?.final ?? []), ...(a?.proposed ?? [])];
+    if (all.length) all.forEach((s, i) => (d[all.length > 1 ? `critical habitat ${i + 1}` : "critical habitat"] = critHabText(s)));
+    else if (a?.final && a?.proposed) d["critical habitat"] = "no designated critical habitat at this point (most listed species have no designation; this says nothing about whether a species is here)";
+    if (a && !a.final) d["critical habitat (final)"] = "FWS's final layer did not answer: unknown, not absent";
+    if (a && !a.proposed) d["critical habitat (proposed)"] = "FWS's proposed layer did not answer: unknown, not absent";
+    d["critical habitat note"] = "a regulatory designation, not range or occurrence; FWS: the GIS files are not the legal boundary (the Federal Register rule is)";
+  }
   d.point = `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}`;
   return d;
 }
@@ -219,6 +234,7 @@ const ASK: Record<GroundPart, (lon: string, lat: string) => Promise<unknown>> = 
   slope: async (lon, lat) => ((await getJson(`/api/terrain?op=point&product=slope&lon=${lon}&lat=${lat}`)).data as { degrees?: unknown })?.degrees ?? null,
   elevation: async (lon, lat) => (await getJson(`/api/land?op=elevation&lon=${lon}&lat=${lat}`)).data ?? null,
   geology: async (lon, lat) => (await getJson(`/api/infra?op=geology&lon=${lon}&lat=${lat}`)).data ?? null,
+  crithab: async (lon, lat) => (await getJson(`/api/land?op=crithab&lon=${lon}&lat=${lat}`)).data ?? null,
 };
 
 /** Ask every ground layer that is on what is under this point, and open the dossier. */

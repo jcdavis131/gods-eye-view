@@ -200,6 +200,10 @@ const LAYER_ALIASES: Record<string, LayerId> = {
   "historic landmarks": "historic",
   landmarks: "historic",
   historic: "historic",
+  "critical habitat": "crithab",
+  "endangered species": "crithab",
+  "threatened species": "crithab",
+  endangered: "crithab",
   // Infrastructure and geohazards. "planes" stays with aircraft and "reservoirs" with surface water.
   "transmission lines": "transmission",
   transmission: "transmission",

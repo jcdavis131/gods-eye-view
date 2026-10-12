@@ -365,7 +365,7 @@ export function areaReport(input: ReportInput): AreaReport {
   }
   if (pointLines.length) sections.push({ title: "Counted inside", source: "every loaded point layer", lines: pointLines, notes: ["Only what the layers that are on had loaded; a layer's box can end inside the area.", ...pointNotes] });
 
-  for (const l of ["landcover", "firehazard", "slope", "soils", "geology"] as LayerId[]) {
+  for (const l of ["landcover", "firehazard", "slope", "soils", "geology", "crithab"] as LayerId[]) {
     if (on[l]) missing.push(`${label(l)}: a picture, not features; click the ground inside the area for its value there`);
   }
   return { areaM2, samples: points.length, spacingM, sections, missing };

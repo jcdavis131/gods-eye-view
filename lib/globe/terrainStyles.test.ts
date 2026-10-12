@@ -26,3 +26,18 @@ describe("wetlands raster", () => {
     expect(hosts().has(new URL(WETLANDS_PICTURE.url.replace(/\{\w+\}/g, "0")).host)).toBe(true);
   });
 });
+
+describe("critical habitat", () => {
+  it("draws FWS's final and proposed caches as two sparse pictures, to level 14, from a registered host", async () => {
+    const { crithabStyle } = await import("./terrainStyles");
+    const specs = crithabStyle.tiles?.({}) ?? [];
+    expect(specs.map((s) => s.key)).toEqual(["crithab:final", "crithab:proposed"]);
+    for (const s of specs) {
+      expect(s.sparse).toBe(true);
+      expect(s.maximumLevel).toBe(14);
+      expect(s.maxHeight).toBeUndefined();
+      expect(hosts().has(new URL(s.url.replace(/\{\w+\}/g, "0")).host)).toBe(true);
+    }
+    expect(specs[1].url).toContain("usfws_critical_habitat_proposed");
+  });
+});

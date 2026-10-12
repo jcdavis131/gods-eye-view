@@ -10,7 +10,7 @@ import { NLCD_CLASSES, NWI_RASTER_CLASSES, SLR_LEGEND, WHP_CLASSES } from "@/lib
 import { SLR_DEFAULT_FT, SLR_FEET, isSlrFeet } from "@/lib/terrain/products";
 
 /** Layers that draw a tiled picture (their own, or the FEMA map under flood zones). */
-export const PICTURE_LAYERS = new Set<LayerId>(["relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "flood", "wetlands", "geology"]);
+export const PICTURE_LAYERS = new Set<LayerId>(["relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "flood", "wetlands", "geology", "crithab"]);
 
 const DEFAULT_ALPHA: Partial<Record<LayerId, number>> = {
   relief: 0.55,
@@ -23,6 +23,7 @@ const DEFAULT_ALPHA: Partial<Record<LayerId, number>> = {
   flood: 0.8,
   wetlands: 0.7,
   geology: 0.55,
+  crithab: 0.75,
 };
 
 function Swatches({ items }: { items: Array<{ label: string; color: string }> }) {
@@ -86,6 +87,7 @@ export default function TileControls({ id }: { id: LayerId }) {
       {id === "landcover" && <Swatches items={NLCD_CLASSES.filter((c) => !/AK only/.test(c.label))} />}
       {id === "slope" && <div>USGS&apos;s colours: yellow to red is steeper; click the ground for the slope in degrees.</div>}
       {id === "soils" && <div>Map units outlined with their symbols; click the ground for the soil.</div>}
+      {id === "crithab" && <div>FWS&apos;s map of final and proposed designations; click the ground for the species and whether it is proposed. Not where a species lives.</div>}
       {id === "wetlands" && (
         <>
           <div>Above 10 km: NWI&apos;s national raster, about 100 m, so small wetlands can be missing. Below 10 km: the polygons, to click.</div>

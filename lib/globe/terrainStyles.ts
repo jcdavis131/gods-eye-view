@@ -7,6 +7,8 @@
 import type { LayerStyle } from "./renderer";
 import type { TileSpec } from "./tiles";
 import {
+  CRITHAB_MAX_ZOOM,
+  CRITHAB_TILES,
   NWI_RASTER_MAX_ZOOM,
   NWI_RASTER_TEMPLATE,
   RELIEF_TILES,
@@ -39,6 +41,7 @@ export const TILE_Z = {
   soils: 40,
   slope: 50,
   sealevel: 60,
+  crithab: 65,
   floodmap: 70,
   contours: 80,
 } as const;
@@ -156,6 +159,34 @@ export const WETLANDS_PICTURE: TileSpec = {
   minHeight: WETLANDS_MAX_HEIGHT_M,
   credit: "Wetlands raster: U.S. Fish and Wildlife Service, National Wetlands Inventory",
 };
+
+/**
+ * USFWS critical habitat: FWS's final and proposed caches, in FWS's own symbology, at every
+ * height (cached to level 14, magnified beyond). Both are sparse: outside designated habitat
+ * the caches answer 404, which is "no tile here".
+ */
+export const crithabStyle = picture("#22C55E", () => [
+  {
+    key: "crithab:final",
+    kind: "xyz",
+    url: CRITHAB_TILES.final,
+    maximumLevel: CRITHAB_MAX_ZOOM,
+    sparse: true,
+    alpha: 0.75,
+    z: TILE_Z.crithab,
+    credit: "Critical habitat (final): U.S. Fish and Wildlife Service",
+  },
+  {
+    key: "crithab:proposed",
+    kind: "xyz",
+    url: CRITHAB_TILES.proposed,
+    maximumLevel: CRITHAB_MAX_ZOOM,
+    sparse: true,
+    alpha: 0.75,
+    z: TILE_Z.crithab + 1,
+    credit: "Critical habitat (proposed): U.S. Fish and Wildlife Service",
+  },
+]);
 
 /** FEMA's own map of the flood zones, drawn under the clickable zones of the Flood zones layer. */
 export const FLOOD_PICTURE: TileSpec = routeSpec("floodmap", {
