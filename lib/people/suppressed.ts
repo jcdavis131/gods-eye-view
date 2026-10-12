@@ -19,8 +19,8 @@
 // setting is fixed. The error names the variable and a count, never an entry.
 //
 // Every place that emits a reporting owner asks isWithheld before it does:
-// lib/people/store.ts now, and the /api/rsu events and EmployerAside when they
-// read people (M8). A withheld owner is left out with no count and no marker,
+// lib/people/store.ts and the /api/rsu events now, and EmployerAside when it
+// reads people (M8). A withheld owner is left out with no count and no marker,
 // so an answer reads the same as one for an owner who never filed.
 // Server only (node:crypto).
 

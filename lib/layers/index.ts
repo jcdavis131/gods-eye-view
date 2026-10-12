@@ -4,6 +4,7 @@
 import type { LayerDefinition, LayerId } from "./types";
 import { aircraftLayer } from "./aircraft";
 import { satellitesLayer } from "./satellites";
+import { issLayer } from "./iss";
 import { shipsLayer } from "./ships";
 import { earthquakesLayer } from "./earthquakes";
 import { camerasLayer } from "./cameras";
@@ -27,6 +28,7 @@ import { usElectricityPricesLayer } from "./usElectricityPrices";
 import { globalGenerationLayer } from "./globalGeneration";
 import { datacentersLayer } from "./datacenters";
 import { weatherLayer } from "./weather";
+import { windFlowLayer, oceanFlowLayer } from "./flows";
 import { wildfireLayer } from "./wildfire";
 import { firesLayer } from "./fires";
 import { hazardsLayer } from "./hazards";
@@ -52,6 +54,7 @@ export const LAYERS: LayerDefinition[] = [
   aircraftLayer,
   shipsLayer,
   satellitesLayer,
+  issLayer,
   earthquakesLayer,
   camerasLayer,
   trafficLayer,
@@ -74,6 +77,8 @@ export const LAYERS: LayerDefinition[] = [
   globalGenerationLayer,
   datacentersLayer,
   weatherLayer,
+  windFlowLayer,
+  oceanFlowLayer,
   wildfireLayer,
   firesLayer,
   hazardsLayer,

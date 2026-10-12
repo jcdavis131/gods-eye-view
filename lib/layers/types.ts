@@ -6,12 +6,15 @@
 // produced here, so every signal on screen is inspectable in one place.
 
 import type { Feature, FeatureCollection, Geometry } from "geojson";
+import type * as CesiumNS from "cesium";
+import type { LayerRendererLike } from "@/lib/globe/rendererTypes";
 import type { ApiKeyId } from "@/lib/store/settings";
 
 export type LayerId =
   | "aircraft"
   | "ships"
   | "satellites"
+  | "iss"
   | "earthquakes"
   | "cameras"
   | "traffic"
@@ -67,12 +70,15 @@ export type LayerId =
   | "constructs"
   | "field"
   | "alerts"
-  | "employers";
+  | "employers"
+  | "windflow"
+  | "oceanflow";
 
 export const LAYER_IDS: LayerId[] = [
   "aircraft",
   "ships",
   "satellites",
+  "iss",
   "earthquakes",
   "cameras",
   "traffic",
@@ -129,6 +135,8 @@ export const LAYER_IDS: LayerId[] = [
   "field",
   "alerts",
   "employers",
+  "windflow",
+  "oceanflow",
 ];
 
 /** Properties every feature carries, whatever the layer. */
@@ -276,6 +284,13 @@ export interface LayerDefinition {
   estimate?: string;
   attribution: string;
   fetch: (ctx: FetchContext) => Promise<FetchResult>;
+  /**
+   * Custom renderer factory. When present, LayerHost builds this instead of
+   * the GeoJSON LayerRenderer (used by the particle-flow layers, which draw a
+   * canvas overlay rather than primitives). The factory's result must satisfy
+   * LayerRendererLike.
+   */
+  createRenderer?: (viewer: CesiumNS.Viewer) => LayerRendererLike;
 }
 
 /**

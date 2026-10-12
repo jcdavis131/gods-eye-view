@@ -117,6 +117,8 @@ interface GlobeState {
   setExploreOpen: (open: boolean) => void;
   spaceWeatherOpen: boolean;
   setSpaceWeatherOpen: (open: boolean) => void;
+  insightsOpen: boolean;
+  setInsightsOpen: (open: boolean) => void;
   measure: MeasureState;
   setMeasure: (patch: Partial<MeasureState>) => void;
   /** ?embed=1: no HUD chrome, for iframes. */
@@ -196,6 +198,8 @@ export const useGlobe = create<GlobeState>()((set) => ({
   setExploreOpen: (exploreOpen) => set({ exploreOpen }),
   spaceWeatherOpen: false,
   setSpaceWeatherOpen: (spaceWeatherOpen) => set({ spaceWeatherOpen }),
+  insightsOpen: false,
+  setInsightsOpen: (insightsOpen) => set({ insightsOpen }),
   measure: { mode: "off", shape: null, elevation: null },
   setMeasure: (patch) => set((s) => ({ measure: { ...s.measure, ...patch } })),
   embed: false,

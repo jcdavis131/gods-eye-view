@@ -125,7 +125,7 @@ describe("public/openapi.json", () => {
       .map((f) => "/api/" + f.replace(/\/?route\.ts$/, "").replace(/\\/g, "/"))
       .map((f) => f.replace(/\/$/, ""));
     // Thin browser proxies for the live layers are not part of the practitioner API.
-    const proxies = new Set(["/api/aircraft", "/api/cameras", "/api/earthquakes", "/api/geocode", "/api/launches", "/api/roads", "/api/satellites", "/api/ships", "/api/sports", "/api/weather", "/api/voice/elevenlabs"]);
+    const proxies = new Set(["/api/aircraft", "/api/cameras", "/api/earthquakes", "/api/geocode", "/api/iss", "/api/launches", "/api/roads", "/api/satellites", "/api/ships", "/api/sports", "/api/weather", "/api/voice/elevenlabs"]);
     for (const r of routes) {
       if (proxies.has(r)) continue;
       expect(spec.paths[r], r).toBeDefined();

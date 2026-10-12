@@ -3,8 +3,13 @@
 //   POST /api/rsu/extract  { xml: "<ownershipDocument>..." }
 //     -> { transactions: [...], vestingSchedules: [...] }
 //
-//   GET /api/rsu/blackout
+//   GET /api/rsu?op=blackout   (the default op)
 //     -> { status: "not_publicly_disclosed", note: ... }
+//
+//   GET /api/rsu?op=events[&ticker=META][&from=2026-01-01][&to=2026-12-31][&type=vest]
+//     -> point-in-time event calendar built by scripts/rsu-events.py from real
+//        parsed Form 4 filings. Empty until filings are parsed - no synthetic
+//        events, ever.
 //
 // Form 4 XML is parsed for RSU grants (code A), vests (code M), sales (code S),
 // and tax withholdings (code F). Vesting schedules are inferred from footnote
@@ -15,6 +20,8 @@
 
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { allRsuEvents, rsuEventProvenance, rsuEventsFiltered } from "@/lib/rsu/events";
+import { withheldCheck } from "@/lib/people/suppressed";
 
 export const maxDuration = 30;
 
@@ -103,6 +110,13 @@ function parseForm4(xml: string): RSUTransaction[] {
   return txns;
 }
 
+const EVENT_CAVEATS = [
+  "knowable_date (filing date) is when each event became public - use it, not event_date, for any analysis.",
+  "Events with knowable_estimated=true use event_date + 2 business days (Form 4 due window); pass exact filing dates to the builder for precision.",
+  "Projected vest dates (event_type=projected_vest) are inferred, not reported - never mix them with actuals.",
+  "The calendar is empty until real Form 4 filings are parsed. Nothing here is a trading signal.",
+];
+
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status, headers: CORS });
 }
@@ -124,7 +138,32 @@ export async function GET(req: NextRequest) {
       generatedAt: new Date().toISOString(),
     });
   }
-  return json({ error: "unknown op. Use POST /api/rsu/extract or GET ?op=blackout" }, 400);
+  if (op === "events") {
+    try {
+      // Every event names a reporting owner, so withheld owners are left out
+      // with no count and no marker (docs/PEOPLE.md G16). withheldCheck throws
+      // on a malformed setting, which fails the whole answer closed.
+      const withheld = withheldCheck();
+      const shown = (e: { filer_cik: string }) => !(e.filer_cik && withheld(e.filer_cik));
+      const sp = req.nextUrl.searchParams;
+      const data = rsuEventsFiltered({
+        ticker: sp.get("ticker") || undefined,
+        from: sp.get("from") || undefined,
+        to: sp.get("to") || undefined,
+        type: sp.get("type") || undefined,
+      }).filter(shown);
+      return json({
+        data,
+        provenance: [rsuEventProvenance()],
+        generatedAt: new Date().toISOString(),
+        caveats: EVENT_CAVEATS,
+        meta: { op, count: data.length, total: allRsuEvents().filter(shown).length },
+      });
+    } catch (err) {
+      return json({ error: err instanceof Error ? err.message : "internal error" }, 500);
+    }
+  }
+  return json({ error: "unknown op. Use POST /api/rsu/extract, GET ?op=blackout or GET ?op=events" }, 400);
 }
 
 export async function POST(req: NextRequest) {

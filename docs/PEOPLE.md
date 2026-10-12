@@ -198,7 +198,7 @@ Answers take the shapes in `lib/fabric/parties.ts`: a business, a notable person
 
 - A withheld owner is left out of every roster, owner lookup and link, with no count and no marker, so an answer reads the same as for someone who never filed, and their person view gets the same 404 as an unknown CIK. Their CIK is still refused before any request to EDGAR (G13).
 - It fails closed. A list with no key, or an entry that is not 64 hex characters, makes every roster, owner lookup and link throw, for known and unknown CIKs alike, until the setting is fixed; the error names the variable and a count, never an entry.
-- `lib/people/store.ts` applies it now. The routes, the MCP tools, the `/api/rsu` events and `EmployerAside` go through it as each starts to emit people (M4a, M5, M8).
+- `lib/people/store.ts` and the `/api/rsu?op=events` calendar apply it now. The routes, the MCP tools and `EmployerAside` go through it as each starts to emit people (M4a, M5, M8).
 - The business view is to be cached for 24 hours plus 24 hours stale-while-revalidate, so a newly withheld person can stay in the CDN cache for up to about 48 hours.
 - `lib/people/suppressed.test.ts` (T12) checks each point above, and that the repository tracks no withheld list, no env file and no assignment of either variable.
 

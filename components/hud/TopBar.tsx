@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, Settings2, Crosshair, Home, Droplets, Compass, Link2, Landmark, Menu, Activity, CalendarDays, Bell, Table2, Aperture, Zap, Sun, Ruler } from "lucide-react";
+import { Search, Settings2, Crosshair, Home, Droplets, Compass, Link2, Landmark, Menu, Activity, CalendarDays, Bell, Table2, Aperture, Zap, Sun, Ruler, Sparkles } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { useIndicators } from "@/lib/indicators/store";
@@ -72,6 +72,7 @@ export default function TopBar() {
   const vintage = useReleases((s) => s.vintage);
   const watchOpen = useWatchlists((s) => s.open);
   const setWatchOpen = useWatchlists((s) => s.setOpen);
+  const insightsOpen = useGlobe((s) => s.insightsOpen);
   const screenOpen = useScreener((s) => s.open);
   const toggleScreen = useScreener((s) => s.toggle);
   const personaId = useLens((s) => s.personaId);
@@ -226,6 +227,10 @@ export default function TopBar() {
         <button type="button" onClick={() => setWatchOpen(!watchOpen)} aria-pressed={watchOpen} className={btn} title="Watchlists with rules, RSS/Atom feeds and webhooks">
           <Bell className="size-3.5" />
           <span className="sr-only">Watch</span>
+        </button>
+        <button type="button" onClick={() => useGlobe.getState().setInsightsOpen(!insightsOpen)} aria-pressed={insightsOpen} className={btn} title="Insights: the brief engine's latest findings for wherever the map is looking">
+          <Sparkles className="size-3.5" />
+          <span className="sr-only">Insights</span>
         </button>
         <DeskToggle />
         <div className="hud-rule mx-1 my-3 hidden md:block" />

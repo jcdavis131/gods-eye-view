@@ -28,6 +28,50 @@ import ConstructAside, { ConstructContext } from "./ConstructAside";
 import { requiredDisclaimer } from "@/lib/civic/terms";
 import ParcelAside from "./ParcelAside";
 import { flyTo } from "@/lib/globe/camera";
+import dynamic from "next/dynamic";
+import PowerWaterAside from "./PowerWaterAside";
+
+const ChipViewer = dynamic(() => import("./ChipViewer"), {
+  ssr: false,
+  loading: () => (
+    <div className="mx-3 my-2 rounded-sm border border-border/60 p-4 text-center text-[12px] text-muted-foreground">
+      Loading 3D…
+    </div>
+  ),
+});
+
+/** "Inside the racks" — data-center dossier extras: power/water context + 3D chip viewer. */
+function InsideRacks({ lat, lon }: { lat: number; lon: number }) {
+  const [open, setOpen] = useState(() =>
+    typeof window === "undefined" ? true : !window.matchMedia("(max-width: 700px)").matches,
+  );
+  return (
+    <div className="border-t border-border/60">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex min-h-[48px] w-full items-center justify-between px-3 text-left"
+      >
+        <span className="hud-label text-[9px]">INSIDE THE RACKS</span>
+        <span className="text-[11px] text-muted-foreground" aria-hidden>
+          {open ? "▾" : "▸"}
+        </span>
+      </button>
+      {open && (
+        <div className="pb-1">
+          <p className="px-3 pb-1 text-[10px] leading-snug text-muted-foreground">
+            This is what&apos;s computing inside buildings like this one — the server CPU, the AI
+            GPU, and the DPU that moves the bits.
+          </p>
+          <PowerWaterAside lat={lat} lon={lon} />
+          <div className="hud-label px-3 pb-1 pt-2 text-[9px]">CHIP VIEWER</div>
+          <ChipViewer defaultChip="gpu" />
+        </div>
+      )}
+    </div>
+  );
+}
 
 function useRefresh(ms: number) {
   const [, set] = useState(0);
@@ -218,6 +262,10 @@ export default function InfoPanel() {
             <Row key={k} k={k} v={v} />
           ))}
         </dl>
+
+        {p.layer === "datacenters" && lonlat && (
+          <InsideRacks key={`racks:${p.id}`} lat={lonlat[1]} lon={lonlat[0]} />
+        )}
 
         {disclaimer && <p className="border-t border-border/60 px-3 py-2 text-[9px] leading-snug text-muted-foreground">{disclaimer}</p>}
 
