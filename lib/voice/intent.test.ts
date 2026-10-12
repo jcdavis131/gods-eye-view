@@ -111,3 +111,12 @@ describe("voice words for critical habitat", () => {
     expect(layerOf("show endangered species near austin")).toMatchObject({ layer: "crithab", place: "austin" });
   });
 });
+
+describe("voice words for contaminated sites", () => {
+  it("hears superfund, brownfields and hazardous waste, and keeps hazards with hazard alerts", () => {
+    expect(layerOf("show superfund sites")).toMatchObject({ layer: "contaminants" });
+    expect(layerOf("show brownfields over houston")).toMatchObject({ layer: "contaminants", place: "houston" });
+    expect(layerOf("show hazardous waste")).toMatchObject({ layer: "contaminants" });
+    expect(layerOf("show hazards")).toMatchObject({ layer: "hazards" });
+  });
+});

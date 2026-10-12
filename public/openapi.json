@@ -2804,8 +2804,8 @@
     },
     "/api/permits": {
       "get": {
-        "summary": "Building permits, business licences or environmental permits in a box",
-        "description": "op=building: permits the cities list as issued in the last `days` (7-90, default 30), newest first, at most 500 per city; boxes clamped to 0.03° and snapped to 0.0025°. Each record keeps its valuation under the column it came from (reported cost, estimated project cost, valuation...), the parcel key the city publishes (BBL, TCAD id, SCHEDNUM, PIN, block/lot), the zoning printed on the permit where there is one, the contractor company and the city's record link. Every portal is asked for named columns ($select or outFields), and no applicant, owner or contact name is requested; the contractor company is shown as the city publishes it and can be a sole trader's own name (never searched). op=licences: licensed premises, by trade name (an entity's legal name where there is no trade name; the legal or registrant name is requested only to test for an entity form and to compare it with the trade name, and is discarded otherwise, so a trade name that is a non-company registrant's own name is not shown and `nameNote` says why; a trade name is otherwise as published and can contain a person's name), and licences at apartment or unit addresses withheld as a home-business heuristic (`withheld` counts them); boxes clamped to 0.02°. op=environmental: EPA ECHO NPDES and air facilities (compliance in ECHO's own words; 'not reported by ECHO' when it gives none) and the Corps' regulatory actions (the applicant is never kept; a project name that opens 'Surname, Given' is withheld and `facilityNote` says so, though a project name can carry a person's name in another form; the search returns at most 300, the box's actions first and then actions from anywhere in the country, so only those inside the box are kept, sorted newest first here, and USACE is partial only when all 300 lay in the box); boxes clamped to 0.2° and snapped to 0.05°. `coverage` lists every source the box meets with its state: covered, partial (a cap was hit), stale (Dallas), no-feed (Houston), token-required (Denver commercial), not-wired (San Antonio) or error (did not answer this time: missing, not absent).",
+        "summary": "Building permits, business licences, environmental permits or EPA contaminated-site listings in a box",
+        "description": "op=building: permits the cities list as issued in the last `days` (7-90, default 30), newest first, at most 500 per city; boxes clamped to 0.03° and snapped to 0.0025°. Each record keeps its valuation under the column it came from (reported cost, estimated project cost, valuation...), the parcel key the city publishes (BBL, TCAD id, SCHEDNUM, PIN, block/lot), the zoning printed on the permit where there is one, the contractor company and the city's record link. Every portal is asked for named columns ($select or outFields), and no applicant, owner or contact name is requested; the contractor company is shown as the city publishes it and can be a sole trader's own name (never searched). op=licences: licensed premises, by trade name (an entity's legal name where there is no trade name; the legal or registrant name is requested only to test for an entity form and to compare it with the trade name, and is discarded otherwise, so a trade name that is a non-company registrant's own name is not shown and `nameNote` says why; a trade name is otherwise as published and can contain a person's name), and licences at apartment or unit addresses withheld as a home-business heuristic (`withheld` counts them); boxes clamped to 0.02°. op=environmental: EPA ECHO NPDES and air facilities (compliance in ECHO's own words; 'not reported by ECHO' when it gives none) and the Corps' regulatory actions (the applicant is never kept; a project name that opens 'Surname, Given' is withheld and `facilityNote` says so, though a project name can carry a person's name in another form; the search returns at most 300, the box's actions first and then actions from anywhere in the country, so only those inside the box are kept, sorted newest first here, and USACE is partial only when all 300 lay in the box); boxes clamped to 0.2° and snapped to 0.05°. op=contaminants: EPA Envirofacts EMEF program listings, Superfund (SEMS, NPL and non-NPL, active and archived), Toxics Release Inventory reporters, RCRA hazardous-waste handlers and Brownfields (ACRES), as features named by their program id, with EPA's facility name (as published; it can be a person's name or a street address and is never a search key), the program id, the FRS registry id and EPA's record link in `details`; a listing is a regulatory status, not a finding of contamination, and no release amounts are given; no address is requested; at most 1,000 per program (`coverage` says partial when hit); same box rules as environmental. `coverage` lists every source the box meets with its state: covered, partial (a cap was hit), stale (Dallas), no-feed (Houston), token-required (Denver commercial), not-wired (San Antonio) or error (did not answer this time: missing, not absent).",
         "tags": [
           "permits"
         ],
@@ -2819,10 +2819,11 @@
               "enum": [
                 "building",
                 "licences",
-                "environmental"
+                "environmental",
+                "contaminants"
               ]
             },
-            "description": "building: city building permits. licences: licensed premises. environmental: EPA ECHO facilities and Corps actions."
+            "description": "building: city building permits. licences: licensed premises. environmental: EPA ECHO facilities and Corps actions. contaminants: EPA Superfund, TRI, RCRA and Brownfields listings."
           },
           {
             "name": "bbox",
@@ -2868,6 +2869,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/PermitsEnvironmentalResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PermitsContaminantsResponse"
                     }
                   ]
                 }
@@ -6906,6 +6910,49 @@
           "address",
           "url",
           "published"
+        ]
+      },
+      "PermitsContaminantsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/FeatureCollection"
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "coverage": {
+                "$ref": "#/components/schemas/PermitsCoverage"
+              }
+            }
+          }
+        ],
+        "x-op": "contaminants",
+        "x-feature-properties": [
+          "id",
+          "layer",
+          "name",
+          "kind",
+          "source",
+          "details",
+          "extra"
+        ],
+        "x-details-keys": [
+          "program",
+          "facility (as EPA publishes it)",
+          "program system id",
+          "registry id",
+          "program system (as EPA codes it)",
+          "EPA record",
+          "what this is"
         ]
       },
       "LandFloodResponse": {

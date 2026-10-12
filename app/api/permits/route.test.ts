@@ -14,12 +14,19 @@ import cwaRows from "@/lib/permits/fixtures/echo-npdes-rows.json";
 import airQuery from "@/lib/permits/fixtures/echo-air-query.json";
 import airRows from "@/lib/permits/fixtures/echo-air-rows.json";
 import orm from "@/lib/permits/fixtures/usace-orm.json";
+import emefSems from "@/lib/permits/fixtures/emef-0-houston.json";
+import emefTri from "@/lib/permits/fixtures/emef-1-houston.json";
+import emefRcra from "@/lib/permits/fixtures/emef-4-houston.json";
+import emefAcres from "@/lib/permits/fixtures/emef-5-houston.json";
 
 type F = { geometry: GeoJSON.Geometry | null; properties: Record<string, unknown> | null };
 const asRows = (j: unknown): F[] => (Array.isArray(j) ? j.map((r) => ({ geometry: null, properties: r as Record<string, unknown> })) : (j as { features: F[] }).features);
 
 const calls: string[] = [];
 let failHosts: string[] = [];
+/** EMEF layers to answer as cut at the record limit (the flag ArcGIS sets), to test the cap note. */
+let truncatedLayers: number[] = [];
+const emefParams: Array<Record<string, string>> = [];
 
 vi.mock("@/lib/server/cache", () => ({
   cached: async <T,>(_k: string, _ttl: number, produce: () => Promise<T>) => ({ value: await produce(), age: 0, hit: false }),
@@ -27,10 +34,18 @@ vi.mock("@/lib/server/cache", () => ({
 }));
 
 vi.mock("@/lib/civic/request", () => ({
-  runRows: async (_name: string, req: { kind: string; layer?: string; url?: string }) => {
+  runRows: async (_name: string, req: { kind: string; layer?: string; url?: string; params?: Record<string, string> }) => {
     const url = req.kind === "arcgis" ? req.layer! : req.url!;
     calls.push(url);
     if (failHosts.some((h) => url.includes(h))) throw new Error(`${new URL(url).host} 503`);
+    const emef = url.match(/\/EMEF\/efpoints\/MapServer\/(\d)$/);
+    if (emef) {
+      emefParams.push(req.params ?? {});
+      const n = Number(emef[1]);
+      const fc = ({ 0: emefSems, 1: emefTri, 4: emefRcra, 5: emefAcres } as unknown as Record<number, { features: F[] }>)[n];
+      if (!fc) throw new Error(`unexpected EMEF layer ${n}`);
+      return { features: fc.features, truncated: truncatedLayers.includes(n) };
+    }
     if (url.includes("ydr8-5enu")) return { features: asRows(chicagoPermits), truncated: false };
     if (url.includes("RESIDENTIALCONSTPERMIT")) return { features: asRows(denverPermits), truncated: false };
     if (url.includes("w7w3-xahh")) return { features: asRows(nycLicences), truncated: false };
@@ -60,6 +75,8 @@ async function get(qs: string) {
 beforeEach(() => {
   calls.length = 0;
   failHosts = [];
+  truncatedLayers = [];
+  emefParams.length = 0;
 });
 
 describe("/api/permits?op=building", () => {
@@ -147,5 +164,42 @@ describe("/api/permits?op=environmental", () => {
 
   it("rejects an unknown op", async () => {
     expect((await get("op=coverage")).status).toBe(400);
+  });
+});
+
+describe("/api/permits?op=contaminants", () => {
+  it("answers EPA's Superfund, TRI, RCRA and Brownfields layers, never water (2) or air (3), with named fields only", async () => {
+    const { status, body } = await get("op=contaminants&bbox=-95.3,29.7,-95.15,29.8");
+    expect(status).toBe(200);
+    const layers = calls.filter((u) => u.includes("/EMEF/")).map((u) => u.split("/").pop());
+    expect(layers.sort()).toEqual(["0", "1", "4", "5"]);
+    for (const p of emefParams) {
+      expect(p.outFields).toBe("registry_id,primary_name,pgm_sys_acrnm,pgm_sys_id,facility_url");
+      expect(p.outFields).not.toContain("location_address");
+      expect(p.resultRecordCount).toBe("1000");
+    }
+    const byName = Object.fromEntries(body.coverage.map((c) => [c.name, c]));
+    expect(byName["EPA SEMS"]).toMatchObject({ state: "covered", count: 1 });
+    expect(byName["EPA TRI"]).toMatchObject({ state: "covered", count: 117 });
+    expect(byName["EPA RCRA"]).toMatchObject({ state: "covered", count: 617 });
+    expect(byName["EPA Brownfields"]).toMatchObject({ state: "covered", count: 24 });
+    const sems = body.data.features.find((f) => f.properties.kind === "sems")!;
+    expect(sems.properties.name).toBe("SEMS TXN000607093");
+    expect((sems.properties as { details?: Record<string, unknown> }).details).toMatchObject({ "facility (as EPA publishes it)": "US OIL RECOVERY", "registry id": "110015665528", "EPA record": "https://enviro.epa.gov/envirofacts/sems/detail-view?id=TXN000607093" });
+    expect(JSON.stringify(body.data)).not.toMatch(/location_address/);
+    expect(body.caveats?.join(" ")).toMatch(/not a finding of contamination/);
+  });
+
+  it("says a program was capped, and names a program that failed as missing", async () => {
+    truncatedLayers = [4];
+    const capped = await get("op=contaminants&bbox=-95.3,29.7,-95.15,29.8");
+    expect(capped.body.coverage.find((c) => c.name === "EPA RCRA")).toMatchObject({ state: "partial", reason: "the first 1,000 of more in this box" });
+    expect(capped.body.caveats?.join(" ")).toMatch(/1,000-listing cap/);
+    truncatedLayers = [];
+    failHosts = ["geopub.epa.gov"];
+    const down = await get("op=contaminants&bbox=-95.3,29.7,-95.15,29.8");
+    expect(down.status).toBe(200);
+    expect(down.body.coverage.every((c) => c.state === "error")).toBe(true);
+    expect(down.body.caveats?.join(" ")).toMatch(/missing from this answer, not absent/);
   });
 });

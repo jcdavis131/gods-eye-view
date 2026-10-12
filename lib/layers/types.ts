@@ -68,6 +68,7 @@ export type LayerId =
   | "permits"
   | "licences"
   | "envpermits"
+  | "contaminants"
   | "sports"
   | "constructs"
   | "field"
@@ -134,6 +135,7 @@ export const LAYER_IDS: LayerId[] = [
   "permits",
   "licences",
   "envpermits",
+  "contaminants",
   "sports",
   "constructs",
   "field",

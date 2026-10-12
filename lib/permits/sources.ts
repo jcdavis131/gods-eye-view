@@ -8,6 +8,8 @@
 //                     then its rows; the rows are cached, never the id) and the
 //                     Corps' ORM actions in a box (the search pads its answer
 //                     with actions from elsewhere; only the box's are kept); 6 h
+//   contaminants      EPA EMEF Superfund (SEMS), TRI, RCRA and Brownfields listings in
+//                     a box, 1,000 per program at most; 6 h
 //
 // Every request goes through lib/civic/request.ts (a gate per host, ten
 // minutes off after a 429 or a 503). A city that fails is named in
@@ -47,6 +49,8 @@ import {
   type EnvProgram,
   type EnvRecord,
 } from "./environmental";
+import { buildContaminants, EMEF, EMEF_LAYERS, EMEF_MAX, emefParams } from "./contaminants";
+import type { LayerFeature } from "@/lib/layers/types";
 
 const MIN = 60_000;
 const iso = (ageMs: number) => new Date(Date.now() - ageMs).toISOString();
@@ -295,3 +299,64 @@ export async function environmental(b: Bbox): Promise<EnvAnswer> {
 }
 
 export type { PermitCityId };
+
+// ------------------------------------------------------------------ contaminated sites (EPA EMEF)
+
+export interface ContaminantsAnswer {
+  features: LayerFeature[];
+  coverage: CoverageEntry[];
+  provenance: Provenance[];
+  age: number;
+}
+
+/**
+ * EPA's Superfund, TRI, RCRA and Brownfields listings in a box: one EMEF layer query each,
+ * in parallel, each cached six hours. A layer that fails is named in `coverage` as "error";
+ * one that hit EMEF_MAX is "partial".
+ */
+export async function contaminants(b: Bbox): Promise<ContaminantsAnswer> {
+  const results = await Promise.all(
+    EMEF_LAYERS.map(async (l) => {
+      try {
+        const r = await cached(`emef:${l.id}:${b.join(",")}`, 6 * 60 * MIN, async () => {
+          const rows = await runRows("epa-emef", { kind: "arcgis", layer: `${EMEF}/${l.layer}`, params: emefParams(b) }, 25_000);
+          return { features: buildContaminants(l.id, rows.features), capped: rows.truncated || rows.features.length >= EMEF_MAX };
+        });
+        return { l, ok: true as const, ...r.value, age: r.age };
+      } catch (err) {
+        return { l, ok: false as const, error: errorText(err) };
+      }
+    }),
+  );
+  const features: LayerFeature[] = [];
+  const coverage: CoverageEntry[] = [];
+  const prov: Provenance[] = [];
+  let age = 0;
+  for (const r of results) {
+    const name = `EPA ${r.l.short}`;
+    if (!r.ok) {
+      coverage.push({ id: r.l.id, name, state: "error", count: 0, reason: r.error });
+      continue;
+    }
+    features.push(...r.features);
+    age = Math.max(age, r.age);
+    coverage.push({
+      id: r.l.id,
+      name,
+      state: r.capped ? "partial" : "covered",
+      count: r.features.length,
+      reason: r.capped ? `the first ${EMEF_MAX.toLocaleString("en-US")} of more in this box` : undefined,
+      cadence: "as EPA's program systems update Envirofacts",
+    });
+    prov.push(
+      provenance(source("epa-emef"), {
+        kind: "published",
+        seriesId: `EMEF efpoints MapServer layer ${r.l.layer} (${r.l.service})`,
+        upstreamUrl: `${EMEF}/${r.l.layer}`,
+        retrievedAt: iso(r.age),
+        notes: [`${r.features.length} in the box${r.capped ? ` (capped at ${EMEF_MAX})` : ""}`],
+      }),
+    );
+  }
+  return { features, coverage, provenance: prov, age };
+}

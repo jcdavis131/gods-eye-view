@@ -34,7 +34,7 @@ const US: Bbox[] = [
   [-67.5, 17.5, -65, 18.6],
 ];
 
-function inUs(b: Bbox): boolean {
+export function inUs(b: Bbox): boolean {
   return US.some((u) => b[0] < u[2] && b[2] > u[0] && b[1] < u[3] && b[3] > u[1]);
 }
 

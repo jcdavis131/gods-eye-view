@@ -163,7 +163,7 @@ export default function InfoPanel() {
   const details = Object.entries(p.details ?? {}).filter(([, v]) => v != null && v !== "" && v !== false);
   const isLiveLayer =
     !p.simulated &&
-    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "employers", "banks", "spending", "constructs", "field", "flood", "wetlands", "publiclands", "relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "transmission", "pipelines", "plants", "rail", "airports", "dams", "faults", "landslides", "geology", "plss", "parcels", "zoning", "permits", "licences", "envpermits", "historic", "crithab"].includes(p.layer);
+    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "employers", "banks", "spending", "constructs", "field", "flood", "wetlands", "publiclands", "relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "transmission", "pipelines", "plants", "rail", "airports", "dams", "faults", "landslides", "geology", "plss", "parcels", "zoning", "permits", "licences", "envpermits", "historic", "crithab", "contaminants"].includes(p.layer);
   const banner = BANNER[p.layer];
   const iss = p.layer === "satellites" && p.id === "25544";
   const construct = p.layer === "constructs" || p.layer === "field" || p.layer === "alerts";
@@ -351,6 +351,7 @@ const BANNER: Partial<Record<string, string>> = {
   envpermits: "AS EPA ECHO OR THE CORPS PUBLISHES IT · COMPLIANCE IN ECHO'S OWN WORDS",
   historic: "NATIONAL REGISTER LISTING AS NPS PUBLISHES IT · RESTRICTED ARCHAEOLOGICAL SITES ARE WITHHELD AND NOT SHOWN · NOT A SECTION 106 REVIEW",
   crithab: "REGULATORY DESIGNATION · NOT SPECIES RANGE OR OCCURRENCE · FWS GIS IS NOT THE LEGAL BOUNDARY",
+  contaminants: "AN EPA PROGRAM LISTING · A REGULATORY STATUS, NOT A FINDING OF CONTAMINATION AT THIS POINT",
 };
 
 /**
