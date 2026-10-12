@@ -342,6 +342,97 @@ export function nwiImagerySummary(sources: NwiSource[]): { years: number[]; proj
   return { years, projects };
 }
 
+// ---------------------------------------------------------------- NPS National Register
+
+/**
+ * The fields the route asks NPS's nrhp_locations layers for. Address, Vicinity and every
+ * bookkeeping field stay at the source: no street address is ever requested.
+ */
+export const NRHP_FIELDS = ["OBJECTID", "NRIS_Refnum", "RESNAME", "ResType", "City", "County", "State", "Is_NHL", "CertDate", "NARA_URL"] as const;
+
+/** What NPS publishes, and what it withholds (route caveat, InfoPanel banner, README). */
+export const NRHP_CAVEAT =
+  "Only National Register properties that NPS publishes as non-restricted (NPS describes the service as \"all public, NON-SENSITIVE OR RESTRICTED historic properties\"). Archaeological sites whose locations are withheld under NHPA section 304 / ARPA are not in this source and are not shown. Absence on the map does not mean no resource is present. This is not a substitute for Section 106 consultation or a SHPO file search.";
+
+export interface HistoricExtra {
+  /** NRIS reference number, NPS's id for the listing. */
+  refnum?: string;
+  /** building, structure, district, site or object, as NPS types it. */
+  resType?: string;
+  /** NPS flags National Historic Landmarks with "X"; anything else is not flagged. */
+  nhl: boolean;
+  /** Listing (certification) date as far as NPS publishes it: "2007-10" or "2007-10-15". */
+  listed?: string;
+  shape: "point" | "boundary";
+}
+
+/**
+ * NPS's CertDate, leniently: it is usually "YYYY-MM-" (no day). "2007-10-" is 2007-10,
+ * "2007-10-15" stays a day, "2007" a year; a blank or anything else is no date, never a guess.
+ */
+export function parseCertDate(v: unknown): string | undefined {
+  const s = str(v);
+  if (!s) return undefined;
+  const m = s.match(/^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?-?$/);
+  if (!m) return undefined;
+  const y = Number(m[1]);
+  if (y < 1966 || y > 2100) return undefined;
+  if (m[2] && (Number(m[2]) < 1 || Number(m[2]) > 12)) return undefined;
+  if (m[3] && (Number(m[3]) < 1 || Number(m[3]) > 31)) return undefined;
+  return [m[1], m[2], m[3]].filter(Boolean).join("-");
+}
+
+/**
+ * National Register listings as NPS publishes them: points (layer 0) or boundaries
+ * (layer 1). The feature is named by its NRIS number and type, so the search palette
+ * (which matches names) never goes from a person's name to a place: a property's name
+ * can be one ("Milam, Ben, Statue") and is shown in the dossier only.
+ */
+export function buildHistoric(
+  rows: Array<{ id?: number | string; geometry: GeoJSON.Geometry | null; properties: Record<string, unknown> | null }>,
+  shape: HistoricExtra["shape"],
+): LayerFeature[] {
+  const out: LayerFeature[] = [];
+  rows.forEach((r, i) => {
+    const g = r.geometry;
+    if (!g) return;
+    if (shape === "point" ? g.type !== "Point" : !isPoly(g)) return;
+    const p = r.properties ?? {};
+    const refnum = str(p.NRIS_Refnum);
+    const resType = str(p.ResType)?.toLowerCase();
+    const x: HistoricExtra = { refnum, resType, nhl: str(p.Is_NHL)?.toUpperCase() === "X", listed: parseCertDate(p.CertDate), shape };
+    const oid = str(p.OBJECTID) ?? str(r.id) ?? `${refnum ?? "nrhp"}:${i}`;
+    const nara = str(p.NARA_URL);
+    out.push({
+      type: "Feature",
+      geometry: g,
+      properties: {
+        id: `nrhp:${shape === "point" ? "pt" : "bnd"}:${oid}`,
+        layer: "historic",
+        name: `NRHP ${refnum ?? "listing"}${resType ? ` · ${resType}` : ""}${x.nhl ? " · NHL" : ""}`,
+        kind: resType ?? "property",
+        source: "NPS National Register",
+        details: {
+          "property name (as NPS lists it)": str(p.RESNAME),
+          "resource type": resType,
+          "national historic landmark": x.nhl ? "yes (NPS flags it as an NHL)" : undefined,
+          listed: x.listed,
+          city: str(p.City),
+          county: str(p.County),
+          state: str(p.State),
+          "nris refnum": refnum,
+          "nomination (National Archives)": nara && /^https:\/\//.test(nara) ? nara : undefined,
+          drawn: shape === "point" ? "NPS's point for the listing" : "NPS's boundary for the listing",
+          "what this is": "a property listed on the National Register of Historic Places, as NPS's public spatial data shows it",
+          "not shown": "archaeological sites whose locations are restricted under NHPA section 304 / ARPA; absence here is not absence on the ground",
+        },
+        extra: x,
+      },
+    });
+  });
+  return out;
+}
+
 // ---------------------------------------------------------------- USGS PAD-US
 
 export type Access = "open" | "restricted" | "closed" | "unknown";

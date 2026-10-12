@@ -2,20 +2,26 @@ import { describe, expect, it } from "vitest";
 import type { MultiPolygon, Polygon } from "geojson";
 import nwiWetlands from "./fixtures/nwi-wetlands-mitchell.json";
 import nwiCodeRows from "./fixtures/nwi-codes-mitchell.json";
+import nrhpPoints from "./fixtures/nrhp-points-dc.json";
+import nrhpBoundaries from "./fixtures/nrhp-polygons-dc.json";
 import {
   buildFloodZones,
+  buildHistoric,
   buildPublicLands,
   buildWetlands,
   floodZoneMeaning,
+  NRHP_FIELDS,
   NWI_CAVEAT,
   nwiCodesIn,
   nwiImagerySummary,
+  parseCertDate,
   parseEpqs,
   parseNwiCodes,
   parseNwiSources,
   pointInRing,
   trimParts,
   type FloodZoneExtra,
+  type HistoricExtra,
   type PublicLandExtra,
   type WetlandExtra,
 } from "./features";
@@ -129,6 +135,58 @@ describe("wetlands and their imagery year", () => {
     const ring = [[0, 0], [2, 0], [2, 2], [0, 2], [0, 0]];
     expect(pointInRing(1, 1, ring)).toBe(true);
     expect(pointInRing(3, 1, ring)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------- NPS National Register
+
+describe("National Register listings (captured from NPS around the National Mall, 2026-10-12)", () => {
+  const pts = buildHistoric(nrhpPoints.features as unknown as Parameters<typeof buildHistoric>[0], "point");
+  const bnd = buildHistoric(nrhpBoundaries.features as unknown as Parameters<typeof buildHistoric>[0], "boundary");
+
+  it("names a listing by its NRIS number and type, the property's name in the dossier only", () => {
+    expect(pts).toHaveLength(60);
+    const urn = pts.find((f) => (f.properties.extra as HistoricExtra).refnum === "07001053")!;
+    expect(urn.properties.name).toBe("NRHP 07001053 · object");
+    expect(urn.properties.details?.["property name (as NPS lists it)"]).toBe("Cuban Friendship Urn");
+    expect(urn.properties.details?.listed).toBe("2007-10");
+    expect(urn.properties.details?.["nomination (National Archives)"]).toBe("https://catalog.archives.gov/id/117691539");
+    expect(urn.properties.extra).toMatchObject({ resType: "object", nhl: false, shape: "point" });
+  });
+
+  it("marks National Historic Landmarks only where NPS flags them", () => {
+    const nhl = pts.filter((f) => (f.properties.extra as HistoricExtra).nhl);
+    expect(nhl).toHaveLength(13);
+    expect(nhl[0].properties.name).toMatch(/· NHL$/);
+    expect(pts.find((f) => !(f.properties.extra as HistoricExtra).nhl)!.properties.details?.["national historic landmark"]).toBeUndefined();
+  });
+
+  it("draws boundaries from layer 1 and never carries an address", () => {
+    expect(bnd).toHaveLength(18);
+    expect(bnd.every((f) => f.geometry.type === "Polygon" || f.geometry.type === "MultiPolygon")).toBe(true);
+    expect(bnd[0].properties.id).toMatch(/^nrhp:bnd:/);
+    for (const f of [...pts, ...bnd]) expect(Object.keys(f.properties.details ?? {}).join(" ")).not.toMatch(/address/i);
+    expect(NRHP_FIELDS as readonly string[]).not.toContain("Address");
+    expect(NRHP_FIELDS as readonly string[]).not.toContain("Vicinity");
+  });
+
+  it("drops a NARA link NPS left blank rather than linking nowhere", () => {
+    const blank = bnd.find((f) => (f.properties.extra as HistoricExtra).refnum === "15000845")!;
+    expect(blank.properties.details?.["nomination (National Archives)"]).toBeUndefined();
+  });
+
+  it("reads NPS's partial CertDate leniently and never guesses", () => {
+    expect(parseCertDate("2007-10-")).toBe("2007-10");
+    expect(parseCertDate("2007-10-15")).toBe("2007-10-15");
+    expect(parseCertDate("1974")).toBe("1974");
+    expect(parseCertDate("")).toBeUndefined();
+    expect(parseCertDate(null)).toBeUndefined();
+    expect(parseCertDate("unknown")).toBeUndefined();
+    expect(parseCertDate("2007-13-")).toBeUndefined();
+    expect(parseCertDate("0000-00-")).toBeUndefined();
+    // A blank CertDate in the capture stays blank.
+    const undated = pts.filter((f) => (f.properties.extra as HistoricExtra).listed === undefined);
+    expect(undated.length).toBeGreaterThan(0);
   });
 });
 

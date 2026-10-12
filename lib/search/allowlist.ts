@@ -72,6 +72,9 @@ export const SEARCHABLE_DETAILS: ReadonlySet<string> = new Set([
   "licence number",
   "licence type",
   "permit id",
+  // historic places: NPS's NRIS reference number. Never the property's name (it can be
+  // a person's: "Milam, Ben, Statue"); the feature is named by its number instead
+  "nris refnum",
   // companies, banks, constructs: identifiers and categories their publishers assign
   "ticker",
   "cik",

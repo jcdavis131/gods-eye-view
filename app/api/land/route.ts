@@ -15,6 +15,13 @@
 //                                          year of the imagery each was mapped from (NWI
 //                                          Data_Source). Same box rules; NWI answers at most
 //                                          500 polygons a query.
+//   /api/land?op=historic&bbox=w,s,e,n[&polygons=1]
+//                                          National Register of Historic Places listings NPS
+//                                          publishes as non-restricted: points, and with
+//                                          polygons=1 boundaries too. Box at most 0.12
+//                                          degrees, snapped to 0.02; 2,000 per layer at most.
+//                                          Never an address; archaeological sites withheld
+//                                          under NHPA s.304 / ARPA are not in the source.
 //   /api/land?op=publiclands&bbox=w,s,e,n  USGS PAD-US 4.1 fee, easement, designation and
 //                                          proclamation areas with manager, owner agency,
 //                                          local owner, easement holder, public access and
@@ -38,8 +45,11 @@ import { provenance, type Provenance } from "@/lib/provenance/types";
 import { source } from "@/lib/provenance/sources";
 import {
   buildFloodZones,
+  buildHistoric,
   buildPublicLands,
   buildWetlands,
+  NRHP_CAVEAT,
+  NRHP_FIELDS,
   NWI_CAVEAT,
   nwiCodesIn,
   nwiImagerySummary,
@@ -76,6 +86,10 @@ const NWI_SOURCE = "https://fwspublicservices.wim.usgs.gov/wetlandsmapservice/re
 /** NWI's layer 0 answers at most this many polygons a query (maxRecordCount, 2026-10-12). */
 const NWI_MAX_RECORDS = 500;
 const PADUS = "https://services.arcgis.com/v01gqwM5QqNysAAi/arcgis/rest/services/Manager_Name_PADUS/FeatureServer/0";
+/** NPS National Register spatial data: layer 0 points, layer 1 boundaries (public, non-restricted listings only). */
+const NRHP = "https://mapservices.nps.gov/arcgis/rest/services/cultural_resources/nrhp_locations/MapServer";
+/** Listings asked for per layer and box; past it the answer says so. */
+const NRHP_MAX = 2000;
 const EPQS = "https://epqs.nationalmap.gov/v1/json";
 
 const DAY = 24 * 3600_000;
@@ -299,6 +313,72 @@ async function opWetlands(bbox: Bbox): Promise<OpResult> {
   };
 }
 
+function nrhpQuery(layer: 0 | 1, bbox: Bbox) {
+  return arcgisQuery(
+    "nps-nrhp",
+    `${NRHP}/${layer}`,
+    {
+      // Removed listings (648) and those with no status (60) are left out.
+      where: "STATUS='Listed'",
+      ...envelope(bbox),
+      outFields: NRHP_FIELDS.join(","),
+      returnGeometry: "true",
+      ...(layer === 1 ? { maxAllowableOffset: "0.00004", geometryPrecision: "6" } : {}),
+      resultRecordCount: String(NRHP_MAX),
+    },
+    { gate: "nps-nrhp", minIntervalMs: 300, timeoutMs: 25_000, tries: 2 },
+  );
+}
+
+/**
+ * National Register listings in a box: NPS's points, and with `boundaries` its polygons
+ * too (the layer asks for them only below 10 km). A boundary query that fails leaves the
+ * points standing and says the boundaries are missing.
+ */
+async function opHistoric(bbox: Bbox, boundaries: boolean): Promise<OpResult> {
+  const [pts, bnd] = await Promise.all([
+    cached("nrhp-pt:" + bbox.join(","), DAY, async () => {
+      const fc = await nrhpQuery(0, bbox);
+      return { features: buildHistoric(fc.features, "point"), truncated: truncated(fc) || fc.features.length >= NRHP_MAX };
+    }, LAND_DEADLINE),
+    boundaries
+      ? cached("nrhp-bnd:" + bbox.join(","), DAY, async () => {
+          const fc = await nrhpQuery(1, bbox);
+          return { features: buildHistoric(fc.features, "boundary"), truncated: truncated(fc) || fc.features.length >= NRHP_MAX };
+        }, LAND_DEADLINE).catch(() => null)
+      : Promise.resolve(null),
+  ]);
+  const retrievedAt = fetchedAt(pts.age);
+  const prov = [
+    provenance(source("nps-nrhp"), { kind: "published", seriesId: "nrhp_locations MapServer layer 0 (points), STATUS='Listed'", upstreamUrl: `${NRHP}/0`, retrievedAt, notes: [`bbox ${bbox.join(",")}`] }),
+  ];
+  if (bnd) prov.push(provenance(source("nps-nrhp"), { kind: "published", seriesId: "nrhp_locations MapServer layer 1 (boundaries), STATUS='Listed'", upstreamUrl: `${NRHP}/1`, retrievedAt: fetchedAt(bnd.age), notes: [`bbox ${bbox.join(",")}`] }));
+  const caveats = [
+    NRHP_CAVEAT,
+    "Property names are shown as NPS lists them and can include a person's name; they are not searchable. No street address is requested.",
+    BOX_CAVEAT,
+  ];
+  if (pts.value.truncated) caveats.push(`NPS's points were capped at the first ${NRHP_MAX.toLocaleString("en-US")} in this box; ask for a smaller box for every listing.`);
+  if (bnd?.value.truncated) caveats.push(`NPS's boundaries were capped at the first ${NRHP_MAX.toLocaleString("en-US")} in this box.`);
+  if (boundaries && !bnd) caveats.push("NPS's boundary layer did not answer this time; the points are shown, the boundaries are missing (boundaries: null).");
+  return {
+    data: { type: "FeatureCollection", features: [...pts.value.features, ...(bnd?.value.features ?? [])] },
+    meta: {
+      source: "National Park Service, National Register of Historic Places spatial data (public, non-restricted listings)",
+      bbox,
+      points: pts.value.features.length,
+      // null when boundaries were asked for and NPS did not answer; absent when not asked for.
+      ...(boundaries ? { boundaries: bnd ? bnd.value.features.length : null } : {}),
+      truncated: pts.value.truncated || !!bnd?.value.truncated,
+      maxRecords: NRHP_MAX,
+      cacheAge: pts.age,
+    },
+    ttlS: boundaries && !bnd ? 600 : 3600,
+    provenance: prov,
+    caveats,
+  };
+}
+
 let padusDomains: Promise<Map<string, Map<string, string>>> | null = null;
 function padusLookup(): Promise<Map<string, Map<string, string>>> {
   if (!padusDomains) {
@@ -487,6 +567,11 @@ export async function GET(req: NextRequest) {
         if (!b) return badRequest(BBOX_HELP);
         return respond(await opWetlands(b));
       }
+      case "historic": {
+        const b = parseBbox(q.get("bbox"), 0.12, 0.02);
+        if (!b) return badRequest(BBOX_HELP);
+        return respond(await opHistoric(b, q.get("polygons") === "1"));
+      }
       case "publiclands": {
         const b = parseBbox(q.get("bbox"), 2, 0.25);
         if (!b) return badRequest(BBOX_HELP);
@@ -499,7 +584,7 @@ export async function GET(req: NextRequest) {
         return respond(await opElevation(lon, lat));
       }
       default:
-        return badRequest("unknown op: flood | wetlands | publiclands | elevation");
+        return badRequest("unknown op: flood | wetlands | historic | publiclands | elevation");
     }
   } catch (err) {
     return withCors(jsonError(err));

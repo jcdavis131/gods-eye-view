@@ -44,6 +44,7 @@ export const SOURCES = {
   gdacs: { id: "gdacs", name: "Global Disaster Alert and Coordination System", publisher: "European Commission Joint Research Centre", url: "https://www.gdacs.org/", license: "CC BY 4.0 (European Union), credit to GDACS" },
   "nasa-eonet": { id: "nasa-eonet", name: "Earth Observatory Natural Event Tracker (EONET) v3", publisher: "NASA", url: "https://eonet.gsfc.nasa.gov/", license: "NASA open data" },
   "usfws-nwi": { id: "usfws-nwi", name: "National Wetlands Inventory", publisher: "U.S. Fish and Wildlife Service", url: "https://www.fws.gov/program/national-wetlands-inventory", license: "public domain" },
+  "nps-nrhp": { id: "nps-nrhp", name: "National Register of Historic Places spatial data (public, non-restricted listings; nrhp_locations MapServer)", publisher: "National Park Service, Cultural Resources GIS", url: "https://mapservices.nps.gov/arcgis/rest/services/cultural_resources/nrhp_locations/MapServer", license: "US federal (public domain); general reference only, not Section 106 compliance; NPS publishes only non-sensitive, non-restricted listings" },
   "usgs-padus": { id: "usgs-padus", name: "Protected Areas Database of the United States (PAD-US) 4.1", publisher: "U.S. Geological Survey Gap Analysis Project", url: "https://doi.org/10.5066/P96WBCHS", license: "public domain" },
   // Infrastructure, geohazards, cameras, air quality and events (/api/infra, /api/cameras, /api/air, /api/events).
   // Licence strings are what each publisher states; terms read 2026-09-26 (README, "Data sources and attribution").

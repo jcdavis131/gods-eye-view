@@ -96,3 +96,11 @@ describe("voice words for the infrastructure and geohazard layers", () => {
     expect(resolveLayer("dams")).toBe("dams");
   });
 });
+
+describe("voice words for the heritage, species, contamination and imagery layers", () => {
+  it("hears historic places by their plain names", () => {
+    expect(layerOf("show historic places over washington")).toMatchObject({ layer: "historic", place: "washington" });
+    expect(layerOf("show the national register")).toMatchObject({ layer: "historic" });
+    expect(layerOf("hide landmarks")).toMatchObject({ layer: "historic", on: false });
+  });
+});

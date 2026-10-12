@@ -7,6 +7,8 @@ import { NextRequest } from "next/server";
 import nwiWetlands from "@/lib/land/fixtures/nwi-wetlands-mitchell.json";
 import nwiCodes from "@/lib/land/fixtures/nwi-codes-mitchell.json";
 import nwiSource from "@/lib/land/fixtures/nwi-source-mitchell.json";
+import nrhpPoints from "@/lib/land/fixtures/nrhp-points-dc.json";
+import nrhpBoundaries from "@/lib/land/fixtures/nrhp-polygons-dc.json";
 
 vi.mock("@/lib/server/cache", () => ({
   cached: async <T,>(_k: string, _ttl: number, produce: () => Promise<T>) => ({ value: await produce(), age: 0, hit: false }),
@@ -74,5 +76,64 @@ describe("op=wetlands", () => {
     expect(body.data.features[0].properties.extra?.system).toBeUndefined();
     expect(body.codesDecoded).toBe(false);
     expect(body.caveats?.join(" ")).toMatch(/code table did not answer/);
+  });
+});
+
+describe("op=historic", () => {
+  const nps = (u: string) => {
+    if (u.includes("/nrhp_locations/MapServer/0/query")) return json(nrhpPoints);
+    if (u.includes("/nrhp_locations/MapServer/1/query")) return json(nrhpBoundaries);
+    return null;
+  };
+
+  it("asks NPS for listed properties only, by named fields, never the address", async () => {
+    answer = nps;
+    const { status, body } = await get("op=historic&bbox=-77.04,38.88,-77.02,38.90");
+    expect(status).toBe(200);
+    expect(calls).toHaveLength(1);
+    const q = calls[0];
+    expect(param(q, "where")).toBe("STATUS='Listed'");
+    const fields = param(q, "outFields")!.split(",");
+    expect(fields).toEqual(["OBJECTID", "NRIS_Refnum", "RESNAME", "ResType", "City", "County", "State", "Is_NHL", "CertDate", "NARA_URL"]);
+    expect(fields).not.toContain("Address");
+    expect(fields).not.toContain("*");
+    expect(param(q, "resultRecordCount")).toBe("2000");
+    expect(body.data.features).toHaveLength(60);
+    expect(body.points).toBe(60);
+    expect(body.boundaries).toBeUndefined();
+    expect(body.caveats?.join(" ")).toMatch(/NHPA section 304 \/ ARPA/);
+    expect(body.caveats?.join(" ")).toMatch(/not a substitute for Section 106/);
+  });
+
+  it("adds the boundaries with polygons=1, and keeps the points when the boundary layer fails", async () => {
+    answer = nps;
+    const both = await get("op=historic&bbox=-77.04,38.88,-77.02,38.90&polygons=1");
+    expect(both.body.data.features).toHaveLength(78);
+    expect(both.body.boundaries).toBe(18);
+    const q1 = calls.find((u) => u.includes("/MapServer/1/query"))!;
+    expect(param(q1, "outFields")).not.toContain("Address");
+    expect(param(q1, "where")).toBe("STATUS='Listed'");
+
+    answer = (u) => (u.includes("/MapServer/1/query") ? new Response("down", { status: 503 }) : nps(u));
+    const half = await get("op=historic&bbox=-77.04,38.88,-77.02,38.90&polygons=1");
+    expect(half.status).toBe(200);
+    expect(half.body.data.features).toHaveLength(60);
+    expect(half.body.boundaries).toBeNull();
+    expect(half.body.caveats?.join(" ")).toMatch(/boundary layer did not answer/);
+  });
+
+  it("clamps the box to 0.12 degrees on a 0.02 grid and refuses a bad one without asking NPS", async () => {
+    answer = nps;
+    const { body } = await get("op=historic&bbox=-77.5,38.5,-76.5,39.5");
+    const [w, s, e, n] = body.bbox as number[];
+    expect(e - w).toBeLessThanOrEqual(0.12 + 0.02 + 1e-9);
+    expect(n - s).toBeLessThanOrEqual(0.12 + 0.02 + 1e-9);
+    for (const v of [w, s, e, n]) expect(Math.abs(v / 0.02 - Math.round(v / 0.02))).toBeLessThan(1e-6);
+    expect(w).toBeLessThanOrEqual(-77.06);
+    expect(e).toBeGreaterThanOrEqual(-76.94);
+    calls.length = 0;
+    const bad = await get("op=historic&bbox=1,2,3");
+    expect(bad.status).toBe(400);
+    expect(calls).toEqual([]);
   });
 });

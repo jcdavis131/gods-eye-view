@@ -163,7 +163,7 @@ export default function InfoPanel() {
   const details = Object.entries(p.details ?? {}).filter(([, v]) => v != null && v !== "" && v !== false);
   const isLiveLayer =
     !p.simulated &&
-    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "employers", "banks", "spending", "constructs", "field", "flood", "wetlands", "publiclands", "relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "transmission", "pipelines", "plants", "rail", "airports", "dams", "faults", "landslides", "geology", "plss", "parcels", "zoning", "permits", "licences", "envpermits"].includes(p.layer);
+    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "employers", "banks", "spending", "constructs", "field", "flood", "wetlands", "publiclands", "relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "transmission", "pipelines", "plants", "rail", "airports", "dams", "faults", "landslides", "geology", "plss", "parcels", "zoning", "permits", "licences", "envpermits", "historic"].includes(p.layer);
   const banner = BANNER[p.layer];
   const iss = p.layer === "satellites" && p.id === "25544";
   const construct = p.layer === "constructs" || p.layer === "field" || p.layer === "alerts";
@@ -349,6 +349,7 @@ const BANNER: Partial<Record<string, string>> = {
   permits: "A PERMIT AS THE CITY PUBLISHES IT · PERMISSION TO BUILD, NOT PROOF WORK HAPPENED",
   licences: "AS THE REGISTRY PUBLISHES IT · BY TRADE NAME, NOT A SOLE PROPRIETOR'S OWN NAME · APARTMENT AND UNIT ADDRESSES WITHHELD",
   envpermits: "AS EPA ECHO OR THE CORPS PUBLISHES IT · COMPLIANCE IN ECHO'S OWN WORDS",
+  historic: "NATIONAL REGISTER LISTING AS NPS PUBLISHES IT · RESTRICTED ARCHAEOLOGICAL SITES ARE WITHHELD AND NOT SHOWN · NOT A SECTION 106 REVIEW",
 };
 
 /**

@@ -193,6 +193,13 @@ const LAYER_ALIASES: Record<string, LayerId> = {
   "sea level rise": "sealevel",
   "sea-level rise": "sealevel",
   "sea level": "sealevel",
+  "historic places": "historic",
+  "historic place": "historic",
+  "historic sites": "historic",
+  "national register": "historic",
+  "historic landmarks": "historic",
+  landmarks: "historic",
+  historic: "historic",
   // Infrastructure and geohazards. "planes" stays with aircraft and "reservoirs" with surface water.
   "transmission lines": "transmission",
   transmission: "transmission",
