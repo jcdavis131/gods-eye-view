@@ -7,6 +7,7 @@ import { NextRequest } from "next/server";
 import whpNw from "@/lib/terrain/fixtures/whp-identify-nw.json";
 import nlcdDt from "@/lib/terrain/fixtures/nlcd-gfi-dt.json";
 import slopeNw from "@/lib/terrain/fixtures/slope-identify-nw.json";
+import waybackConfig from "@/lib/terrain/fixtures/wayback-config-trimmed.json";
 
 vi.mock("@/lib/server/cache", () => ({
   cached: async <T,>(_k: string, _ttl: number, produce: () => Promise<T>) => ({ value: await produce(), age: 0, hit: false }),
@@ -109,5 +110,22 @@ describe("op=products", () => {
     const ids = j.data.products.map((p) => `${p.id}:${p.delivery}`);
     expect(ids).toEqual(expect.arrayContaining(["slope:route", "contours:route", "landcover:route", "floodmap:route", "relief:direct", "soils:direct", "firehazard:direct", "sealevel:direct", "terrain:direct"]));
     expect(j.data.terrainAttribution.length).toBeGreaterThan(5);
+  });
+});
+
+describe("op=wayback", () => {
+  it("answers Esri's release index newest first, and never a tile", async () => {
+    answer = (url) => (url.startsWith("https://s3-us-west-2.amazonaws.com/config.maptiles.arcgis.com/waybackconfig.json") ? new Response(JSON.stringify(waybackConfig), { status: 200, headers: { "content-type": "application/json" } }) : new Response("unexpected", { status: 500 }));
+    const res = await GET(req("op=wayback"));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { releases: Array<{ release: number; date: string }>; newest: { date: string }; oldest: { date: string }; tiles: string }; caveats: string[] };
+    expect(calls).toHaveLength(1);
+    expect(body.data.releases.map((r) => r.release)).toEqual([63116, 26334, 23001, 4230, 10]);
+    expect(body.data.newest.date).toBe("2026-09-24");
+    expect(body.data.oldest.date).toBe("2014-02-20");
+    expect(body.data.tiles).toContain("wayback.maptiles.arcgis.com");
+    expect(body.data.tiles).toContain("/tile/{release}/{z}/{y}/{x}");
+    expect(body.caveats.join(" ")).toMatch(/not a capture date/);
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
   });
 });

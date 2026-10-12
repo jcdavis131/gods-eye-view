@@ -120,3 +120,11 @@ describe("voice words for contaminated sites", () => {
     expect(layerOf("show hazards")).toMatchObject({ layer: "hazards" });
   });
 });
+
+describe("voice words for historic imagery", () => {
+  it("hears historic imagery before historic places", () => {
+    expect(layerOf("show historic imagery")).toMatchObject({ layer: "wayback" });
+    expect(layerOf("show wayback over austin")).toMatchObject({ layer: "wayback", place: "austin" });
+    expect(layerOf("show historic places")).toMatchObject({ layer: "historic" });
+  });
+});

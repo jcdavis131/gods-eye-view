@@ -155,7 +155,7 @@ export function routeTileUrl(product: RenderProductId, z: number | string, x: nu
 // ---------------------------------------------------------------- direct sources
 
 export interface DirectSource {
-  id: "relief" | "soils" | "firehazard" | "sealevel" | "terrain" | "geology" | "wetlands" | "crithab";
+  id: "relief" | "soils" | "firehazard" | "sealevel" | "terrain" | "geology" | "wetlands" | "crithab" | "wayback";
   title: string;
   source: SourceId;
   /** Host the browser fetches from (CSP img-src / connect-src must allow it). */
@@ -237,6 +237,15 @@ export const DIRECT_SOURCES: DirectSource[] = [
     template: CRITHAB_TILES.final,
     maxZoom: CRITHAB_MAX_ZOOM,
     note: "Two caches in FWS's own symbology, to level 14; a 404 is no tile there. The click answer comes from FWS's FeatureServer through /api/land?op=crithab.",
+  },
+  {
+    id: "wayback",
+    title: "Esri World Imagery Wayback (one tile set per release since 2014-02-20)",
+    source: "esri-wayback",
+    host: "wayback.maptiles.arcgis.com",
+    template: "https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/{release}/{z}/{y}/{x}",
+    maxZoom: 19,
+    note: "The browser loads tiles from Esri directly (CORS *, including on the 301 Esri sends to the release where a tile last changed); the release index comes from /api/terrain?op=wayback. Never proxied or cached here.",
   },
 ];
 

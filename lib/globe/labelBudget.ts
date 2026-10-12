@@ -173,5 +173,6 @@ export const LAYER_LABEL_PRIORITY: Record<string, number> = {
   landcover: 2,
   sealevel: 2,
   crithab: 2,
+  wayback: 2,
   geology: 2,
 };

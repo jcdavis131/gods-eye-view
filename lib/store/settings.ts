@@ -132,6 +132,8 @@ export interface Prefs {
   terrainExaggeration: number;
   /** Sea level rise scenario the Sea level rise layer draws, whole feet above MHHW (1 to 10). */
   seaLevelFt: number;
+  /** Esri World Imagery Wayback release the Historic imagery layer draws; null = the newest. */
+  waybackRelease: number | null;
   /** The viewer's opacity for each picture layer (0..1); absent = the layer's default. */
   tileAlpha: Partial<Record<LayerId, number>>;
   /** CelesTrak GP groups to load. "active" is ~10k objects and opt-in. */
@@ -158,6 +160,7 @@ export const DEFAULT_PREFS: Prefs = {
   terrain: false,
   terrainExaggeration: 1,
   seaLevelFt: 3,
+  waybackRelease: null,
   tileAlpha: {},
   satelliteGroups: ["stations", "visual", "gps-ops", "military", "weather"],
   observer: null,

@@ -2366,8 +2366,8 @@
     },
     "/api/terrain": {
       "get": {
-        "summary": "Slope, 2 ft contour, land cover and FEMA flood-map tiles rendered once and held at the edge; the hazard class, land cover class or slope at a point; the catalog of terrain pictures",
-        "description": "op=tile: one 512 px PNG in Web Mercator (XYZ, y down) of a product no publisher caches as tiles: slope (USGS 3DEP \"Slope Map\", z 8-16), contours (3DEP \"Preset 2ft Contour Interval\", black lines on white, unlabelled, z 13-17), landcover (MRLC NLCD 2021 WMS, z 5-12), floodmap (FEMA NFHL layer 28 export, transparent, z 14-17). The route builds the upstream request from the product and the tile's EPSG:3857 box and never takes a URL; the image is the publisher's own render, cached a day in the server and for weeks at the edge. op=point: firehazard (USFS Wildfire Hazard Potential 2023 class, with the class table from the service's own legend), landcover (NLCD 2021 class, from MRLC's GetFeatureInfo and legend) or slope (3DEP \"Slope Degrees\", whole degrees) at lon, lat; a point with no value answers `class: null` / `degrees: null`, never 0. op=products: every terrain picture the globe draws, direct or rendered here, with its source, zoom range, class tables, caveats and the terrain tiles' required attribution.",
+        "summary": "Slope, 2 ft contour, land cover and FEMA flood-map tiles rendered once and held at the edge; the hazard class, land cover class or slope at a point; the catalog of terrain pictures; Esri's Wayback release index",
+        "description": "op=tile: one 512 px PNG in Web Mercator (XYZ, y down) of a product no publisher caches as tiles: slope (USGS 3DEP \"Slope Map\", z 8-16), contours (3DEP \"Preset 2ft Contour Interval\", black lines on white, unlabelled, z 13-17), landcover (MRLC NLCD 2021 WMS, z 5-12), floodmap (FEMA NFHL layer 28 export, transparent, z 14-17). The route builds the upstream request from the product and the tile's EPSG:3857 box and never takes a URL; the image is the publisher's own render, cached a day in the server and for weeks at the edge. op=point: firehazard (USFS Wildfire Hazard Potential 2023 class, with the class table from the service's own legend), landcover (NLCD 2021 class, from MRLC's GetFeatureInfo and legend) or slope (3DEP \"Slope Degrees\", whole degrees) at lon, lat; a point with no value answers `class: null` / `degrees: null`, never 0. op=products: every terrain picture the globe draws, direct or rendered here, with its source, zoom range, class tables, caveats and the terrain tiles' required attribution. op=wayback: Esri World Imagery Wayback's release index, `releases` [{release, date}] newest first (2014-02-20 onward), parsed from each release's title (an undated entry is dropped, never guessed), held a day; the tile template with {release}; tiles are loaded from Esri by the browser and never proxied or cached here (the item's licence: not for offline tile export). A release date is when Esri published that basemap, not when its pixels were captured.",
         "tags": [
           "terrain"
         ],
@@ -2381,10 +2381,11 @@
               "enum": [
                 "tile",
                 "point",
-                "products"
+                "products",
+                "wayback"
               ]
             },
-            "description": "tile: a rendered PNG tile. point: a class or slope at lon, lat. products: the catalog."
+            "description": "tile: a rendered PNG tile. point: a class or slope at lon, lat. products: the catalog. wayback: Esri World Imagery Wayback's release index."
           },
           {
             "name": "product",
@@ -2474,6 +2475,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/TerrainProductsResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TerrainWaybackResponse"
                     }
                   ]
                 }
@@ -7403,6 +7407,58 @@
           }
         ],
         "x-op": "products"
+      },
+      "TerrainWaybackResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "releases": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/WaybackRelease"
+                    },
+                    "description": "Every dated release Esri lists, newest first."
+                  },
+                  "newest": {
+                    "$ref": "#/components/schemas/WaybackRelease"
+                  },
+                  "oldest": {
+                    "$ref": "#/components/schemas/WaybackRelease"
+                  },
+                  "tiles": {
+                    "type": "string",
+                    "description": "Esri's tile template, with {release}, {z}, {y} and {x}; load it from Esri, not through this API."
+                  }
+                }
+              },
+              "attribution": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "x-op": "wayback"
+      },
+      "WaybackRelease": {
+        "type": "object",
+        "properties": {
+          "release": {
+            "type": "integer",
+            "description": "Esri's release number, the {release} in the tile path."
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "Release (publication) date, not capture date."
+          }
+        }
       },
       "SoilComponent": {
         "type": "object",

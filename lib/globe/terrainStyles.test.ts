@@ -41,3 +41,18 @@ describe("critical habitat", () => {
     expect(specs[1].url).toContain("usfws_critical_habitat_proposed");
   });
 });
+
+describe("historic imagery", () => {
+  it("draws nothing until the release index answered, then the release in the meta, keyed by it", async () => {
+    const { waybackStyle } = await import("./terrainStyles");
+    expect(waybackStyle.tiles?.({})).toBeNull();
+    const a = waybackStyle.tiles?.({ meta: { waybackRelease: 63116, waybackDate: "2026-09-24" } }) ?? [];
+    const b = waybackStyle.tiles?.({ meta: { waybackRelease: 23001, waybackDate: "2020-01-08" } }) ?? [];
+    expect(a[0].key).toBe("wayback:63116");
+    expect(b[0].key).toBe("wayback:23001");
+    expect(a[0].url).toContain("/tile/63116/{z}/{y}/{x}");
+    expect(a[0]).toMatchObject({ maximumLevel: 19, sparse: true });
+    expect(a[0].credit).toContain("Esri, Vantor, Earthstar Geographics, and the GIS User Community");
+    expect(hosts().has(new URL(a[0].url.replace(/\{\w+\}/g, "0")).host)).toBe(true);
+  });
+});

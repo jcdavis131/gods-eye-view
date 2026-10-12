@@ -31,9 +31,11 @@ import {
 } from "@/lib/layers/terrain";
 import { FLOOD_MAX_HEIGHT_M } from "@/lib/layers/flood";
 import { WETLANDS_MAX_HEIGHT_M } from "@/lib/layers/wetlands";
+import { parseReleaseId, WAYBACK_ATTRIBUTION, WAYBACK_MAX_ZOOM, waybackTiles } from "@/lib/terrain/wayback";
 
 /** Stacking among pictures, bottom to top: relief under everything, lines on top. */
 export const TILE_Z = {
+  wayback: 5,
   relief: 10,
   landcover: 20,
   wetlands: 25,
@@ -187,6 +189,30 @@ export const crithabStyle = picture("#22C55E", () => [
     credit: "Critical habitat (proposed): U.S. Fish and Wildlife Service",
   },
 ]);
+
+/**
+ * Esri World Imagery Wayback: the release the layer's fetch resolved (meta.waybackRelease),
+ * straight from Esri, under every other picture. Nothing is drawn until the release index
+ * has answered. Sparse: where a release has no tile Esri answers 404; where a tile did not
+ * change it 301s to the release that last changed it, which the image loader follows.
+ */
+export const waybackStyle = picture("#94A3B8", ({ meta }) => {
+  const release = parseReleaseId(meta?.waybackRelease);
+  if (release == null) return null;
+  const date = typeof meta?.waybackDate === "string" ? meta.waybackDate : "";
+  return [
+    {
+      key: `wayback:${release}`,
+      kind: "xyz",
+      url: waybackTiles(release),
+      maximumLevel: WAYBACK_MAX_ZOOM,
+      sparse: true,
+      alpha: 1,
+      z: TILE_Z.wayback,
+      credit: `World Imagery Wayback${date ? ` (release ${date})` : ""}: ${WAYBACK_ATTRIBUTION}`,
+    },
+  ];
+});
 
 /** FEMA's own map of the flood zones, drawn under the clickable zones of the Flood zones layer. */
 export const FLOOD_PICTURE: TileSpec = routeSpec("floodmap", {
