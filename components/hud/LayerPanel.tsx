@@ -13,22 +13,41 @@ import { useEffect, useMemo, useState } from "react";
 import FieldControls from "./FieldControls";
 import TileControls, { PICTURE_LAYERS } from "./TileControls";
 
-/** One layer in the pinned list: dot, name, badges, count, switch, status line. */
+/** One layer in the pinned list: number, dot, name, badges, count, switch, status line.
+    Patent-motion legend row: hover lifts the row, inverts it to a cream pill,
+    and pushes the layer's live fact to the frame caption. Click still toggles. */
 function LayerRow({
   l,
+  index,
   on,
   st,
   setLayer,
 }: {
   l: LayerDefinition;
+  index: number;
   on: boolean;
   st: LayerStatus | undefined;
   setLayer: (id: LayerId, on: boolean) => void;
 }) {
   const toggle = (checked: boolean) => setLayer(l.id, checked);
+  const setCaptionFact = useGlobe((s) => s.setCaptionFact);
+  const fact = st?.error
+    ? `${l.label} · ERR ${st.error.slice(0, 48)}`
+    : on
+      ? `${l.label} · ${st?.picture ? "MAP LIVE" : `${(st?.count ?? 0).toLocaleString()} LIVE`} · ${st?.fetchedAt ? timeAgo(st.fetchedAt) : "—"}`
+      : `${l.label} · OFF · ${l.description}`;
   return (
-    <li className="flex min-h-[48px] flex-col justify-center px-3 py-2 md:min-h-0">
+    <li
+      className="patent-legend-row flex min-h-[48px] flex-col justify-center px-3 py-2 md:min-h-0"
+      onMouseEnter={() => setCaptionFact(fact)}
+      onMouseLeave={() => setCaptionFact(null)}
+      onFocus={() => setCaptionFact(fact)}
+      onBlur={() => setCaptionFact(null)}
+    >
       <div className="flex items-center gap-2.5">
+        <span className="patent-legend-num w-6 shrink-0" aria-hidden>
+          {String(index + 1).padStart(2, "0")}
+        </span>
         <span
           className="size-1.5 shrink-0 rounded-full"
           aria-hidden
@@ -37,13 +56,13 @@ function LayerRow({
         <button
           type="button"
           onClick={() => setLayer(l.id, !on)}
-          className="hud-display min-w-0 flex-1 text-left text-[13px] leading-tight tracking-[0.1em] md:text-[11.5px]"
+          className="patent-legend-label hud-display min-w-0 flex-1 text-left text-[13px] leading-tight tracking-[0.1em] md:text-[11.5px]"
           style={{ color: on ? "var(--accent-foreground)" : "var(--muted-foreground)" }}
           title={l.description}
         >
           {l.label}
         </button>
-        <span className="min-w-[44px] shrink-0 text-right text-[13px] tabular-nums text-foreground/90 md:text-[11px]">
+        <span className="patent-legend-count min-w-[44px] shrink-0 text-right text-[13px] tabular-nums text-foreground/90 md:text-[11px]">
           {on && st ? (st.picture ? "MAP" : st.count.toLocaleString()) : "—"}
         </span>
         {/* Short-landscape phones keep the pinned panel, so both sizes stay. */}
@@ -138,8 +157,8 @@ export default function LayerPanel({ embedded = false }: { embedded?: boolean } 
       <div className="hud-panel">
         {header}
         <ul className="divide-y divide-border/60">
-          {LAYERS.map((l) => (
-            <LayerRow key={l.id} l={l} on={!!layers[l.id]} st={status[l.id]} setLayer={setLayer} />
+          {LAYERS.map((l, i) => (
+            <LayerRow key={l.id} l={l} index={i} on={!!layers[l.id]} st={status[l.id]} setLayer={setLayer} />
           ))}
         </ul>
       </div>
@@ -233,6 +252,8 @@ function Tiles({
       {items.map((l) => {
         const on = layers[l.id];
         const st = status[l.id];
+        // Global patent number, matching the desktop legend ordering.
+        const n = String(LAYERS.indexOf(l) + 1).padStart(2, "0");
         return (
           <button
             key={l.id}
@@ -247,6 +268,9 @@ function Tiles({
               background: on ? `color-mix(in srgb, ${l.color} 14%, transparent)` : "transparent",
             }}
           >
+            <span className="patent-legend-num shrink-0" aria-hidden>
+              {n}
+            </span>
             <span className="hud-dot shrink-0" style={{ color: l.color, opacity: on ? 1 : 0.35 }} />
             <span className="min-w-0 flex-1">
               <span

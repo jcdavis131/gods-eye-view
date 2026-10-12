@@ -127,6 +127,10 @@ interface GlobeState {
   /** Guided tour through the Explore presets. */
   tour: { active: boolean; index: number; startedAt: number; paused: boolean };
   setTour: (patch: Partial<GlobeState["tour"]>) => void;
+  /** Patent-motion live fact caption (bottom-right of the globe frame). Set by
+      legend hover; null = the frame falls back to the layers-live summary. */
+  captionFact: string | null;
+  setCaptionFact: (fact: string | null) => void;
 }
 
 const defaultLayers = Object.fromEntries(
@@ -206,6 +210,8 @@ export const useGlobe = create<GlobeState>()((set) => ({
   setEmbed: (embed) => set({ embed }),
   tour: { active: false, index: 0, startedAt: 0, paused: false },
   setTour: (patch) => set((s) => ({ tour: { ...s.tour, ...patch } })),
+  captionFact: null,
+  setCaptionFact: (captionFact) => set({ captionFact }),
 }));
 
 /** Mission time = wall clock + operator offset. */

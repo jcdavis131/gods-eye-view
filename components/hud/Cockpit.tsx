@@ -5,6 +5,8 @@ import dynamic from "next/dynamic";
 import { useEffect } from "react";
 import LayerHost from "@/components/globe/LayerHost";
 import HudFrame from "./HudFrame";
+import PatentFrame from "./PatentFrame";
+import PatentDip from "./PatentDip";
 import TopBar from "./TopBar";
 import LayerPanel from "./LayerPanel";
 import InfoPanel from "./InfoPanel";
@@ -175,10 +177,13 @@ export default function Cockpit({ initialMobile = false }: { initialMobile?: boo
           Skip to the layer controls
         </a>
       )}
-      <CesiumGlobe />
+      <PatentDip>
+        <CesiumGlobe />
+      </PatentDip>
       <LayerHost />
       <TimeMachineTicker />
       <HudFrame />
+      <PatentFrame />
       {!embed && <TitleCard />}
       {embed ? (
         <EmbedBadge />
