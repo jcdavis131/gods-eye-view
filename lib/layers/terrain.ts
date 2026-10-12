@@ -22,7 +22,6 @@
 
 import type { FetchContext, FetchResult, LayerDefinition, LayerId, ViewState } from "./types";
 import { SLR_CAVEAT, SLR_DEFAULT_FT, SOIL_CAVEAT, WHP_CAVEAT, isSlrFeet } from "@/lib/terrain/products";
-import { CRITHAB_CAVEAT } from "@/lib/land/features";
 
 /** Camera-height bands (metres): above them the layer's picture is hidden and its note says why. */
 export const SLOPE_MAX_HEIGHT_M = 250_000;
@@ -204,7 +203,6 @@ export const crithabLayer = picture({
   color: "#22C55E",
   attribution: "U.S. Fish and Wildlife Service, critical habitat (final and proposed)",
   source: "USFWS critical habitat",
-  estimate: CRITHAB_CAVEAT,
   note: "FWS's final and proposed designations · regulatory polygons, not where a species lives; many listed species have none · NOAA marine species not included · click the ground for the species and rule",
 });
 
