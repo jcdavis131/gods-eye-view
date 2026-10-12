@@ -83,6 +83,11 @@ describe("op=wetlands", () => {
   });
 });
 
+// NPS's boundary layer (1) holds listed polygons whose Address reads "Address
+// Restricted" (3 on 2026-10-12: 66000046, 66000049, 66000113); the point layer has
+// none. The filter runs at NPS, so it is checked as the where clause sent.
+const NRHP_WHERE = "STATUS='Listed' AND (Address IS NULL OR UPPER(Address) NOT LIKE '%RESTRICT%')";
+
 describe("op=historic", () => {
   const nps = (u: string) => {
     if (u.includes("/nrhp_locations/MapServer/0/query")) return json(nrhpPoints);
@@ -96,7 +101,7 @@ describe("op=historic", () => {
     expect(status).toBe(200);
     expect(calls).toHaveLength(1);
     const q = calls[0];
-    expect(param(q, "where")).toBe("STATUS='Listed'");
+    expect(param(q, "where")).toBe(NRHP_WHERE);
     const fields = param(q, "outFields")!.split(",");
     expect(fields).toEqual(["OBJECTID", "NRIS_Refnum", "RESNAME", "ResType", "City", "County", "State", "Is_NHL", "CertDate", "NARA_URL"]);
     expect(fields).not.toContain("Address");
@@ -116,7 +121,7 @@ describe("op=historic", () => {
     expect(both.body.boundaries).toBe(18);
     const q1 = calls.find((u) => u.includes("/MapServer/1/query"))!;
     expect(param(q1, "outFields")).not.toContain("Address");
-    expect(param(q1, "where")).toBe("STATUS='Listed'");
+    expect(param(q1, "where")).toBe(NRHP_WHERE);
 
     answer = (u) => (u.includes("/MapServer/1/query") ? new Response("down", { status: 503 }) : nps(u));
     const half = await get("op=historic&bbox=-77.04,38.88,-77.02,38.90&polygons=1");
@@ -124,6 +129,31 @@ describe("op=historic", () => {
     expect(half.body.data.features).toHaveLength(60);
     expect(half.body.boundaries).toBeNull();
     expect(half.body.caveats?.join(" ")).toMatch(/boundary layer did not answer/);
+  });
+
+  it("never asks either layer for a listing NPS marks Address Restricted, and never requests the address", async () => {
+    answer = nps;
+    await get("op=historic&bbox=-71.14,42.36,-71.10,42.38&polygons=1");
+    const layers = ["/MapServer/0/query", "/MapServer/1/query"].map((p) => calls.find((u) => u.includes(p))!);
+    for (const u of layers) {
+      expect(u).toBeTruthy();
+      const where = param(u, "where")!;
+      expect(where).toMatch(/^STATUS='Listed' AND /);
+      expect(where).toContain("UPPER(Address) NOT LIKE '%RESTRICT%'");
+      expect(param(u, "outFields")!.split(",")).not.toContain("Address");
+    }
+  });
+
+  it("keeps a box already on the 0.02 grid, and refuses a blank coordinate instead of reading it as 0", async () => {
+    answer = nps;
+    const on = await get("op=historic&bbox=-77.04,38.88,-77.02,38.90");
+    expect(on.body.bbox).toEqual([-77.04, 38.88, -77.02, 38.9]);
+    calls.length = 0;
+    for (const b of ["-77.05,,-77.0,38.9", "-77.05,38.88,-77.0,", ",38.88,-77.0,38.9"]) {
+      const r = await get(`op=historic&bbox=${b}`);
+      expect(r.status).toBe(400);
+    }
+    expect(calls).toEqual([]);
   });
 
   it("clamps the box to 0.12 degrees on a 0.02 grid and refuses a bad one without asking NPS", async () => {

@@ -20,8 +20,10 @@
 //                                          publishes as non-restricted: points, and with
 //                                          polygons=1 boundaries too. Box at most 0.12
 //                                          degrees, snapped to 0.02; 2,000 per layer at most.
-//                                          Never an address; archaeological sites withheld
-//                                          under NHPA s.304 / ARPA are not in the source.
+//                                          Never an address, and never a listing whose
+//                                          Address NPS marks restricted (some boundaries
+//                                          carry one); archaeological sites withheld under
+//                                          NHPA s.304 / ARPA are not in the source.
 //   /api/land?op=crithab&lon=..&lat=..     USFWS designated critical habitat (final and
 //                                          proposed) containing a point: species, listing
 //                                          status, Federal Register rule and date. Regulatory
@@ -47,6 +49,7 @@ import { badRequest, ok, options, withCors } from "@/lib/server/respond";
 import { preferIpv4, retrying } from "@/lib/server/net";
 import { provenance, type Provenance } from "@/lib/provenance/types";
 import { source } from "@/lib/provenance/sources";
+import { numParam, parseBbox, type Bbox } from "@/lib/civic/bbox";
 import {
   buildFloodZones,
   buildHistoric,
@@ -119,29 +122,6 @@ const fetchedAt = (ageMs: number) => new Date(Date.now() - ageMs).toISOString();
 
 /** Said on every box answer: the box is what was asked, and nothing outside it. */
 const BOX_CAVEAT = "Only the returned `bbox` was loaded; outside it nothing is loaded, which is not the same as nothing being there.";
-
-type Bbox = [number, number, number, number];
-
-/** Clamp to `span` degrees around the centre and snap outward to a `grid` degree grid. */
-function snapBbox(v: Bbox, span: number, grid: number): Bbox {
-  let [w, s, e, n] = v;
-  const cx = (w + e) / 2;
-  const cy = (s + n) / 2;
-  w = Math.max(w, cx - span / 2, -180);
-  e = Math.min(e, cx + span / 2, 180);
-  s = Math.max(s, cy - span / 2, -90);
-  n = Math.min(n, cy + span / 2, 90);
-  const f = (x: number) => Number((Math.floor(x / grid) * grid).toFixed(4));
-  const c = (x: number) => Number((Math.ceil(x / grid) * grid).toFixed(4));
-  return [f(w), f(s), c(e), c(n)];
-}
-
-function parseBbox(raw: string | null, span: number, grid: number): Bbox | null {
-  const v = (raw ?? "").split(",").map(Number);
-  if (v.length !== 4 || !v.every(Number.isFinite)) return null;
-  if (v[0] >= v[2] || v[1] >= v[3]) return null;
-  return snapBbox(v as Bbox, span, grid);
-}
 
 interface OpResult {
   data: unknown;
@@ -327,13 +307,21 @@ async function opWetlands(bbox: Bbox): Promise<OpResult> {
   };
 }
 
+/**
+ * Listed properties only (removed listings and those with no status are left out),
+ * and never one whose Address NPS marks restricted. Layer 0 has none of those, but
+ * layer 1 (boundaries) does: 3 listed polygons read "Address Restricted" (2026-10-12,
+ * 22,858 listed, 22,855 after this filter). Address is filtered on, never requested;
+ * a null Address is not a restriction marker and is kept.
+ */
+const NRHP_WHERE = "STATUS='Listed' AND (Address IS NULL OR UPPER(Address) NOT LIKE '%RESTRICT%')";
+
 function nrhpQuery(layer: 0 | 1, bbox: Bbox) {
   return arcgisQuery(
     "nps-nrhp",
     `${NRHP}/${layer}`,
     {
-      // Removed listings (648) and those with no status (60) are left out.
-      where: "STATUS='Listed'",
+      where: NRHP_WHERE,
       ...envelope(bbox),
       outFields: NRHP_FIELDS.join(","),
       returnGeometry: "true",
@@ -364,9 +352,9 @@ async function opHistoric(bbox: Bbox, boundaries: boolean): Promise<OpResult> {
   ]);
   const retrievedAt = fetchedAt(pts.age);
   const prov = [
-    provenance(source("nps-nrhp"), { kind: "published", seriesId: "nrhp_locations MapServer layer 0 (points), STATUS='Listed'", upstreamUrl: `${NRHP}/0`, retrievedAt, notes: [`bbox ${bbox.join(",")}`] }),
+    provenance(source("nps-nrhp"), { kind: "published", seriesId: "nrhp_locations MapServer layer 0 (points), listed, restricted addresses excluded", upstreamUrl: `${NRHP}/0`, retrievedAt, notes: [`bbox ${bbox.join(",")}`] }),
   ];
-  if (bnd) prov.push(provenance(source("nps-nrhp"), { kind: "published", seriesId: "nrhp_locations MapServer layer 1 (boundaries), STATUS='Listed'", upstreamUrl: `${NRHP}/1`, retrievedAt: fetchedAt(bnd.age), notes: [`bbox ${bbox.join(",")}`] }));
+  if (bnd) prov.push(provenance(source("nps-nrhp"), { kind: "published", seriesId: "nrhp_locations MapServer layer 1 (boundaries), listed, restricted addresses excluded", upstreamUrl: `${NRHP}/1`, retrievedAt: fetchedAt(bnd.age), notes: [`bbox ${bbox.join(",")}`] }));
   const caveats = [
     NRHP_CAVEAT,
     "Property names are shown as NPS lists them and can include a person's name; they are not searchable. No street address is requested.",
@@ -603,13 +591,6 @@ class NoValue extends Error {}
 
 function respond(r: OpResult) {
   return ok(r.data, { meta: r.meta, provenance: r.provenance, caveats: r.caveats, ttlS: r.ttlS });
-}
-
-/** A query parameter as a finite number; a missing or blank one is null, never 0 (Number(null) is 0). */
-function numParam(v: string | null): number | null {
-  if (v == null || v.trim() === "") return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
 }
 
 const BBOX_HELP = "bbox=w,s,e,n required, west < east and south < north, e.g. bbox=-98.50,29.41,-98.47,29.44";
