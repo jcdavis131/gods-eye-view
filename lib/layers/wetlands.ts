@@ -4,8 +4,8 @@
 //
 //   USFWS National Wetlands Inventory   Wetlands MapServer layer 0 through
 //                                       /api/land; the code table (system,
-//                                       class, water regime) comes back joined
-//                                       in the same query, and the Data_Source
+//                                       class, water regime) is looked up in
+//                                       NWI's table 1, and the Data_Source
 //                                       layer gives each mapping project's
 //                                       imagery year, date, scale and type
 //
@@ -51,7 +51,7 @@ async function fetchWetlands(ctx: FetchContext): Promise<FetchResult> {
     fetchedAt: ctx.now,
     note:
       `${r.features.length} wetland polygons inside the dashed box · ${Math.round(acres).toLocaleString()} ac mapped · ${imagery}` +
-      (r.truncated ? " · NWI record limit (1,000) hit, zoom in" : ""),
+      (r.truncated ? " · NWI record limit (500 polygons) hit, zoom in" : ""),
     meta: { count: r.features.length },
   };
 }

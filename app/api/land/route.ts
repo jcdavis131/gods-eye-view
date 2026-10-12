@@ -11,9 +11,10 @@
 //                                          regulatory map, not a forecast. Box at most
 //                                          ~9 km, snapped to a 0.02 degree grid.
 //   /api/land?op=wetlands&bbox=w,s,e,n     USFWS National Wetlands Inventory polygons with
-//                                          their Cowardin names and the year of the imagery
-//                                          each was mapped from (NWI Data_Source). Same box
-//                                          rules.
+//                                          their Cowardin names (NWI's code table) and the
+//                                          year of the imagery each was mapped from (NWI
+//                                          Data_Source). Same box rules; NWI answers at most
+//                                          500 polygons a query.
 //   /api/land?op=publiclands&bbox=w,s,e,n  USGS PAD-US 4.1 fee, easement, designation and
 //                                          proclamation areas with manager, owner agency,
 //                                          local owner, easement holder, public access and
@@ -29,7 +30,7 @@
 
 import type { NextRequest } from "next/server";
 import { cached } from "@/lib/server/cache";
-import { arcgisLayerInfo, arcgisQuery, codedDomains, envelope, truncated } from "@/lib/server/arcgis";
+import { arcgisLayerInfo, arcgisQuery, arcgisRows, codedDomains, envelope, truncated } from "@/lib/server/arcgis";
 import { jsonError, polite, upstream } from "@/lib/server/upstream";
 import { badRequest, ok, options, withCors } from "@/lib/server/respond";
 import { preferIpv4, retrying } from "@/lib/server/net";
@@ -40,13 +41,16 @@ import {
   buildPublicLands,
   buildWetlands,
   NWI_CAVEAT,
+  nwiCodesIn,
   nwiImagerySummary,
   PADUS_CATEGORIES,
   PADUS_FIELDS,
   parseEpqs,
+  parseNwiCodes,
   parseNwiSources,
   type ElevationReading,
   type NfhlProps,
+  type NwiCode,
   type NwiSource,
 } from "@/lib/land/features";
 
@@ -58,8 +62,19 @@ preferIpv4();
 
 const NFHL = "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28";
 const NWI = "https://fwspublicservices.wim.usgs.gov/wetlandsmapservice/rest/services/Wetlands/MapServer/0";
-/** NWI mapping projects: the imagery year, date, scale and type each quad was drawn from. */
-const NWI_SOURCE = "https://fwspublicservices.wim.usgs.gov/wetlandsmapservice/rest/services/Data_Source/MapServer/0";
+/**
+ * NWI's code table: system, subsystem, class and water regime names by Cowardin code. Until
+ * 2026 they came back joined into layer 0 as NWI_Wetland_Codes.*; the layer now answers
+ * plain fields only (a prefixed outFields is a 400), so the names are looked up here.
+ */
+const NWI_CODES = "https://fwspublicservices.wim.usgs.gov/wetlandsmapservice/rest/services/Wetlands/MapServer/1";
+/**
+ * NWI mapping projects: the imagery year, date, scale and type each quad was drawn from
+ * (Data_Source layer 3, "Image Year"; layer 0 became "Historic map information" in 2026).
+ */
+const NWI_SOURCE = "https://fwspublicservices.wim.usgs.gov/wetlandsmapservice/rest/services/Data_Source/MapServer/3";
+/** NWI's layer 0 answers at most this many polygons a query (maxRecordCount, 2026-10-12). */
+const NWI_MAX_RECORDS = 500;
 const PADUS = "https://services.arcgis.com/v01gqwM5QqNysAAi/arcgis/rest/services/Manager_Name_PADUS/FeatureServer/0";
 const EPQS = "https://epqs.nationalmap.gov/v1/json";
 
@@ -180,6 +195,30 @@ function nwiSources(bbox: Bbox): Promise<NwiSource[]> {
   }, { deadlineMs: 20_000 }).then((r) => r.value);
 }
 
+/**
+ * The code table's names for these codes, one query per distinct code set, held for a
+ * week (the table changes with NWI's classification, not with the map). A lookup that
+ * fails is not cached, so the next request asks again.
+ */
+function nwiCodes(codes: string[]): Promise<Map<string, NwiCode>> {
+  // Codes are NWI's own values; anything outside Cowardin's alphabet is not sent.
+  const safe = codes.filter((c) => /^[A-Za-z0-9/]{1,15}$/.test(c));
+  if (!safe.length) return Promise.resolve(new Map());
+  return cached("nwi-codes:" + safe.join(","), 7 * DAY, async () => {
+    const rows = await arcgisRows(
+      "usfws-nwi",
+      NWI_CODES,
+      {
+        where: `ATTRIBUTE IN (${safe.map((c) => `'${c}'`).join(",")})`,
+        outFields: "ATTRIBUTE,SYSTEM_NAME,SUBSYSTEM_NAME,CLASS_NAME,WATER_REGIME_NAME",
+        returnGeometry: "false",
+      },
+      { gate: "usfws-nwi", minIntervalMs: 300, timeoutMs: 15_000, tries: 2 },
+    );
+    return parseNwiCodes(rows);
+  }, { deadlineMs: 15_000 }).then((r) => r.value);
+}
+
 async function opWetlands(bbox: Bbox): Promise<OpResult> {
   // The wetlands and their mapping projects are cached apart, so a source lookup that failed
   // once is asked again next time instead of leaving a day of wetlands undated. A failed
@@ -192,16 +231,7 @@ async function opWetlands(bbox: Bbox): Promise<OpResult> {
         {
           where: "1=1",
           ...envelope(bbox),
-          outFields: [
-            "Wetlands.OBJECTID",
-            "Wetlands.ATTRIBUTE",
-            "Wetlands.WETLAND_TYPE",
-            "Wetlands.ACRES",
-            "NWI_Wetland_Codes.SYSTEM_NAME",
-            "NWI_Wetland_Codes.SUBSYSTEM_NAME",
-            "NWI_Wetland_Codes.CLASS_NAME",
-            "NWI_Wetland_Codes.WATER_REGIME_NAME",
-          ].join(","),
+          outFields: "OBJECTID,ATTRIBUTE,WETLAND_TYPE,ACRES",
           returnGeometry: "true",
           maxAllowableOffset: "0.00004",
           geometryPrecision: "6",
@@ -212,11 +242,24 @@ async function opWetlands(bbox: Bbox): Promise<OpResult> {
     }, LAND_DEADLINE),
     nwiSources(bbox).catch(() => null),
   ]);
+  // The code names never hold back the polygons: a failed lookup leaves them undecoded.
+  const codes = await nwiCodes(nwiCodesIn(r.value.rows)).catch(() => null);
   const imagery = sources ? nwiImagerySummary(sources) : null;
   const retrievedAt = fetchedAt(r.age);
   const prov = [
-    provenance(source("usfws-nwi"), { kind: "published", seriesId: "Wetlands MapServer layer 0 (with the NWI_Wetland_Codes join)", upstreamUrl: NWI, retrievedAt, notes: [`bbox ${bbox.join(",")}`] }),
+    provenance(source("usfws-nwi"), { kind: "published", seriesId: "Wetlands MapServer layer 0 (wetland polygons)", upstreamUrl: NWI, retrievedAt, notes: [`bbox ${bbox.join(",")}`] }),
   ];
+  if (codes) {
+    prov.push(
+      provenance(source("usfws-nwi"), {
+        kind: "published",
+        seriesId: "Wetlands MapServer table 1 (NWI_Wetland_Codes: system, subsystem, class and water regime names)",
+        upstreamUrl: NWI_CODES,
+        retrievedAt,
+        notes: [`${codes.size} codes looked up`],
+      }),
+    );
+  }
   if (imagery) {
     prov.push(
       provenance(source("usfws-nwi"), {
@@ -234,20 +277,23 @@ async function opWetlands(bbox: Bbox): Promise<OpResult> {
     BOX_CAVEAT,
   ];
   if (!imagery) caveats.push("NWI's Data_Source layer did not answer, so the imagery year of these polygons is unknown this time (imageYears: null).");
-  if (r.value.truncated) caveats.push("NWI's record limit was hit; ask for a smaller box for every polygon.");
+  if (!codes) caveats.push("NWI's code table did not answer, so the system, class and water regime names are missing this time (codesDecoded: false); each polygon keeps its Cowardin code and type.");
+  if (r.value.truncated) caveats.push(`NWI's record limit (${NWI_MAX_RECORDS} polygons a query) was hit; ask for a smaller box for every polygon.`);
   return {
-    data: { type: "FeatureCollection", features: buildWetlands(r.value.rows, sources ?? []) },
+    data: { type: "FeatureCollection", features: buildWetlands(r.value.rows, sources ?? [], codes) },
     meta: {
       source: "USFWS National Wetlands Inventory (Wetlands and Data_Source layers)",
       // Years of the imagery the polygons in this box were drawn from; null when NWI's source layer did not answer.
       imageYears: imagery?.years ?? null,
       projects: imagery?.projects ?? null,
+      // Whether NWI's code table answered for the system, class and water regime names.
+      codesDecoded: codes != null,
       caveat: NWI_CAVEAT,
       bbox,
       truncated: r.value.truncated,
       cacheAge: r.age,
     },
-    ttlS: imagery ? 3600 : 600,
+    ttlS: imagery && codes ? 3600 : 600,
     provenance: prov,
     caveats,
   };

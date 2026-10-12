@@ -2243,7 +2243,7 @@
     "/api/land": {
       "get": {
         "summary": "Flood zones, wetlands, public and protected lands in a box, or the ground elevation at a point",
-        "description": "op=flood: FEMA National Flood Hazard Layer flood hazard zones (layer 28) with FEMA's meaning of each zone, whether the ground is in the special flood hazard area, and the base flood elevation where FEMA published one (the -9999 sentinel is dropped). A regulatory map, not a forecast; a box with no zone is not a finding of no risk. Boxes are clamped to 0.08° and snapped to a 0.02° grid. op=wetlands: USFWS National Wetlands Inventory polygons with their Cowardin code, type, system, class, water regime, acres and the year of the imagery each was mapped from (`imageYears`, null when NWI's source layer did not answer); same box rules. op=publiclands: USGS PAD-US 4.1 fee, easement, designation and proclamation areas with owner, manager, local owner, easement holder, public access, GAP status and IUCN category as PAD-US publishes them; boxes up to 2°, snapped to 0.25°; a box taller than 1.5° keeps the largest 600 units, generalised. op=elevation: USGS 3DEP ground elevation (EPQS) in metres with the source DEM resolution; outside 3DEP coverage `metres` is absent and `note` carries what EPQS said. Only the returned `bbox` is loaded.",
+        "description": "op=flood: FEMA National Flood Hazard Layer flood hazard zones (layer 28) with FEMA's meaning of each zone, whether the ground is in the special flood hazard area, and the base flood elevation where FEMA published one (the -9999 sentinel is dropped). A regulatory map, not a forecast; a box with no zone is not a finding of no risk. Boxes are clamped to 0.08° and snapped to a 0.02° grid. op=wetlands: USFWS National Wetlands Inventory polygons with their Cowardin code, type, acres, the system, class and water regime names from NWI's code table (`codesDecoded` false when it did not answer), and the year of the imagery each was mapped from (`imageYears`, null when NWI's source layer did not answer); same box rules, at most 500 polygons a query. op=publiclands: USGS PAD-US 4.1 fee, easement, designation and proclamation areas with owner, manager, local owner, easement holder, public access, GAP status and IUCN category as PAD-US publishes them; boxes up to 2°, snapped to 0.25°; a box taller than 1.5° keeps the largest 600 units, generalised. op=elevation: USGS 3DEP ground elevation (EPQS) in metres with the source DEM resolution; outside 3DEP coverage `metres` is absent and `note` carries what EPQS said. Only the returned `bbox` is loaded.",
         "tags": [
           "land"
         ],
@@ -6952,6 +6952,10 @@
                 "items": {
                   "type": "string"
                 }
+              },
+              "codesDecoded": {
+                "type": "boolean",
+                "description": "Whether NWI's code table (Wetlands MapServer table 1) answered for the system, subsystem, class and water regime names; when false each polygon keeps its Cowardin code and type and the names are absent."
               }
             }
           }

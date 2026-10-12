@@ -51,6 +51,32 @@ export async function arcgisQuery<P = Record<string, unknown>>(
   }, opts.tries ?? 3);
 }
 
+/**
+ * GET a table's /query endpoint as Esri JSON rows (attributes only), with the
+ * same retry and error handling. For tables that do not speak `f=geojson`
+ * (NWI's code table answers geoJSON with an error).
+ */
+export async function arcgisRows<A = Record<string, unknown>>(
+  name: string,
+  layerUrl: string,
+  params: Record<string, string>,
+  opts: ArcgisOptions,
+): Promise<A[]> {
+  const qs = new URLSearchParams({ f: "json", ...params });
+  const url = `${layerUrl}/query?${qs.toString()}`;
+  return retrying(async () => {
+    const j = await polite(
+      opts.gate,
+      opts.minIntervalMs ?? 250,
+      opts.backoffMs ?? 30_000,
+      () => upstreamJson<{ features?: Array<{ attributes?: A }>; error?: { code?: number; message?: string } }>(name, url, { timeoutMs: opts.timeoutMs ?? 20_000 }),
+      opts.backoffOn,
+    );
+    if (j.error) throw new UpstreamError(name, j.error.code ?? 502, `${name}: ${j.error.message ?? "query error"}`);
+    return (j.features ?? []).map((f) => f.attributes).filter((a): a is A => !!a);
+  }, opts.tries ?? 3);
+}
+
 /** Whether a GeoJSON answer was cut at the layer's record limit (ArcGIS puts the flag in two places). */
 export function truncated(fc: ArcgisFc<unknown>): boolean {
   return fc.exceededTransferLimit === true || fc.properties?.exceededTransferLimit === true;

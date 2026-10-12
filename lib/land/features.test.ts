@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 import type { MultiPolygon, Polygon } from "geojson";
+import nwiWetlands from "./fixtures/nwi-wetlands-mitchell.json";
+import nwiCodeRows from "./fixtures/nwi-codes-mitchell.json";
 import {
   buildFloodZones,
   buildPublicLands,
   buildWetlands,
   floodZoneMeaning,
   NWI_CAVEAT,
+  nwiCodesIn,
   nwiImagerySummary,
   parseEpqs,
+  parseNwiCodes,
   parseNwiSources,
   pointInRing,
   trimParts,
@@ -64,7 +68,7 @@ describe("wetlands and their imagery year", () => {
   });
   const wet = (lon: number) => ({
     geometry: { type: "Polygon" as const, coordinates: [[[lon, 29.3], [lon + 0.001, 29.3], [lon + 0.001, 29.301], [lon, 29.3]]] },
-    properties: { "Wetlands.ATTRIBUTE": "PEM1A", "Wetlands.OBJECTID": lon, "Wetlands.WETLAND_TYPE": "Freshwater Emergent Wetland" },
+    properties: { ATTRIBUTE: "PEM1A", OBJECTID: lon, WETLAND_TYPE: "Freshwater Emergent Wetland" },
   });
 
   it("gives each wetland its mapping project's imagery year, or says it was not found", () => {
@@ -77,6 +81,42 @@ describe("wetlands and their imagery year", () => {
     expect(built[0].properties.details?.["usfws caveat"]).toBe(NWI_CAVEAT);
     expect(built[0].properties.name).toBe("Freshwater Emergent Wetland · PEM1A");
     expect(nwiImagerySummary(sources).years).toEqual([1983, 2010]);
+  });
+
+  it("decodes each polygon's Cowardin code from NWI's code table (captured 2026-10-12)", () => {
+    const rows = nwiWetlands.features as unknown as Parameters<typeof buildWetlands>[0];
+    const codes = parseNwiCodes(nwiCodeRows.features.map((f) => f.attributes));
+    expect(nwiCodesIn(rows)).toEqual(["L2USAh", "PEM1Ch", "PUBFh", "PUBHh", "PUSAh", "PUSCh", "R4SBAx", "R4SBC", "R5UBH"]);
+    const built = buildWetlands(rows, [], codes);
+    expect(built).toHaveLength(14);
+    const lake = built.find((f) => (f.properties.extra as WetlandExtra).code === "L2USAh")!;
+    expect(lake.properties.id).toBe("nwi:24255589");
+    expect(lake.properties.extra).toMatchObject({ type: "Lake", system: "Lacustrine", subsystem: "Littoral", cls: "Unconsolidated Shore", regime: "Temporary Flooded" });
+    // Palustrine has no subsystem: NWI publishes null, which stays absent, never "".
+    const pem = built.find((f) => (f.properties.extra as WetlandExtra).code === "PEM1Ch")!;
+    expect((pem.properties.extra as WetlandExtra).subsystem).toBeUndefined();
+    expect(pem.properties.details?.subsystem).toBeUndefined();
+    expect(pem.properties.details?.["code names"]).toBeUndefined();
+  });
+
+  it("keeps the first published name when NWI's table lists a code twice", () => {
+    // PUBFh came back twice, once without its water regime.
+    const codes = parseNwiCodes(nwiCodeRows.features.map((f) => f.attributes));
+    expect(codes.get("PUBFh")).toEqual({ system: "Palustrine", subsystem: undefined, cls: "Unconsolidated Bottom", regime: "Semipermanently Flooded" });
+    const reversed = parseNwiCodes([...nwiCodeRows.features].reverse().map((f) => f.attributes));
+    expect(reversed.get("PUBFh")?.regime).toBe("Semipermanently Flooded");
+  });
+
+  it("draws every polygon with its code and type when the code table did not answer, its names absent", () => {
+    const rows = nwiWetlands.features as unknown as Parameters<typeof buildWetlands>[0];
+    const built = buildWetlands(rows, [], null);
+    expect(built).toHaveLength(14);
+    const x = built[0].properties.extra as WetlandExtra;
+    expect(x.code).toBe("L2USAh");
+    expect(x.type).toBe("Lake");
+    expect(x.system).toBeUndefined();
+    expect(x.regime).toBeUndefined();
+    expect(built[0].properties.details?.["code names"]).toMatch(/did not answer/);
   });
 
   it("reads NWI's 0 year as not recorded rather than as year 0", () => {

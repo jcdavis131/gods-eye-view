@@ -4,7 +4,7 @@
 //
 // Every label here is either the upstream's own value or its published
 // definition: FEMA's zone meanings, the NWI Cowardin names that come back
-// joined in the same query, PAD-US's coded-value domains read from the
+// looked up in NWI's code table, PAD-US's coded-value domains read from the
 // layer's metadata. Sentinels (-9999, -1000000) become undefined.
 
 import type { MultiPolygon, Polygon } from "geojson";
@@ -241,27 +241,70 @@ export interface WetlandExtra {
   imageYear?: number;
 }
 
+/** The plain-language names NWI's code table (Wetlands MapServer table 1) gives one Cowardin code. */
+export interface NwiCode {
+  system?: string;
+  subsystem?: string;
+  cls?: string;
+  regime?: string;
+}
+
+/**
+ * Code table rows -> code -> names. NWI's table can carry a code twice (PUBFh
+ * came back once with its water regime and once without it, 2026-10-12): the
+ * first published value of each field wins, and a field no row publishes stays
+ * absent, never "".
+ */
+export function parseNwiCodes(rows: Array<Record<string, unknown>>): Map<string, NwiCode> {
+  const out = new Map<string, NwiCode>();
+  for (const r of rows) {
+    const code = str(r.ATTRIBUTE);
+    if (!code) continue;
+    const cur = out.get(code) ?? {};
+    out.set(code, {
+      system: cur.system ?? str(r.SYSTEM_NAME),
+      subsystem: cur.subsystem ?? str(r.SUBSYSTEM_NAME),
+      cls: cur.cls ?? str(r.CLASS_NAME),
+      regime: cur.regime ?? str(r.WATER_REGIME_NAME),
+    });
+  }
+  return out;
+}
+
+/** The distinct Cowardin codes in a wetlands answer, sorted (the code-table lookup's cache key). */
+export function nwiCodesIn(rows: Array<{ properties: Record<string, unknown> | null }>): string[] {
+  return [...new Set(rows.map((r) => str(r.properties?.ATTRIBUTE)).filter((c): c is string => !!c))].sort();
+}
+
+/**
+ * Wetland polygons from NWI's Wetlands layer 0 (fields ATTRIBUTE,
+ * WETLAND_TYPE, ACRES, OBJECTID since USFWS dropped the joined code table in
+ * 2026), named from the code table when its lookup answered. A code the table
+ * did not answer for keeps its code and type; its decoded names stay absent.
+ */
 export function buildWetlands(
-  rows: Array<{ id?: number | string; geometry: GeoJSON.Geometry | null; properties: Record<string, unknown> }>,
+  rows: Array<{ id?: number | string; geometry: GeoJSON.Geometry | null; properties: Record<string, unknown> | null }>,
   sources: NwiSource[] = [],
+  codes: Map<string, NwiCode> | null = null,
 ): LayerFeature[] {
   const out: LayerFeature[] = [];
   rows.forEach((r, i) => {
     if (!isPoly(r.geometry)) return;
-    const p = r.properties;
-    const code = str(p["Wetlands.ATTRIBUTE"]) ?? "unclassified";
+    const p = r.properties ?? {};
+    const code = str(p.ATTRIBUTE) ?? "unclassified";
     const src = sourceFor(r.geometry, sources);
+    const names = codes?.get(code);
     const x: WetlandExtra = {
       code,
-      type: str(p["Wetlands.WETLAND_TYPE"]),
-      acres: finite(p["Wetlands.ACRES"]),
-      system: str(p["NWI_Wetland_Codes.SYSTEM_NAME"]),
-      subsystem: str(p["NWI_Wetland_Codes.SUBSYSTEM_NAME"]),
-      cls: str(p["NWI_Wetland_Codes.CLASS_NAME"]),
-      regime: str(p["NWI_Wetland_Codes.WATER_REGIME_NAME"]),
+      type: str(p.WETLAND_TYPE),
+      acres: finite(p.ACRES),
+      system: names?.system,
+      subsystem: names?.subsystem,
+      cls: names?.cls,
+      regime: names?.regime,
       imageYear: src?.year,
     };
-    const oid = str(p["Wetlands.OBJECTID"]) ?? str(r.id) ?? `${code}:${i}`;
+    const oid = str(p.OBJECTID) ?? str(r.id) ?? `${code}:${i}`;
     out.push({
       type: "Feature",
       geometry: r.geometry,
@@ -278,6 +321,7 @@ export function buildWetlands(
           subsystem: x.subsystem,
           class: x.cls,
           "water regime": x.regime,
+          "code names": codes ? undefined : "NWI's code table did not answer this time; the code is shown undecoded",
           acres: x.acres != null ? x.acres.toFixed(x.acres < 10 ? 2 : 1) : undefined,
           "mapped from": src ? nwiSourceText(src) : "imagery date not found in NWI's source layer",
           "what this is": "a wetland habitat mapped from that imagery, not a jurisdictional (Clean Water Act) delineation",
