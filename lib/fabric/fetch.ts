@@ -8,6 +8,7 @@ import type { SourceId } from "@/lib/provenance/sources";
 import countriesJson from "@/lib/economy/data/countries.json";
 import { bboxContains, geojsonRings, ringCentroid, ringsBbox, ringsContain, roundRings, type BBox } from "./geo";
 import { assembleFabric } from "./graph";
+import { enrichFabricWithWiki } from "./wiki";
 import {
   countryNodes,
   federalNodes,
@@ -221,7 +222,7 @@ export async function fetchFabric(lon: number, lat: number, opts: FabricOptions)
     }
   });
 
-  return assembleFabric({ lon, lat, elevationM, nodes, edges, answered, failed });
+  return enrichFabricWithWiki(assembleFabric({ lon, lat, elevationM, nodes, edges, answered, failed }), lon, lat);
 }
 
 // ------------------------------------------------------------------ field

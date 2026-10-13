@@ -3261,6 +3261,119 @@
         }
       }
     },
+    "/api/wikipedia": {
+      "get": {
+        "summary": "Wikipedia articles near a point, one article's summary, and On this day entries",
+        "description": "Keyless MediaWiki / Wikimedia APIs. op=nearby (the default): geotagged articles within `radius` metres (500 to 10000, the API's cap) of lat/lon, each with coordinates, a short extract, the article URL and its computed distance from the point. op=summary: one article's REST summary by exact title; 404 when Wikipedia has no such article. op=onthisday: dated events, births, deaths and selected entries for mm/dd, each with its linked pages (some carry coordinates). Article text is CC BY-SA; the globe layers are Wikipedia and On this day (Wikipedia).",
+        "tags": [
+          "fabric"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "nearby",
+                "summary",
+                "onthisday"
+              ],
+              "default": "nearby"
+            },
+            "description": "nearby: geotagged articles around a point. summary: one article by title. onthisday: dated entries for a calendar day."
+          },
+          {
+            "name": "lat",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            },
+            "description": "nearby: latitude in degrees (required)."
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            },
+            "description": "nearby: longitude in degrees (required)."
+          },
+          {
+            "name": "radius",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": 500,
+              "maximum": 10000,
+              "default": 10000
+            },
+            "description": "nearby: search radius in metres."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            },
+            "description": "nearby: most articles to return."
+          },
+          {
+            "name": "title",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "summary: the article title, e.g. Austin, Texas (required for op=summary)."
+          },
+          {
+            "name": "mm",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 12
+            },
+            "description": "onthisday: month (required for op=onthisday)."
+          },
+          {
+            "name": "dd",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 31
+            },
+            "description": "onthisday: day of month (required for op=onthisday)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope { source, cacheAge, data } where data is the parsed articles, summary or day items (lib/wiki/types.ts).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/Upstream"
+          }
+        }
+      }
+    },
     "/api/rsu": {
       "get": {
         "summary": "RSU event calendar from parsed SEC Form 4 filings, and the blackout-window status",

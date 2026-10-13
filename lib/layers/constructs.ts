@@ -111,6 +111,12 @@ export function fabricFeatures(fabric: Fabric, height: number, born = Date.now()
         relations: fabric.edges.length,
         coverage: fabric.coverage,
         missing: fabric.failed.length ? fabric.failed.map((f) => f.source).join(", ") : null,
+        ...(fabric.wikiNearby?.length
+          ? {
+              "nearest wikipedia": `${fabric.wikiNearby[0].title} (${fabric.wikiNearby[0].distM < 1000 ? `${Math.round(fabric.wikiNearby[0].distM)} m` : `${(fabric.wikiNearby[0].distM / 1000).toFixed(1)} km`})`,
+              "wikipedia nearby": fabric.wikiNearby.map((a) => a.title).join(" · "),
+            }
+          : {}),
       },
       extra: here,
     },
@@ -143,7 +149,7 @@ export const constructsLayer: LayerDefinition = {
   id: "constructs",
   label: "Constructs",
   description:
-    "The human and scientific frames over the camera target, floated as strata above the ground and listed in the strata rail: county, city, districts, school district, tract, metro, watershed (HUC-2 to HUC-12), ecoregion, flood zone, forecast office, time zone, federal regions, country. Focus one to draw its outline and see every loaded feature inside it; Ascend flies up through the stack; a second pin compares two places.",
+    "The human and scientific frames over the camera target, floated as strata above the ground and listed in the strata rail: county, city, districts, school district, tract, metro, watershed (HUC-2 to HUC-12), ecoregion, flood zone, forecast office, time zone, federal regions, country. Focus one to draw its outline and see every loaded feature inside it; Ascend flies up through the stack; a second pin compares two places. Place, county, state and country strata carry their Wikipedia summary and link when one exists, and the anchor lists the nearest geotagged articles.",
   color: "#E5E7EB",
   updateIntervalMs: 6 * 3600_000,
   defaultEnabled: false,
