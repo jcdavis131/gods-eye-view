@@ -28,6 +28,7 @@ describe("the catalogue", () => {
       "emef-tri",
       "emef-rcra",
       "emef-acres",
+      "tri-releases",
       "esri-wayback",
       "wayback-capture",
       "usgs-htmc",

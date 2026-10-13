@@ -30,6 +30,7 @@ import ParcelAside from "./ParcelAside";
 import { flyTo } from "@/lib/globe/camera";
 import dynamic from "next/dynamic";
 import PowerWaterAside from "./PowerWaterAside";
+import TriAside from "./TriAside";
 
 const ChipViewer = dynamic(() => import("./ChipViewer"), {
   ssr: false,
@@ -278,6 +279,7 @@ export default function InfoPanel() {
         {p.layer === "employers" && <EmployerAside key={p.id} feature={feature} />}
         {(p.layer === "banks" || p.layer === "spending") && <FinanceAside key={p.id} feature={feature} />}
         {parcel && <ParcelAside key={p.id} feature={feature} />}
+        {p.layer === "contaminants" && p.kind === "tri" && <TriAside key={p.id} feature={feature} />}
         {construct ? <ConstructAside key={p.id} feature={feature} /> : <ConstructContext key={`ctx:${p.layer}:${p.id}`} feature={feature} />}
         {well && (
           <GaugeHistory

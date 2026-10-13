@@ -43,7 +43,7 @@ export const EMEF_MAX = 1000;
 export const EMEF_FIELDS = ["registry_id", "primary_name", "pgm_sys_acrnm", "pgm_sys_id", "facility_url"] as const;
 
 export const CONTAMINANTS_CAVEAT =
-  "EPA program listings: Superfund (SEMS, including non-NPL and archived sites), Toxics Release Inventory reporters, RCRA hazardous-waste handlers and Brownfields properties. A listing is a regulatory status, not a finding of contamination at the point, and no release amounts are shown. Points are EPA's facility coordinates. Water and air permits are in the Environmental permits layer.";
+  "EPA program listings: Superfund (SEMS, including non-NPL and archived sites), Toxics Release Inventory reporters, RCRA hazardous-waste handlers and Brownfields properties. A listing is a regulatory status, not a finding of contamination at the point; a TRI reporter's record can show what it reported releasing (asked on click, never drawn). Points are EPA's facility coordinates. Water and air permits are in the Environmental permits layer.";
 
 export function emefParams(b: Bbox): Record<string, string> {
   const [w, s, e, n] = b;
@@ -108,7 +108,7 @@ export function buildContaminants(
           "registry id": registryId,
           "program system (as EPA codes it)": str(p.pgm_sys_acrnm),
           "EPA record": url && /^https:\/\//.test(url) ? url : undefined,
-          "what this is": "an EPA program listing: a regulatory status, not a finding of contamination at this point; no release amounts are shown",
+          "what this is": program === "tri" ? "an EPA program listing: a regulatory status, not a finding of contamination at this point; what the facility reported releasing is under Reported releases" : "an EPA program listing: a regulatory status, not a finding of contamination at this point",
         },
         extra: x,
       },

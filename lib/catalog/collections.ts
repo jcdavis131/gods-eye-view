@@ -19,6 +19,7 @@ import { WAYBACK_CAPTURE_CAVEAT, WAYBACK_CAVEAT } from "@/lib/terrain/wayback";
 import { TOPO_CAVEAT } from "@/lib/terrain/topo";
 import { IMPAIRED_CAVEAT } from "@/lib/water/impaired";
 import { NMFS_CAVEAT, RANGES_CAVEAT } from "@/lib/land/features";
+import { TRI_CAVEAT } from "@/lib/permits/tri";
 
 export interface Exclusion {
   what: string;
@@ -308,6 +309,29 @@ export const COLLECTIONS: readonly Collection[] = [
     ops: ["permits?op=contaminants"],
     sensitivity: "Federal regulatory records; no address or contact field is requested; the property name can be an address and is never searched or embedded.",
     round: 1,
+  },
+  {
+    id: "tri-releases",
+    title: "Toxics Release Inventory reported releases (EPA)",
+    layer: "contaminants",
+    sources: ["epa-tri"],
+    what: "What a TRI facility reported releasing on site in a reporting year, by chemical and medium (stack and fugitive air, surface water, underground injection, landfills, surface impoundments, land treatment), in its reported units and estimation basis, with the chemicals it certified on Form A. Asked from a TRI listing's record; never drawn.",
+    recordIs: "One Form R release line: a facility's own report of a quantity to one medium for one chemical and year. Not exposure, not concentration, not a measurement by EPA.",
+    coverage: { spatial: "TRI reporting facilities in the United States", temporal: "reporting years 1987 onward; the newest complete year is two behind the calendar (2024 answered, 2025 returned no rows on 2026-10-13)", count: null },
+    freshness: { statement: "Envirofacts serves the TRI tables as filed; a year's data completes about two years later.", readFrom: "Envirofacts dmapservice TRI tables (2025 empty, 2024 populated, 2026-10-13)", recordedOn: R2 },
+    excluded: [
+      { what: "the certifying official's name, title and signature, and every public and technical contact name, phone, extension and email", why: "sent by Envirofacts on every row; dropped by allowlist before anything is cached or returned" },
+      { what: "TRI's own facility coordinates", why: "pref_longitude is stored unsigned; the map point stays EMEF's" },
+      { what: "totals across units", why: "pounds and grams (dioxins) are never added" },
+      { what: "range reports and 'NA' lines in totals", why: "a range is not a number, and NA is not zero" },
+      { what: "off-site transfers and waste management quantities", why: "this collection is on-site releases (tri_release_qty) only" },
+    ],
+    caveats: [TRI_CAVEAT],
+    searchable: [],
+    embedText: ["cas_chem_name", "cas_registry_number", "environmental_medium", "unit_of_measure", "reporting_year"],
+    ops: ["permits?op=tri"],
+    sensitivity: "Federal regulatory records kept by allowlist; no person's name, phone or email leaves the parser.",
+    round: 2,
   },
   // ------------------------------------------------------------ round 1: imagery
   {

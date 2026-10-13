@@ -204,3 +204,78 @@ describe("/api/permits?op=contaminants", () => {
     expect(down.body.caveats?.join(" ")).toMatch(/missing from this answer, not absent/);
   });
 });
+
+describe("op=tri", () => {
+  const triCalls: string[] = [];
+  const answerTri = (formR: unknown, formA: unknown) => {
+    triCalls.length = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const u = String(url);
+        triCalls.push(u);
+        if (!u.startsWith("https://data.epa.gov/dmapservice/tri.tri_reporting_form/")) throw new Error(`unexpected request ${u}`);
+        const body = u.includes("/form_type_ind/equals/S/") ? formA : formR;
+        return body instanceof Response ? body : new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+      }),
+    );
+  };
+  const getTri = async (qs: string) => {
+    const { GET } = await import("./route");
+    const res = await GET(new NextRequest(`http://localhost/api/permits?${qs}`));
+    return { status: res.status, body: (await res.json()) as { data: { year: number; rows: Array<Record<string, unknown>>; totals: Array<{ unit: string }>; formA: Array<{ chemical: string }> | null }; caveats: string[] } };
+  };
+
+  it("answers the Form R rows and totals per medium and unit, and the Form A list, from the allowlist only", async () => {
+    const formR = (await import("@/lib/permits/fixtures/tri-r-91331MCPRD12306-2024.json")).default;
+    const formA = (await import("@/lib/permits/fixtures/tri-a-91331MCPRD12306-2024.json")).default;
+    // The upstream sends contact columns on every row; give the real rows those column names to prove they never leave.
+    const withContacts = (formR as Array<Record<string, unknown>>).map((r) => ({ ...r, certif_name: "stand-in", public_contact_email: "stand-in", technical_phone_ext: "stand-in" }));
+    answerTri(withContacts, formA);
+    const { status, body } = await getTri("op=tri&trifid=91331MCPRD12306&year=2024");
+    expect(status).toBe(200);
+    expect(triCalls).toHaveLength(2);
+    expect(body.data.year).toBe(2024);
+    expect(body.data.rows).toHaveLength(11);
+    expect(JSON.stringify(body)).not.toContain("stand-in");
+    expect(body.data.formA?.map((f) => f.chemical)).toContain("Methanol");
+    expect(body.caveats.join(" ")).toMatch(/pounds and grams are never added/);
+    vi.unstubAllGlobals();
+  });
+
+  it("tries the year before when the newest complete year holds nothing, and says unknown when Form A fails", async () => {
+    // Deer Park's real 2024 rows stand in for "the year before has rows": what is tested is the fallback and the shape.
+    const deerPark = (await import("@/lib/permits/fixtures/tri-r-77536DRPRK5900H-2024-trimmed.json")).default;
+    triCalls.length = 0;
+    const [newest, before] = (await import("@/lib/permits/tri")).triDefaultYears();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const u = String(url);
+        triCalls.push(u);
+        if (u.includes("/form_type_ind/equals/S/")) return new Response("busy", { status: 404 });
+        const rows = u.includes(`/reporting_year/equals/${before}/`) ? deerPark : [];
+        return new Response(JSON.stringify(rows), { status: 200, headers: { "content-type": "application/json" } });
+      }),
+    );
+    const { status, body } = await getTri("op=tri&trifid=77536DRPRK5900H");
+    expect(status).toBe(200);
+    expect(triCalls.some((u) => u.includes(`/reporting_year/equals/${newest}/`))).toBe(true);
+    expect(body.data.formA).toBeNull();
+    expect(body.data.rows.length).toBe(24);
+    expect(new Set(body.data.totals.map((t) => t.unit))).toEqual(new Set(["Pounds", "Grams"]));
+    expect(body.caveats.join(" ")).toMatch(/Form A list did not answer this time/);
+    vi.unstubAllGlobals();
+  });
+
+  it("refuses a bad facility id or year without asking EPA", async () => {
+    answerTri([], []);
+    expect((await getTri("op=tri&trifid=77536drprk5900h")).status).toBe(400);
+    expect((await getTri("op=tri&trifid=77536DRPRK5900H/../x")).status).toBe(400);
+    expect((await getTri("op=tri&trifid=77536DRPRK5900H&year=1986")).status).toBe(400);
+    expect((await getTri("op=tri&trifid=77536DRPRK5900H&year=20x4")).status).toBe(400);
+    expect((await getTri("op=tri")).status).toBe(400);
+    expect(triCalls).toEqual([]);
+    vi.unstubAllGlobals();
+  });
+});

@@ -22,6 +22,10 @@
 //        Superfund (SEMS), Toxics Release Inventory, RCRA hazardous-waste handlers and
 //        Brownfields (ACRES), 1,000 per program at most. Same box rules. A listing is a
 //        regulatory status, not a finding of contamination; no address is requested.
+//   /api/permits?op=tri&trifid=77012HLLPT9701M[&year=2024]   what a TRI facility reported
+//        releasing on site that year (Form R), by chemical and medium, in its reported
+//        units, with totals per medium and unit, and its Form A certifications. Fields are
+//        kept by allowlist: the certifying official and every contact field never leave.
 //
 // Every portal is asked for named columns, and no applicant, owner, contact or
 // filing-representative name is requested. A licence registry's legal or
@@ -31,7 +35,7 @@
 // as published and can be a person's; nothing searches them (lib/permits/*.ts).
 
 import type { NextRequest } from "next/server";
-import { jsonError } from "@/lib/server/upstream";
+import { jsonError, polite, upstreamJson } from "@/lib/server/upstream";
 import { badRequest, ok, options, withCors } from "@/lib/server/respond";
 import { preferIpv4 } from "@/lib/server/net";
 import { numParam, parseBbox, type Bbox } from "@/lib/civic/bbox";
@@ -39,6 +43,11 @@ import { CHICAGO_DISCLAIMER } from "@/lib/civic/terms";
 import { buildingPermits, contaminants, environmental, licences } from "@/lib/permits/sources";
 import { CONTAMINANTS_CAVEAT } from "@/lib/permits/contaminants";
 import { HOME_HEURISTIC, permitFeatures, licenceFeatures, envFeatures } from "@/lib/permits/geojson";
+import { cached } from "@/lib/server/cache";
+import { retrying } from "@/lib/server/net";
+import { provenance, type Provenance } from "@/lib/provenance/types";
+import { source } from "@/lib/provenance/sources";
+import { projectTri, TRI_CAVEAT, TRI_FIRST_YEAR, triDefaultYears, triFormA, triFormAUrl, TRIFID_RE, triReleases, triReleaseUrl, triTotals, type TriRaw } from "@/lib/permits/tri";
 
 export const maxDuration = 60;
 export const OPTIONS = options;
@@ -122,6 +131,41 @@ async function opContaminants(b: Bbox) {
   );
 }
 
+/** One Envirofacts call, projected to the TRI allowlist before anything else sees it. */
+function triFetch(url: string): Promise<TriRaw[]> {
+  return retrying(() => polite("epa-envirofacts", 1000, 30_000, async () => projectTri(await upstreamJson<unknown>("epa-tri", url, { timeoutMs: 30_000 }))), 3);
+}
+
+/** A facility-year: the Form R release rows and the Form A certifications, held 30 days (a filed year rarely changes). */
+function triYear(trifid: string, year: number) {
+  return cached(`tri:${trifid}:${year}`, 30 * 24 * 3600_000, async () => {
+    const [r, a] = await Promise.all([triFetch(triReleaseUrl(trifid, year)), triFetch(triFormAUrl(trifid, year)).catch(() => null)]);
+    return { releases: triReleases(r), formA: a ? triFormA(a) : null };
+  });
+}
+
+async function opTri(trifid: string, asked: number | null) {
+  const years = asked != null ? [asked] : triDefaultYears();
+  let year = years[0];
+  let r = await triYear(trifid, year);
+  if (asked == null && !r.value.releases.length && !r.value.formA?.length) {
+    year = years[1];
+    r = await triYear(trifid, year);
+  }
+  const { releases, formA } = r.value;
+  const caveats = [TRI_CAVEAT, "The certifying official and every contact field Envirofacts sends are dropped before anything is kept; TRI's own facility coordinates are not used."];
+  if (!releases.length && !formA?.length) caveats.push(asked != null ? `TRI holds no Form R or Form A from this facility for ${year}.` : `TRI holds no Form R or Form A from this facility for ${years.join(" or ")}; ask for another year with year=.`);
+  if (formA == null) caveats.push("The Form A list did not answer this time (formA: null): certifications without quantities are unknown, not absent.");
+  const prov: Provenance[] = [
+    provenance(source("epa-tri"), { kind: "published", seriesId: `tri_reporting_form + tri_release_qty + tri_chem_info, facility ${trifid}, reporting year ${year}`, upstreamUrl: triReleaseUrl(trifid, year), retrievedAt: new Date(Date.now() - r.age).toISOString() }),
+  ];
+  if (formA) prov.push(provenance(source("epa-tri"), { kind: "published", seriesId: `tri_reporting_form (Form A) + tri_chem_info, facility ${trifid}, reporting year ${year}`, upstreamUrl: triFormAUrl(trifid, year), retrievedAt: new Date(Date.now() - r.age).toISOString() }));
+  return ok(
+    { facility: trifid, year, rows: releases, totals: triTotals(releases), formA },
+    { meta: { source: source("epa-tri").name, cacheAge: r.age }, provenance: prov, caveats, ttlS: formA ? 86400 : 600 },
+  );
+}
+
 const BBOX_HELP = "bbox=w,s,e,n required, west < east and south < north, e.g. bbox=-87.635,41.88,-87.625,41.887";
 
 export async function GET(req: NextRequest) {
@@ -151,8 +195,17 @@ export async function GET(req: NextRequest) {
         if (!b) return badRequest(BBOX_HELP);
         return await opContaminants(b);
       }
+      case "tri": {
+        const trifid = (q.get("trifid") ?? "").trim();
+        const y = q.get("year");
+        const year = y == null || y.trim() === "" ? null : /^\d{4}$/.test(y.trim()) ? Number(y.trim()) : NaN;
+        if (!TRIFID_RE.test(trifid) || (year != null && (!Number.isInteger(year) || year < TRI_FIRST_YEAR || year > new Date().getUTCFullYear()))) {
+          return badRequest(`trifid (15 letters and digits, e.g. 77012HLLPT9701M) required; year optional, ${TRI_FIRST_YEAR} to this year`);
+        }
+        return await opTri(trifid, year);
+      }
       default:
-        return badRequest("unknown op: building | licences | environmental | contaminants");
+        return badRequest("unknown op: building | licences | environmental | contaminants | tri");
     }
   } catch (err) {
     return withCors(jsonError(err));
