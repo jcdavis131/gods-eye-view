@@ -21,6 +21,9 @@ import nmfsAreaSeattle from "@/lib/land/fixtures/nmfs-226-seattle.json";
 import nmfsLineSeattle from "@/lib/land/fixtures/nmfs-2-seattle.json";
 import nmfsAreaSodo from "@/lib/land/fixtures/nmfs-226-sodo.json";
 import nmfsLineSodo from "@/lib/land/fixtures/nmfs-2-sodo.json";
+import rangesBarton from "@/lib/land/fixtures/ranges-3-barton.json";
+import rangesPecos from "@/lib/land/fixtures/ranges-3-pecos.json";
+import rangesAustin from "@/lib/land/fixtures/ranges-3-austin.json";
 
 vi.mock("@/lib/server/cache", () => ({
   cached: async <T,>(_k: string, _ttl: number, produce: () => Promise<T>) => ({ value: await produce(), age: 0, hit: false }),
@@ -187,6 +190,7 @@ describe("op=crithab", () => {
     if (u.includes("/USFWS_Critical_Habitat/FeatureServer/2/query")) return json(place === "barton" ? chProposedBarton : chProposedPecos);
     if (u.includes("/All_NMFS_Critical_Habitat/MapServer/226/query")) return json(NOAA[place][0]);
     if (u.includes("/All_NMFS_Critical_Habitat/MapServer/2/query")) return json(NOAA[place][1]);
+    if (u.includes("/Species_Ranges/FeatureServer/3/query")) return json(place === "barton" ? rangesBarton : rangesPecos);
     return null;
   };
   const isFws = (u: string) => u.includes("/USFWS_Critical_Habitat/");
@@ -195,7 +199,7 @@ describe("op=crithab", () => {
     answer = fws("barton");
     const { status, body } = await get("op=crithab&lon=-97.7713&lat=30.2638");
     expect(status).toBe(200);
-    expect(calls).toHaveLength(4);
+    expect(calls).toHaveLength(5);
     for (const u of calls.filter(isFws)) {
       expect(param(u, "returnGeometry")).toBe("false");
       expect(param(u, "outFields")).toBe("comname,sciname,listing_status,status,fedreg,pubdate");
@@ -282,5 +286,37 @@ describe("op=crithab, NOAA Fisheries", () => {
     expect(d.noaa).toBeNull();
     expect(d.final).toHaveLength(1);
     expect(body.caveats?.join(" ")).toMatch(/NOAA Fisheries' critical habitat layers did not answer this time/);
+  });
+});
+
+describe("op=crithab, species ranges", () => {
+  const ranges = (body: unknown) => (u: string) => {
+    if (u.includes("/USFWS_Critical_Habitat/FeatureServer/") || u.includes("/All_NMFS_Critical_Habitat/")) return json({ type: "FeatureCollection", features: [] });
+    if (u.includes("/Species_Ranges/FeatureServer/3/query")) return body == null ? new Response("down", { status: 404 }) : json(body);
+    return null;
+  };
+
+  it("lists the species whose range covers the point, separately from habitat, never drawn", async () => {
+    answer = ranges(rangesAustin);
+    const { status, body } = await get("op=crithab&lon=-97.74&lat=30.27");
+    expect(status).toBe(200);
+    const q = calls.find((u) => u.includes("/Species_Ranges/"))!;
+    expect(param(q, "returnDistinctValues")).toBe("true");
+    expect(param(q, "returnGeometry")).toBe("false");
+    expect(param(q, "outFields")).toBe("Common_Name,Scientific_Name,ESA_Listing_Status,Entity_Description,Lead_Agency,ECOS_Listed_Species_ID,Range_Shapefile_Last_Updated,Taxonomic_Group,Status_Category");
+    expect(param(q, "outFields")).not.toMatch(/Office_Name|Address_City/);
+    const d = body.data as unknown as { final: unknown[]; ranges: Array<Record<string, unknown>> };
+    expect(d.final).toEqual([]);
+    expect(d.ranges).toHaveLength(13);
+    expect(d.ranges.find((s) => s.common === "Bone Cave harvestman")).toMatchObject({ scientific: "Texella reyesi", listing: "Endangered", group: "Arachnids", agency: "FWS", rangeUpdated: "2018-01-24", ecos: "https://ecos.fws.gov/ecp/species/465" });
+    expect(body.caveats?.join(" ")).toMatch(/it is not presence/);
+  });
+
+  it("says unknown, not none, when the range layer fails", async () => {
+    answer = ranges(null);
+    const { status, body } = await get("op=crithab&lon=-97.74&lat=30.27");
+    expect(status).toBe(200);
+    expect((body.data as unknown as { ranges: unknown }).ranges).toBeNull();
+    expect(body.caveats?.join(" ")).toMatch(/species range layer did not answer this time \(ranges: null\)/);
   });
 });

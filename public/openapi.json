@@ -2357,7 +2357,7 @@
     "/api/land": {
       "get": {
         "summary": "Flood zones, wetlands, historic places, public and protected lands in a box, or the ground elevation or critical habitat at a point",
-        "description": "op=flood: FEMA National Flood Hazard Layer flood hazard zones (layer 28) with FEMA's meaning of each zone, whether the ground is in the special flood hazard area, and the base flood elevation where FEMA published one (the -9999 sentinel is dropped). A regulatory map, not a forecast; a box with no zone is not a finding of no risk. Boxes are clamped to 0.08° and snapped to a 0.02° grid. op=wetlands: USFWS National Wetlands Inventory polygons with their Cowardin code, type, acres, the system, class and water regime names from NWI's code table (`codesDecoded` false when it did not answer), and the year of the imagery each was mapped from (`imageYears`, null when NWI's source layer did not answer); same box rules, at most 500 polygons a query. op=historic: National Register of Historic Places listings as NPS's public spatial data publishes them (STATUS 'Listed', and never a record whose Address NPS marks restricted, which a few boundary records still carry; Address itself is never requested): NRIS number, the property's name as NPS lists it (it can include a person's name; it is not a search key), resource type, National Historic Landmark flag, listing date (NPS's partial CertDate, e.g. 2007-10), city, county, state and the National Archives nomination link. Points always; with polygons=1 the district and site boundaries too. No street address is requested. Archaeological sites whose locations are restricted under NHPA section 304 / ARPA are not in NPS's public data, so absence is not absence on the ground, and this is not a Section 106 review. Boxes are clamped to 0.12° and snapped to 0.02°; at most 2,000 per layer. op=crithab: the USFWS designated critical habitat, final (`final`) and proposed (`proposed`), that contains lon, lat: species common and scientific name, listing status, whether the designation is Final or Proposed, the Federal Register citation and its publication date. FWS's placeholder text (\"Please check current species specific shapefile\") is read as no value. And NOAA Fisheries critical habitat for marine and anadromous species (`noaa`): polygons of layer 226 containing the point and river and stream lines of layer 2 within about 200 m (a box 0.002 degrees each way), with agency, shape, listing, Final or Proposed, unit, the Federal Register citation split from NOAA's HTML anchor, eCFR section and dates; null when NOAA did not answer (unknown, not absent). A layer that did not answer is null (unknown, not absent). Regulatory designations, not range or occurrence; FWS says its GIS files are not the legal boundary; NOAA Fisheries' marine and anadromous species are not included. op=publiclands: USGS PAD-US 4.1 fee, easement, designation and proclamation areas with owner, manager, local owner, easement holder, public access, GAP status and IUCN category as PAD-US publishes them; boxes up to 2°, snapped to 0.25°; a box taller than 1.5° keeps the largest 600 units, generalised. op=elevation: USGS 3DEP ground elevation (EPQS) in metres with the source DEM resolution; outside 3DEP coverage `metres` is absent and `note` carries what EPQS said. Only the returned `bbox` is loaded.",
+        "description": "op=flood: FEMA National Flood Hazard Layer flood hazard zones (layer 28) with FEMA's meaning of each zone, whether the ground is in the special flood hazard area, and the base flood elevation where FEMA published one (the -9999 sentinel is dropped). A regulatory map, not a forecast; a box with no zone is not a finding of no risk. Boxes are clamped to 0.08° and snapped to a 0.02° grid. op=wetlands: USFWS National Wetlands Inventory polygons with their Cowardin code, type, acres, the system, class and water regime names from NWI's code table (`codesDecoded` false when it did not answer), and the year of the imagery each was mapped from (`imageYears`, null when NWI's source layer did not answer); same box rules, at most 500 polygons a query. op=historic: National Register of Historic Places listings as NPS's public spatial data publishes them (STATUS 'Listed', and never a record whose Address NPS marks restricted, which a few boundary records still carry; Address itself is never requested): NRIS number, the property's name as NPS lists it (it can include a person's name; it is not a search key), resource type, National Historic Landmark flag, listing date (NPS's partial CertDate, e.g. 2007-10), city, county, state and the National Archives nomination link. Points always; with polygons=1 the district and site boundaries too. No street address is requested. Archaeological sites whose locations are restricted under NHPA section 304 / ARPA are not in NPS's public data, so absence is not absence on the ground, and this is not a Section 106 review. Boxes are clamped to 0.12° and snapped to 0.02°; at most 2,000 per layer. op=crithab: the USFWS designated critical habitat, final (`final`) and proposed (`proposed`), that contains lon, lat: species common and scientific name, listing status, whether the designation is Final or Proposed, the Federal Register citation and its publication date. FWS's placeholder text (\"Please check current species specific shapefile\") is read as no value. And NOAA Fisheries critical habitat for marine and anadromous species (`noaa`): polygons of layer 226 containing the point and river and stream lines of layer 2 within about 200 m (a box 0.002 degrees each way), with agency, shape, listing, Final or Proposed, unit, the Federal Register citation split from NOAA's HTML anchor, eCFR section and dates; null when NOAA did not answer (unknown, not absent). And `ranges`: the listed and proposed species whose range covers the point, from EPA OPP's Species_Ranges layer 3 (distinct values, never drawn), with listing status, entity, lead agency, taxonomic group, range date and ECOS link; a range is not presence; null when that layer did not answer. A layer that did not answer is null (unknown, not absent). Regulatory designations, not range or occurrence; FWS says its GIS files are not the legal boundary; NOAA Fisheries' marine and anadromous species are not included. op=publiclands: USGS PAD-US 4.1 fee, easement, designation and proclamation areas with owner, manager, local owner, easement holder, public access, GAP status and IUCN category as PAD-US publishes them; boxes up to 2°, snapped to 0.25°; a box taller than 1.5° keeps the largest 600 units, generalised. op=elevation: USGS 3DEP ground elevation (EPQS) in metres with the source DEM resolution; outside 3DEP coverage `metres` is absent and `note` carries what EPQS said. Only the returned `bbox` is loaded.",
         "tags": [
           "land"
         ],
@@ -7271,6 +7271,46 @@
                       "$ref": "#/components/schemas/NmfsSpecies"
                     },
                     "description": "NOAA Fisheries designations (marine and anadromous species): polygons (layer 226) containing the point and river and stream lines (layer 2) within about 200 m; null when either NOAA layer did not answer."
+                  },
+                  "ranges": {
+                    "type": [
+                      "array",
+                      "null"
+                    ],
+                    "description": "Listed and proposed species whose range covers the point (EPA OPP Species_Ranges layer 3, USFWS and NOAA ranges): a separate list, never mixed with habitat rows; a range is where a species could occur, not presence. null when the range layer did not answer.",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "common": {
+                          "type": "string"
+                        },
+                        "scientific": {
+                          "type": "string"
+                        },
+                        "listing": {
+                          "type": "string"
+                        },
+                        "entity": {
+                          "type": "string"
+                        },
+                        "agency": {
+                          "type": "string"
+                        },
+                        "group": {
+                          "type": "string"
+                        },
+                        "category": {
+                          "type": "string"
+                        },
+                        "rangeUpdated": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "ecos": {
+                          "type": "string"
+                        }
+                      }
+                    }
                   }
                 }
               }

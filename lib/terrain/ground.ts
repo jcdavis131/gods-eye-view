@@ -33,7 +33,7 @@ import { GROUND_LAYERS } from "@/lib/layers/terrain";
 import type { ClassAnswer } from "./classes";
 import { nccpiText, type SoilAnswer } from "./soil";
 import { ageRange, type GeologyAnswer } from "@/lib/infra/geology";
-import { critHabText, nmfsText, type CritHabSpecies, type NmfsSpecies } from "@/lib/land/features";
+import { critHabText, nmfsText, rangeGroup, rangeText, type CritHabSpecies, type NmfsSpecies, type RangeSpecies } from "@/lib/land/features";
 import { useSettings } from "@/lib/store/settings";
 import { resolveTopoYear, sheetText, type TopoSheet, type TopoYear } from "./topo";
 import { captureText, parseReleaseId, zoomForHeight, type WaybackCapture } from "./wayback";
@@ -186,7 +186,7 @@ export function groundDetails(p: Pick<GroundPick, "lon" | "lat" | "parts">): Det
   }
   const ch = p.parts.crithab;
   if (ch && !waiting(d, "critical habitat", ch, "USFWS")) {
-    const a = ch.data as { final: CritHabSpecies[] | null; proposed: CritHabSpecies[] | null; noaa?: NmfsSpecies[] | null } | null;
+    const a = ch.data as { final: CritHabSpecies[] | null; proposed: CritHabSpecies[] | null; noaa?: NmfsSpecies[] | null; ranges?: RangeSpecies[] | null } | null;
     const all = [...(a?.final ?? []).map(critHabText), ...(a?.proposed ?? []).map(critHabText), ...(a?.noaa ?? []).map(nmfsText)];
     const noaaAsked = a != null && "noaa" in a;
     if (all.length) all.forEach((t, i) => (d[all.length > 1 ? `critical habitat ${i + 1}` : "critical habitat"] = t));
@@ -195,6 +195,23 @@ export function groundDetails(p: Pick<GroundPick, "lon" | "lat" | "parts">): Det
     if (a && !a.proposed) d["critical habitat (proposed)"] = "FWS's proposed layer did not answer: unknown, not absent";
     if (noaaAsked && !a?.noaa) d["critical habitat (NOAA Fisheries)"] = "NOAA Fisheries did not answer: marine and anadromous designations unknown, not absent";
     d["critical habitat note"] = "a regulatory designation, not range or occurrence; the GIS files are not the legal boundary (for FWS the Federal Register rule and 50 CFR 17 are, for NOAA the eCFR text)";
+    if (a && "ranges" in a) {
+      const r = a.ranges;
+      if (!r) d["listed species ranges here"] = "EPA's species range layer did not answer: unknown, not none";
+      else if (!r.length) d["listed species ranges here"] = "no listed or proposed species' range covers this point in EPA's range layer";
+      else {
+        d["listed species ranges here"] = `${r.length} listed or proposed species whose range covers this point (USFWS and NOAA ranges, via EPA): a range is where a species could occur, not where it is`;
+        const order = ["endangered", "threatened", "proposed"];
+        const groups = new Map<string, RangeSpecies[]>();
+        for (const s of r) {
+          const g = rangeGroup(s);
+          if (!groups.has(g)) groups.set(g, []);
+          groups.get(g)!.push(s);
+        }
+        const keys = [...groups.keys()].sort((x, y) => (order.indexOf(x) < 0 ? 9 : order.indexOf(x)) - (order.indexOf(y) < 0 ? 9 : order.indexOf(y)) || x.localeCompare(y));
+        for (const g of keys) d[`range: ${g} (${groups.get(g)!.length})`] = groups.get(g)!.map(rangeText).join("; ");
+      }
+    }
   }
   const tp = p.parts.topo;
   if (tp && !waiting(d, "topographic maps", tp, "USGS (HTMC)")) {

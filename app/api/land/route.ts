@@ -69,6 +69,8 @@ import {
   parseCritHab,
   NMFS_CAVEAT,
   parseNmfs,
+  parseRanges,
+  RANGES_CAVEAT,
   type NmfsSpecies,
   parseEpqs,
   parseNwiCodes,
@@ -121,6 +123,14 @@ const CRITHAB_FIELDS = "comname,sciname,listing_status,status,fedreg,pubdate";
  */
 const NMFS = "https://maps.fisheries.noaa.gov/server/rest/services/All_NMFS_Critical_Habitat/MapServer";
 const NMFS_FIELDS = "SCIENAME,COMNAME,LISTSTATUS,CHSTATUS,UNIT,ECFR,FR,PUBDATE,EFFECTDATE,HABTYPE";
+/**
+ * EPA OPP's Endangered Species Range Areas, layer 3 "Diced" (12,293 polygons, best for a point
+ * query): listed and proposed species whose range covers a point, as USFWS and NOAA delineate it.
+ * Asked with returnDistinctValues; never drawn, so the answer is a list and suggests no location.
+ * Office_Name and Address_City (FWS field offices) are not asked for.
+ */
+const RANGES = "https://services.arcgis.com/cJ9YHowT8TU7DUyn/arcgis/rest/services/Species_Ranges/FeatureServer/3";
+const RANGES_FIELDS = "Common_Name,Scientific_Name,ESA_Listing_Status,Entity_Description,Lead_Agency,ECOS_Listed_Species_ID,Range_Shapefile_Last_Updated,Taxonomic_Group,Status_Category";
 /** A point never intersects a line: the line layer is asked in a box this many degrees each way (about 200 m). */
 const NMFS_LINE_PAD = 0.002;
 const EPQS = "https://epqs.nationalmap.gov/v1/json";
@@ -439,21 +449,35 @@ async function opCritHab(lon: number, lat: number): Promise<OpResult> {
       );
       return parseNmfs(fc.features, layer === 226 ? "area" : "line");
     });
+  const ranges = () =>
+    cached(`opp-ranges:3:${x},${y}`, DAY, async () =>
+      parseRanges(
+        await arcgisRows(
+          "epa-opp-ranges",
+          RANGES,
+          { where: "1=1", geometry: `${x},${y}`, geometryType: "esriGeometryPoint", inSR: "4326", spatialRel: "esriSpatialRelIntersects", outFields: RANGES_FIELDS, returnGeometry: "false", returnDistinctValues: "true" },
+          { gate: "epa-opp-ranges", minIntervalMs: 250, timeoutMs: 20_000, tries: 2 },
+        ),
+      ),
+    );
   const settle = <T,>(p: Promise<T>) => p.catch((e: unknown) => (e instanceof Error ? e : new Error(String(e))));
-  const [fin, prop, nArea, nLine] = await Promise.all([settle(ask(0)), settle(ask(2)), settle(nmfs(226)), settle(nmfs(2))]);
-  if (fin instanceof Error && prop instanceof Error && nArea instanceof Error && nLine instanceof Error) throw fin;
+  const [fin, prop, nArea, nLine, rng] = await Promise.all([settle(ask(0)), settle(ask(2)), settle(nmfs(226)), settle(nmfs(2)), settle(ranges())]);
+  if (fin instanceof Error && prop instanceof Error && nArea instanceof Error && nLine instanceof Error && rng instanceof Error) throw fin;
+  // A separate list, never mixed into the habitat rows: range is not habitat and not presence.
+  const speciesRanges = rng instanceof Error ? null : rng.value;
   const final = fin instanceof Error ? null : fin.value;
   const proposed = prop instanceof Error ? null : prop.value;
   // NOAA is one source to the reader: both of its layers answered, or it is unknown.
   const noaa: NmfsSpecies[] | null = nArea instanceof Error || nLine instanceof Error ? null : [...nArea.value, ...nLine.value];
-  const ages = [fin, prop, nArea, nLine].map((r) => (r instanceof Error ? 0 : r.age));
+  const ages = [fin, prop, nArea, nLine, rng].map((r) => (r instanceof Error ? 0 : r.age));
   const age = Math.max(...ages);
   const species = [...(final ?? []), ...(proposed ?? []), ...(noaa ?? [])];
-  const caveats = [CRITHAB_CAVEAT, NMFS_CAVEAT];
+  const caveats = [CRITHAB_CAVEAT, NMFS_CAVEAT, RANGES_CAVEAT];
   if (!species.length && final && proposed && noaa) caveats.push("No designated critical habitat contains this point. That is not a finding that no listed species is here: most listed species have no designation, and range is not habitat.");
   if (!final) caveats.push("FWS's final critical habitat layer did not answer this time (final: null); final designations here are unknown, not absent.");
   if (!proposed) caveats.push("FWS's proposed critical habitat layer did not answer this time (proposed: null); proposed designations here are unknown, not absent.");
   if (!noaa) caveats.push("NOAA Fisheries' critical habitat layers did not answer this time (noaa: null); marine and anadromous designations here are unknown, not absent.");
+  if (!speciesRanges) caveats.push("EPA's species range layer did not answer this time (ranges: null); which listed species' ranges cover this point is unknown, not none.");
   const prov: Provenance[] = [];
   if (final) prov.push(provenance(source("usfws-crithab"), { kind: "published", seriesId: "USFWS_Critical_Habitat FeatureServer layer 0 (final)", upstreamUrl: `${CRITHAB}/0`, retrievedAt: fetchedAt(age), notes: [`point ${x},${y}`] }));
   if (proposed) prov.push(provenance(source("usfws-crithab"), { kind: "published", seriesId: "USFWS_Critical_Habitat FeatureServer layer 2 (proposed)", upstreamUrl: `${CRITHAB}/2`, retrievedAt: fetchedAt(age), notes: [`point ${x},${y}`] }));
@@ -461,10 +485,11 @@ async function opCritHab(lon: number, lat: number): Promise<OpResult> {
     prov.push(provenance(source("noaa-nmfs-crithab"), { kind: "published", seriesId: "All_NMFS_Critical_Habitat MapServer layer 226 (polygons, at the point)", upstreamUrl: `${NMFS}/226`, retrievedAt: fetchedAt(age), notes: [`point ${x},${y}`] }));
     prov.push(provenance(source("noaa-nmfs-crithab"), { kind: "published", seriesId: "All_NMFS_Critical_Habitat MapServer layer 2 (lines, within about 200 m)", upstreamUrl: `${NMFS}/2`, retrievedAt: fetchedAt(age), notes: [`box ${NMFS_LINE_PAD} degrees around ${x},${y}`] }));
   }
+  if (speciesRanges) prov.push(provenance(source("epa-opp-ranges"), { kind: "published", seriesId: "Species_Ranges FeatureServer layer 3 (Diced Endangered Species Range Areas), distinct", upstreamUrl: RANGES, retrievedAt: fetchedAt(age), notes: [`point ${x},${y}`] }));
   return {
-    data: { lon: x, lat: y, final, proposed, noaa },
-    meta: { source: "U.S. Fish and Wildlife Service (final and proposed) and NOAA Fisheries critical habitat", cacheAge: age },
-    ttlS: final && proposed && noaa ? 3600 : 300,
+    data: { lon: x, lat: y, final, proposed, noaa, ranges: speciesRanges },
+    meta: { source: "U.S. Fish and Wildlife Service (final and proposed) and NOAA Fisheries critical habitat; EPA OPP species ranges", cacheAge: age },
+    ttlS: final && proposed && noaa && speciesRanges ? 3600 : 300,
     provenance: prov,
     caveats,
   };

@@ -593,6 +593,72 @@ export function nmfsText(s: NmfsSpecies): string {
   return [`${name} · ${s.listing ?? "listing status not published"} · ${designation}`, where, rule || undefined, "NOAA Fisheries"].filter(Boolean).join(" · ");
 }
 
+// ---------------------------------------------------------------- EPA OPP species ranges
+
+/** What a species range is and is not (route caveat, dossier, catalogue). */
+export const RANGES_CAVEAT =
+  "A range is where a species could occur, as USFWS or NOAA delineate it; it is not presence. It includes proposed species. Range dates differ by species (2014-2026 at the points checked, 2026-10-13).";
+
+export interface RangeSpecies {
+  common?: string;
+  scientific?: string;
+  /** ESA listing status as published: Endangered, Threatened, Proposed Threatened, Experimental Population... */
+  listing?: string;
+  /** The listed entity, e.g. "Wherever found" or a distinct population segment. */
+  entity?: string;
+  /** FWS or NMFS. */
+  agency?: string;
+  group?: string;
+  /** "Listed" or "Proposed for Listing". */
+  category?: string;
+  /** When the range shapefile was last updated, YYYY-MM-DD. */
+  rangeUpdated?: string;
+  /** The species' ECOS page. */
+  ecos?: string;
+}
+
+/** Species_Ranges point rows (f=json attributes, distinct) -> one entry per species, entity and status. */
+export function parseRanges(rows: Array<Record<string, unknown>>): RangeSpecies[] {
+  const out: RangeSpecies[] = [];
+  const seen = new Set<string>();
+  for (const a of rows) {
+    const epoch = typeof a.Range_Shapefile_Last_Updated === "number" && Number.isFinite(a.Range_Shapefile_Last_Updated) ? a.Range_Shapefile_Last_Updated : null;
+    const id = str(a.ECOS_Listed_Species_ID);
+    const sp: RangeSpecies = {
+      common: str(a.Common_Name),
+      scientific: str(a.Scientific_Name),
+      listing: str(a.ESA_Listing_Status),
+      entity: str(a.Entity_Description),
+      agency: str(a.Lead_Agency),
+      group: str(a.Taxonomic_Group),
+      category: str(a.Status_Category),
+      rangeUpdated: epoch != null ? new Date(epoch).toISOString().slice(0, 10) : undefined,
+      ecos: id && /^\d{1,7}$/.test(id) ? `https://ecos.fws.gov/ecp/species/${id}` : undefined,
+    };
+    const key = [sp.scientific, sp.common, sp.entity, sp.listing].join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(sp);
+  }
+  return out.sort((x, y) => (x.common ?? x.scientific ?? "").localeCompare(y.common ?? y.scientific ?? ""));
+}
+
+/** The dossier's status groups: Endangered, Threatened, Proposed, then anything else as published. */
+export function rangeGroup(s: RangeSpecies): string {
+  const l = s.listing?.toLowerCase() ?? "";
+  if (l.startsWith("proposed")) return "proposed";
+  if (l === "endangered") return "endangered";
+  if (l === "threatened") return "threatened";
+  return s.listing ? s.listing.toLowerCase() : "status not published";
+}
+
+/** One species in a range group: "Bone Cave harvestman (Texella reyesi; arachnids; FWS; range 2018-01-24)". */
+export function rangeText(s: RangeSpecies): string {
+  const name = s.common ?? s.scientific ?? "species not named";
+  const bits = [s.common && s.scientific ? s.scientific : undefined, s.entity && s.entity !== "Wherever found" ? s.entity : undefined, rangeGroup(s) === "proposed" ? s.listing : undefined, s.group?.toLowerCase(), s.agency, s.rangeUpdated ? `range ${s.rangeUpdated}` : undefined].filter(Boolean);
+  return bits.length ? `${name} (${bits.join("; ")})` : name;
+}
+
 // ---------------------------------------------------------------- USGS PAD-US
 
 export type Access = "open" | "restricted" | "closed" | "unknown";

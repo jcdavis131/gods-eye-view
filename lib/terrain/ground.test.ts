@@ -164,3 +164,18 @@ describe("NOAA Fisheries critical habitat in the ground dossier", () => {
     expect(down["critical habitat (NOAA Fisheries)"]).toMatch(/unknown, not absent/);
   });
 });
+
+describe("species ranges in the ground dossier", () => {
+  it("groups the species by status, says range is not presence, and says unknown when the layer failed", async () => {
+    const { parseRanges } = await import("@/lib/land/features");
+    const austin = (await import("@/lib/land/fixtures/ranges-3-austin.json")).default as { features: Array<{ attributes: Record<string, unknown> }> };
+    const ranges = parseRanges(austin.features.map((f) => f.attributes));
+    const d = groundDetails({ lon: -97.74, lat: 30.27, parts: { crithab: { loading: false, data: { final: [], proposed: [], noaa: [], ranges } } } });
+    expect(d["listed species ranges here"]).toMatch(/^13 listed or proposed species whose range covers this point .* not where it is$/);
+    const groups = Object.keys(d).filter((k) => k.startsWith("range: "));
+    expect(groups[0]).toMatch(/^range: endangered \(\d+\)$/);
+    expect(String(d[groups[0]])).toContain("Bone Cave harvestman (Texella reyesi; arachnids; FWS; range 2018-01-24)");
+    const down = groundDetails({ lon: -97.74, lat: 30.27, parts: { crithab: { loading: false, data: { final: [], proposed: [], noaa: [], ranges: null } } } });
+    expect(down["listed species ranges here"]).toMatch(/unknown, not none/);
+  });
+});

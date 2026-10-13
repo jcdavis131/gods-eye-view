@@ -22,6 +22,7 @@ describe("the catalogue", () => {
       "nrhp-listed",
       "fws-crithab",
       "nmfs-crithab",
+      "opp-ranges",
       "attains-impaired",
       "emef-sems",
       "emef-tri",

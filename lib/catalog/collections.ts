@@ -18,7 +18,7 @@ import type { SourceId } from "@/lib/provenance/sources";
 import { WAYBACK_CAPTURE_CAVEAT, WAYBACK_CAVEAT } from "@/lib/terrain/wayback";
 import { TOPO_CAVEAT } from "@/lib/terrain/topo";
 import { IMPAIRED_CAVEAT } from "@/lib/water/impaired";
-import { NMFS_CAVEAT } from "@/lib/land/features";
+import { NMFS_CAVEAT, RANGES_CAVEAT } from "@/lib/land/features";
 
 export interface Exclusion {
   what: string;
@@ -186,6 +186,27 @@ export const COLLECTIONS: readonly Collection[] = [
     embedText: ["COMNAME", "SCIENAME", "LISTSTATUS", "CHSTATUS", "UNIT", "FR", "PUBDATE", "HABTYPE"],
     ops: ["land?op=crithab"],
     sensitivity: "Agency-published regulatory polygons and lines only; no occurrence points.",
+    round: 2,
+  },
+  {
+    id: "opp-ranges",
+    title: "Listed species ranges (EPA OPP, USFWS and NOAA)",
+    layer: "crithab",
+    sources: ["epa-opp-ranges"],
+    what: "ESA listed and proposed species ranges as USFWS and NOAA Fisheries delineate them, published by EPA's Office of Pesticide Programs for Section 7 work. A click with Critical habitat on lists the species whose range covers the point, grouped by status, with taxonomic group, lead agency, range date and ECOS page. The polygons are never drawn.",
+    recordIs: "A range: where a species could occur. Not presence, not habitat, not a sighting.",
+    coverage: { spatial: "United States and its waters", temporal: null, count: { value: 12293, of: "diced range polygons in layer 3", countedOn: R2 } },
+    freshness: { statement: "EPA last edited the layer's data on 2026-10-11; each species carries its own range date (2014-2026 at the points checked).", readFrom: "Species_Ranges FeatureServer layer 3 editingInfo.dataLastEditDate; Range_Shapefile_Last_Updated", recordedOn: R2 },
+    excluded: [
+      { what: "drawing the range polygons", why: "the answer is a list, so it does not suggest where a species is" },
+      { what: "Office_Name and Address_City (FWS field offices)", why: "they add nothing to the question" },
+      { what: "occurrence points (GBIF, iNaturalist, NatureServe)", why: "precise locations of sensitive species are not shown" },
+    ],
+    caveats: [RANGES_CAVEAT],
+    searchable: [],
+    embedText: ["Common_Name", "Scientific_Name", "ESA_Listing_Status", "Entity_Description", "Lead_Agency", "Taxonomic_Group"],
+    ops: ["land?op=crithab"],
+    sensitivity: "Agency-published coarse ranges only, never drawn; no occurrence points.",
     round: 2,
   },
   // ------------------------------------------------------------ round 2: water quality
