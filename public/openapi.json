@@ -175,8 +175,7 @@
                               "searchable",
                               "embedText",
                               "ops",
-                              "sensitivity",
-                              "round"
+                              "sensitivity"
                             ]
                           }
                         },

@@ -18,9 +18,11 @@ import { source } from "@/lib/provenance/sources";
 
 export const OPTIONS = options;
 
-/** A collection with its sources expanded from the registry. */
+/** A collection with its sources expanded from the registry; `round` is internal curation bookkeeping and is not published. */
 function view(c: Collection) {
-  return { ...c, sources: c.sources.map((id) => source(id)), globe: `/?layers=${c.layer}` };
+  const out: Omit<Collection, "sources" | "round"> & { round?: Collection["round"]; sources: ReturnType<typeof source>[]; globe: string } = { ...c, sources: c.sources.map((id) => source(id)), globe: `/?layers=${c.layer}` };
+  delete out.round;
+  return out;
 }
 
 const CAVEATS = [

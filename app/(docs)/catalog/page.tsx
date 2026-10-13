@@ -46,7 +46,7 @@ function Card({ c }: { c: Collection }) {
         {c.title}
       </h3>
       <p className="mt-1 text-[13px] text-muted-foreground">
-        <span className="tabular-nums">{c.id}</span> · layer <span className="tabular-nums">{c.layer}</span> · catalogued in round {c.round} ·{" "}
+        <span className="tabular-nums">{c.id}</span> · layer <span className="tabular-nums">{c.layer}</span> ·{" "}
         <a href={`/?layers=${c.layer}`} className="text-primary underline">
           show on the globe
         </a>
