@@ -111,7 +111,7 @@ export function gasWeekForDate(
 
 /** Layer ids that redraw for the playback year. ERCOT is live-only and is
  * hidden during playback; data centers are static and ignore the clock. */
-export const TIME_AWARE_LAYER_IDS = ["uselectricity", "gasprices", "globalgeneration"] as const;
+export const TIME_AWARE_LAYER_IDS = ["uselectricity", "gasprices", "globalgeneration", "wikipedia", "wikiday"] as const;
 
 /** Live-only layer ids hidden while the time machine is engaged. */
 export const PLAYBACK_HIDDEN_LAYER_IDS = ["ercotprices"] as const;

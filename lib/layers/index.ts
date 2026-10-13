@@ -48,6 +48,8 @@ import { envpermitsLayer } from "./envpermits";
 import { sportsLayer } from "./sports";
 import { constructsLayer } from "./constructs";
 import { fieldLayer } from "./field";
+import { wikipediaLayer } from "./wikipedia";
+import { wikidayLayer } from "./wikiday";
 import { alertsLayer } from "./alerts";
 
 export const LAYERS: LayerDefinition[] = [
@@ -98,6 +100,8 @@ export const LAYERS: LayerDefinition[] = [
   sportsLayer,
   constructsLayer,
   fieldLayer,
+  wikipediaLayer,
+  wikidayLayer,
   alertsLayer,
 ];
 
