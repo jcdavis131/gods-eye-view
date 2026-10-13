@@ -1,0 +1,293 @@
+// The catalogue: one card per curated collection the globe draws or the
+// dossiers read. eye is a library; each layer is one or more collections, and
+// each collection says what a record is, where it comes from, what it covers,
+// how current it is (and where that was read), what is left out and why, and
+// what may be searched or embedded.
+//
+// This module adds only that. It never copies a source's name, publisher or
+// licence (those live in lib/provenance/sources.ts, referenced by id), never a
+// layer's label (lib/layers), and never an op's schema (public/openapi.json,
+// referenced as "route?op=x"). Counts are from returnCountOnly probes on the
+// date given, never estimated; freshness is what the upstream says about
+// itself, with the field it was read from.
+//
+// Served at /api/catalog and listed at /catalog. Pure and static: no network.
+
+import type { LayerId } from "@/lib/layers/types";
+import type { SourceId } from "@/lib/provenance/sources";
+import { WAYBACK_CAVEAT } from "@/lib/terrain/wayback";
+
+export interface Exclusion {
+  what: string;
+  why: string;
+}
+
+export interface Collection {
+  /** Stable id, kebab-case, e.g. "nrhp-listed". Never reused. */
+  id: string;
+  title: string;
+  /** The layer that draws it. A dossier-only collection still names the layer whose click shows it. */
+  layer: LayerId;
+  /** Upstreams, by id in SOURCES; name, publisher and licence come from there. */
+  sources: SourceId[];
+  /** One paragraph: what the collection holds. */
+  what: string;
+  /** What one record means and does not mean. */
+  recordIs: string;
+  coverage: {
+    spatial: string;
+    /** null when the collection is a current-state snapshot. */
+    temporal: string | null;
+    /** From a returnCountOnly (or equivalent) probe, never estimated; null when not counted. */
+    count: { value: number; of: string; countedOn: string } | null;
+  };
+  freshness: {
+    /** What the upstream says about its own currency. */
+    statement: string;
+    /** The field or document it was read from. */
+    readFrom: string;
+    /** When it was read, ISO date. Not a live claim. */
+    recordedOn: string;
+  };
+  excluded: Exclusion[];
+  caveats: string[];
+  /** Fields that identify a record and may be searched; never a name that can be a person's. */
+  searchable: string[];
+  /** Fields safe to embed as record text (the embedding step). Never addresses, contacts or person-name fields. */
+  embedText: string[];
+  /** Ops that serve it, as "route?op=x"; each must be in public/openapi.json. */
+  ops: string[];
+  /** Sensitive-location and personal-data handling. */
+  sensitivity: string;
+  /** Curation round it entered. */
+  round: 1 | 2;
+}
+
+/** Which shelf a layer's collections sit on (the /catalog page's grouping). */
+export const SHELVES: Array<{ id: string; title: string; layers: LayerId[] }> = [
+  { id: "land", title: "Land and heritage", layers: ["wetlands", "historic"] },
+  { id: "species", title: "Species", layers: ["crithab"] },
+  { id: "water", title: "Water quality", layers: [] },
+  { id: "contaminants", title: "Contaminants", layers: ["contaminants"] },
+  { id: "imagery", title: "Imagery and maps", layers: ["wayback"] },
+];
+
+const R1 = "2026-10-12";
+const R2 = "2026-10-13";
+
+export const COLLECTIONS: readonly Collection[] = [
+  // ------------------------------------------------------------ round 1: land and heritage
+  {
+    id: "nwi-wetlands",
+    title: "National Wetlands Inventory polygons",
+    layer: "wetlands",
+    sources: ["usfws-nwi"],
+    what: "USFWS's map of wetland and deepwater habitat, one polygon per mapped unit, each with its Cowardin code decoded through NWI's own code table (system, subsystem, class, water regime) and the year of the imagery it was drawn from (NWI Data_Source).",
+    recordIs: "A habitat polygon mapped from aerial imagery of a given year. It is not a jurisdictional (Clean Water Act) delineation and does not say the area is wet today.",
+    coverage: { spatial: "United States and territories; polygons below 10 km camera height, 500 per request (NWI's maxRecordCount)", temporal: "imagery years vary by quad, often decades old", count: null },
+    freshness: { statement: "Each polygon carries the year of the imagery it was mapped from; the service does not publish an edit date.", readFrom: "Data_Source MapServer layer 3 (Image Year); Wetlands layer 0 ?f=json has no editingInfo", recordedOn: R2 },
+    excluded: [
+      { what: "jurisdictional status", why: "NWI is a habitat inventory, not a delineation; nothing here says what a regulator would decide" },
+      { what: "guessed names for unknown codes", why: "a code the table does not answer leaves the names null" },
+    ],
+    caveats: ["A habitat inventory mapped from imagery that can be decades old, not a jurisdictional (Clean Water Act) delineation."],
+    searchable: [],
+    embedText: ["ATTRIBUTE", "WETLAND_TYPE", "SYSTEM_NAME", "CLASS_NAME", "WATER_REGIME_NAME"],
+    ops: ["land?op=wetlands"],
+    sensitivity: "Habitat polygons only; no ownership or personal data.",
+    round: 1,
+  },
+  {
+    id: "nwi-wetlands-raster",
+    title: "National Wetlands Inventory raster (zoomed out)",
+    layer: "wetlands",
+    sources: ["usfws-nwi"],
+    what: "NWI's national generalised raster, about 100 m pixels in eight wetland types, drawn above 10 km where the polygons are not loaded. The legend is the raster's own attribute table.",
+    recordIs: "A pixel class at about 100 m: a picture of where NWI maps wetland types at that scale.",
+    coverage: { spatial: "United States and territories; above 10 km camera height", temporal: null, count: null },
+    freshness: { statement: "Pinned to service version v5 by name.", readFrom: "service name Wetlands_Raster_v5", recordedOn: R1 },
+    excluded: [
+      { what: "small wetlands", why: "lost at 100 m pixels" },
+      { what: "a click answer on the raster", why: "raster identify is deferred; below 10 km the polygons answer" },
+    ],
+    caveats: ["Above 10 km the map is NWI's national ~100 m generalised raster, eight classes. Small wetlands can be missing at that scale."],
+    searchable: [],
+    embedText: [],
+    ops: ["terrain?op=products"],
+    sensitivity: "A picture of habitat classes; no personal data.",
+    round: 1,
+  },
+  {
+    id: "nrhp-listed",
+    title: "National Register of Historic Places, listed properties",
+    layer: "historic",
+    sources: ["nps-nrhp"],
+    what: "Properties listed on the National Register as NPS publishes them in its public, non-restricted spatial data: points for every listing it maps, and boundaries for districts and sites, each with its NRIS reference number, resource type, NHL flag, listing date and National Archives nomination link.",
+    recordIs: "A listing on the National Register: a property NPS has listed, at the location NPS publishes. Absence is not absence on the ground.",
+    coverage: { spatial: "United States; points below 25 km, boundaries below 10 km, 2,000 per layer and box", temporal: null, count: { value: 73928, of: "listed points (layer 0), restricted addresses excluded; 22,855 listed boundaries on layer 1", countedOn: R1 } },
+    freshness: { statement: "The service publishes no edit date; NPS describes it as its current public, non-restricted spatial data.", readFrom: "nrhp_locations MapServer ?f=json (no editingInfo; serviceDescription)", recordedOn: R2 },
+    excluded: [
+      { what: "removed listings (648) and listings with no status (60)", why: "the layer shows what is listed, as STATUS='Listed'" },
+      { what: "boundaries whose Address reads \"Address Restricted\" (3 listed)", why: "NPS marks their location restricted; filtered in the query, Address never requested" },
+      { what: "archaeological sites whose locations are withheld under NHPA s.304 / ARPA", why: "NPS does not publish them in this service, and eye does not seek them elsewhere (no SHPO files, DINAA, tDAR or mirrors)" },
+      { what: "street addresses", why: "never requested" },
+    ],
+    caveats: [
+      "Only National Register properties that NPS publishes as non-restricted. Archaeological sites withheld under NHPA s.304 / ARPA are not in this source and are not shown. Absence on the map does not mean no resource is present. Not a substitute for Section 106 consultation or a SHPO file search.",
+      "Property names can include a person's name, as NPS lists them, and are not searchable.",
+    ],
+    searchable: ["NRIS_Refnum"],
+    embedText: ["NRIS_Refnum", "ResType", "Is_NHL", "CertDate", "City", "County", "State"],
+    ops: ["land?op=historic"],
+    sensitivity: "Agency-published, non-restricted listings only; restricted-address records are filtered out; property names (RESNAME) can be a person's and are never searched or embedded.",
+    round: 1,
+  },
+  // ------------------------------------------------------------ round 1: species
+  {
+    id: "fws-crithab",
+    title: "USFWS designated critical habitat, final and proposed",
+    layer: "crithab",
+    sources: ["usfws-crithab"],
+    what: "ESA critical habitat designations under the U.S. Fish and Wildlife Service, one polygon set per species and rule, final and proposed, drawn from FWS's own tile caches and answered at a click from its FeatureServer: species, listing status, Final or Proposed, Federal Register rule and publication date.",
+    recordIs: "A regulatory designation under the Endangered Species Act. It is not species range or occurrence, and FWS says the GIS file is not the legal boundary (the Federal Register rule and 50 CFR 17 are).",
+    coverage: { spatial: "United States and territories, FWS-lead species", temporal: null, count: { value: 803, of: "final per-species designations (layer 0); 70 proposed (layer 2)", countedOn: R2 } },
+    freshness: { statement: "FWS last edited the final layer on 2026-08-31.", readFrom: "USFWS_Critical_Habitat FeatureServer layer 0 editingInfo.lastEditDate", recordedOn: R2 },
+    excluded: [
+      { what: "occurrence points of any kind (GBIF, iNaturalist, NatureServe)", why: "precise locations of sensitive species are not shown; only agency regulatory polygons" },
+      { what: "species images", why: "fws.gov/disclaimer: images can be copyrighted" },
+      { what: "unitname, effectdate, accuracy", why: "FWS fills them with its placeholder \"Please check current species specific shapefile\"" },
+    ],
+    caveats: ["Many listed species have no designation, and a polygon does not mean the species is present. Proposed designations are always labelled as proposed."],
+    searchable: [],
+    embedText: ["comname", "sciname", "listing_status", "status", "fedreg", "pubdate"],
+    ops: ["land?op=crithab"],
+    sensitivity: "Agency-published regulatory polygons only; no occurrence points.",
+    round: 1,
+  },
+  // ------------------------------------------------------------ round 1: contaminants
+  {
+    id: "emef-sems",
+    title: "Superfund sites (EPA EMEF, SEMS)",
+    layer: "contaminants",
+    sources: ["epa-emef"],
+    what: "Superfund sites as EPA's Envirofacts EMEF map service publishes them (layer 0, program system SEMS), each with its EPA program id, FRS registry id and EPA facility page.",
+    recordIs: "A Superfund program listing at EPA's facility coordinates. A regulatory status, not a finding of contamination at the point.",
+    coverage: { spatial: "United States; below 25 km, 1,000 per program and box", temporal: null, count: { value: 1374, of: "points in EMEF efpoints layer 0 (SEMS)", countedOn: R2 } },
+    freshness: { statement: "The map service publishes no edit date; EPA links its metadata record from the layer description.", readFrom: "EMEF efpoints MapServer layer 0 ?f=json (no editingInfo)", recordedOn: R2 },
+    excluded: [
+      { what: "location_address, postal_code and every contact field", why: "never requested" },
+      { what: "site boundaries and NPL status", why: "not in this layer; deferred (EPA's FAC_Superfund_Site_Boundaries_EPA_Public)" },
+    ],
+    caveats: [
+      "Round 1 described this layer as every SEMS site, NPL and non-NPL, active and archived. The layer held 1,374 points on 2026-10-13, which is nearer the size of the NPL than of all of SEMS; the description is under review.",
+    ],
+    searchable: ["registry_id", "pgm_sys_id"],
+    embedText: ["pgm_sys_acrnm", "pgm_sys_id", "registry_id"],
+    ops: ["permits?op=contaminants"],
+    sensitivity: "Federal regulatory records; no address or contact field is requested. The facility name (primary_name) can be a person's or a street address and is never searched or embedded.",
+    round: 1,
+  },
+  {
+    id: "emef-tri",
+    title: "Toxics Release Inventory reporters (EPA EMEF)",
+    layer: "contaminants",
+    sources: ["epa-emef"],
+    what: "Facilities that report to the Toxics Release Inventory, as EMEF layer 1 publishes them, with the TRI facility id (TRIFID), FRS registry id and EPA facility page.",
+    recordIs: "A TRI reporter: a facility that filed with TRI. The listing alone says nothing about how much was released.",
+    coverage: { spatial: "United States; below 25 km, 1,000 per program and box", temporal: null, count: { value: 64501, of: "points in EMEF efpoints layer 1 (TRI)", countedOn: R2 } },
+    freshness: { statement: "The map service publishes no edit date.", readFrom: "EMEF efpoints MapServer layer 1 ?f=json (no editingInfo)", recordedOn: R2 },
+    excluded: [{ what: "location_address and every contact field", why: "never requested" }],
+    caveats: ["A listing is a regulatory status, not a finding of contamination at the point."],
+    searchable: ["registry_id", "pgm_sys_id"],
+    embedText: ["pgm_sys_acrnm", "pgm_sys_id", "registry_id"],
+    ops: ["permits?op=contaminants"],
+    sensitivity: "Federal regulatory records; no address or contact field is requested; the facility name is never searched or embedded.",
+    round: 1,
+  },
+  {
+    id: "emef-rcra",
+    title: "RCRA hazardous-waste handlers (EPA EMEF, RCRAInfo)",
+    layer: "contaminants",
+    sources: ["epa-emef"],
+    what: "Handlers of hazardous waste registered in RCRAInfo, as EMEF layer 4 publishes them.",
+    recordIs: "A RCRA handler registration: a regulatory status, not a finding of contamination.",
+    coverage: { spatial: "United States; below 25 km, 1,000 per box (RCRA is dense: 3,001 in a 0.4 by 0.25 degree Houston box)", temporal: null, count: { value: 1552273, of: "points in EMEF efpoints layer 4 (RCRAInfo)", countedOn: R2 } },
+    freshness: { statement: "The map service publishes no edit date.", readFrom: "EMEF efpoints MapServer layer 4 ?f=json (no editingInfo)", recordedOn: R2 },
+    excluded: [
+      { what: "location_address and every contact field", why: "never requested" },
+      { what: "EMEF water (layer 2) and air (layer 3) facilities", why: "the Environmental permits layer already draws them from ECHO" },
+      { what: "handlers past the first 1,000 in a box", why: "the cap keeps the answer bounded; the coverage note says when it was hit" },
+    ],
+    caveats: ["A listing is a regulatory status, not a finding of contamination at the point."],
+    searchable: ["registry_id", "pgm_sys_id"],
+    embedText: ["pgm_sys_acrnm", "pgm_sys_id", "registry_id"],
+    ops: ["permits?op=contaminants"],
+    sensitivity: "Federal regulatory records; no address or contact field is requested; the facility name is never searched or embedded.",
+    round: 1,
+  },
+  {
+    id: "emef-acres",
+    title: "Brownfields properties (EPA EMEF, ACRES)",
+    layer: "contaminants",
+    sources: ["epa-emef"],
+    what: "Brownfields properties in EPA's ACRES system, as EMEF layer 5 publishes them.",
+    recordIs: "A Brownfields property record: a property in an EPA grant program, not a finding of contamination.",
+    coverage: { spatial: "United States; below 25 km, 1,000 per box", temporal: null, count: { value: 44445, of: "points in EMEF efpoints layer 5 (ACRES)", countedOn: R2 } },
+    freshness: { statement: "The map service publishes no edit date.", readFrom: "EMEF efpoints MapServer layer 5 ?f=json (no editingInfo)", recordedOn: R2 },
+    excluded: [{ what: "location_address and every contact field", why: "never requested; a Brownfields property's EPA name is often its street address, so it is never searched" }],
+    caveats: ["A listing is a regulatory status, not a finding of contamination at the point."],
+    searchable: ["registry_id", "pgm_sys_id"],
+    embedText: ["pgm_sys_acrnm", "pgm_sys_id", "registry_id"],
+    ops: ["permits?op=contaminants"],
+    sensitivity: "Federal regulatory records; no address or contact field is requested; the property name can be an address and is never searched or embedded.",
+    round: 1,
+  },
+  // ------------------------------------------------------------ round 1: imagery
+  {
+    id: "esri-wayback",
+    title: "World Imagery Wayback releases",
+    layer: "wayback",
+    sources: ["esri-wayback"],
+    what: "Every published release of Esri World Imagery since 2014-02-20, each its own tile set, picked by release date; the release index comes from Esri's waybackconfig.json.",
+    recordIs: "A release: the basemap as Esri published it on that date. A release date is not a capture date.",
+    coverage: { spatial: "Worldwide", temporal: "releases 2014-02-20 to 2026-09-24", count: { value: 197, of: "dated releases in waybackconfig.json", countedOn: R1 } },
+    freshness: { statement: "The newest release in the index was 2026-09-24.", readFrom: "waybackconfig.json itemTitle (Wayback YYYY-MM-DD)", recordedOn: R1 },
+    excluded: [
+      { what: "tile proxying, caching or export", why: "the item's licence: not intended to be used to export tiles for offline; tiles load from Esri in the browser" },
+      { what: "imagery before 2014 as a release", why: "Wayback starts at 2014-02-20 (older captures inside a release are dated by the capture-date collection)" },
+    ],
+    caveats: [WAYBACK_CAVEAT],
+    searchable: [],
+    embedText: [],
+    ops: ["terrain?op=wayback"],
+    sensitivity: "Imagery as Esri publishes it; nothing is stored here.",
+    round: 1,
+  },
+];
+
+/** One collection by id. */
+export function collection(id: string): Collection | undefined {
+  return COLLECTIONS.find((c) => c.id === id);
+}
+
+/** A layer's collections, in catalogue order. */
+export function collectionsForLayer(layer: LayerId): Collection[] {
+  return COLLECTIONS.filter((c) => c.layer === layer);
+}
+
+/** Layers with at least one collection. */
+export function catalogued(): LayerId[] {
+  return [...new Set(COLLECTIONS.map((c) => c.layer))];
+}
+
+/** "land?op=historic" -> { route: "/api/land", op: "historic" }; null when malformed. */
+export function parseOpRef(ref: string): { route: string; op: string } | null {
+  const m = ref.match(/^([a-z]+)\?op=([a-z][a-z-]*)$/);
+  return m ? { route: `/api/${m[1]}`, op: m[2] } : null;
+}
+
+/**
+ * Field names that must never be searchable or embedded: addresses, contacts, owners,
+ * certifiers, and names that can be a person's (NRHP RESNAME, EPA primary_name, UST Name).
+ */
+export const DENY_FIELD = /address|street|zip|postal|contact|phone|email|owner|certif|^primary_name$|^resname$|^name$/i;

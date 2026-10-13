@@ -328,6 +328,14 @@ curl "https://eye.jcamd.com/api/water?op=history&site=USGS-08180800&param=00060"
 curl "https://eye.jcamd.com/api/water?op=matchup&site=USGS-08181500&param=63680&from=2026-09-02T15:25:56Z&to=2026-09-02T19:25:56Z"
 ```
 
+**The catalogue.** Every layer is one or more curated collections, and each collection has a card: what one record is and is not, who publishes it and on what terms (with the credit line they ask for), what it covers, how current it is and where that was read, what is left out and why, the caveats, which fields may be searched or embedded (never an address, a contact or a name that can be a person's), and the call that serves it. Browse it at [/catalog](https://eye.jcamd.com/catalog); the same cards are JSON:
+
+```bash
+curl "https://eye.jcamd.com/api/catalog"                    # every collection, and the layers not yet catalogued
+curl "https://eye.jcamd.com/api/catalog?id=nrhp-listed"     # one card
+curl "https://eye.jcamd.com/api/catalog?layer=crithab"      # a layer's collections
+```
+
 `/api/economy` does the same for trade, jobs and home values:
 
 ```bash
