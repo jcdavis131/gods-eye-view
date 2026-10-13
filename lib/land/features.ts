@@ -439,7 +439,7 @@ export function buildHistoric(
 
 /** What a critical habitat designation is and is not (route caveat, picture note, README). */
 export const CRITHAB_CAVEAT =
-  "USFWS designated critical habitat, final and proposed: regulatory designations under the Endangered Species Act, not species range or occurrence. Many listed species have no designation, and a polygon does not mean the species is present. FWS says these GIS files are not the legal boundary; the Federal Register rule and 50 CFR 17 are. Marine and anadromous species under NOAA Fisheries are not included.";
+  "USFWS designated critical habitat, final and proposed: regulatory designations under the Endangered Species Act, not species range or occurrence. Many listed species have no designation, and a polygon does not mean the species is present. FWS says these GIS files are not the legal boundary; the Federal Register rule and 50 CFR 17 are. Marine and anadromous species under NOAA Fisheries come from NOAA's own layers, listed with the agency named.";
 
 /** FWS fills some text fields with this instead of a value; it is no value, never shown. */
 export const FWS_PLACEHOLDER = "Please check current species specific shapefile";
@@ -502,6 +502,95 @@ export function critHabText(s: CritHabSpecies): string {
   const designation = s.designation?.toLowerCase() === "proposed" ? "PROPOSED critical habitat (not final)" : s.designation?.toLowerCase() === "final" ? "final critical habitat" : `critical habitat (${s.designation ?? "designation status not published"})`;
   const rule = [s.fedreg ? `${s.fedreg.replace(/^(\d+)FR(\d+)/, "$1 FR $2")}` : undefined, s.published ? `published ${s.published}` : undefined].filter(Boolean).join(", ");
   return `${name} · ${s.listing ?? "listing status not published"} · ${designation}${rule ? ` · ${rule}` : ""}`;
+}
+
+// ---------------------------------------------------------------- NOAA Fisheries critical habitat
+
+/** What NOAA's layers are and are not (route caveat, picture note, README). */
+export const NMFS_CAVEAT =
+  "Marine and anadromous species come from NOAA Fisheries. NOAA's combined polygon layer is dated 2023-05-02 in its name but holds rules to July 2025; its line layer ends in 2017. The eCFR text is the legal boundary. A line row is one within about 200 m of the point, not one the point is on.";
+
+export interface NmfsSpecies {
+  agency: "NOAA Fisheries";
+  /** "area" from the polygon layer (226), "line" from the line layer (2, within about 200 m). */
+  shape: "area" | "line";
+  common?: string;
+  scientific?: string;
+  listing?: string;
+  /** "Final" or "Proposed". */
+  designation?: string;
+  unit?: string;
+  /** The Federal Register citation NOAA links, split from its HTML anchor. */
+  fr?: { text: string; url?: string };
+  /** eCFR section, a link. */
+  ecfr?: string;
+  published?: string;
+  effective?: string;
+  habitat?: string;
+}
+
+/**
+ * "8/17/2017" or "08/09/2023" -> "2017-08-17"; NOAA also has one "20240102" (yyyymmdd) among its
+ * 30 publication dates (2026-10-13). Anything else is no date.
+ */
+export function nmfsDate(v: unknown): string | undefined {
+  const s = str(v);
+  const ymd = s?.match(/^(\d{4})(\d{2})(\d{2})$/);
+  const m = ymd ? [s!, ymd[2], ymd[3], ymd[1]] : s?.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!m) return undefined;
+  const mo = Number(m[1]);
+  const d = Number(m[2]);
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return undefined;
+  return `${m[3]}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+/** NOAA's FR field: "<a href='URL' ...>71 FR 69054</a>" -> {text, url}; plain text stays text; a non-https link is dropped. */
+export function nmfsFr(v: unknown): NmfsSpecies["fr"] {
+  const s = str(v);
+  if (!s) return undefined;
+  const m = s.match(/^<a\s+href=['"]([^'"]+)['"][^>]*>([^<]*)<\/a>$/i);
+  if (!m) return /</.test(s) ? undefined : { text: s };
+  const text = m[2].trim();
+  const url = /^https:\/\//.test(m[1]) ? m[1] : undefined;
+  return text ? { text, url } : url ? { text: url, url } : undefined;
+}
+
+/** NOAA point (layer 226) or envelope (layer 2) rows, one per species, unit and rule. */
+export function parseNmfs(rows: Array<{ properties: Record<string, unknown> | null }>, shape: NmfsSpecies["shape"]): NmfsSpecies[] {
+  const out: NmfsSpecies[] = [];
+  const seen = new Set<string>();
+  for (const r of rows) {
+    const p = r.properties ?? {};
+    const ecfr = str(p.ECFR);
+    const sp: NmfsSpecies = {
+      agency: "NOAA Fisheries",
+      shape,
+      common: str(p.COMNAME),
+      scientific: str(p.SCIENAME),
+      listing: str(p.LISTSTATUS),
+      designation: str(p.CHSTATUS),
+      unit: str(p.UNIT),
+      fr: nmfsFr(p.FR),
+      ecfr: ecfr && /^https:\/\/www\.ecfr\.gov\//.test(ecfr) ? ecfr : undefined,
+      published: nmfsDate(p.PUBDATE),
+      effective: nmfsDate(p.EFFECTDATE),
+      habitat: str(p.HABTYPE),
+    };
+    const key = [sp.scientific, sp.common, sp.designation, sp.unit, sp.fr?.text].join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(sp);
+  }
+  return out;
+}
+
+/** One NOAA species' line in the ground dossier: proposed designations always say so; line rows say "within about 200 m". */
+export function nmfsText(s: NmfsSpecies): string {
+  const name = [s.common, s.scientific ? `(${s.scientific})` : undefined].filter(Boolean).join(" ") || "species not named by NOAA";
+  const designation = s.designation?.toLowerCase() === "proposed" ? "PROPOSED critical habitat (not final)" : s.designation?.toLowerCase() === "final" ? "final critical habitat" : `critical habitat (${s.designation ?? "designation status not published"})`;
+  const rule = [s.fr?.text, s.published ? `published ${s.published}` : undefined].filter(Boolean).join(", ");
+  const where = s.shape === "line" ? "a river or stream unit within about 200 m" : s.unit ? `unit ${s.unit}` : undefined;
+  return [`${name} · ${s.listing ?? "listing status not published"} · ${designation}`, where, rule || undefined, "NOAA Fisheries"].filter(Boolean).join(" · ");
 }
 
 // ---------------------------------------------------------------- USGS PAD-US

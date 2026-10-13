@@ -194,7 +194,7 @@ export default function TileControls({ id }: { id: LayerId }) {
       {id === "soils" && <div>Map units outlined with their symbols; click the ground for the soil.</div>}
       {id === "wayback" && <WaybackPicker />}
       {id === "topo" && <TopoPicker />}
-      {id === "crithab" && <div>FWS&apos;s map of final and proposed designations; click the ground for the species and whether it is proposed. Not where a species lives.</div>}
+      {id === "crithab" && <div>FWS&apos;s map of final and proposed designations, with NOAA Fisheries&apos; marine and anadromous species; click the ground for the species and whether it is proposed. Not where a species lives.</div>}
       {id === "wetlands" && (
         <>
           <div>Above 10 km: NWI&apos;s national raster, about 100 m, so small wetlands can be missing. Below 10 km: the polygons, to click.</div>

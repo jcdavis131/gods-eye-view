@@ -33,7 +33,7 @@ import { GROUND_LAYERS } from "@/lib/layers/terrain";
 import type { ClassAnswer } from "./classes";
 import { nccpiText, type SoilAnswer } from "./soil";
 import { ageRange, type GeologyAnswer } from "@/lib/infra/geology";
-import { critHabText, type CritHabSpecies } from "@/lib/land/features";
+import { critHabText, nmfsText, type CritHabSpecies, type NmfsSpecies } from "@/lib/land/features";
 import { useSettings } from "@/lib/store/settings";
 import { resolveTopoYear, sheetText, type TopoSheet, type TopoYear } from "./topo";
 import { captureText, parseReleaseId, zoomForHeight, type WaybackCapture } from "./wayback";
@@ -106,7 +106,7 @@ const SOURCE_OF: Record<GroundPart, string> = {
   slope: "USGS 3DEP",
   elevation: "USGS 3DEP EPQS",
   geology: "Macrostrat",
-  crithab: "USFWS critical habitat",
+  crithab: "USFWS and NOAA Fisheries critical habitat",
   topo: "USGS historical topo maps",
   wayback: "Esri Wayback metadata",
 };
@@ -186,13 +186,15 @@ export function groundDetails(p: Pick<GroundPick, "lon" | "lat" | "parts">): Det
   }
   const ch = p.parts.crithab;
   if (ch && !waiting(d, "critical habitat", ch, "USFWS")) {
-    const a = ch.data as { final: CritHabSpecies[] | null; proposed: CritHabSpecies[] | null } | null;
-    const all = [...(a?.final ?? []), ...(a?.proposed ?? [])];
-    if (all.length) all.forEach((s, i) => (d[all.length > 1 ? `critical habitat ${i + 1}` : "critical habitat"] = critHabText(s)));
-    else if (a?.final && a?.proposed) d["critical habitat"] = "no designated critical habitat at this point (most listed species have no designation; this says nothing about whether a species is here)";
+    const a = ch.data as { final: CritHabSpecies[] | null; proposed: CritHabSpecies[] | null; noaa?: NmfsSpecies[] | null } | null;
+    const all = [...(a?.final ?? []).map(critHabText), ...(a?.proposed ?? []).map(critHabText), ...(a?.noaa ?? []).map(nmfsText)];
+    const noaaAsked = a != null && "noaa" in a;
+    if (all.length) all.forEach((t, i) => (d[all.length > 1 ? `critical habitat ${i + 1}` : "critical habitat"] = t));
+    else if (a?.final && a?.proposed && (!noaaAsked || a.noaa)) d["critical habitat"] = "no designated critical habitat at this point (most listed species have no designation; this says nothing about whether a species is here)";
     if (a && !a.final) d["critical habitat (final)"] = "FWS's final layer did not answer: unknown, not absent";
     if (a && !a.proposed) d["critical habitat (proposed)"] = "FWS's proposed layer did not answer: unknown, not absent";
-    d["critical habitat note"] = "a regulatory designation, not range or occurrence; FWS: the GIS files are not the legal boundary (the Federal Register rule is)";
+    if (noaaAsked && !a?.noaa) d["critical habitat (NOAA Fisheries)"] = "NOAA Fisheries did not answer: marine and anadromous designations unknown, not absent";
+    d["critical habitat note"] = "a regulatory designation, not range or occurrence; the GIS files are not the legal boundary (for FWS the Federal Register rule and 50 CFR 17 are, for NOAA the eCFR text)";
   }
   const tp = p.parts.topo;
   if (tp && !waiting(d, "topographic maps", tp, "USGS (HTMC)")) {

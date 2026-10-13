@@ -28,12 +28,19 @@ describe("wetlands raster", () => {
 });
 
 describe("critical habitat", () => {
-  it("draws FWS's final and proposed caches as two sparse pictures, to level 14, from a registered host", async () => {
+  it("draws FWS's final and proposed caches as sparse pictures and NOAA Fisheries' export over them, to level 14, from registered hosts", async () => {
     const { crithabStyle } = await import("./terrainStyles");
     const specs = crithabStyle.tiles?.({}) ?? [];
-    expect(specs.map((s) => s.key)).toEqual(["crithab:final", "crithab:proposed"]);
+    expect(specs.map((s) => s.key)).toEqual(["crithab:final", "crithab:proposed", "crithab:noaa"]);
+    expect(specs[0].sparse).toBe(true);
+    expect(specs[1].sparse).toBe(true);
+    // NOAA's /export answers a transparent PNG everywhere, never a 404.
+    expect(specs[2].sparse).toBeUndefined();
+    const noaa = new URL(specs[2].url.replace(/\{\w+\}/g, "0"));
+    expect(noaa.host).toBe("maps.fisheries.noaa.gov");
+    expect(noaa.searchParams.get("layers")).toBe("show:226,2");
+    expect(noaa.searchParams.get("transparent")).toBe("true");
     for (const s of specs) {
-      expect(s.sparse).toBe(true);
       expect(s.maximumLevel).toBe(14);
       expect(s.maxHeight).toBeUndefined();
       expect(hosts().has(new URL(s.url.replace(/\{\w+\}/g, "0")).host)).toBe(true);

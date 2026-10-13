@@ -54,6 +54,9 @@ export const CRITHAB_TILES = {
 } as const;
 export const CRITHAB_MAX_ZOOM = 14;
 
+/** NOAA Fisheries critical habitat (polygons 226 and lines 2), drawn by the MapServer's /export per tile. */
+export const NMFS_EXPORT = "https://maps.fisheries.noaa.gov/server/rest/services/All_NMFS_Critical_Habitat/MapServer/export?bbox={westProjected},{southProjected},{eastProjected},{northProjected}&bboxSR=3857&imageSR=3857&size=256,256&layers=show:226,2&format=png32&transparent=true&f=image";
+
 /** Deepest terrarium zoom published (about 4.8 m a pixel at the equator). */
 export const TERRARIUM_MAX_ZOOM = 15;
 
@@ -156,7 +159,7 @@ export function routeTileUrl(product: RenderProductId, z: number | string, x: nu
 // ---------------------------------------------------------------- direct sources
 
 export interface DirectSource {
-  id: "relief" | "soils" | "firehazard" | "sealevel" | "terrain" | "geology" | "wetlands" | "crithab" | "wayback" | "topo";
+  id: "relief" | "soils" | "firehazard" | "sealevel" | "terrain" | "geology" | "wetlands" | "crithab" | "crithab-noaa" | "wayback" | "topo";
   title: string;
   source: SourceId;
   /** Host the browser fetches from (CSP img-src / connect-src must allow it). */
@@ -238,6 +241,15 @@ export const DIRECT_SOURCES: DirectSource[] = [
     template: CRITHAB_TILES.final,
     maxZoom: CRITHAB_MAX_ZOOM,
     note: "Two caches in FWS's own symbology, to level 14; a 404 is no tile there. The click answer comes from FWS's FeatureServer through /api/land?op=crithab.",
+  },
+  {
+    id: "crithab-noaa",
+    title: "Critical habitat, NOAA Fisheries (All_NMFS_Critical_Habitat MapServer export, layers 226 and 2)",
+    source: "noaa-nmfs-crithab",
+    host: "maps.fisheries.noaa.gov",
+    template: NMFS_EXPORT,
+    maxZoom: CRITHAB_MAX_ZOOM,
+    note: "Dynamic /export in NOAA's own symbology (CORS reflects the origin), drawn with the FWS caches; the click answer comes from layers 226 and 2 through /api/land?op=crithab.",
   },
   {
     id: "wayback",

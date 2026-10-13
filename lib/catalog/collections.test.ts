@@ -21,6 +21,7 @@ describe("the catalogue", () => {
       "nwi-wetlands-raster",
       "nrhp-listed",
       "fws-crithab",
+      "nmfs-crithab",
       "attains-impaired",
       "emef-sems",
       "emef-tri",

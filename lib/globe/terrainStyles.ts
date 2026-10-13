@@ -9,6 +9,7 @@ import type { TileSpec } from "./tiles";
 import {
   CRITHAB_MAX_ZOOM,
   CRITHAB_TILES,
+  NMFS_EXPORT,
   NWI_RASTER_MAX_ZOOM,
   NWI_RASTER_TEMPLATE,
   RELIEF_TILES,
@@ -165,7 +166,8 @@ export const WETLANDS_PICTURE: TileSpec = {
 };
 
 /**
- * USFWS critical habitat: FWS's final and proposed caches, in FWS's own symbology, at every
+ * USFWS critical habitat: FWS's final and proposed caches, and NOAA Fisheries' /export (polygons
+ * and river lines, transparent PNG, so not sparse), in FWS's own symbology, at every
  * height (cached to level 14, magnified beyond). Both are sparse: outside designated habitat
  * the caches answer 404, which is "no tile here".
  */
@@ -189,6 +191,15 @@ export const crithabStyle = picture("#22C55E", () => [
     alpha: 0.75,
     z: TILE_Z.crithab + 1,
     credit: "Critical habitat (proposed): U.S. Fish and Wildlife Service",
+  },
+  {
+    key: "crithab:noaa",
+    kind: "xyz",
+    url: NMFS_EXPORT,
+    maximumLevel: CRITHAB_MAX_ZOOM,
+    alpha: 0.75,
+    z: TILE_Z.crithab + 2,
+    credit: "Critical habitat (marine and anadromous): NOAA National Marine Fisheries Service",
   },
 ]);
 

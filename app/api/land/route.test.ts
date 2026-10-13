@@ -13,6 +13,14 @@ import chFinalBarton from "@/lib/land/fixtures/crithab-0-barton.json";
 import chProposedBarton from "@/lib/land/fixtures/crithab-2-barton.json";
 import chFinalPecos from "@/lib/land/fixtures/crithab-0-pecos.json";
 import chProposedPecos from "@/lib/land/fixtures/crithab-2-pecos.json";
+import nmfsAreaBarton from "@/lib/land/fixtures/nmfs-226-barton.json";
+import nmfsLineBarton from "@/lib/land/fixtures/nmfs-2-barton.json";
+import nmfsAreaPecos from "@/lib/land/fixtures/nmfs-226-pecos.json";
+import nmfsLinePecos from "@/lib/land/fixtures/nmfs-2-pecos.json";
+import nmfsAreaSeattle from "@/lib/land/fixtures/nmfs-226-seattle.json";
+import nmfsLineSeattle from "@/lib/land/fixtures/nmfs-2-seattle.json";
+import nmfsAreaSodo from "@/lib/land/fixtures/nmfs-226-sodo.json";
+import nmfsLineSodo from "@/lib/land/fixtures/nmfs-2-sodo.json";
 
 vi.mock("@/lib/server/cache", () => ({
   cached: async <T,>(_k: string, _ttl: number, produce: () => Promise<T>) => ({ value: await produce(), age: 0, hit: false }),
@@ -173,23 +181,28 @@ describe("op=historic", () => {
 });
 
 describe("op=crithab", () => {
+  const NOAA = { barton: [nmfsAreaBarton, nmfsLineBarton], pecos: [nmfsAreaPecos, nmfsLinePecos] } as const;
   const fws = (place: "barton" | "pecos") => (u: string) => {
     if (u.includes("/USFWS_Critical_Habitat/FeatureServer/0/query")) return json(place === "barton" ? chFinalBarton : chFinalPecos);
     if (u.includes("/USFWS_Critical_Habitat/FeatureServer/2/query")) return json(place === "barton" ? chProposedBarton : chProposedPecos);
+    if (u.includes("/All_NMFS_Critical_Habitat/MapServer/226/query")) return json(NOAA[place][0]);
+    if (u.includes("/All_NMFS_Critical_Habitat/MapServer/2/query")) return json(NOAA[place][1]);
     return null;
   };
+  const isFws = (u: string) => u.includes("/USFWS_Critical_Habitat/");
 
   it("asks both FWS layers at the point for named fields and no geometry, and reads a final designation", async () => {
     answer = fws("barton");
     const { status, body } = await get("op=crithab&lon=-97.7713&lat=30.2638");
     expect(status).toBe(200);
-    expect(calls).toHaveLength(2);
-    for (const u of calls) {
+    expect(calls).toHaveLength(4);
+    for (const u of calls.filter(isFws)) {
       expect(param(u, "returnGeometry")).toBe("false");
       expect(param(u, "outFields")).toBe("comname,sciname,listing_status,status,fedreg,pubdate");
       expect(param(u, "geometry")).toBe("-97.7713,30.2638");
     }
-    const d = body.data as unknown as { final: Array<Record<string, string>>; proposed: unknown[] };
+    const d = body.data as unknown as { final: Array<Record<string, string>>; proposed: unknown[]; noaa: unknown[] };
+    expect(d.noaa).toEqual([]);
     expect(d.final).toEqual([{ common: "Austin blind Salamander", scientific: "Eurycea waterlooensis", listing: "Endangered", designation: "Final", fedreg: "78FR51328 51379", published: "2013-08-20" }]);
     expect(d.proposed).toEqual([]);
     expect(body.caveats?.join(" ")).toMatch(/not species range or occurrence/);
@@ -212,5 +225,62 @@ describe("op=crithab", () => {
     calls.length = 0;
     expect((await get("op=crithab&lon=-97.7")).status).toBe(400);
     expect(calls).toEqual([]);
+  });
+});
+
+describe("op=crithab, NOAA Fisheries", () => {
+  const noaa = (area: unknown, line: unknown) => (u: string) => {
+    if (u.includes("/USFWS_Critical_Habitat/FeatureServer/")) return json({ type: "FeatureCollection", features: [] });
+    if (u.includes("/All_NMFS_Critical_Habitat/MapServer/226/query")) return json(area);
+    if (u.includes("/All_NMFS_Critical_Habitat/MapServer/2/query")) return json(line);
+    return null;
+  };
+
+  it("asks NOAA's polygons at the point and its lines in a box about 200 m around it, and splits the Federal Register anchor", async () => {
+    answer = noaa(nmfsAreaSeattle, nmfsLineSeattle);
+    const { status, body } = await get("op=crithab&lon=-122.4&lat=47.6");
+    expect(status).toBe(200);
+    const area = calls.find((u) => u.includes("/MapServer/226/query"))!;
+    const line = calls.find((u) => u.includes("/MapServer/2/query"))!;
+    expect(param(area, "geometry")).toBe("-122.4,47.6");
+    expect(param(area, "outFields")).toBe("SCIENAME,COMNAME,LISTSTATUS,CHSTATUS,UNIT,ECFR,FR,PUBDATE,EFFECTDATE,HABTYPE");
+    expect(JSON.parse(param(line, "geometry")!)).toEqual({ xmin: -122.402, ymin: 47.598, xmax: -122.398, ymax: 47.602 });
+    expect(param(line, "geometryType")).toBe("esriGeometryEnvelope");
+    const d = body.data as unknown as { noaa: Array<Record<string, unknown>> };
+    expect(d.noaa).toEqual([
+      expect.objectContaining({
+        agency: "NOAA Fisheries",
+        shape: "area",
+        common: "Whale, killer",
+        scientific: "Orcinus orca",
+        listing: "Endangered",
+        designation: "Final",
+        unit: "Puget Sound",
+        fr: { text: "71 FR 69054", url: "https://www.fisheries.noaa.gov/west-coast/endangered-species-conservation/critical-habitat-southern-resident-killer-whales" },
+        published: "2006-11-29",
+        effective: "2006-12-29",
+      }),
+    ]);
+    expect(body.caveats?.join(" ")).toMatch(/NOAA's combined polygon layer is dated 2023-05-02/);
+  });
+
+  it("reads a line within about 200 m with a blank unit as no unit, and both date formats", async () => {
+    answer = noaa(nmfsAreaSodo, nmfsLineSodo);
+    const { body } = await get("op=crithab&lon=-122.346&lat=47.5694");
+    const d = body.data as unknown as { noaa: Array<Record<string, unknown>> };
+    const steelhead = d.noaa.find((s) => s.shape === "line")!;
+    expect(steelhead).toMatchObject({ common: "Steelhead", listing: "Threatened", published: "2016-02-24", effective: "2016-03-25" });
+    expect(steelhead.unit).toBeUndefined();
+    expect(d.noaa.find((s) => s.shape === "area")).toMatchObject({ common: "Salmon, Chinook", unit: "N8", published: "2005-09-02" });
+  });
+
+  it("names NOAA as unknown when it fails, and keeps FWS's rows", async () => {
+    answer = (u) => (u.includes("/All_NMFS_Critical_Habitat/") ? new Response("down", { status: 404 }) : (u.includes("/USFWS_Critical_Habitat/FeatureServer/0/query") ? json(chFinalBarton) : u.includes("/USFWS_Critical_Habitat/FeatureServer/2/query") ? json(chProposedBarton) : null));
+    const { status, body } = await get("op=crithab&lon=-97.7713&lat=30.2638");
+    expect(status).toBe(200);
+    const d = body.data as unknown as { final: unknown[]; noaa: unknown };
+    expect(d.noaa).toBeNull();
+    expect(d.final).toHaveLength(1);
+    expect(body.caveats?.join(" ")).toMatch(/NOAA Fisheries' critical habitat layers did not answer this time/);
   });
 });

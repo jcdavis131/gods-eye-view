@@ -151,3 +151,16 @@ describe("Wayback capture dates in the ground dossier", () => {
     expect(none["imagery captured"]).toBe("Release 2014-02-20 · Esri lists no capture date here");
   });
 });
+
+describe("NOAA Fisheries critical habitat in the ground dossier", () => {
+  it("lists NOAA's species with the agency named, and says NOAA is unknown when it did not answer", async () => {
+    const { parseNmfs } = await import("@/lib/land/features");
+    const area = (await import("@/lib/land/fixtures/nmfs-226-seattle.json")).default as { features: Array<{ properties: Record<string, unknown> }> };
+    const noaa = parseNmfs(area.features, "area");
+    const d = groundDetails({ lon: -122.4, lat: 47.6, parts: { crithab: { loading: false, data: { final: [], proposed: [], noaa } } } });
+    expect(d["critical habitat"]).toBe("Whale, killer (Orcinus orca) · Endangered · final critical habitat · unit Puget Sound · 71 FR 69054, published 2006-11-29 · NOAA Fisheries");
+    const down = groundDetails({ lon: -122.4, lat: 47.6, parts: { crithab: { loading: false, data: { final: [], proposed: [], noaa: null } } } });
+    expect(down["critical habitat"]).toBeUndefined();
+    expect(down["critical habitat (NOAA Fisheries)"]).toMatch(/unknown, not absent/);
+  });
+});

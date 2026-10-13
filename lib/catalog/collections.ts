@@ -18,6 +18,7 @@ import type { SourceId } from "@/lib/provenance/sources";
 import { WAYBACK_CAPTURE_CAVEAT, WAYBACK_CAVEAT } from "@/lib/terrain/wayback";
 import { TOPO_CAVEAT } from "@/lib/terrain/topo";
 import { IMPAIRED_CAVEAT } from "@/lib/water/impaired";
+import { NMFS_CAVEAT } from "@/lib/land/features";
 
 export interface Exclusion {
   what: string;
@@ -159,12 +160,33 @@ export const COLLECTIONS: readonly Collection[] = [
       { what: "species images", why: "fws.gov/disclaimer: images can be copyrighted" },
       { what: "unitname, effectdate, accuracy", why: "FWS fills them with its placeholder \"Please check current species specific shapefile\"" },
     ],
-    caveats: ["Many listed species have no designation, and a polygon does not mean the species is present. Proposed designations are always labelled as proposed."],
+    caveats: ["Many listed species have no designation, and a polygon does not mean the species is present. Proposed designations are always labelled as proposed. Marine and anadromous species are in the NOAA Fisheries card."],
     searchable: [],
     embedText: ["comname", "sciname", "listing_status", "status", "fedreg", "pubdate"],
     ops: ["land?op=crithab"],
     sensitivity: "Agency-published regulatory polygons only; no occurrence points.",
     round: 1,
+  },
+  {
+    id: "nmfs-crithab",
+    title: "NOAA Fisheries designated critical habitat (marine and anadromous species)",
+    layer: "crithab",
+    sources: ["noaa-nmfs-crithab"],
+    what: "ESA critical habitat for species under NOAA Fisheries (whales, sea turtles, corals, salmon and steelhead, and others), drawn from NOAA's MapServer /export over FWS's caches and answered at a click: polygons containing the point (layer 226) and river and stream lines within about 200 m (layer 2), with listing status, Final or Proposed, unit, Federal Register rule, eCFR section and dates.",
+    recordIs: "A regulatory designation under the Endangered Species Act, as NOAA maps it. Not range or occurrence; the eCFR text is the legal boundary.",
+    coverage: { spatial: "US waters and the rivers and streams of anadromous species", temporal: "rules published to 2025-07-15 (polygons); to 2017-08-17 (lines)", count: { value: 2117, of: "polygons in layer 226; 59,888 lines in layer 2", countedOn: R2 } },
+    freshness: { statement: "The polygon layer is named 20230502 but holds rules to July 2025 (Indo-Pacific corals, Nassau grouper, proposed Rice's whale and six proposed green sea turtle DPSs); the line layer's latest PUBDATE is 8/17/2017.", readFrom: "layer names and PUBDATE maxima", recordedOn: R2 },
+    excluded: [
+      { what: "NOAA's OPR folder", why: "answers 499 Token Required" },
+      { what: "EPA's Critical_Habitat FeatureServer copy", why: "it disagreed with NOAA at the Seattle point (no bocaccio)" },
+      { what: "occurrence and sighting data of any kind", why: "only agency regulatory polygons and lines" },
+    ],
+    caveats: [NMFS_CAVEAT],
+    searchable: [],
+    embedText: ["COMNAME", "SCIENAME", "LISTSTATUS", "CHSTATUS", "UNIT", "FR", "PUBDATE", "HABTYPE"],
+    ops: ["land?op=crithab"],
+    sensitivity: "Agency-published regulatory polygons and lines only; no occurrence points.",
+    round: 2,
   },
   // ------------------------------------------------------------ round 2: water quality
   {

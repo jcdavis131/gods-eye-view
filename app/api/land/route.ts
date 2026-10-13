@@ -26,8 +26,11 @@
 //                                          NHPA s.304 / ARPA are not in the source.
 //   /api/land?op=crithab&lon=..&lat=..     USFWS designated critical habitat (final and
 //                                          proposed) containing a point: species, listing
-//                                          status, Federal Register rule and date. Regulatory
-//                                          polygons only; no occurrence data of any kind.
+//                                          status, Federal Register rule and date; and NOAA
+//                                          Fisheries critical habitat for marine and
+//                                          anadromous species (polygons at the point, river
+//                                          lines within about 200 m). Regulatory polygons
+//                                          only; no occurrence data of any kind.
 //   /api/land?op=publiclands&bbox=w,s,e,n  USGS PAD-US 4.1 fee, easement, designation and
 //                                          proclamation areas with manager, owner agency,
 //                                          local owner, easement holder, public access and
@@ -64,6 +67,9 @@ import {
   PADUS_CATEGORIES,
   PADUS_FIELDS,
   parseCritHab,
+  NMFS_CAVEAT,
+  parseNmfs,
+  type NmfsSpecies,
   parseEpqs,
   parseNwiCodes,
   parseNwiSources,
@@ -107,6 +113,16 @@ const CRITHAB = "https://services.arcgis.com/QVENGdaPbd4LUkLV/arcgis/rest/servic
  * 803 rows, and leadoffice is a numeric office code, not a name.
  */
 const CRITHAB_FIELDS = "comname,sciname,listing_status,status,fedreg,pubdate";
+/**
+ * NOAA Fisheries critical habitat (marine and anadromous species): layer 226, every polygon
+ * designation (named 20230502 but holding rules to 2025-07-15), and layer 2, the river and
+ * stream lines (to 2017). Not used: the OPR folder (token required) and EPA's copy, which
+ * disagreed with NOAA at Seattle.
+ */
+const NMFS = "https://maps.fisheries.noaa.gov/server/rest/services/All_NMFS_Critical_Habitat/MapServer";
+const NMFS_FIELDS = "SCIENAME,COMNAME,LISTSTATUS,CHSTATUS,UNIT,ECFR,FR,PUBDATE,EFFECTDATE,HABTYPE";
+/** A point never intersects a line: the line layer is asked in a box this many degrees each way (about 200 m). */
+const NMFS_LINE_PAD = 0.002;
 const EPQS = "https://epqs.nationalmap.gov/v1/json";
 
 const DAY = 24 * 3600_000;
@@ -382,9 +398,11 @@ async function opHistoric(bbox: Bbox, boundaries: boolean): Promise<OpResult> {
 }
 
 /**
- * Which designated critical habitat (final and proposed) contains a point: one query per
- * layer, no geometry back, cached a day per point (5 decimals). A layer that fails is named
- * as missing; both failing is an upstream error.
+ * Which designated critical habitat contains a point: FWS final (layer 0) and proposed
+ * (layer 2), and NOAA Fisheries polygons (layer 226) at the point and river lines (layer 2)
+ * within about 200 m, all in parallel, no geometry back, each cached a day per point
+ * (5 decimals). A source that fails is named as unknown, not absent; all failing is an
+ * upstream error.
  */
 async function opCritHab(lon: number, lat: number): Promise<OpResult> {
   const x = Number(lon.toFixed(5));
@@ -407,23 +425,46 @@ async function opCritHab(lon: number, lat: number): Promise<OpResult> {
       );
       return parseCritHab(fc.features);
     });
-  const [fin, prop] = await Promise.all([ask(0).catch((e: unknown) => e as Error), ask(2).catch((e: unknown) => e as Error)]);
-  if (fin instanceof Error && prop instanceof Error) throw fin;
+  const nmfs = (layer: 226 | 2) =>
+    cached(`nmfs-crithab:${layer}:${x},${y}`, DAY, async () => {
+      const where =
+        layer === 226
+          ? { geometry: `${x},${y}`, geometryType: "esriGeometryPoint" }
+          : { geometry: JSON.stringify({ xmin: Number((x - NMFS_LINE_PAD).toFixed(5)), ymin: Number((y - NMFS_LINE_PAD).toFixed(5)), xmax: Number((x + NMFS_LINE_PAD).toFixed(5)), ymax: Number((y + NMFS_LINE_PAD).toFixed(5)) }), geometryType: "esriGeometryEnvelope" };
+      const fc = await arcgisQuery(
+        "noaa-nmfs-crithab",
+        `${NMFS}/${layer}`,
+        { where: "1=1", ...where, inSR: "4326", spatialRel: "esriSpatialRelIntersects", outFields: NMFS_FIELDS, returnGeometry: "false" },
+        { gate: "noaa-nmfs-crithab", minIntervalMs: 250, timeoutMs: 20_000, tries: 2 },
+      );
+      return parseNmfs(fc.features, layer === 226 ? "area" : "line");
+    });
+  const settle = <T,>(p: Promise<T>) => p.catch((e: unknown) => (e instanceof Error ? e : new Error(String(e))));
+  const [fin, prop, nArea, nLine] = await Promise.all([settle(ask(0)), settle(ask(2)), settle(nmfs(226)), settle(nmfs(2))]);
+  if (fin instanceof Error && prop instanceof Error && nArea instanceof Error && nLine instanceof Error) throw fin;
   const final = fin instanceof Error ? null : fin.value;
   const proposed = prop instanceof Error ? null : prop.value;
-  const age = Math.max(fin instanceof Error ? 0 : fin.age, prop instanceof Error ? 0 : prop.age);
-  const species = [...(final ?? []), ...(proposed ?? [])];
-  const caveats = [CRITHAB_CAVEAT];
-  if (!species.length && final && proposed) caveats.push("No designated critical habitat contains this point. That is not a finding that no listed species is here: most listed species have no designation, and range is not habitat.");
+  // NOAA is one source to the reader: both of its layers answered, or it is unknown.
+  const noaa: NmfsSpecies[] | null = nArea instanceof Error || nLine instanceof Error ? null : [...nArea.value, ...nLine.value];
+  const ages = [fin, prop, nArea, nLine].map((r) => (r instanceof Error ? 0 : r.age));
+  const age = Math.max(...ages);
+  const species = [...(final ?? []), ...(proposed ?? []), ...(noaa ?? [])];
+  const caveats = [CRITHAB_CAVEAT, NMFS_CAVEAT];
+  if (!species.length && final && proposed && noaa) caveats.push("No designated critical habitat contains this point. That is not a finding that no listed species is here: most listed species have no designation, and range is not habitat.");
   if (!final) caveats.push("FWS's final critical habitat layer did not answer this time (final: null); final designations here are unknown, not absent.");
   if (!proposed) caveats.push("FWS's proposed critical habitat layer did not answer this time (proposed: null); proposed designations here are unknown, not absent.");
+  if (!noaa) caveats.push("NOAA Fisheries' critical habitat layers did not answer this time (noaa: null); marine and anadromous designations here are unknown, not absent.");
   const prov: Provenance[] = [];
   if (final) prov.push(provenance(source("usfws-crithab"), { kind: "published", seriesId: "USFWS_Critical_Habitat FeatureServer layer 0 (final)", upstreamUrl: `${CRITHAB}/0`, retrievedAt: fetchedAt(age), notes: [`point ${x},${y}`] }));
   if (proposed) prov.push(provenance(source("usfws-crithab"), { kind: "published", seriesId: "USFWS_Critical_Habitat FeatureServer layer 2 (proposed)", upstreamUrl: `${CRITHAB}/2`, retrievedAt: fetchedAt(age), notes: [`point ${x},${y}`] }));
+  if (noaa) {
+    prov.push(provenance(source("noaa-nmfs-crithab"), { kind: "published", seriesId: "All_NMFS_Critical_Habitat MapServer layer 226 (polygons, at the point)", upstreamUrl: `${NMFS}/226`, retrievedAt: fetchedAt(age), notes: [`point ${x},${y}`] }));
+    prov.push(provenance(source("noaa-nmfs-crithab"), { kind: "published", seriesId: "All_NMFS_Critical_Habitat MapServer layer 2 (lines, within about 200 m)", upstreamUrl: `${NMFS}/2`, retrievedAt: fetchedAt(age), notes: [`box ${NMFS_LINE_PAD} degrees around ${x},${y}`] }));
+  }
   return {
-    data: { lon: x, lat: y, final, proposed },
-    meta: { source: "U.S. Fish and Wildlife Service, critical habitat (final and proposed)", cacheAge: age },
-    ttlS: final && proposed ? 3600 : 300,
+    data: { lon: x, lat: y, final, proposed, noaa },
+    meta: { source: "U.S. Fish and Wildlife Service (final and proposed) and NOAA Fisheries critical habitat", cacheAge: age },
+    ttlS: final && proposed && noaa ? 3600 : 300,
     provenance: prov,
     caveats,
   };
