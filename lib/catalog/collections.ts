@@ -17,6 +17,7 @@ import type { LayerId } from "@/lib/layers/types";
 import type { SourceId } from "@/lib/provenance/sources";
 import { WAYBACK_CAPTURE_CAVEAT, WAYBACK_CAVEAT } from "@/lib/terrain/wayback";
 import { TOPO_CAVEAT } from "@/lib/terrain/topo";
+import { IMPAIRED_CAVEAT } from "@/lib/water/impaired";
 
 export interface Exclusion {
   what: string;
@@ -68,7 +69,7 @@ export interface Collection {
 export const SHELVES: Array<{ id: string; title: string; layers: LayerId[] }> = [
   { id: "land", title: "Land and heritage", layers: ["wetlands", "historic"] },
   { id: "species", title: "Species", layers: ["crithab"] },
-  { id: "water", title: "Water quality", layers: [] },
+  { id: "water", title: "Water quality", layers: ["impaired"] },
   { id: "contaminants", title: "Contaminants", layers: ["contaminants"] },
   { id: "imagery", title: "Imagery and maps", layers: ["wayback", "topo"] },
 ];
@@ -164,6 +165,28 @@ export const COLLECTIONS: readonly Collection[] = [
     ops: ["land?op=crithab"],
     sensitivity: "Agency-published regulatory polygons only; no occurrence points.",
     round: 1,
+  },
+  // ------------------------------------------------------------ round 2: water quality
+  {
+    id: "attains-impaired",
+    title: "Impaired waters (EPA ATTAINS, 303(d))",
+    layer: "impaired",
+    sources: ["epa-attains"],
+    what: "Assessment units that states, territories and tribes report to EPA as impaired (isimpaired = 'Y'): Integrated Report category 4 and 5 stream reaches (lines) and lakes, estuaries and watersheds (areas), each with its category, 303(d) listing, TMDL, reporting cycle, overall status, EPA action status and How's My Waterway page.",
+    recordIs: "A state's report that a whole assessment unit is impaired, for one reporting cycle. A regulatory listing, not a measured value at a point.",
+    coverage: { spatial: "United States, states, territories and tribes that report to ATTAINS; below 10 km, 2,000 per layer and box", temporal: "reporting cycles 2022-2026 (they differ by state)", count: { value: 150218, of: "impaired line records (layer 1); 32,061 impaired area records (layer 2)", countedOn: R2 } },
+    freshness: { statement: "EPA last edited the line layer's data on 2026-09-02; 81,709 of the 150,218 impaired line records are a state's submittal EPA has not acted on yet.", readFrom: "ATTAINS_Assessment FeatureServer layer 1 editingInfo.dataLastEditDate; cyclestatus counts by statistics query", recordedOn: R2 },
+    excluded: [
+      { what: "waters not reported impaired, including waters never assessed", why: "the layer shows listings; absence is not a finding that a water is clean" },
+      { what: "the per-cause columns (mercury, PCBs, pathogens, nutrients, PFAS and about 35 more)", why: "deferred to a dossier follow-up" },
+      { what: "a zoomed-out picture above 10 km", why: "EPA's gispub /export answered 504 on 3 of 5 calls when probed from this box (2026-10-13); recheck from Vercel" },
+    ],
+    caveats: [IMPAIRED_CAVEAT],
+    searchable: ["assessmentunitidentifier"],
+    embedText: ["assessmentunitidentifier", "assessmentunitname", "state", "organizationname", "reportingcycle", "ircategory", "on303dlist", "hastmdl", "cyclestatus"],
+    ops: ["water?op=impaired"],
+    sensitivity: "Agency regulatory listings of water bodies; no personal data.",
+    round: 2,
   },
   // ------------------------------------------------------------ round 1: contaminants
   {

@@ -21,6 +21,7 @@ describe("the catalogue", () => {
       "nwi-wetlands-raster",
       "nrhp-listed",
       "fws-crithab",
+      "attains-impaired",
       "emef-sems",
       "emef-tri",
       "emef-rcra",
@@ -49,7 +50,7 @@ describe("the catalogue", () => {
   });
 
   it("gives every curated layer at least one card, and shelves every catalogued layer once", () => {
-    for (const l of ["wetlands", "historic", "crithab", "contaminants", "wayback", "topo"] as const) expect(collectionsForLayer(l).length, l).toBeGreaterThan(0);
+    for (const l of ["wetlands", "historic", "crithab", "contaminants", "wayback", "topo", "impaired"] as const) expect(collectionsForLayer(l).length, l).toBeGreaterThan(0);
     const shelved = SHELVES.flatMap((s) => s.layers);
     expect(new Set(shelved).size).toBe(shelved.length);
     for (const l of catalogued()) expect(shelved, l).toContain(l);

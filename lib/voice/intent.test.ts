@@ -138,3 +138,11 @@ describe("voice words for historic topo maps", () => {
     expect(layerOf("show historic places")).toMatchObject({ layer: "historic" });
   });
 });
+
+describe("voice words for impaired waters", () => {
+  it("hears impaired waters and the 303(d) list", () => {
+    expect(layerOf("show impaired waters")).toMatchObject({ layer: "impaired" });
+    expect(layerOf("show 303d list")).toMatchObject({ layer: "impaired" });
+    expect(layerOf("show polluted water over baltimore")).toMatchObject({ layer: "impaired", place: "baltimore" });
+  });
+});

@@ -440,10 +440,11 @@
                 "history",
                 "matchup",
                 "normals",
+                "impaired",
                 "report"
               ]
             },
-            "description": "gauges: USGS latest continuous readings in a bbox (flow, stage, temperature, DO, conductance, pH, turbidity, reservoir elevation/storage). wells: USGS latest daily groundwater levels with aquifer names. nwps: NOAA NWPS gauges with flood categories. twdb: Texas reservoirs. drought: US Drought Monitor current polygons. history: 365 days of daily means for one site and parameter. matchup: instantaneous values for one site and parameter in a window. normals: USGS daily-mean discharge percentiles (5th to 95th) for a calendar day, per site (sites=, date=MM-DD). report: the community water report for a point."
+            "description": "gauges: USGS latest continuous readings in a bbox (flow, stage, temperature, DO, conductance, pH, turbidity, reservoir elevation/storage). wells: USGS latest daily groundwater levels with aquifer names. nwps: NOAA NWPS gauges with flood categories. twdb: Texas reservoirs. drought: US Drought Monitor current polygons. history: 365 days of daily means for one site and parameter. matchup: instantaneous values for one site and parameter in a window. normals: USGS daily-mean discharge percentiles (5th to 95th) for a calendar day, per site (sites=, date=MM-DD). impaired: EPA ATTAINS assessment units states report as impaired (303(d)), lines and areas, in a box clamped to 0.12 degrees and snapped to 0.02 (not the 4 degree water box): category with its meaning, 303(d) listing and TMDL (null when not reported, never N), reporting cycle, overall status, EPA action status verbatim and the How's My Waterway link; 2,000 per layer; `coverage` says per layer whether it answered (a failed layer has count null: unknown, not none). A listing for the whole unit and one cycle, not a measurement; waters not returned were not reported impaired, which includes waters never assessed. report: the community water report for a point."
           },
           {
             "$ref": "#/components/parameters/format"
@@ -454,7 +455,7 @@
             "schema": {
               "$ref": "#/components/schemas/Bbox"
             },
-            "description": "`w,s,e,n` degrees. Required for op=gauges, wells, nwps."
+            "description": "`w,s,e,n` degrees. Required for op=gauges, wells, nwps, impaired."
           },
           {
             "name": "param",
@@ -556,6 +557,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/WaterNormalsResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/WaterImpairedResponse"
                     },
                     {
                       "$ref": "#/components/schemas/WaterReportResponse"
@@ -5504,6 +5508,64 @@
           }
         ],
         "x-op": "normals"
+      },
+      "WaterImpairedResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "description": "GeoJSON FeatureCollection: one feature per assessment unit and shape (LineString/MultiLineString for streams, Polygon/MultiPolygon for areas), named by assessment unit id and category; properties.details holds the unit name, id, state, reporting organization, category and meaning, 303(d) listing, TMDL, overall status, reporting cycle, EPA action status and the How's My Waterway link."
+              },
+              "bbox": {
+                "$ref": "#/components/schemas/Bbox"
+              },
+              "coverage": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "enum": [
+                        "lines",
+                        "areas"
+                      ]
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "covered",
+                        "partial",
+                        "error"
+                      ]
+                    },
+                    "count": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              },
+              "truncated": {
+                "type": "boolean"
+              },
+              "maxRecords": {
+                "type": "integer"
+              }
+            }
+          }
+        ],
+        "x-op": "impaired"
       },
       "WaterReportResponse": {
         "allOf": [

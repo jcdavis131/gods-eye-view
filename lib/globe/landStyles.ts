@@ -8,6 +8,7 @@
 import type { LayerStyle } from "./renderer";
 import type { LayerFeature } from "@/lib/layers/types";
 import type { Access, FloodZoneExtra, HistoricExtra, PublicLandExtra, WetlandExtra } from "@/lib/land/features";
+import type { ImpairedExtra } from "@/lib/water/impaired";
 import { polyFills, polyOutlines, UNRATED } from "./hazardStyles";
 import { FLOOD_PICTURE, WETLANDS_PICTURE } from "./terrainStyles";
 
@@ -175,4 +176,37 @@ export const historicStyle: LayerStyle = {
     return polyOutlines(f, historicColor(f), 0.8, 1.5);
   },
   scaleByDistance: [2e3, 1.0, 2.5e4, 0.6],
+};
+
+// ---------------------------------------------------------------- impaired waters (EPA ATTAINS)
+
+/** 5 (on the 303(d) list) solid red; 4A/4B/4C (a TMDL or other plan) orange; a category not reported grey. */
+const IMPAIRED: Record<ImpairedExtra["tier"], string> = { listed: "#EF4444", planned: "#F97316", other: "#94A3B8" };
+
+function impairedColor(f: LayerFeature): string {
+  return IMPAIRED[(f.properties.extra as ImpairedExtra | undefined)?.tier ?? "other"] ?? IMPAIRED.other;
+}
+
+function lineParts(f: LayerFeature): number[][][] {
+  const g = f.geometry;
+  if (g.type === "LineString") return [g.coordinates];
+  if (g.type === "MultiLineString") return g.coordinates;
+  return [];
+}
+
+export const impairedStyle: LayerStyle = {
+  color: "#EF4444",
+  icon: () => null,
+  colorFor: (f) => (isLoadedBox(f) ? LOADED_BOX : impairedColor(f)),
+  label: (f) => (f.properties.details?.["assessment unit"] as string | undefined) ?? f.properties.name,
+  labelMax: 20,
+  labelWhen: (f) => !isLoadedBox(f),
+  polygons: (f) => (isLoadedBox(f) ? null : polyFills(f, impairedColor(f), 0.16)),
+  lines: (f) => {
+    if (isLoadedBox(f)) return polyOutlines(f, LOADED_BOX, 0.7, 1.5, true);
+    if (f.geometry.type === "Polygon" || f.geometry.type === "MultiPolygon") return polyOutlines(f, impairedColor(f), 0.85, 1.5);
+    return lineParts(f)
+      .filter((p) => p.length > 1)
+      .map((p) => ({ positions: p.map((c) => [c[0], c[1], 0] as [number, number, number]), color: impairedColor(f), width: 2.4, alpha: 0.9 }));
+  },
 };
