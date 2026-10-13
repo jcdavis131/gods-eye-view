@@ -247,7 +247,7 @@ export const COLLECTIONS: readonly Collection[] = [
       { what: "site boundaries and NPL status", why: "not in this layer; deferred (EPA's FAC_Superfund_Site_Boundaries_EPA_Public)" },
     ],
     caveats: [
-      "Round 1 described this layer as every SEMS site, NPL and non-NPL, active and archived. The layer held 1,374 points on 2026-10-13, which is nearer the size of the NPL than of all of SEMS; the description is under review.",
+      "EPA's Superfund (SEMS) site layer: 1,374 points on 2026-10-13, about the size of the National Priorities List. It is roughly the NPL, not every Superfund site; non-NPL and archived SEMS sites are not to be assumed present.",
     ],
     searchable: ["registry_id", "pgm_sys_id"],
     embedText: ["pgm_sys_acrnm", "pgm_sys_id", "registry_id"],

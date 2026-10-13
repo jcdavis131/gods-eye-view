@@ -2,8 +2,8 @@
 // below CONTAMINANTS_MAX_M, inside the same ~11 km dashed box as the
 // Environmental permits layer, anywhere in the United States:
 //
-//   Superfund (SEMS)   every site in EPA's Superfund system, NPL and not,
-//                      active and archived
+//   Superfund (SEMS)   EPA's Superfund site layer, about 1,400 sites:
+//                      roughly the NPL, not every Superfund site
 //   TRI                Toxics Release Inventory reporters
 //   RCRA               hazardous-waste handlers (RCRAInfo)
 //   Brownfields        ACRES properties
@@ -55,7 +55,7 @@ export const contaminantsLayer: LayerDefinition = {
   id: "contaminants",
   label: "Contaminated sites (EPA)",
   description:
-    "EPA program listings below 25 km inside a dashed box: Superfund sites (SEMS, NPL and non-NPL, active and archived), Toxics Release Inventory reporters, RCRA hazardous-waste handlers and Brownfields properties, coloured by program, each with its EPA record. A listing is a regulatory status, not a finding of contamination; a TRI reporter's record shows, on request, what it reported releasing that year. United States.",
+    "EPA program listings below 25 km inside a dashed box: Superfund sites (EPA's SEMS site layer, about 1,400 sites, roughly the National Priorities List, not every Superfund site), Toxics Release Inventory reporters, RCRA hazardous-waste handlers and Brownfields properties, coloured by program, each with its EPA record. A listing is a regulatory status, not a finding of contamination; a TRI reporter's record shows, on request, what it reported releasing that year. United States.",
   color: "#F87171",
   updateIntervalMs: 6 * 60 * 60_000,
   defaultEnabled: false,
