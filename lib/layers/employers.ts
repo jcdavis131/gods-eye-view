@@ -9,7 +9,7 @@
 // Bundled as lib/companies/data/employers_ranked.json by
 // scripts/employers-build.py. Headcounts are organization-wide as reported,
 // not US-only. Selecting an employer opens the compensation dossier via
-// /api/employers.
+// /api/employers (op=equity&ticker= serves the RSU/vesting dossier, pilot batch).
 
 import type { Point, FeatureCollection } from "geojson";
 import type { BaseProps, FetchContext, FetchResult, LayerDefinition, LayerFeature } from "./types";
