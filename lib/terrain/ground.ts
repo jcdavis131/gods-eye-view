@@ -242,7 +242,7 @@ export function groundDetails(p: Pick<GroundPick, "lon" | "lat" | "parts">): Det
       d["imagery captured"] = `Release ${a.release.date} · ${captureText(a.captures)}`;
       const named = [...new Set(a.captures.map((c) => c.name).filter((n): n is string => !!n))];
       if (named.length) d["imagery collection (Esri)"] = named.join("; ");
-      d["imagery note"] = `Esri's metadata for this release at about zoom level ${a.z}; a capture date is when the pixels were taken, a release date when Esri published them`;
+      d["imagery note"] = `Esri's metadata for this release at about zoom level ${a.z}; a capture date is when the pixels were taken, a release date when Esri published them${a.fallback ? "; the release in the link is not in Esri's index, so these are the newest release's dates, as drawn" : ""}`;
     }
   }
   d.point = `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}`;
@@ -295,6 +295,8 @@ export interface WaybackDateAnswer {
   release: { release: number; date: string };
   z: number;
   captures: WaybackCapture[];
+  /** The pref's release is not in Esri's index, so these are the newest release's dates (as the layer draws). */
+  fallback?: boolean;
 }
 
 /** What a topo answer holds in the pick: the sheets and years at the point, and the edition drawn. */
@@ -315,8 +317,16 @@ const ASK: Record<GroundPart, (lon: string, lat: string) => Promise<unknown>> = 
   wayback: async (lon, lat) => {
     const release = parseReleaseId(useSettings.getState().prefs.waybackRelease);
     const z = zoomForHeight(useGlobe.getState().view.height, Number(lat));
-    const r = release != null ? `&release=${release}` : "";
-    return (await getJson(`/api/terrain?op=waybackdate&lon=${lon}&lat=${lat}&z=${z}${r}`)).data ?? null;
+    const base = `/api/terrain?op=waybackdate&lon=${lon}&lat=${lat}&z=${z}`;
+    if (release == null) return (await getJson(base)).data ?? null;
+    try {
+      return (await getJson(`${base}&release=${release}`)).data ?? null;
+    } catch (err) {
+      // The layer draws the newest release when the pref's is not in Esri's index; the dates follow it.
+      if (!(err instanceof Error) || !/not in Esri's index/.test(err.message)) throw err;
+      const d = (await getJson(base)).data as WaybackDateAnswer | undefined;
+      return d ? { ...d, fallback: true } : null;
+    }
   },
   topo: async (lon, lat) => {
     const d = (await getJson(`/api/terrain?op=topo&lon=${lon}&lat=${lat}`)).data as { sheets?: TopoSheet[]; years?: TopoYear[] } | undefined;

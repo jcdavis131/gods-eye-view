@@ -24,6 +24,7 @@ import nmfsLineSodo from "@/lib/land/fixtures/nmfs-2-sodo.json";
 import rangesBarton from "@/lib/land/fixtures/ranges-3-barton.json";
 import rangesPecos from "@/lib/land/fixtures/ranges-3-pecos.json";
 import rangesAustin from "@/lib/land/fixtures/ranges-3-austin.json";
+import rangesSeattle from "@/lib/land/fixtures/ranges-3-seattle.json";
 
 vi.mock("@/lib/server/cache", () => ({
   cached: async <T,>(_k: string, _ttl: number, produce: () => Promise<T>) => ({ value: await produce(), age: 0, hit: false }),
@@ -241,7 +242,7 @@ describe("op=crithab, NOAA Fisheries", () => {
   };
 
   it("asks NOAA's polygons at the point and its lines in a box about 200 m around it, and splits the Federal Register anchor", async () => {
-    answer = noaa(nmfsAreaSeattle, nmfsLineSeattle);
+    answer = (u) => (u.includes("/Species_Ranges/FeatureServer/3/query") ? json(rangesSeattle) : noaa(nmfsAreaSeattle, nmfsLineSeattle)(u));
     const { status, body } = await get("op=crithab&lon=-122.4&lat=47.6");
     expect(status).toBe(200);
     const area = calls.find((u) => u.includes("/MapServer/226/query"))!;
@@ -250,7 +251,10 @@ describe("op=crithab, NOAA Fisheries", () => {
     expect(param(area, "outFields")).toBe("SCIENAME,COMNAME,LISTSTATUS,CHSTATUS,UNIT,ECFR,FR,PUBDATE,EFFECTDATE,HABTYPE");
     expect(JSON.parse(param(line, "geometry")!)).toEqual({ xmin: -122.402, ymin: 47.598, xmax: -122.398, ymax: 47.602 });
     expect(param(line, "geometryType")).toBe("esriGeometryEnvelope");
-    const d = body.data as unknown as { noaa: Array<Record<string, unknown>> };
+    const d = body.data as unknown as { noaa: Array<Record<string, unknown>>; ranges: Array<Record<string, unknown>> };
+    // NOAA-led ranges (whales, Steller sea lion) and FWS-led ones come back in the same list.
+    expect(d.ranges).toHaveLength(10);
+    expect(d.ranges.filter((s) => s.agency === "NMFS").length).toBe(7);
     expect(d.noaa).toEqual([
       expect.objectContaining({
         agency: "NOAA Fisheries",
