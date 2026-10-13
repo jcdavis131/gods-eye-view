@@ -43,7 +43,7 @@ import { CHICAGO_DISCLAIMER } from "@/lib/civic/terms";
 import { buildingPermits, contaminants, environmental, licences } from "@/lib/permits/sources";
 import { CONTAMINANTS_CAVEAT } from "@/lib/permits/contaminants";
 import { HOME_HEURISTIC, permitFeatures, licenceFeatures, envFeatures } from "@/lib/permits/geojson";
-import { cached } from "@/lib/server/cache";
+import { cacheDelete, cached, DeadlineError } from "@/lib/server/cache";
 import { retrying } from "@/lib/server/net";
 import { provenance, type Provenance } from "@/lib/provenance/types";
 import { source } from "@/lib/provenance/sources";
@@ -131,30 +131,55 @@ async function opContaminants(b: Bbox) {
   );
 }
 
+/**
+ * Time budget for op=tri, inside maxDuration (60 s). One Envirofacts call gets
+ * 12 s and one retry (about 25 s at worst); the whole op stops waiting at 50 s,
+ * so the year-before fallback only gets what the first year left over.
+ */
+const TRI_TRY_MS = 12_000;
+const TRI_BUDGET_MS = 50_000;
+
 /** One Envirofacts call, projected to the TRI allowlist before anything else sees it. */
 function triFetch(url: string): Promise<TriRaw[]> {
-  return retrying(() => polite("epa-envirofacts", 1000, 30_000, async () => projectTri(await upstreamJson<unknown>("epa-tri", url, { timeoutMs: 30_000 }))), 3);
+  return retrying(() => polite("epa-envirofacts", 1000, 30_000, async () => projectTri(await upstreamJson<unknown>("epa-tri", url, { timeoutMs: TRI_TRY_MS }))), 2);
 }
 
-/** A facility-year: the Form R release rows and the Form A certifications, held 30 days (a filed year rarely changes). */
-function triYear(trifid: string, year: number) {
-  return cached(`tri:${trifid}:${year}`, 30 * 24 * 3600_000, async () => {
-    const [r, a] = await Promise.all([triFetch(triReleaseUrl(trifid, year)), triFetch(triFormAUrl(trifid, year)).catch(() => null)]);
-    return { releases: triReleases(r), formA: a ? triFormA(a) : null };
-  });
+/**
+ * A facility-year: the Form R release rows and the Form A certifications, held
+ * 30 days (a filed year rarely changes). A year whose Form A list did not
+ * answer (formA: null) is not kept: the next ask tries Form A again rather
+ * than inheriting "unknown" for a month. That includes a result that landed
+ * after the caller's deadline and was stored by the cache on its own.
+ */
+async function triYear(trifid: string, year: number, deadlineMs: number) {
+  const key = `tri:${trifid}:${year}`;
+  const r = await cached(key, 30 * 24 * 3600_000, async () => {
+    const [rel, a] = await Promise.all([triFetch(triReleaseUrl(trifid, year)), triFetch(triFormAUrl(trifid, year)).catch(() => null)]);
+    return { releases: triReleases(rel), formA: a ? triFormA(a) : null };
+  }, { deadlineMs: Math.max(1, deadlineMs) });
+  if (r.value.formA == null) cacheDelete(key);
+  return r;
 }
 
 async function opTri(trifid: string, asked: number | null) {
+  const end = Date.now() + TRI_BUDGET_MS;
   const years = asked != null ? [asked] : triDefaultYears();
   let year = years[0];
-  let r = await triYear(trifid, year);
+  let r = await triYear(trifid, year, end - Date.now());
+  let fallbackLate = false;
   if (asked == null && !r.value.releases.length && !r.value.formA?.length) {
-    year = years[1];
-    r = await triYear(trifid, year);
+    try {
+      r = await triYear(trifid, years[1], end - Date.now());
+      year = years[1];
+    } catch (err) {
+      if (!(err instanceof DeadlineError)) throw err;
+      fallbackLate = true;
+    }
   }
   const { releases, formA } = r.value;
   const caveats = [TRI_CAVEAT, "The certifying official and every contact field Envirofacts sends are dropped before anything is kept; TRI's own facility coordinates are not used."];
-  if (!releases.length && !formA?.length) caveats.push(asked != null ? `TRI holds no Form R or Form A from this facility for ${year}.` : `TRI holds no Form R or Form A from this facility for ${years.join(" or ")}; ask for another year with year=.`);
+  if (fallbackLate) caveats.push(`TRI holds no Form R or Form A from this facility for ${year}, and ${years[1]} did not answer in time; ask for it with year=${years[1]}.`);
+  else if (!releases.length && !formA?.length) caveats.push(asked != null ? `TRI holds no Form R or Form A from this facility for ${year}.` : `TRI holds no Form R or Form A from this facility for ${years.join(" or ")}; ask for another year with year=.`);
   if (formA == null) caveats.push("The Form A list did not answer this time (formA: null): certifications without quantities are unknown, not absent.");
   const prov: Provenance[] = [
     provenance(source("epa-tri"), { kind: "published", seriesId: `tri_reporting_form + tri_release_qty + tri_chem_info, facility ${trifid}, reporting year ${year}`, upstreamUrl: triReleaseUrl(trifid, year), retrievedAt: new Date(Date.now() - r.age).toISOString() }),

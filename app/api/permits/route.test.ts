@@ -31,6 +31,7 @@ const emefParams: Array<Record<string, string>> = [];
 vi.mock("@/lib/server/cache", () => ({
   cached: async <T,>(_k: string, _ttl: number, produce: () => Promise<T>) => ({ value: await produce(), age: 0, hit: false }),
   cacheDelete: () => {},
+  DeadlineError: class DeadlineError extends Error {},
 }));
 
 vi.mock("@/lib/civic/request", () => ({
