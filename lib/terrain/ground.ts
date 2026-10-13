@@ -15,6 +15,9 @@
 //                                            and the map it comes from
 //   crithab     /api/land?op=crithab         USFWS critical habitat (final and
 //                                            proposed) containing the point
+//   topo        /api/terrain?op=topo         USGS historical topographic sheets at the
+//                                            point: the drawn edition first, with
+//                                            citation, GeoPDF and GeoTIFF
 //
 // Only the layers that are on are asked, and only below GROUND_MAX_HEIGHT_M,
 // so a click from orbit still just deselects.
@@ -29,11 +32,13 @@ import type { ClassAnswer } from "./classes";
 import { nccpiText, type SoilAnswer } from "./soil";
 import { ageRange, type GeologyAnswer } from "@/lib/infra/geology";
 import { critHabText, type CritHabSpecies } from "@/lib/land/features";
+import { useSettings } from "@/lib/store/settings";
+import { resolveTopoYear, sheetText, type TopoSheet, type TopoYear } from "./topo";
 
 /** Above this camera height a ground click is not a question about the ground. */
 export const GROUND_MAX_HEIGHT_M = 150_000;
 
-export type GroundPart = "soils" | "firehazard" | "landcover" | "slope" | "elevation" | "geology" | "crithab";
+export type GroundPart = "soils" | "firehazard" | "landcover" | "slope" | "elevation" | "geology" | "crithab" | "topo";
 
 export interface PartState {
   loading: boolean;
@@ -68,6 +73,7 @@ const PART_OF: Partial<Record<LayerId, GroundPart>> = {
   relief: "elevation",
   geology: "geology",
   crithab: "crithab",
+  topo: "topo",
 };
 
 /** The parts to ask for, given which layers are on (each once, in a fixed order). */
@@ -97,6 +103,7 @@ const SOURCE_OF: Record<GroundPart, string> = {
   elevation: "USGS 3DEP EPQS",
   geology: "Macrostrat",
   crithab: "USFWS critical habitat",
+  topo: "USGS historical topo maps",
 };
 
 type Details = NonNullable<LayerFeature["properties"]["details"]>;
@@ -182,6 +189,27 @@ export function groundDetails(p: Pick<GroundPick, "lon" | "lat" | "parts">): Det
     if (a && !a.proposed) d["critical habitat (proposed)"] = "FWS's proposed layer did not answer: unknown, not absent";
     d["critical habitat note"] = "a regulatory designation, not range or occurrence; FWS: the GIS files are not the legal boundary (the Federal Register rule is)";
   }
+  const tp = p.parts.topo;
+  if (tp && !waiting(d, "topographic maps", tp, "USGS (HTMC)")) {
+    const a = tp.data as TopoAnswer | null;
+    if (!a?.sheets.length) d["topographic maps"] = "no USGS topographic sheet here in the collection (1879-2006)";
+    else {
+      const year = a.year ?? a.years[a.years.length - 1]?.year;
+      const drawn = a.sheets.filter((s) => s.year === year);
+      d["topographic maps"] = `${a.sheets.length} sheets in ${a.years.length} editions here, ${a.years[0].year} to ${a.years[a.years.length - 1].year}`;
+      if (!drawn.length) d[`topo ${year}`] = `no ${year} sheet at this point`;
+      drawn.forEach((s, i) => {
+        const k = drawn.length > 1 ? `topo ${year} sheet ${i + 1}` : `topo ${year} sheet`;
+        d[k] = sheetText(s);
+        if (s.citation) d[`${k} citation (USGS)`] = s.citation;
+        if (s.geopdf) d[`${k} GeoPDF`] = s.geopdf;
+        if (s.geotiff) d[`${k} GeoTIFF`] = s.geotiff;
+      });
+      const others = a.years.filter((y) => y.year !== year).map((y) => y.year);
+      if (others.length) d["other topo editions here"] = others.join(", ");
+      d["topo note"] = "sheets found at the point rounded to 0.01° (about 1 km), so near a sheet edge a neighbour can be listed; the edition year is when USGS revised the map, not a survey date, and parts of a sheet can be decades older";
+    }
+  }
   d.point = `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}`;
   return d;
 }
@@ -227,6 +255,13 @@ async function getJson(url: string): Promise<{ data?: unknown; error?: string }>
   return j;
 }
 
+/** What a topo answer holds in the pick: the sheets and years at the point, and the edition drawn. */
+export interface TopoAnswer {
+  sheets: TopoSheet[];
+  years: TopoYear[];
+  year: number | null;
+}
+
 const ASK: Record<GroundPart, (lon: string, lat: string) => Promise<unknown>> = {
   soils: async (lon, lat) => (await getJson(`/api/soil?op=point&lon=${lon}&lat=${lat}`)).data ?? null,
   firehazard: async (lon, lat) => ((await getJson(`/api/terrain?op=point&product=firehazard&lon=${lon}&lat=${lat}`)).data as { class?: unknown })?.class ?? null,
@@ -235,6 +270,12 @@ const ASK: Record<GroundPart, (lon: string, lat: string) => Promise<unknown>> = 
   elevation: async (lon, lat) => (await getJson(`/api/land?op=elevation&lon=${lon}&lat=${lat}`)).data ?? null,
   geology: async (lon, lat) => (await getJson(`/api/infra?op=geology&lon=${lon}&lat=${lat}`)).data ?? null,
   crithab: async (lon, lat) => (await getJson(`/api/land?op=crithab&lon=${lon}&lat=${lat}`)).data ?? null,
+  topo: async (lon, lat) => {
+    const d = (await getJson(`/api/terrain?op=topo&lon=${lon}&lat=${lat}`)).data as { sheets?: TopoSheet[]; years?: TopoYear[] } | undefined;
+    const years = d?.years ?? [];
+    const answer: TopoAnswer = { sheets: d?.sheets ?? [], years, year: resolveTopoYear(years, useSettings.getState().prefs.topoYear).year };
+    return answer;
+  },
 };
 
 /** Ask every ground layer that is on what is under this point, and open the dossier. */

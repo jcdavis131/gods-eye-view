@@ -8,6 +8,8 @@ import whpNw from "@/lib/terrain/fixtures/whp-identify-nw.json";
 import nlcdDt from "@/lib/terrain/fixtures/nlcd-gfi-dt.json";
 import slopeNw from "@/lib/terrain/fixtures/slope-identify-nw.json";
 import waybackConfig from "@/lib/terrain/fixtures/wayback-config-trimmed.json";
+import htmcSf from "@/lib/terrain/fixtures/htmc-point-sf.json";
+import tnmSf from "@/lib/terrain/fixtures/tnm-htmc-sf.json";
 
 vi.mock("@/lib/server/cache", () => ({
   cached: async <T,>(_k: string, _ttl: number, produce: () => Promise<T>) => ({ value: await produce(), age: 0, hit: false }),
@@ -127,5 +129,49 @@ describe("op=wayback", () => {
     expect(body.data.tiles).toContain("/tile/{release}/{z}/{y}/{x}");
     expect(body.caveats.join(" ")).toMatch(/not a capture date/);
     expect(res.headers.get("access-control-allow-origin")).toBe("*");
+  });
+});
+
+describe("op=topo", () => {
+  const usgs = (tnmUp: boolean) => (url: string) => {
+    if (url.startsWith("https://historical1.arcgis.com/arcgis/rest/services/USGS_Historical_Topographic_Maps/ImageServer/query?")) return new Response(JSON.stringify(htmcSf), { status: 200, headers: { "content-type": "application/json" } });
+    if (url.startsWith("https://tnmaccess.nationalmap.gov/api/v1/products?")) return tnmUp ? new Response(JSON.stringify(tnmSf), { status: 200, headers: { "content-type": "application/json" } }) : new Response("down", { status: 404 });
+    return new Response("unexpected", { status: 500 });
+  };
+
+  it("asks the HTMC for named fields at the snapped point, lists the editions, and links each sheet's files from TNM", async () => {
+    answer = usgs(true);
+    const res = await GET(req("op=topo&lon=-122.4213&lat=37.7712"));
+    expect(res.status).toBe(200);
+    const htmcCall = calls.find((u) => u.includes("/ImageServer/query?"))!;
+    const p = new URL(htmcCall).searchParams;
+    expect(p.get("geometry")).toBe("-122.42,37.77");
+    expect(p.get("outFields")).toBe("OBJECTID,Scan_Id,DateCurrent,Map_Scale,Map_Name,Citation,Imprint_Year,Survey_Year");
+    expect(p.get("where")).toBe("Category=1");
+    expect(p.get("returnDistinctValues")).toBeNull();
+    expect(p.get("returnGeometry")).toBe("false");
+    const tnmCall = calls.find((u) => u.includes("tnmaccess"))!;
+    expect(new URL(tnmCall).searchParams.get("bbox")).toBe("-122.425,37.765,-122.415,37.775");
+    const body = (await res.json()) as { data: { lon: number; lat: number; years: Array<{ year: number }>; sheets: Array<{ geotiff: string | null }>; tiles: string }; caveats: string[] };
+    expect(body.data.lon).toBe(-122.42);
+    expect(body.data.years[0].year).toBe(1895);
+    expect(body.data.sheets).toHaveLength(31);
+    expect(body.data.sheets.filter((s) => s.geotiff)).toHaveLength(30);
+    expect(body.data.tiles).toContain("DateCurrent%3D{year}");
+    expect(body.caveats.join(" ")).toMatch(/edition year is not a survey date/);
+  });
+
+  it("still answers the sheets when TNM fails, without links, and refuses a point without lon and lat", async () => {
+    answer = usgs(false);
+    const res = await GET(req("op=topo&lon=-122.42&lat=37.77"));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { sheets: Array<{ geotiff: string | null; geopdf: string | null }> }; caveats: string[] };
+    expect(body.data.sheets).toHaveLength(31);
+    expect(body.data.sheets.every((s) => s.geotiff === null && s.geopdf === null)).toBe(true);
+    expect(body.caveats.join(" ")).toMatch(/TNM did not answer/);
+    calls.length = 0;
+    expect((await GET(req("op=topo&lon=-122.42"))).status).toBe(400);
+    expect((await GET(req("op=topo&lon=&lat=37.77"))).status).toBe(400);
+    expect(calls).toEqual([]);
   });
 });

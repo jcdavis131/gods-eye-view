@@ -16,6 +16,7 @@
 import type { LayerId } from "@/lib/layers/types";
 import type { SourceId } from "@/lib/provenance/sources";
 import { WAYBACK_CAVEAT } from "@/lib/terrain/wayback";
+import { TOPO_CAVEAT } from "@/lib/terrain/topo";
 
 export interface Exclusion {
   what: string;
@@ -69,7 +70,7 @@ export const SHELVES: Array<{ id: string; title: string; layers: LayerId[] }> = 
   { id: "species", title: "Species", layers: ["crithab"] },
   { id: "water", title: "Water quality", layers: [] },
   { id: "contaminants", title: "Contaminants", layers: ["contaminants"] },
-  { id: "imagery", title: "Imagery and maps", layers: ["wayback"] },
+  { id: "imagery", title: "Imagery and maps", layers: ["wayback", "topo"] },
 ];
 
 const R1 = "2026-10-12";
@@ -262,6 +263,27 @@ export const COLLECTIONS: readonly Collection[] = [
     ops: ["terrain?op=wayback"],
     sensitivity: "Imagery as Esri publishes it; nothing is stored here.",
     round: 1,
+  },
+  {
+    id: "usgs-htmc",
+    title: "USGS historical topographic maps, 1879-2006",
+    layer: "topo",
+    sources: ["usgs-htmc"],
+    what: "Every scale and edition of the topographic map USGS published, scanned (the Historical Topographic Map Collection), drawn one edition year at a time from Esri's HTMC ImageServer; a click lists the sheets at the point with their USGS citation, and their GeoPDF and GeoTIFF from USGS TNM Access matched by scan id.",
+    recordIs: "A sheet: one edition of one USGS quadrangle as published. The edition year (DateCurrent) is when USGS revised the map, not a survey date; parts of a sheet can be decades older.",
+    coverage: { spatial: "United States and territories; tiles draw from about level 11 (about 10 km or closer)", temporal: "editions 1879-2006 (DateCurrent minimum and maximum)", count: { value: 181008, of: "sheets in the ImageServer (Category=1)", countedOn: R2 } },
+    freshness: { statement: "A closed collection: USGS's historical series ends in 2006, and the service describes it as all scales and all editions published since the program began.", readFrom: "ImageServer ?f=json description; DateCurrent max statistic (2006)", recordedOn: R2 },
+    excluded: [
+      { what: "the HTMC's own GeoPDF links (Download_GeoPDF)", why: "their host, ims.er.usgs.gov, no longer resolves (2026-10-13); the GeoPDF and GeoTIFF come from TNM instead" },
+      { what: "a year the view centre has no sheet for, in the picker", why: "a year with no sheet under a tile draws blank" },
+      { what: "tiles coarser than level 11", why: "a sheet draws only finer than its MaxPS; a 20 km tile came back blank" },
+    ],
+    caveats: [TOPO_CAVEAT],
+    searchable: [],
+    embedText: ["Map_Name", "Map_Scale", "DateCurrent", "Imprint_Year", "Survey_Year", "Citation"],
+    ops: ["terrain?op=topo"],
+    sensitivity: "Published federal maps; no personal data. Sheet names are place names.",
+    round: 2,
   },
 ];
 

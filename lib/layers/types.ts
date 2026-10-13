@@ -45,6 +45,7 @@ export type LayerId =
   | "historic"
   | "crithab"
   | "wayback"
+  | "topo"
   | "relief"
   | "slope"
   | "contours"
@@ -113,6 +114,7 @@ export const LAYER_IDS: LayerId[] = [
   "historic",
   "crithab",
   "wayback",
+  "topo",
   "relief",
   "slope",
   "contours",

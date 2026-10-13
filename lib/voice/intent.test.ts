@@ -128,3 +128,13 @@ describe("voice words for historic imagery", () => {
     expect(layerOf("show historic places")).toMatchObject({ layer: "historic" });
   });
 });
+
+describe("voice words for historic topo maps", () => {
+  it("hears topo maps before historic places and contour lines", () => {
+    expect(layerOf("show historic maps")).toMatchObject({ layer: "topo" });
+    expect(layerOf("show old maps over boston")).toMatchObject({ layer: "topo", place: "boston" });
+    expect(layerOf("show topo maps")).toMatchObject({ layer: "topo" });
+    expect(layerOf("show topo lines")).toMatchObject({ layer: "contours" });
+    expect(layerOf("show historic places")).toMatchObject({ layer: "historic" });
+  });
+});

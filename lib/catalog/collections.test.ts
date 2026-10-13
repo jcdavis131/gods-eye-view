@@ -26,6 +26,7 @@ describe("the catalogue", () => {
       "emef-rcra",
       "emef-acres",
       "esri-wayback",
+      "usgs-htmc",
     ]);
     const ids = COLLECTIONS.map((c) => c.id);
     expect(new Set(ids).size).toBe(ids.length);
@@ -47,7 +48,7 @@ describe("the catalogue", () => {
   });
 
   it("gives every curated layer at least one card, and shelves every catalogued layer once", () => {
-    for (const l of ["wetlands", "historic", "crithab", "contaminants", "wayback"] as const) expect(collectionsForLayer(l).length, l).toBeGreaterThan(0);
+    for (const l of ["wetlands", "historic", "crithab", "contaminants", "wayback", "topo"] as const) expect(collectionsForLayer(l).length, l).toBeGreaterThan(0);
     const shelved = SHELVES.flatMap((s) => s.layers);
     expect(new Set(shelved).size).toBe(shelved.length);
     for (const l of catalogued()) expect(shelved, l).toContain(l);

@@ -10,9 +10,11 @@ import type { LayerId } from "@/lib/layers/types";
 import { NLCD_CLASSES, NWI_RASTER_CLASSES, SLR_LEGEND, WHP_CLASSES } from "@/lib/terrain/classes";
 import { SLR_DEFAULT_FT, SLR_FEET, isSlrFeet } from "@/lib/terrain/products";
 import { releasesByYear, resolveRelease, type WaybackRelease } from "@/lib/terrain/wayback";
+import { resolveTopoYear, yearLabel } from "@/lib/terrain/topo";
+import { useTopoHere } from "@/lib/layers/topo";
 
 /** Layers that draw a tiled picture (their own, or the FEMA map under flood zones). */
-export const PICTURE_LAYERS = new Set<LayerId>(["relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "flood", "wetlands", "geology", "crithab", "wayback"]);
+export const PICTURE_LAYERS = new Set<LayerId>(["relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "flood", "wetlands", "geology", "crithab", "wayback", "topo"]);
 
 const DEFAULT_ALPHA: Partial<Record<LayerId, number>> = {
   relief: 0.55,
@@ -27,6 +29,7 @@ const DEFAULT_ALPHA: Partial<Record<LayerId, number>> = {
   geology: 0.55,
   crithab: 0.75,
   wayback: 1,
+  topo: 1,
 };
 
 function Swatches({ items }: { items: Array<{ label: string; color: string }> }) {
@@ -103,6 +106,44 @@ function WaybackPicker() {
   );
 }
 
+/** The edition picker under Historic topo maps: only the years with a sheet at the view centre. */
+function TopoPicker() {
+  const wanted = useSettings((s) => s.prefs.topoYear);
+  const setPref = useSettings((s) => s.setPref);
+  const here = useTopoHere((s) => s.here);
+  if (!here) return <div>Descend below 150 km for the editions at the view centre; the maps draw from about 10 km.</div>;
+  if (!here.years.length) return <div>No USGS topographic sheet at the view centre.</div>;
+  const { year, present, nearest } = resolveTopoYear(here.years, wanted);
+  return (
+    <>
+      <label className="flex items-center gap-2">
+        <span className="w-14 shrink-0 uppercase tracking-widest">Edition</span>
+        <select
+          value={wanted != null && present ? String(wanted) : ""}
+          onChange={(e) => setPref("topoYear", e.target.value ? Number(e.target.value) : null)}
+          className="min-w-0 flex-1 border border-border bg-transparent px-1 py-0.5 text-foreground"
+          aria-label="USGS topographic map edition year (only years with a sheet at the view centre)"
+        >
+          <option value="" className="bg-background">
+            Newest here ({here.years[here.years.length - 1].year})
+          </option>
+          {[...here.years].reverse().map((y) => (
+            <option key={y.year} value={y.year} className="bg-background">
+              {yearLabel(y)}
+            </option>
+          ))}
+        </select>
+      </label>
+      {!present && year != null && (
+        <div>
+          No {year} sheet at the view centre{nearest.length ? `; nearest editions here: ${nearest.join(", ")}` : ""}. The {year} edition draws only where a {year} sheet exists.
+        </div>
+      )}
+      <div>The edition year is when USGS revised the map, not a survey date; parts of a sheet can be older. Click the ground for the sheets.</div>
+    </>
+  );
+}
+
 export default function TileControls({ id }: { id: LayerId }) {
   const alpha = useSettings((s) => s.prefs.tileAlpha?.[id]);
   const ft = useSettings((s) => s.prefs.seaLevelFt);
@@ -152,6 +193,7 @@ export default function TileControls({ id }: { id: LayerId }) {
       {id === "slope" && <div>USGS&apos;s colours: yellow to red is steeper; click the ground for the slope in degrees.</div>}
       {id === "soils" && <div>Map units outlined with their symbols; click the ground for the soil.</div>}
       {id === "wayback" && <WaybackPicker />}
+      {id === "topo" && <TopoPicker />}
       {id === "crithab" && <div>FWS&apos;s map of final and proposed designations; click the ground for the species and whether it is proposed. Not where a species lives.</div>}
       {id === "wetlands" && (
         <>

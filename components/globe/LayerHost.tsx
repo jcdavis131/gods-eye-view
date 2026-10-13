@@ -31,6 +31,7 @@ const OPTION_KEYS: Partial<Record<LayerDefinition["id"], Array<keyof Prefs>>> = 
   field: ["fieldPov"],
   sealevel: ["seaLevelFt"],
   wayback: ["waybackRelease"],
+  topo: ["topoYear"],
 };
 
 export default function LayerHost() {

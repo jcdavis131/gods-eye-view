@@ -110,3 +110,26 @@ describe("critical habitat in the ground dossier", () => {
     expect(half["critical habitat (proposed)"]).toMatch(/unknown, not absent/);
   });
 });
+
+describe("historic topo maps in the ground dossier", () => {
+  it("is asked when the Historic topo maps layer is on", () => {
+    expect(partsFor({ topo: true })).toEqual(["topo"]);
+    expect(groundClickWanted({ topo: true }, 20_000)).toBe(true);
+  });
+
+  it("lists the drawn edition's sheets with citation and files, then the other editions", async () => {
+    const { parseHtmcSheets, tnmFiles, topoYears, withTnmFiles } = await import("./topo");
+    const htmc = (await import("./fixtures/htmc-point-sf.json")).default;
+    const tnm = (await import("./fixtures/tnm-htmc-sf.json")).default;
+    const sheets = withTnmFiles(parseHtmcSheets(htmc), tnmFiles(tnm));
+    const years = topoYears(sheets);
+    const d = groundDetails({ lon: -122.42, lat: 37.77, parts: { topo: { loading: false, data: { sheets, years, year: 1895 } } } });
+    expect(d["topographic maps"]).toBe(`31 sheets in ${years.length} editions here, 1895 to 1995`);
+    const keys = Object.keys(d).filter((k) => k.startsWith("topo 1895 sheet"));
+    expect(keys.length).toBeGreaterThan(0);
+    expect(Object.entries(d).some(([k, v]) => k.endsWith("GeoTIFF") && typeof v === "string" && v.startsWith("https://prd-tnm.s3.amazonaws.com/"))).toBe(true);
+    expect(d["other topo editions here"]).not.toContain("1895");
+    const none = groundDetails({ lon: -150, lat: 0, parts: { topo: { loading: false, data: { sheets: [], years: [], year: null } } } });
+    expect(none["topographic maps"]).toMatch(/^no USGS topographic sheet here/);
+  });
+});

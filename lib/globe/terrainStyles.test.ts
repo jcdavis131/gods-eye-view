@@ -56,3 +56,22 @@ describe("historic imagery", () => {
     expect(hosts().has(new URL(a[0].url.replace(/\{\w+\}/g, "0")).host)).toBe(true);
   });
 });
+
+describe("historic topo maps", () => {
+  it("draws nothing until an edition is resolved, then that edition, keyed by it, from level 11 to 16", async () => {
+    const { topoStyle } = await import("./terrainStyles");
+    expect(topoStyle.tiles?.({})).toBeNull();
+    expect(topoStyle.tiles?.({ meta: { topoYear: 1700 } })).toBeNull();
+    const a = topoStyle.tiles?.({ meta: { topoYear: 1895 } }) ?? [];
+    const b = topoStyle.tiles?.({ meta: { topoYear: 1956 } }) ?? [];
+    expect(a[0].key).toBe("topo:1895");
+    expect(b[0].key).toBe("topo:1956");
+    expect(a[0].url).toContain("DateCurrent%3D1895");
+    expect(a[0]).toMatchObject({ floorLevel: 11, maximumLevel: 16, alpha: 1 });
+    expect(a[0].sparse).toBeUndefined();
+    expect(a[0].z).toBeGreaterThan(TILE_Z.wayback);
+    expect(a[0].z).toBeLessThan(TILE_Z.relief);
+    expect(a[0].credit).toContain("Historical Topographic Map Collection courtesy of the U.S. Geological Survey, Esri");
+    expect(hosts().has(new URL(a[0].url.replace(/\{\w+\}/g, "0")).host)).toBe(true);
+  });
+});

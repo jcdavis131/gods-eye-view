@@ -14,6 +14,7 @@
 
 import { bboxParam } from "./webmercator";
 import type { SourceId } from "@/lib/provenance/sources";
+import { HTMC_HOST, TOPO_MAX_ZOOM, topoTiles } from "./topo";
 
 export const DEP_IMAGE = "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer";
 export const RELIEF_TILES = "https://basemap.nationalmap.gov/arcgis/rest/services/USGSShadedReliefOnly/MapServer/tile/{z}/{y}/{x}";
@@ -155,7 +156,7 @@ export function routeTileUrl(product: RenderProductId, z: number | string, x: nu
 // ---------------------------------------------------------------- direct sources
 
 export interface DirectSource {
-  id: "relief" | "soils" | "firehazard" | "sealevel" | "terrain" | "geology" | "wetlands" | "crithab" | "wayback";
+  id: "relief" | "soils" | "firehazard" | "sealevel" | "terrain" | "geology" | "wetlands" | "crithab" | "wayback" | "topo";
   title: string;
   source: SourceId;
   /** Host the browser fetches from (CSP img-src / connect-src must allow it). */
@@ -246,6 +247,15 @@ export const DIRECT_SOURCES: DirectSource[] = [
     template: "https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/{release}/{z}/{y}/{x}",
     maxZoom: 19,
     note: "The browser loads tiles from Esri directly (CORS *, including on the 301 Esri sends to the release where a tile last changed); the release index comes from /api/terrain?op=wayback. Never proxied or cached here.",
+  },
+  {
+    id: "topo",
+    title: "USGS historical topographic maps, 1879-2006 (Esri USGS_Historical_Topographic_Maps ImageServer, one edition year at a time)",
+    source: "usgs-htmc",
+    host: HTMC_HOST,
+    template: topoTiles(1956).replace("DateCurrent%3D1956", "DateCurrent%3D{year}"),
+    maxZoom: TOPO_MAX_ZOOM,
+    note: "Dynamic exportImage, no tile cache (CORS reflects the origin); a sheet draws only from about level 11, and a year with no sheet under a tile is a blank PNG. The years and sheets at a point come from /api/terrain?op=topo.",
   },
 ];
 

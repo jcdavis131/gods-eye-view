@@ -2476,8 +2476,8 @@
     },
     "/api/terrain": {
       "get": {
-        "summary": "Slope, 2 ft contour, land cover and FEMA flood-map tiles rendered once and held at the edge; the hazard class, land cover class or slope at a point; the catalog of terrain pictures; Esri's Wayback release index",
-        "description": "op=tile: one 512 px PNG in Web Mercator (XYZ, y down) of a product no publisher caches as tiles: slope (USGS 3DEP \"Slope Map\", z 8-16), contours (3DEP \"Preset 2ft Contour Interval\", black lines on white, unlabelled, z 13-17), landcover (MRLC NLCD 2021 WMS, z 5-12), floodmap (FEMA NFHL layer 28 export, transparent, z 14-17). The route builds the upstream request from the product and the tile's EPSG:3857 box and never takes a URL; the image is the publisher's own render, cached a day in the server and for weeks at the edge. op=point: firehazard (USFS Wildfire Hazard Potential 2023 class, with the class table from the service's own legend), landcover (NLCD 2021 class, from MRLC's GetFeatureInfo and legend) or slope (3DEP \"Slope Degrees\", whole degrees) at lon, lat; a point with no value answers `class: null` / `degrees: null`, never 0. op=products: every terrain picture the globe draws, direct or rendered here, with its source, zoom range, class tables, caveats and the terrain tiles' required attribution. op=wayback: Esri World Imagery Wayback's release index, `releases` [{release, date}] newest first (2014-02-20 onward), parsed from each release's title (an undated entry is dropped, never guessed), held a day; the tile template with {release}; tiles are loaded from Esri by the browser and never proxied or cached here (the item's licence: not for offline tile export). A release date is when Esri published that basemap, not when its pixels were captured.",
+        "summary": "Slope, 2 ft contour, land cover and FEMA flood-map tiles rendered once and held at the edge; the hazard class, land cover class or slope at a point; the catalog of terrain pictures; Esri's Wayback release index; the USGS historical topographic maps at a point",
+        "description": "op=tile: one 512 px PNG in Web Mercator (XYZ, y down) of a product no publisher caches as tiles: slope (USGS 3DEP \"Slope Map\", z 8-16), contours (3DEP \"Preset 2ft Contour Interval\", black lines on white, unlabelled, z 13-17), landcover (MRLC NLCD 2021 WMS, z 5-12), floodmap (FEMA NFHL layer 28 export, transparent, z 14-17). The route builds the upstream request from the product and the tile's EPSG:3857 box and never takes a URL; the image is the publisher's own render, cached a day in the server and for weeks at the edge. op=point: firehazard (USFS Wildfire Hazard Potential 2023 class, with the class table from the service's own legend), landcover (NLCD 2021 class, from MRLC's GetFeatureInfo and legend) or slope (3DEP \"Slope Degrees\", whole degrees) at lon, lat; a point with no value answers `class: null` / `degrees: null`, never 0. op=products: every terrain picture the globe draws, direct or rendered here, with its source, zoom range, class tables, caveats and the terrain tiles' required attribution. op=wayback: Esri World Imagery Wayback's release index, `releases` [{release, date}] newest first (2014-02-20 onward), parsed from each release's title (an undated entry is dropped, never guessed), held a day; the tile template with {release}; tiles are loaded from Esri by the browser and never proxied or cached here (the item's licence: not for offline tile export). A release date is when Esri published that basemap, not when its pixels were captured. op=topo: the USGS Historical Topographic Map Collection (1879-2006) at lon, lat (snapped to 0.01 degrees, held 30 days): `years` [{year, scales}] oldest first, the edition years with a sheet there (the years the map can draw there), and `sheets` newest edition first, each with its edition year (DateCurrent), scale, imprint and survey year (null when absent), USGS citation verbatim, and its GeoPDF and GeoTIFF from USGS TNM Access matched by scan id (null when TNM does not list the scan, or when TNM did not answer: the sheets still come back). A row with no edition year is dropped. `tiles` is the exportImage template with {year}; tiles load from Esri in the browser and draw only from about level 11.",
         "tags": [
           "terrain"
         ],
@@ -2492,10 +2492,11 @@
                 "tile",
                 "point",
                 "products",
-                "wayback"
+                "wayback",
+                "topo"
               ]
             },
-            "description": "tile: a rendered PNG tile. point: a class or slope at lon, lat. products: the catalog. wayback: Esri World Imagery Wayback's release index."
+            "description": "tile: a rendered PNG tile. point: a class or slope at lon, lat. products: the catalog. wayback: Esri World Imagery Wayback's release index. topo: the USGS historical topographic map editions and sheets at lon, lat."
           },
           {
             "name": "product",
@@ -2547,7 +2548,7 @@
               "minimum": -180,
               "maximum": 180
             },
-            "description": "op=point: longitude."
+            "description": "op=point, op=topo: longitude."
           },
           {
             "name": "lat",
@@ -2557,7 +2558,7 @@
               "minimum": -90,
               "maximum": 90
             },
-            "description": "op=point: latitude."
+            "description": "op=point, op=topo: latitude."
           }
         ],
         "responses": {
@@ -2588,6 +2589,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/TerrainWaybackResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TerrainTopoResponse"
                     }
                   ]
                 }
@@ -7559,6 +7563,126 @@
           }
         ],
         "x-op": "wayback"
+      },
+      "TerrainTopoResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "lon": {
+                    "type": "number",
+                    "description": "The point asked, snapped to 0.01 degrees."
+                  },
+                  "lat": {
+                    "type": "number"
+                  },
+                  "years": {
+                    "type": "array",
+                    "description": "Edition years with a sheet at the point, oldest first.",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "year": {
+                          "type": "integer"
+                        },
+                        "scales": {
+                          "type": "array",
+                          "items": {
+                            "type": "integer"
+                          },
+                          "description": "Scale denominators, e.g. 24000 for 1:24,000."
+                        }
+                      }
+                    }
+                  },
+                  "sheets": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/TopoSheet"
+                    }
+                  },
+                  "tiles": {
+                    "type": "string",
+                    "description": "Esri's exportImage template, with {year} inside the percent-encoded mosaicRule and the imagery provider's {westProjected} etc. tokens; load it from Esri, not through this API."
+                  }
+                }
+              },
+              "attribution": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "x-op": "topo"
+      },
+      "TopoSheet": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "HTMC OBJECTID."
+          },
+          "scanId": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "USGS scan id, the key into TNM's file names."
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "year": {
+            "type": "integer",
+            "description": "Edition year (DateCurrent), not a survey date."
+          },
+          "scale": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "imprintYear": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "surveyYear": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "citation": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "USGS's citation, verbatim."
+          },
+          "geopdf": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "geotiff": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
       },
       "WaybackRelease": {
         "type": "object",
