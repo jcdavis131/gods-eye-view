@@ -15,7 +15,7 @@
 
 import type { LayerId } from "@/lib/layers/types";
 import type { SourceId } from "@/lib/provenance/sources";
-import { WAYBACK_CAVEAT } from "@/lib/terrain/wayback";
+import { WAYBACK_CAPTURE_CAVEAT, WAYBACK_CAVEAT } from "@/lib/terrain/wayback";
 import { TOPO_CAVEAT } from "@/lib/terrain/topo";
 
 export interface Exclusion {
@@ -263,6 +263,27 @@ export const COLLECTIONS: readonly Collection[] = [
     ops: ["terrain?op=wayback"],
     sensitivity: "Imagery as Esri publishes it; nothing is stored here.",
     round: 1,
+  },
+  {
+    id: "wayback-capture",
+    title: "World Imagery Wayback capture dates",
+    layer: "wayback",
+    sources: ["esri-wayback-metadata"],
+    what: "Esri's per-release imagery metadata: for each Wayback release, polygons saying which capture each region of that release came from, in 14 resolution bands, with the capture date, resolution, accuracy, provider and Esri's collection name. A click on Wayback imagery reads it at the point for the release drawn and the zoom it is drawn at.",
+    recordIs: "A capture: when and by whom the pixels in that release were taken, as Esri records it. A point can sit on more than one capture.",
+    coverage: { spatial: "Worldwide, where Esri publishes metadata (some areas have none)", temporal: "captures back to 2002 in the 2014-02-20 release, e.g. 2010-10-26 at San Francisco", count: { value: 197, of: "releases whose index entry names a metadata service on metadata.maptiles.arcgis.com", countedOn: R2 } },
+    freshness: { statement: "A release's metadata is fixed when the release is published; new releases bring new services.", readFrom: "waybackconfig.json metadataLayerUrl, one MapServer per release", recordedOn: R2 },
+    excluded: [
+      { what: "a single 'best' capture per point", why: "rows tie on DrawOrder (two 2010 captures at 90 in the 2014 release at San Francisco), so every row is shown" },
+      { what: "a guessed date where Esri lists none", why: "no metadata answers 'Esri lists no capture date here'" },
+      { what: "metadata URLs from the caller", why: "the route reads them from Esri's index by release id" },
+    ],
+    caveats: [WAYBACK_CAPTURE_CAVEAT],
+    searchable: [],
+    embedText: ["SRC_DATE", "SRC_RES", "NICE_NAME", "NICE_DESC"],
+    ops: ["terrain?op=waybackdate"],
+    sensitivity: "Imagery provenance only; no personal data.",
+    round: 2,
   },
   {
     id: "usgs-htmc",

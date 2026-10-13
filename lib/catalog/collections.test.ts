@@ -26,6 +26,7 @@ describe("the catalogue", () => {
       "emef-rcra",
       "emef-acres",
       "esri-wayback",
+      "wayback-capture",
       "usgs-htmc",
     ]);
     const ids = COLLECTIONS.map((c) => c.id);

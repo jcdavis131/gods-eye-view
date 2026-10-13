@@ -15,6 +15,8 @@
 //                                            and the map it comes from
 //   crithab     /api/land?op=crithab         USFWS critical habitat (final and
 //                                            proposed) containing the point
+//   wayback     /api/terrain?op=waybackdate  when the drawn Wayback release's pixels
+//                                            were captured there (Esri's metadata)
 //   topo        /api/terrain?op=topo         USGS historical topographic sheets at the
 //                                            point: the drawn edition first, with
 //                                            citation, GeoPDF and GeoTIFF
@@ -34,11 +36,12 @@ import { ageRange, type GeologyAnswer } from "@/lib/infra/geology";
 import { critHabText, type CritHabSpecies } from "@/lib/land/features";
 import { useSettings } from "@/lib/store/settings";
 import { resolveTopoYear, sheetText, type TopoSheet, type TopoYear } from "./topo";
+import { captureText, parseReleaseId, zoomForHeight, type WaybackCapture } from "./wayback";
 
 /** Above this camera height a ground click is not a question about the ground. */
 export const GROUND_MAX_HEIGHT_M = 150_000;
 
-export type GroundPart = "soils" | "firehazard" | "landcover" | "slope" | "elevation" | "geology" | "crithab" | "topo";
+export type GroundPart = "soils" | "firehazard" | "landcover" | "slope" | "elevation" | "geology" | "crithab" | "topo" | "wayback";
 
 export interface PartState {
   loading: boolean;
@@ -74,6 +77,7 @@ const PART_OF: Partial<Record<LayerId, GroundPart>> = {
   geology: "geology",
   crithab: "crithab",
   topo: "topo",
+  wayback: "wayback",
 };
 
 /** The parts to ask for, given which layers are on (each once, in a fixed order). */
@@ -104,6 +108,7 @@ const SOURCE_OF: Record<GroundPart, string> = {
   geology: "Macrostrat",
   crithab: "USFWS critical habitat",
   topo: "USGS historical topo maps",
+  wayback: "Esri Wayback metadata",
 };
 
 type Details = NonNullable<LayerFeature["properties"]["details"]>;
@@ -210,6 +215,17 @@ export function groundDetails(p: Pick<GroundPick, "lon" | "lat" | "parts">): Det
       d["topo note"] = "sheets found at the point rounded to 0.01° (about 1 km), so near a sheet edge a neighbour can be listed; the edition year is when USGS revised the map, not a survey date, and parts of a sheet can be decades older";
     }
   }
+  const wb = p.parts.wayback;
+  if (wb && !waiting(d, "imagery captured", wb, "Esri (Wayback metadata)")) {
+    const a = wb.data as WaybackDateAnswer | null;
+    if (!a) d["imagery captured"] = "Esri lists no capture date here";
+    else {
+      d["imagery captured"] = `Release ${a.release.date} · ${captureText(a.captures)}`;
+      const named = [...new Set(a.captures.map((c) => c.name).filter((n): n is string => !!n))];
+      if (named.length) d["imagery collection (Esri)"] = named.join("; ");
+      d["imagery note"] = `Esri's metadata for this release at about zoom level ${a.z}; a capture date is when the pixels were taken, a release date when Esri published them`;
+    }
+  }
   d.point = `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}`;
   return d;
 }
@@ -255,6 +271,13 @@ async function getJson(url: string): Promise<{ data?: unknown; error?: string }>
   return j;
 }
 
+/** What the Wayback capture answer holds (the route's data). */
+export interface WaybackDateAnswer {
+  release: { release: number; date: string };
+  z: number;
+  captures: WaybackCapture[];
+}
+
 /** What a topo answer holds in the pick: the sheets and years at the point, and the edition drawn. */
 export interface TopoAnswer {
   sheets: TopoSheet[];
@@ -270,6 +293,12 @@ const ASK: Record<GroundPart, (lon: string, lat: string) => Promise<unknown>> = 
   elevation: async (lon, lat) => (await getJson(`/api/land?op=elevation&lon=${lon}&lat=${lat}`)).data ?? null,
   geology: async (lon, lat) => (await getJson(`/api/infra?op=geology&lon=${lon}&lat=${lat}`)).data ?? null,
   crithab: async (lon, lat) => (await getJson(`/api/land?op=crithab&lon=${lon}&lat=${lat}`)).data ?? null,
+  wayback: async (lon, lat) => {
+    const release = parseReleaseId(useSettings.getState().prefs.waybackRelease);
+    const z = zoomForHeight(useGlobe.getState().view.height, Number(lat));
+    const r = release != null ? `&release=${release}` : "";
+    return (await getJson(`/api/terrain?op=waybackdate&lon=${lon}&lat=${lat}&z=${z}${r}`)).data ?? null;
+  },
   topo: async (lon, lat) => {
     const d = (await getJson(`/api/terrain?op=topo&lon=${lon}&lat=${lat}`)).data as { sheets?: TopoSheet[]; years?: TopoYear[] } | undefined;
     const years = d?.years ?? [];

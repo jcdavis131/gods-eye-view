@@ -14,6 +14,10 @@
 //   /api/terrain?op=wayback
 //        Esri World Imagery Wayback's release index, [{release, date}] newest
 //        first (2014-02-20 onward), held a day; tiles are never proxied
+//   /api/terrain?op=waybackdate&release=..&z=..&lon=..&lat=..
+//        when the pixels of a Wayback release were captured at a point, from
+//        that release's own imagery metadata (every row; the newest release
+//        when release is absent); held 7 days
 //   /api/terrain?op=topo&lon=..&lat=..
 //        USGS historical topographic maps (HTMC, 1879-2006) at a point: the
 //        edition years there with their scales, and each sheet's citation,
@@ -50,7 +54,20 @@ import {
 import { NLCD_CLASSES, NWI_RASTER_CLASSES, SLR_LEGEND, WHP_CLASSES } from "@/lib/terrain/classes";
 import { validTile } from "@/lib/terrain/webmercator";
 import { nlcdAt, renderTile, slopeAt, whpAt } from "@/lib/terrain/sources";
-import { parseWaybackConfig, WAYBACK_ATTRIBUTION, WAYBACK_CAVEAT, WAYBACK_CONFIG, waybackTiles } from "@/lib/terrain/wayback";
+import {
+  metadataLayerFor,
+  neighbourLayer,
+  parseCaptures,
+  parseWaybackConfig,
+  WAYBACK_ATTRIBUTION,
+  WAYBACK_CAPTURE_CAVEAT,
+  WAYBACK_CAVEAT,
+  WAYBACK_CONFIG,
+  WAYBACK_METADATA_ATTRIBUTION,
+  WAYBACK_METADATA_FIELDS,
+  waybackMetadataUrls,
+  waybackTiles,
+} from "@/lib/terrain/wayback";
 import { arcgisRows } from "@/lib/server/arcgis";
 import { HTMC, HTMC_ATTRIBUTION, HTMC_FIELDS, parseHtmcSheets, TNM_PRODUCTS, tnmFiles, TOPO_CAVEAT, topoTiles, topoYears, withTnmFiles, type TnmFiles } from "@/lib/terrain/topo";
 
@@ -156,14 +173,19 @@ async function opPoint(q: URLSearchParams): Promise<Response> {
  * Metadata only: the route never takes a URL and never fetches or caches a tile (the
  * browser loads them from Esri; the item's licence rules out exporting tiles offline).
  */
-async function opWayback(): Promise<Response> {
-  const r = await cached("wayback-config", DAY, async () => {
+/** Esri's index, read once a day: the dated releases and each release's metadata service. */
+function waybackIndex() {
+  return cached("wayback-config", DAY, async () => {
     const j = await retrying(() => polite("esri-wayback", 500, 30_000, () => upstreamJson<unknown>("esri-wayback", WAYBACK_CONFIG, { timeoutMs: 20_000 })), 2);
     const releases = parseWaybackConfig(j);
     if (!releases.length) throw new UpstreamError("esri-wayback", 502, "esri-wayback: the release index listed no dated release");
-    return releases;
+    return { releases, metadata: [...waybackMetadataUrls(j).entries()] };
   });
-  const releases = r.value;
+}
+
+async function opWayback(): Promise<Response> {
+  const r = await waybackIndex();
+  const releases = r.value.releases;
   return ok(
     { releases, newest: releases[0], oldest: releases[releases.length - 1], tiles: waybackTiles(0).replace("/tile/0/", "/tile/{release}/") },
     {
@@ -179,6 +201,72 @@ async function opWayback(): Promise<Response> {
         }),
       ],
       caveats: [WAYBACK_CAVEAT, "Tiles load from Esri directly; this route serves the release index only."],
+    },
+  );
+}
+
+const WAYBACKDATE_HELP = "op=waybackdate needs lon, lat and an integer z (0-23), and optionally release (an id from op=wayback; the newest when absent), e.g. release=63116&z=18&lon=-122.42&lat=37.77";
+
+/**
+ * When the pixels of a Wayback release were captured at a point: every row of that release's
+ * imagery metadata at the layer for zoom z (23 - z), one neighbouring layer tried when the
+ * rows' own bands miss z. The metadata URL comes from Esri's index by release id, never from
+ * the caller. Held 7 days per release, layer and point (0.001 degrees): a release does not change.
+ */
+async function opWaybackDate(q: URLSearchParams): Promise<Response> {
+  const lon = numParam(q.get("lon"));
+  const lat = numParam(q.get("lat"));
+  const z = intParam(q.get("z"));
+  const relRaw = q.get("release");
+  const asked = relRaw == null || relRaw.trim() === "" ? null : intParam(relRaw);
+  if (lon == null || lat == null || Math.abs(lon) > 180 || Math.abs(lat) > 90 || z == null || z > 23 || (relRaw != null && relRaw.trim() !== "" && asked == null)) return badRequest(WAYBACKDATE_HELP);
+  const idx = await waybackIndex();
+  const release = asked ?? idx.value.releases[0].release;
+  const meta = new Map(idx.value.metadata);
+  const info = idx.value.releases.find((r) => r.release === release);
+  const base = meta.get(release);
+  if (!info || !base) return badRequest(`release ${release} is not in Esri's index (or has no imagery metadata service there)`, { newest: idx.value.releases[0] });
+  const x = Number(lon.toFixed(3));
+  const y = Number(lat.toFixed(3));
+  const ask = (layer: number) =>
+    cached(`wayback-date:${release}:${layer}:${x},${y}`, 7 * DAY, async () =>
+      parseCaptures(
+        await arcgisRows(
+          "esri-wayback-metadata",
+          `${base}/${layer}`,
+          { where: "1=1", geometry: `${x},${y}`, geometryType: "esriGeometryPoint", inSR: "4326", spatialRel: "esriSpatialRelIntersects", outFields: WAYBACK_METADATA_FIELDS.join(","), returnGeometry: "false" },
+          { gate: "esri-wayback-metadata", minIntervalMs: 200, timeoutMs: 20_000, tries: 2 },
+        ),
+      ),
+    );
+  let layer = metadataLayerFor(z);
+  let r = await ask(layer);
+  const next = neighbourLayer(r.value, z, layer);
+  if (next != null) {
+    const r2 = await ask(next);
+    if (r2.value.length) {
+      layer = next;
+      r = r2;
+    }
+  }
+  const captures = r.value;
+  const caveats = [WAYBACK_CAPTURE_CAVEAT, "A capture date is when the pixels were taken; the release date is when Esri published the basemap that holds them."];
+  if (!captures.length) caveats.push("Esri lists no capture date at this point for this release and zoom; that is not a guess of any date.");
+  return ok(
+    { lon: x, lat: y, z, release: info, layer, captures },
+    {
+      meta: { source: source("esri-wayback-metadata").name, attribution: WAYBACK_METADATA_ATTRIBUTION, cacheAge: r.age },
+      ttlS: 86400,
+      provenance: [
+        provenance(source("esri-wayback-metadata"), {
+          kind: "published",
+          seriesId: `${base.split("/services/")[1]} layer ${layer}`,
+          upstreamUrl: `${base}/${layer}`,
+          retrievedAt: new Date(Date.now() - r.age).toISOString(),
+          notes: [`point ${x},${y}`, `zoom ${z}`, `release ${info.date}`],
+        }),
+      ],
+      caveats,
     },
   );
 }
@@ -273,8 +361,10 @@ export async function GET(req: NextRequest) {
         return await opWayback();
       case "topo":
         return await opTopo(q);
+      case "waybackdate":
+        return await opWaybackDate(q);
       default:
-        return badRequest("unknown op: tile | point | products | wayback | topo");
+        return badRequest("unknown op: tile | point | products | wayback | topo | waybackdate");
     }
   } catch (err) {
     return withCors(jsonError(err));

@@ -101,7 +101,7 @@ function WaybackPicker() {
         </select>
       </label>
       {fallback && <div>The release in the link is not in Esri&apos;s index; showing the newest.</div>}
-      <div>A release date is when Esri published the basemap, not when the pixels were captured; 2014 onward only.</div>
+      <div>A release date is when Esri published the basemap, not when the pixels were captured; 2014 onward only. Click the ground for the capture date Esri lists there.</div>
     </>
   );
 }

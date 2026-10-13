@@ -209,4 +209,4 @@ export const crithabLayer = picture({
 export const TERRAIN_LAYERS: LayerDefinition[] = [reliefLayer, slopeLayer, contoursLayer, soilsLayer, firehazardLayer, landcoverLayer, sealevelLayer, geologyLayer, crithabLayer];
 
 /** Layers whose click on the ground opens the "ground here" dossier. */
-export const GROUND_LAYERS: LayerId[] = ["soils", "firehazard", "landcover", "slope", "contours", "relief", "geology", "crithab", "topo"];
+export const GROUND_LAYERS: LayerId[] = ["soils", "firehazard", "landcover", "slope", "contours", "relief", "geology", "crithab", "topo", "wayback"];

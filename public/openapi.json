@@ -2477,7 +2477,7 @@
     "/api/terrain": {
       "get": {
         "summary": "Slope, 2 ft contour, land cover and FEMA flood-map tiles rendered once and held at the edge; the hazard class, land cover class or slope at a point; the catalog of terrain pictures; Esri's Wayback release index; the USGS historical topographic maps at a point",
-        "description": "op=tile: one 512 px PNG in Web Mercator (XYZ, y down) of a product no publisher caches as tiles: slope (USGS 3DEP \"Slope Map\", z 8-16), contours (3DEP \"Preset 2ft Contour Interval\", black lines on white, unlabelled, z 13-17), landcover (MRLC NLCD 2021 WMS, z 5-12), floodmap (FEMA NFHL layer 28 export, transparent, z 14-17). The route builds the upstream request from the product and the tile's EPSG:3857 box and never takes a URL; the image is the publisher's own render, cached a day in the server and for weeks at the edge. op=point: firehazard (USFS Wildfire Hazard Potential 2023 class, with the class table from the service's own legend), landcover (NLCD 2021 class, from MRLC's GetFeatureInfo and legend) or slope (3DEP \"Slope Degrees\", whole degrees) at lon, lat; a point with no value answers `class: null` / `degrees: null`, never 0. op=products: every terrain picture the globe draws, direct or rendered here, with its source, zoom range, class tables, caveats and the terrain tiles' required attribution. op=wayback: Esri World Imagery Wayback's release index, `releases` [{release, date}] newest first (2014-02-20 onward), parsed from each release's title (an undated entry is dropped, never guessed), held a day; the tile template with {release}; tiles are loaded from Esri by the browser and never proxied or cached here (the item's licence: not for offline tile export). A release date is when Esri published that basemap, not when its pixels were captured. op=topo: the USGS Historical Topographic Map Collection (1879-2006) at lon, lat (snapped to 0.01 degrees, held 30 days): `years` [{year, scales}] oldest first, the edition years with a sheet there (the years the map can draw there), and `sheets` newest edition first, each with its edition year (DateCurrent), scale, imprint and survey year (null when absent), USGS citation verbatim, and its GeoPDF and GeoTIFF from USGS TNM Access matched by scan id (null when TNM does not list the scan, or when TNM did not answer: the sheets still come back). A row with no edition year is dropped. `tiles` is the exportImage template with {year}; tiles load from Esri in the browser and draw only from about level 11.",
+        "description": "op=tile: one 512 px PNG in Web Mercator (XYZ, y down) of a product no publisher caches as tiles: slope (USGS 3DEP \"Slope Map\", z 8-16), contours (3DEP \"Preset 2ft Contour Interval\", black lines on white, unlabelled, z 13-17), landcover (MRLC NLCD 2021 WMS, z 5-12), floodmap (FEMA NFHL layer 28 export, transparent, z 14-17). The route builds the upstream request from the product and the tile's EPSG:3857 box and never takes a URL; the image is the publisher's own render, cached a day in the server and for weeks at the edge. op=point: firehazard (USFS Wildfire Hazard Potential 2023 class, with the class table from the service's own legend), landcover (NLCD 2021 class, from MRLC's GetFeatureInfo and legend) or slope (3DEP \"Slope Degrees\", whole degrees) at lon, lat; a point with no value answers `class: null` / `degrees: null`, never 0. op=products: every terrain picture the globe draws, direct or rendered here, with its source, zoom range, class tables, caveats and the terrain tiles' required attribution. op=wayback: Esri World Imagery Wayback's release index, `releases` [{release, date}] newest first (2014-02-20 onward), parsed from each release's title (an undated entry is dropped, never guessed), held a day; the tile template with {release}; tiles are loaded from Esri by the browser and never proxied or cached here (the item's licence: not for offline tile export). A release date is when Esri published that basemap, not when its pixels were captured. op=topo: the USGS Historical Topographic Map Collection (1879-2006) at lon, lat (snapped to 0.01 degrees, held 30 days): `years` [{year, scales}] oldest first, the edition years with a sheet there (the years the map can draw there), and `sheets` newest edition first, each with its edition year (DateCurrent), scale, imprint and survey year (null when absent), USGS citation verbatim, and its GeoPDF and GeoTIFF from USGS TNM Access matched by scan id (null when TNM does not list the scan, or when TNM did not answer: the sheets still come back). A row with no edition year is dropped. `tiles` is the exportImage template with {year}; tiles load from Esri in the browser and draw only from about level 11. op=waybackdate: when the pixels of a Wayback release were captured at lon, lat, from that release's own imagery metadata service (its URL is read from Esri's index by release id, never taken from the caller; an id the index does not list is a 400; no release means the newest). z (0-23) picks the metadata band, layer 23 - z, and one neighbouring layer is tried when the rows' own MinMapLevel/MaxMapLevel miss z. Every row is returned (`captures`, oldest first: date from SRC_DATE, null when it does not parse; resolution and accuracy in metres; Esri's source code, collection name (a blank is null) and provider); no single row is picked, since rows tie on DrawOrder. Held 7 days per release, layer and point (0.001 degrees).",
         "tags": [
           "terrain"
         ],
@@ -2493,10 +2493,20 @@
                 "point",
                 "products",
                 "wayback",
-                "topo"
+                "topo",
+                "waybackdate"
               ]
             },
-            "description": "tile: a rendered PNG tile. point: a class or slope at lon, lat. products: the catalog. wayback: Esri World Imagery Wayback's release index. topo: the USGS historical topographic map editions and sheets at lon, lat."
+            "description": "tile: a rendered PNG tile. point: a class or slope at lon, lat. products: the catalog. wayback: Esri World Imagery Wayback's release index. topo: the USGS historical topographic map editions and sheets at lon, lat. waybackdate: when a Wayback release's pixels were captured at lon, lat."
+          },
+          {
+            "name": "release",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "description": "op=waybackdate: a release id from op=wayback (the newest when absent). One Esri's index does not list is a 400."
           },
           {
             "name": "product",
@@ -2520,7 +2530,7 @@
               "type": "integer",
               "minimum": 0
             },
-            "description": "op=tile: zoom, inside the product's range."
+            "description": "op=tile: zoom, inside the product's range. op=waybackdate: the zoom level the imagery is drawn at (0-23), which picks Esri's metadata band (layer 23 - z)."
           },
           {
             "name": "x",
@@ -2548,7 +2558,7 @@
               "minimum": -180,
               "maximum": 180
             },
-            "description": "op=point, op=topo: longitude."
+            "description": "op=point, op=topo, op=waybackdate: longitude."
           },
           {
             "name": "lat",
@@ -2558,7 +2568,7 @@
               "minimum": -90,
               "maximum": 90
             },
-            "description": "op=point, op=topo: latitude."
+            "description": "op=point, op=topo, op=waybackdate: latitude."
           }
         ],
         "responses": {
@@ -2592,6 +2602,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/TerrainTopoResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TerrainWaybackdateResponse"
                     }
                   ]
                 }
@@ -7620,6 +7633,105 @@
           }
         ],
         "x-op": "topo"
+      },
+      "TerrainWaybackdateResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "lon": {
+                    "type": "number",
+                    "description": "The point, to 0.001 degrees."
+                  },
+                  "lat": {
+                    "type": "number"
+                  },
+                  "z": {
+                    "type": "integer"
+                  },
+                  "release": {
+                    "$ref": "#/components/schemas/WaybackRelease"
+                  },
+                  "layer": {
+                    "type": "integer",
+                    "description": "The metadata layer answered (0 finest to 13)."
+                  },
+                  "captures": {
+                    "type": "array",
+                    "description": "Every capture Esri lists under the point for that release and band, oldest first; empty when Esri lists none.",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "date": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "date"
+                        },
+                        "resolutionM": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "accuracyM": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "sourceCode": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "name": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "provider": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "levels": {
+                          "type": [
+                            "array",
+                            "null"
+                          ],
+                          "items": {
+                            "type": "integer"
+                          }
+                        },
+                        "drawOrder": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "attribution": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "x-op": "waybackdate"
       },
       "TopoSheet": {
         "type": "object",

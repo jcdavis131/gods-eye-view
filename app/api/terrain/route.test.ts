@@ -10,6 +10,8 @@ import slopeNw from "@/lib/terrain/fixtures/slope-identify-nw.json";
 import waybackConfig from "@/lib/terrain/fixtures/wayback-config-trimmed.json";
 import htmcSf from "@/lib/terrain/fixtures/htmc-point-sf.json";
 import tnmSf from "@/lib/terrain/fixtures/tnm-htmc-sf.json";
+import meta2014 from "@/lib/terrain/fixtures/wayback-meta-2014r01-5-sf.json";
+import meta2026 from "@/lib/terrain/fixtures/wayback-meta-2026r09-4-sf.json";
 
 vi.mock("@/lib/server/cache", () => ({
   cached: async <T,>(_k: string, _ttl: number, produce: () => Promise<T>) => ({ value: await produce(), age: 0, hit: false }),
@@ -172,6 +174,54 @@ describe("op=topo", () => {
     calls.length = 0;
     expect((await GET(req("op=topo&lon=-122.42"))).status).toBe(400);
     expect((await GET(req("op=topo&lon=&lat=37.77"))).status).toBe(400);
+    expect(calls).toEqual([]);
+  });
+});
+
+describe("op=waybackdate", () => {
+  const json = (b: unknown) => new Response(JSON.stringify(b), { status: 200, headers: { "content-type": "application/json" } });
+  const esri = (url: string) => {
+    if (url.startsWith("https://s3-us-west-2.amazonaws.com/config.maptiles.arcgis.com/waybackconfig.json")) return json(waybackConfig);
+    if (url.startsWith("https://metadata.maptiles.arcgis.com/arcgis/rest/services/World_Imagery_Metadata_2014_r01/MapServer/5/query?")) return json(meta2014);
+    if (url.startsWith("https://metadata.maptiles.arcgis.com/arcgis/rest/services/World_Imagery_Metadata_2026_r09/MapServer/4/query?")) return json(meta2026);
+    return new Response("unexpected", { status: 500 });
+  };
+
+  it("reads the release's metadata URL from Esri's index and returns every capture under the point", async () => {
+    answer = esri;
+    const res = await GET(req("op=waybackdate&release=10&z=18&lon=-122.42&lat=37.77"));
+    expect(res.status).toBe(200);
+    const q = calls.find((u) => u.includes("/World_Imagery_Metadata_2014_r01/MapServer/5/query?"))!;
+    const p = new URL(q).searchParams;
+    expect(p.get("outFields")).toBe("SRC_DATE,SRC_DATE2,SRC_RES,SRC_ACC,SRC_DESC,NICE_NAME,NICE_DESC,MinMapLevel,MaxMapLevel,DrawOrder");
+    expect(p.get("geometry")).toBe("-122.42,37.77");
+    const body = (await res.json()) as { data: { release: { date: string }; layer: number; captures: Array<{ date: string; name: string | null }> }; caveats: string[] };
+    expect(body.data.release.date).toBe("2014-02-20");
+    expect(body.data.layer).toBe(5);
+    expect(body.data.captures.map((c) => c.date)).toEqual(["2010-10-26", "2010-11-02"]);
+    expect(body.data.captures[0].name).toBeNull();
+    expect(body.caveats.join(" ")).toMatch(/more than one capture/);
+  });
+
+  it("uses the newest release when none is given", async () => {
+    answer = esri;
+    const res = await GET(req("op=waybackdate&z=19&lon=-122.42&lat=37.77"));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { release: { release: number }; captures: Array<{ provider: string }> } };
+    expect(body.data.release.release).toBe(63116);
+    expect(body.data.captures[0].provider).toBe("Vantor");
+  });
+
+  it("refuses a release Esri does not list and never takes a URL from the caller", async () => {
+    answer = esri;
+    const res = await GET(req("op=waybackdate&release=999&z=18&lon=-122.42&lat=37.77&url=https://example.com/MapServer"));
+    expect(res.status).toBe(400);
+    expect(calls.some((u) => u.includes("example.com"))).toBe(false);
+    calls.length = 0;
+    expect((await GET(req("op=waybackdate&z=24&lon=-122.42&lat=37.77"))).status).toBe(400);
+    expect((await GET(req("op=waybackdate&z=18.5&lon=-122.42&lat=37.77"))).status).toBe(400);
+    expect((await GET(req("op=waybackdate&release=abc&z=18&lon=-122.42&lat=37.77"))).status).toBe(400);
+    expect((await GET(req("op=waybackdate&lon=-122.42&lat=37.77"))).status).toBe(400);
     expect(calls).toEqual([]);
   });
 });

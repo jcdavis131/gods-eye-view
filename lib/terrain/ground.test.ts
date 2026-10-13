@@ -133,3 +133,21 @@ describe("historic topo maps in the ground dossier", () => {
     expect(none["topographic maps"]).toMatch(/^no USGS topographic sheet here/);
   });
 });
+
+describe("Wayback capture dates in the ground dossier", () => {
+  it("is asked when Historic imagery is on", () => {
+    expect(partsFor({ wayback: true })).toEqual(["wayback"]);
+    expect(partsFor({ topo: true, wayback: true })).toEqual(["topo", "wayback"]);
+  });
+
+  it("says the release, every capture date, and never guesses one", async () => {
+    const { parseCaptures } = await import("./wayback");
+    const meta = (await import("./fixtures/wayback-meta-2014r01-5-sf.json")).default as { features: Array<{ attributes: Record<string, unknown> }> };
+    const captures = parseCaptures(meta.features.map((f) => f.attributes));
+    const d = groundDetails({ lon: -122.42, lat: 37.77, parts: { wayback: { loading: false, data: { release: { release: 10, date: "2014-02-20" }, z: 18, captures } } } });
+    expect(d["imagery captured"]).toBe("Release 2014-02-20 · captured 2010-10-26 and 2010-11-02 · 0.3 m · Microsoft (UC-G)");
+    expect(d["imagery collection (Esri)"]).toBe("US-CA-SanFran-Oakland");
+    const none = groundDetails({ lon: 0, lat: 0, parts: { wayback: { loading: false, data: { release: { release: 10, date: "2014-02-20" }, z: 18, captures: [] } } } });
+    expect(none["imagery captured"]).toBe("Release 2014-02-20 · Esri lists no capture date here");
+  });
+});
