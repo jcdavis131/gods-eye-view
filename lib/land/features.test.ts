@@ -4,6 +4,7 @@ import {
   buildFloodZones,
   buildPublicLands,
   buildWetlands,
+  decodeCowardin,
   floodZoneMeaning,
   NWI_CAVEAT,
   nwiImagerySummary,
@@ -64,7 +65,7 @@ describe("wetlands and their imagery year", () => {
   });
   const wet = (lon: number) => ({
     geometry: { type: "Polygon" as const, coordinates: [[[lon, 29.3], [lon + 0.001, 29.3], [lon + 0.001, 29.301], [lon, 29.3]]] },
-    properties: { "Wetlands.ATTRIBUTE": "PEM1A", "Wetlands.OBJECTID": lon, "Wetlands.WETLAND_TYPE": "Freshwater Emergent Wetland" },
+    properties: { ATTRIBUTE: "PEM1A", OBJECTID: lon, WETLAND_TYPE: "Freshwater Emergent Wetland" },
   });
 
   it("gives each wetland its mapping project's imagery year, or says it was not found", () => {
@@ -83,6 +84,34 @@ describe("wetlands and their imagery year", () => {
     const [s] = parseNwiSources([quad("Nowhere", -98.5, 0)]);
     expect(s.year).toBeUndefined();
     expect(nwiImagerySummary([s]).years).toEqual([]);
+  });
+
+  it("decodes Cowardin names locally from the ATTRIBUTE code", () => {
+    expect(decodeCowardin("PEM1A")).toEqual({
+      system: "Palustrine",
+      subsystem: undefined,
+      cls: "Emergent",
+      regime: "Temporarily Flooded",
+    });
+    expect(decodeCowardin("R2UBH")).toEqual({
+      system: "Riverine",
+      subsystem: "Lower Perennial",
+      cls: "Unconsolidated Bottom",
+      regime: "Permanently Flooded",
+    });
+    expect(decodeCowardin("L1UBHh")).toEqual({
+      system: "Lacustrine",
+      subsystem: "Limnetic",
+      cls: "Unconsolidated Bottom",
+      regime: "Permanently Flooded",
+    });
+    expect(decodeCowardin("E2EM1P")).toMatchObject({
+      system: "Estuarine",
+      cls: "Emergent",
+      regime: "Irregularly Flooded",
+    });
+    expect(decodeCowardin("")).toEqual({});
+    expect(decodeCowardin("XX9Q")).toEqual({});
   });
 
   it("tests points against a ring with the even-odd rule", () => {
