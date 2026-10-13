@@ -193,14 +193,13 @@ async function opWetlands(bbox: Bbox): Promise<OpResult> {
           where: "1=1",
           ...envelope(bbox),
           outFields: [
-            "Wetlands.OBJECTID",
-            "Wetlands.ATTRIBUTE",
-            "Wetlands.WETLAND_TYPE",
-            "Wetlands.ACRES",
-            "NWI_Wetland_Codes.SYSTEM_NAME",
-            "NWI_Wetland_Codes.SUBSYSTEM_NAME",
-            "NWI_Wetland_Codes.CLASS_NAME",
-            "NWI_Wetland_Codes.WATER_REGIME_NAME",
+            // Plain field names: USFWS republished NWI (ArcGIS 11.5) without
+            // the joined view, so table-prefixed / NWI_Wetland_Codes join
+            // fields now 400. Cowardin names are decoded locally from ATTRIBUTE.
+            "OBJECTID",
+            "ATTRIBUTE",
+            "WETLAND_TYPE",
+            "ACRES",
           ].join(","),
           returnGeometry: "true",
           maxAllowableOffset: "0.00004",
@@ -215,7 +214,7 @@ async function opWetlands(bbox: Bbox): Promise<OpResult> {
   const imagery = sources ? nwiImagerySummary(sources) : null;
   const retrievedAt = fetchedAt(r.age);
   const prov = [
-    provenance(source("usfws-nwi"), { kind: "published", seriesId: "Wetlands MapServer layer 0 (with the NWI_Wetland_Codes join)", upstreamUrl: NWI, retrievedAt, notes: [`bbox ${bbox.join(",")}`] }),
+    provenance(source("usfws-nwi"), { kind: "published", seriesId: "Wetlands MapServer layer 0 (plain fields; Cowardin names decoded locally from ATTRIBUTE)", upstreamUrl: NWI, retrievedAt, notes: [`bbox ${bbox.join(",")}`] }),
   ];
   if (imagery) {
     prov.push(
