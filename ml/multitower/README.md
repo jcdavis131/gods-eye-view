@@ -31,6 +31,28 @@ direction and on the noisy count task, where the shared representation earns
 its keep. Adding the seismic tower slightly hurt gas/wti (multitask
 interference, reported honestly in windows.csv).
 
+## M3 GPU challengers (branch `scout/forecast-gpu`, eye-ml PROGRAM.md §2)
+
+Two challengers against the v0 board, same walk-forward protocol
+(expanding windows, 14-day purge where applicable, yearly tests from 2012,
+7-day horizon, metrics in original units, baselines recomputed on the same
+frames). Both require CUDA; both exit 3 honestly when their prerequisites
+are missing — never fake weights, never synthesize data.
+
+- `forge_timesfm_zeroshot.py` — TimesFM-2.5-200m zero-shot, univariate per
+  series, median quantile (0.5) point forecast, context 512d / horizon 7d.
+  Checkpoint `google/timesfm-2.5-200m-pytorch` (Apache-2.0) only; 3.0 weights
+  never touched. HF unreachable within 120s (or a missing task column) →
+  `{"status":503,"error":"CHECKPOINT_STAGING_REQUIRED"}`, exit 3.
+  Outputs `timesfm_zeroshot_metrics.json` + `timesfm_zeroshot_report.md`.
+  Needs: torch, transformers, pandas, numpy.
+- `model_torch.py` + `train_torch.py` — multitower_v1: faithful PyTorch port
+  of the v0 NumPy net (same towers/trunk/heads, same init families, same
+  early-stopping and scalers). Outputs `models/multitower_v1/` in the v0
+  layout (config/metrics/windows.csv/REPORT.md + `weights_final.pt`).
+  Picks up M3 columns (`gas_dir_7d`, `natgas_fwd7`, `natgas_dir_7d`) when
+  present in the frame; `tasks.json` itself is untouched.
+
 ## Files
 
 - `model.py` — MLP towers/trunk/heads, manual backprop (gradient-checked), Adam
