@@ -1,6 +1,6 @@
 # Embedding Atlas data API
 
-Keyless, CORS-open JSON and CSV over the same public sources the globe draws: USGS, NOAA, TWDB and the Drought Monitor for water; BLS QCEW, Zillow, BTS, the World Port Index, the World Bank and FRED for jobs, homes and trade; NIFC, NASA FIRMS, NWS, GDACS and EONET for hazards (`/api/hazards`); FEMA, USFWS, USGS PAD-US and 3DEP for land (`/api/land`); USGS 3DEP, MRLC NLCD, USFS WHP and FEMA for terrain pictures and point classes (`/api/terrain`); NRCS SSURGO for soils (`/api/soil`); GFZ and NASA DONKI for space weather (`/api/space`); HIFLD, EIA, FRA/BTS, FAA, USACE, EIA-860M, Wikidata, USGS, BLM and Macrostrat for infrastructure and geohazards (`/api/infra`); EPA AirNow for air quality (`/api/air`); GDELT for news events (`/api/events`); ten city zoning services for zoning (`/api/zoning`); seven city permit portals, five licence registries, EPA ECHO and the Corps of Engineers for permits (`/api/permits`). Every number carries provenance. This guide is for people calling it from a notebook, a script or their own page.
+Keyless, CORS-open JSON and CSV over the same public sources the globe draws: USGS, NOAA, TWDB and the Drought Monitor for water; BLS QCEW, Zillow, BTS, the World Port Index, the World Bank and FRED for jobs, homes and trade; NIFC, NASA FIRMS, NWS, GDACS and EONET for hazards (`/api/hazards`); FEMA, USFWS, USGS PAD-US and 3DEP for land (`/api/land`); USGS 3DEP, MRLC NLCD, USFS WHP and FEMA for terrain pictures and point classes (`/api/terrain`); NRCS SSURGO for soils (`/api/soil`); GFZ and NASA DONKI for space weather (`/api/space`); HIFLD, EIA, FRA/BTS, FAA, USACE, EIA-860M, Wikidata, USGS, BLM and Macrostrat for infrastructure and geohazards (`/api/infra`); EPA AirNow for air quality (`/api/air`); GDELT for news events (`/api/events`); Wikipedia for geotagged articles, article summaries and On this day entries (`/api/wikipedia`); ten city zoning services for zoning (`/api/zoning`); seven city permit portals, five licence registries, EPA ECHO and the Corps of Engineers for permits (`/api/permits`). Every number carries provenance. This guide is for people calling it from a notebook, a script or their own page.
 
 Machine-readable description: [`/api/openapi`](https://eye.jcamd.com/api/openapi) (also `public/openapi.json` in the repo).
 
@@ -158,6 +158,8 @@ TTLs follow upstream cadence:
 | Agency cameras (`/api/cameras`) | 2 min (LTA) to 1 h (DriveBC) | 2 min (LTA) to 6 h (DriveBC); Caltrans 1 h |
 | Air quality (`/api/air`) | 10 min | 20 min per hourly file |
 | News events (`/api/events`) | 10 min | 6 h per 15-minute export file; lastupdate.txt 5 min |
+| Wikipedia nearby (`/api/wikipedia`) | 5 min | 5 min per point, radius and limit |
+| Wikipedia summary / On this day (`/api/wikipedia`) | 6 h | 6 h per title / per calendar day |
 | Zoning (point, districts) | 1 h (5 min for a New York answer whose tax-lot lookup failed) | 1 day per point or snapped box; the Census place 30 days |
 | Building permits | 15 min (2 min while a city is down) | 30 min per city and box (Los Angeles 6 h) |
 | Business licences | 30 min (2 min while a registry is down) | 1 h per registry and box (Los Angeles 6 h) |

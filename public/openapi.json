@@ -2243,7 +2243,7 @@
     "/api/land": {
       "get": {
         "summary": "Flood zones, wetlands, historic places, public and protected lands in a box, or the ground elevation or critical habitat at a point",
-        "description": "op=flood: FEMA National Flood Hazard Layer flood hazard zones (layer 28) with FEMA's meaning of each zone, whether the ground is in the special flood hazard area, and the base flood elevation where FEMA published one (the -9999 sentinel is dropped). A regulatory map, not a forecast; a box with no zone is not a finding of no risk. Boxes are clamped to 0.08° and snapped to a 0.02° grid. op=wetlands: USFWS National Wetlands Inventory polygons with their Cowardin code, type, acres, the system, class and water regime names from NWI's code table (`codesDecoded` false when it did not answer), and the year of the imagery each was mapped from (`imageYears`, null when NWI's source layer did not answer); same box rules, at most 500 polygons a query. op=historic: National Register of Historic Places listings as NPS's public spatial data publishes them (STATUS 'Listed', and never a record whose Address NPS marks restricted, which a few boundary records still carry; Address itself is never requested): NRIS number, the property's name as NPS lists it (it can include a person's name; it is not a search key), resource type, National Historic Landmark flag, listing date (NPS's partial CertDate, e.g. 2007-10), city, county, state and the National Archives nomination link. Points always; with polygons=1 the district and site boundaries too. No street address is requested. Archaeological sites whose locations are restricted under NHPA section 304 / ARPA are not in NPS's public data, so absence is not absence on the ground, and this is not a Section 106 review. Boxes are clamped to 0.12° and snapped to 0.02°; at most 2,000 per layer. op=crithab: the USFWS designated critical habitat, final (`final`) and proposed (`proposed`), that contains lon, lat: species common and scientific name, listing status, whether the designation is Final or Proposed, the Federal Register citation and its publication date. FWS's placeholder text (\"Please check current species specific shapefile\") is read as no value. A layer that did not answer is null (unknown, not absent). Regulatory designations, not range or occurrence; FWS says its GIS files are not the legal boundary; NOAA Fisheries' marine and anadromous species are not included. op=publiclands: USGS PAD-US 4.1 fee, easement, designation and proclamation areas with owner, manager, local owner, easement holder, public access, GAP status and IUCN category as PAD-US publishes them; boxes up to 2°, snapped to 0.25°; a box taller than 1.5° keeps the largest 600 units, generalised. op=elevation: USGS 3DEP ground elevation (EPQS) in metres with the source DEM resolution; outside 3DEP coverage `metres` is absent and `note` carries what EPQS said. Only the returned `bbox` is loaded.",
+        "description": "op=flood: FEMA National Flood Hazard Layer flood hazard zones (layer 28) with FEMA's meaning of each zone, whether the ground is in the special flood hazard area, and the base flood elevation where FEMA published one (the -9999 sentinel is dropped). A regulatory map, not a forecast; a box with no zone is not a finding of no risk. Boxes are clamped to 0.08° and snapped to a 0.02° grid. op=wetlands: USFWS National Wetlands Inventory polygons with their Cowardin code, type, acres, the system, class and water regime names decoded locally from the Cowardin code (a part not recognised stays absent), and the year of the imagery each was mapped from (`imageYears`, null when NWI's source layer did not answer); same box rules, at most 500 polygons a query. op=historic: National Register of Historic Places listings as NPS's public spatial data publishes them (STATUS 'Listed', and never a record whose Address NPS marks restricted, which a few boundary records still carry; Address itself is never requested): NRIS number, the property's name as NPS lists it (it can include a person's name; it is not a search key), resource type, National Historic Landmark flag, listing date (NPS's partial CertDate, e.g. 2007-10), city, county, state and the National Archives nomination link. Points always; with polygons=1 the district and site boundaries too. No street address is requested. Archaeological sites whose locations are restricted under NHPA section 304 / ARPA are not in NPS's public data, so absence is not absence on the ground, and this is not a Section 106 review. Boxes are clamped to 0.12° and snapped to 0.02°; at most 2,000 per layer. op=crithab: the USFWS designated critical habitat, final (`final`) and proposed (`proposed`), that contains lon, lat: species common and scientific name, listing status, whether the designation is Final or Proposed, the Federal Register citation and its publication date. FWS's placeholder text (\"Please check current species specific shapefile\") is read as no value. A layer that did not answer is null (unknown, not absent). Regulatory designations, not range or occurrence; FWS says its GIS files are not the legal boundary; NOAA Fisheries' marine and anadromous species are not included. op=publiclands: USGS PAD-US 4.1 fee, easement, designation and proclamation areas with owner, manager, local owner, easement holder, public access, GAP status and IUCN category as PAD-US publishes them; boxes up to 2°, snapped to 0.25°; a box taller than 1.5° keeps the largest 600 units, generalised. op=elevation: USGS 3DEP ground elevation (EPQS) in metres with the source DEM resolution; outside 3DEP coverage `metres` is absent and `note` carries what EPQS said. Only the returned `bbox` is loaded.",
         "tags": [
           "land"
         ],
@@ -3284,6 +3284,119 @@
         "responses": {
           "204": {
             "description": "No content."
+          }
+        }
+      }
+    },
+    "/api/wikipedia": {
+      "get": {
+        "summary": "Wikipedia articles near a point, one article's summary, and On this day entries",
+        "description": "Keyless MediaWiki / Wikimedia APIs. op=nearby (the default): geotagged articles within `radius` metres (500 to 10000, the API's cap) of lat/lon, each with coordinates, a short extract, the article URL and its computed distance from the point. op=summary: one article's REST summary by exact title; 404 when Wikipedia has no such article. op=onthisday: dated events, births, deaths and selected entries for mm/dd, each with its linked pages (some carry coordinates). Article text is CC BY-SA; the globe layers are Wikipedia and On this day (Wikipedia).",
+        "tags": [
+          "fabric"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "nearby",
+                "summary",
+                "onthisday"
+              ],
+              "default": "nearby"
+            },
+            "description": "nearby: geotagged articles around a point. summary: one article by title. onthisday: dated entries for a calendar day."
+          },
+          {
+            "name": "lat",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            },
+            "description": "nearby: latitude in degrees (required)."
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            },
+            "description": "nearby: longitude in degrees (required)."
+          },
+          {
+            "name": "radius",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": 500,
+              "maximum": 10000,
+              "default": 10000
+            },
+            "description": "nearby: search radius in metres."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            },
+            "description": "nearby: most articles to return."
+          },
+          {
+            "name": "title",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "summary: the article title, e.g. Austin, Texas (required for op=summary)."
+          },
+          {
+            "name": "mm",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 12
+            },
+            "description": "onthisday: month (required for op=onthisday)."
+          },
+          {
+            "name": "dd",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 31
+            },
+            "description": "onthisday: day of month (required for op=onthisday)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope { source, cacheAge, data } where data is the parsed articles, summary or day items (lib/wiki/types.ts).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/Upstream"
           }
         }
       }
@@ -7026,10 +7139,6 @@
                 "items": {
                   "type": "string"
                 }
-              },
-              "codesDecoded": {
-                "type": "boolean",
-                "description": "Whether NWI's code table (Wetlands MapServer table 1) answered for the system, subsystem, class and water regime names; when false each polygon keeps its Cowardin code and type and the names are absent."
               }
             }
           }

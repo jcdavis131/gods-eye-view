@@ -3,9 +3,9 @@
 // of the imagery each polygon was drawn from.
 //
 //   USFWS National Wetlands Inventory   Wetlands MapServer layer 0 through
-//                                       /api/land; the code table (system,
-//                                       class, water regime) is looked up in
-//                                       NWI's table 1, and the Data_Source
+//                                       /api/land; the Cowardin names (system,
+//                                       class, water regime) are decoded from
+//                                       each polygon's code, and the Data_Source
 //                                       layer gives each mapping project's
 //                                       imagery year, date, scale and type
 //

@@ -391,6 +391,22 @@ export const launchesStyle: LayerStyle = {
   },
 };
 
+export const wikipediaStyle: LayerStyle = {
+  color: "#EDE9E3",
+  pointSize: () => 6,
+  label: (f) => f.properties.name,
+  labelMax: 30,
+  scaleByDistance: [3e5, 1.0, 8e6, 0.3],
+};
+
+export const wikidayStyle: LayerStyle = {
+  color: "#A78BFA",
+  pointSize: () => 6.5,
+  label: (f) => f.properties.name,
+  labelMax: 20,
+  scaleByDistance: [3e5, 1.0, 8e6, 0.3],
+};
+
 export const trafficStyle: LayerStyle = {
   color: "#B48CFF",
   pointSize: () => 3.5,
@@ -478,6 +494,8 @@ export const STYLES: Partial<Record<LayerId, LayerStyle>> = {
   sports: sportsStyle,
   constructs: constructsStyle,
   field: fieldStyle,
+  wikipedia: wikipediaStyle,
+  wikiday: wikidayStyle,
   alerts: alertsStyle,
 };
 
@@ -547,6 +565,8 @@ export const FOLLOW_RANGE: Record<LayerId, number> = {
   sports: 500_000,
   constructs: 150_000,
   field: 400_000,
+  wikipedia: 150_000,
+  wikiday: 250_000,
   alerts: 600_000,
   // Particle-flow layers have no followable objects; a global view is the
   // only sensible follow range (unreachable in practice: nothing to select).

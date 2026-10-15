@@ -4,6 +4,8 @@
 //   /api/employers?op=zip&zip=72712      employers with HQ in a ZIP
 //   /api/employers?op=metro&q=New York   employers with HQ in a metro
 //   /api/employers?op=search&q=walmart   name search
+//   /api/employers?op=placed             employers with map coordinates (Atlas layer)
+//   /api/employers?op=equity&ticker=JPM  RSU/vesting dossier for one ticker (worldwide pilot batch)
 //
 // Every JSON response is an Enveloped<T>: { data, provenance[], generatedAt,
 // caveats?, ...meta }. Headcounts are organization-wide as reported by each
@@ -21,6 +23,8 @@ import {
   topEmployers,
   type EmployerRecord,
 } from "@/lib/companies/employers";
+import { equityDossierTickers, equityProvenance, getEquityDossier } from "@/lib/companies/equity";
+import type { Provenance } from "@/lib/provenance/types";
 
 export const maxDuration = 30;
 
@@ -36,20 +40,34 @@ const CAVEATS = [
   "Coverage is ~1,364 employers with verified headcounts, not a census of all US employers.",
 ];
 
+const EQUITY_CAVEATS = [
+  "Vesting schedules and trading policies are quoted from each company's latest 10-K, 20-F, 40-F, or DEF 14A as filed with the SEC.",
+  "Inferred blackout windows are estimates (labeled ESTIMATE in the dossier): companies disclose that a policy exists but do not publish exact blackout dates.",
+  "Pilot batch covers 70 employers; most employers have no dossier yet.",
+];
+
 interface Enveloped<T> {
   data: T;
-  provenance: ReturnType<typeof employerProvenance>[];
+  provenance: AnyProvenance[];
   generatedAt: string;
   caveats: string[];
   meta: Record<string, unknown>;
 }
 
-function enveloped<T>(data: T, meta: Record<string, unknown>): Enveloped<T> {
+/** The employers ops carry bundle-meta provenance; the equity op carries real citations. */
+type AnyProvenance = ReturnType<typeof employerProvenance> | Provenance;
+
+function enveloped<T>(
+  data: T,
+  meta: Record<string, unknown>,
+  provenance: AnyProvenance[] = [employerProvenance()],
+  caveats: string[] = CAVEATS,
+): Enveloped<T> {
   return {
     data,
-    provenance: [employerProvenance()],
+    provenance,
     generatedAt: new Date().toISOString(),
-    caveats: CAVEATS,
+    caveats,
     meta,
   };
 }
@@ -118,8 +136,25 @@ export async function GET(req: NextRequest) {
           )
         );
       }
+      case "equity": {
+        // RSU/vesting dossier mined from SEC 10-K + DEF 14A (pilot batch of 10 tickers).
+        const ticker = (sp.get("ticker") || "").trim();
+        if (!ticker) return json({ error: "ticker is required" }, 400);
+        const dossier = getEquityDossier(ticker);
+        if (!dossier) {
+          return json(
+            {
+              error: `no equity dossier for ticker ${ticker.toUpperCase()} (pilot batch: ${equityDossierTickers().join(", ")})`,
+            },
+            404,
+          );
+        }
+        return json(
+          enveloped(dossier, { op, ticker: dossier.ticker, found: true }, [equityProvenance()], EQUITY_CAVEATS),
+        );
+      }
       default:
-        return json({ error: `unknown op: ${op}. Use top, zip, metro, search, or placed.` }, 400);
+        return json({ error: `unknown op: ${op}. Use top, zip, metro, search, placed, or equity.` }, 400);
     }
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : "internal error" }, 500);
