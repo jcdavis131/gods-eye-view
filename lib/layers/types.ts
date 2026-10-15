@@ -77,6 +77,8 @@ export type LayerId =
   | "field"
   | "alerts"
   | "employers"
+  | "wikipedia"
+  | "wikiday"
   | "windflow"
   | "oceanflow";
 
@@ -147,6 +149,8 @@ export const LAYER_IDS: LayerId[] = [
   "field",
   "alerts",
   "employers",
+  "wikipedia",
+  "wikiday",
   "windflow",
   "oceanflow",
 ];

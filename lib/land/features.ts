@@ -3,8 +3,8 @@
 // no Cesium or React in them, shared by /api/land and the browser layers.
 //
 // Every label here is either the upstream's own value or its published
-// definition: FEMA's zone meanings, the NWI Cowardin names that come back
-// looked up in NWI's code table, PAD-US's coded-value domains read from the
+// definition: FEMA's zone meanings, the Cowardin names decoded from NWI's
+// own ATTRIBUTE code, PAD-US's coded-value domains read from the
 // layer's metadata. Sentinels (-9999, -1000000) become undefined.
 
 import type { MultiPolygon, Polygon } from "geojson";
@@ -241,67 +241,118 @@ export interface WetlandExtra {
   imageYear?: number;
 }
 
-/** The plain-language names NWI's code table (Wetlands MapServer table 1) gives one Cowardin code. */
-export interface NwiCode {
+/** Cowardin system letters (first character of the ATTRIBUTE code). */
+const COWARDIN_SYSTEMS: Record<string, string> = {
+  M: "Marine",
+  E: "Estuarine",
+  R: "Riverine",
+  L: "Lacustrine",
+  P: "Palustrine",
+};
+
+/** Cowardin subsystems (digit after the system letter; Palustrine has none). */
+const COWARDIN_SUBSYSTEMS: Record<string, Record<string, string>> = {
+  M: { 1: "Subtidal", 2: "Intertidal" },
+  E: { 1: "Subtidal", 2: "Intertidal" },
+  // R5 is NWI's own "Unknown Perennial" (NWI's code table names it so, 2026-10-12).
+  R: { 1: "Tidal", 2: "Lower Perennial", 3: "Upper Perennial", 4: "Intermittent", 5: "Unknown Perennial" },
+  L: { 1: "Limnetic", 2: "Littoral" },
+};
+
+/** Cowardin class letters (two letters after the system/subsystem). */
+const COWARDIN_CLASSES: Record<string, string> = {
+  RB: "Rock Bottom",
+  UB: "Unconsolidated Bottom",
+  AB: "Aquatic Bed",
+  RF: "Reef",
+  US: "Unconsolidated Shore",
+  ML: "Moss-Lichen",
+  EM: "Emergent",
+  SS: "Scrub-Shrub",
+  FO: "Forested",
+  SB: "Streambed",
+  RS: "Rocky Shore",
+  OW: "Open Water",
+};
+
+/** Cowardin water-regime letters (letter after the class + subclass digit). */
+const COWARDIN_REGIMES: Record<string, string> = {
+  A: "Temporarily Flooded",
+  B: "Saturated",
+  C: "Seasonally Flooded",
+  D: "Seasonally Flooded–Well Drained",
+  E: "Seasonally Flooded–Saturated",
+  F: "Semipermanently Flooded",
+  G: "Intermittently Exposed",
+  H: "Permanently Flooded",
+  J: "Intermittently Flooded",
+  K: "Artificially Flooded",
+  L: "Subtidal",
+  M: "Irregularly Exposed",
+  N: "Regularly Flooded",
+  P: "Irregularly Flooded",
+  S: "Temporarily Flooded–Fresh Tidal",
+  T: "Semipermanently Flooded–Fresh Tidal",
+  V: "Permanently Flooded–Fresh Tidal",
+};
+
+/**
+ * Decode the Cowardin system/subsystem/class/water-regime names from an NWI
+ * ATTRIBUTE code (e.g. PEM1A → Palustrine / Emergent / Temporarily Flooded).
+ * Local replacement for the NWI_Wetland_Codes join, which USFWS stopped
+ * publishing with the 11.5 service republish; no second upstream call.
+ * Unknown parts stay undefined — never guessed.
+ */
+export function decodeCowardin(code: string): {
   system?: string;
   subsystem?: string;
   cls?: string;
   regime?: string;
-}
-
-/**
- * Code table rows -> code -> names. NWI's table can carry a code twice (PUBFh
- * came back once with its water regime and once without it, 2026-10-12): the
- * first published value of each field wins, and a field no row publishes stays
- * absent, never "".
- */
-export function parseNwiCodes(rows: Array<Record<string, unknown>>): Map<string, NwiCode> {
-  const out = new Map<string, NwiCode>();
-  for (const r of rows) {
-    const code = str(r.ATTRIBUTE);
-    if (!code) continue;
-    const cur = out.get(code) ?? {};
-    out.set(code, {
-      system: cur.system ?? str(r.SYSTEM_NAME),
-      subsystem: cur.subsystem ?? str(r.SUBSYSTEM_NAME),
-      cls: cur.cls ?? str(r.CLASS_NAME),
-      regime: cur.regime ?? str(r.WATER_REGIME_NAME),
-    });
+} {
+  const out: { system?: string; subsystem?: string; cls?: string; regime?: string } = {};
+  if (!code) return out;
+  const system = COWARDIN_SYSTEMS[code[0]];
+  if (!system) return out;
+  out.system = system;
+  let rest = code.slice(1);
+  const subs = COWARDIN_SUBSYSTEMS[code[0]];
+  if (subs && /^\d/.test(rest)) {
+    out.subsystem = subs[rest[0]];
+    rest = rest.slice(1);
   }
+  const cls = COWARDIN_CLASSES[rest.slice(0, 2)];
+  if (!cls) return out;
+  out.cls = cls;
+  rest = rest.slice(2).replace(/^\d/, ""); // skip the subclass digit
+  const regime = COWARDIN_REGIMES[rest[0]];
+  if (regime) out.regime = regime;
   return out;
 }
 
-/** The distinct Cowardin codes in a wetlands answer, sorted (the code-table lookup's cache key). */
-export function nwiCodesIn(rows: Array<{ properties: Record<string, unknown> | null }>): string[] {
-  return [...new Set(rows.map((r) => str(r.properties?.ATTRIBUTE)).filter((c): c is string => !!c))].sort();
-}
-
 /**
- * Wetland polygons from NWI's Wetlands layer 0 (fields ATTRIBUTE,
+ * Wetland polygons from NWI's Wetlands layer 0 (plain fields ATTRIBUTE,
  * WETLAND_TYPE, ACRES, OBJECTID since USFWS dropped the joined code table in
- * 2026), named from the code table when its lookup answered. A code the table
- * did not answer for keeps its code and type; its decoded names stay absent.
+ * 2026), the Cowardin names decoded locally from the code.
  */
 export function buildWetlands(
   rows: Array<{ id?: number | string; geometry: GeoJSON.Geometry | null; properties: Record<string, unknown> | null }>,
   sources: NwiSource[] = [],
-  codes: Map<string, NwiCode> | null = null,
 ): LayerFeature[] {
   const out: LayerFeature[] = [];
   rows.forEach((r, i) => {
     if (!isPoly(r.geometry)) return;
     const p = r.properties ?? {};
     const code = str(p.ATTRIBUTE) ?? "unclassified";
+    const cow = decodeCowardin(code);
     const src = sourceFor(r.geometry, sources);
-    const names = codes?.get(code);
     const x: WetlandExtra = {
       code,
       type: str(p.WETLAND_TYPE),
       acres: finite(p.ACRES),
-      system: names?.system,
-      subsystem: names?.subsystem,
-      cls: names?.cls,
-      regime: names?.regime,
+      system: cow.system,
+      subsystem: cow.subsystem,
+      cls: cow.cls,
+      regime: cow.regime,
       imageYear: src?.year,
     };
     const oid = str(p.OBJECTID) ?? str(r.id) ?? `${code}:${i}`;
@@ -321,7 +372,6 @@ export function buildWetlands(
           subsystem: x.subsystem,
           class: x.cls,
           "water regime": x.regime,
-          "code names": codes ? undefined : "NWI's code table did not answer this time; the code is shown undecoded",
           acres: x.acres != null ? x.acres.toFixed(x.acres < 10 ? 2 : 1) : undefined,
           "mapped from": src ? nwiSourceText(src) : "imagery date not found in NWI's source layer",
           "what this is": "a wetland habitat mapped from that imagery, not a jurisdictional (Clean Water Act) delineation",

@@ -131,6 +131,8 @@ export interface Fabric {
   failed: { source: SourceId; error: string }[];
   /** Plain-language coverage note ("US constructs need a point inside the United States"). */
   coverage: string;
+  /** Nearest geotagged Wikipedia articles to the point (lib/fabric/wiki.ts), when Wikipedia answered. */
+  wikiNearby?: Array<{ title: string; distM: number; url: string }>;
 }
 
 /** Layer-side payload carried on every constructs feature. */

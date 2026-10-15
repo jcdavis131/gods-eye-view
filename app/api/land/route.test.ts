@@ -5,7 +5,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import nwiWetlands from "@/lib/land/fixtures/nwi-wetlands-mitchell.json";
-import nwiCodes from "@/lib/land/fixtures/nwi-codes-mitchell.json";
 import nwiSource from "@/lib/land/fixtures/nwi-source-mitchell.json";
 import nrhpPoints from "@/lib/land/fixtures/nrhp-points-dc.json";
 import nrhpBoundaries from "@/lib/land/fixtures/nrhp-polygons-dc.json";
@@ -62,36 +61,34 @@ const param = (url: string, k: string) => new URL(url).searchParams.get(k);
 describe("op=wetlands", () => {
   const nwi = (u: string) => {
     if (u.includes("/Wetlands/MapServer/0/query")) return json(nwiWetlands);
-    if (u.includes("/Wetlands/MapServer/1/query")) return json(nwiCodes);
     if (u.includes("/Data_Source/MapServer/3/query")) return json(nwiSource);
     return null;
   };
 
-  it("asks layer 0 for plain fields (the prefixed join is a 400 since 2026) and names each code from table 1", async () => {
+  it("asks layer 0 for plain fields (the prefixed join is a 400 since 2026) and decodes each code locally, no second call", async () => {
     answer = nwi;
     const { status, body } = await get("op=wetlands&bbox=-98.48,29.30,-98.46,29.32");
     expect(status).toBe(200);
     const q0 = calls.find((u) => u.includes("/Wetlands/MapServer/0/query"))!;
     expect(param(q0, "outFields")).toBe("OBJECTID,ATTRIBUTE,WETLAND_TYPE,ACRES");
-    const q1 = calls.find((u) => u.includes("/Wetlands/MapServer/1/query"))!;
-    expect(param(q1, "f")).toBe("json");
-    expect(param(q1, "where")).toBe("ATTRIBUTE IN ('L2USAh','PEM1Ch','PUBFh','PUBHh','PUSAh','PUSCh','R4SBAx','R4SBC','R5UBH')");
+    expect(calls.some((u) => u.includes("/Wetlands/MapServer/1/"))).toBe(false);
+    expect(calls).toHaveLength(2);
     expect(body.data.features).toHaveLength(14);
     const lake = body.data.features.find((f) => f.properties.extra?.code === "L2USAh")!;
-    expect(lake.properties.details).toMatchObject({ system: "Lacustrine", class: "Unconsolidated Shore", "water regime": "Temporary Flooded", "mapped from": "1983 imagery (Southton, CIR 1:58,000, 03/83)" });
-    expect(body.codesDecoded).toBe(true);
+    expect(lake.properties.details).toMatchObject({ system: "Lacustrine", subsystem: "Littoral", class: "Unconsolidated Shore", "water regime": "Temporarily Flooded", "mapped from": "1983 imagery (Southton, CIR 1:58,000, 03/83)" });
     expect(body.imageYears).toEqual([1983]);
-    expect(body.provenance?.map((p) => p.seriesId)).toEqual(expect.arrayContaining([expect.stringContaining("table 1")]));
+    expect(body).not.toHaveProperty("codesDecoded");
+    expect(body.provenance?.map((p) => p.seriesId)).toEqual(expect.arrayContaining([expect.stringContaining("Data_Source MapServer layer 3")]));
   });
 
-  it("still draws the polygons, undecoded, when the code table fails, and says so", async () => {
-    answer = (u) => (u.includes("/Wetlands/MapServer/1/query") ? new Response("bad gateway", { status: 502 }) : nwi(u));
+  it("still draws and names the polygons when the source layer fails, imagery year unknown, and says so", async () => {
+    answer = (u) => (u.includes("/Data_Source/MapServer/3/query") ? new Response("bad gateway", { status: 502 }) : nwi(u));
     const { status, body } = await get("op=wetlands&bbox=-98.48,29.30,-98.46,29.32");
     expect(status).toBe(200);
     expect(body.data.features).toHaveLength(14);
-    expect(body.data.features[0].properties.extra?.system).toBeUndefined();
-    expect(body.codesDecoded).toBe(false);
-    expect(body.caveats?.join(" ")).toMatch(/code table did not answer/);
+    expect(body.data.features[0].properties.extra?.system).toBe("Lacustrine");
+    expect(body.imageYears).toBeNull();
+    expect(body.caveats?.join(" ")).toMatch(/Data_Source layer did not answer/);
   });
 });
 

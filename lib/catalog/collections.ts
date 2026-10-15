@@ -86,7 +86,7 @@ export const COLLECTIONS: readonly Collection[] = [
     title: "National Wetlands Inventory polygons",
     layer: "wetlands",
     sources: ["usfws-nwi"],
-    what: "USFWS's map of wetland and deepwater habitat, one polygon per mapped unit, each with its Cowardin code decoded through NWI's own code table (system, subsystem, class, water regime) and the year of the imagery it was drawn from (NWI Data_Source).",
+    what: "USFWS's map of wetland and deepwater habitat, one polygon per mapped unit, each with its Cowardin code decoded locally into its system, subsystem, class and water regime names and the year of the imagery it was drawn from (NWI Data_Source).",
     recordIs: "A habitat polygon mapped from aerial imagery of a given year. It is not a jurisdictional (Clean Water Act) delineation and does not say the area is wet today.",
     coverage: { spatial: "United States and territories; polygons below 10 km camera height, 500 per request (NWI's maxRecordCount)", temporal: "imagery years vary by quad, often decades old", count: null },
     freshness: { statement: "Each polygon carries the year of the imagery it was mapped from; the service does not publish an edit date.", readFrom: "Data_Source MapServer layer 3 (Image Year); Wetlands layer 0 ?f=json has no editingInfo", recordedOn: R2 },

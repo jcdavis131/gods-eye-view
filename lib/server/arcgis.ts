@@ -54,7 +54,7 @@ export async function arcgisQuery<P = Record<string, unknown>>(
 /**
  * GET a table's /query endpoint as Esri JSON rows (attributes only), with the
  * same retry and error handling. For tables that do not speak `f=geojson`
- * (NWI's code table answers geoJSON with an error).
+ * (some ArcGIS tables answer geoJSON with an error).
  */
 export async function arcgisRows<A = Record<string, unknown>>(
   name: string,

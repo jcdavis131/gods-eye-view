@@ -14,14 +14,13 @@ import {
   fwsDate,
   parseCritHab,
   buildWetlands,
+  decodeCowardin,
   floodZoneMeaning,
   NRHP_FIELDS,
   NWI_CAVEAT,
-  nwiCodesIn,
   nwiImagerySummary,
   parseCertDate,
   parseEpqs,
-  parseNwiCodes,
   parseNwiSources,
   pointInRing,
   trimParts,
@@ -94,46 +93,67 @@ describe("wetlands and their imagery year", () => {
     expect(nwiImagerySummary(sources).years).toEqual([1983, 2010]);
   });
 
-  it("decodes each polygon's Cowardin code from NWI's code table (captured 2026-10-12)", () => {
+  it("names each real polygon locally, matching NWI's own code table (both captured 2026-10-12)", () => {
     const rows = nwiWetlands.features as unknown as Parameters<typeof buildWetlands>[0];
-    const codes = parseNwiCodes(nwiCodeRows.features.map((f) => f.attributes));
-    expect(nwiCodesIn(rows)).toEqual(["L2USAh", "PEM1Ch", "PUBFh", "PUBHh", "PUSAh", "PUSCh", "R4SBAx", "R4SBC", "R5UBH"]);
-    const built = buildWetlands(rows, [], codes);
+    const built = buildWetlands(rows, []);
     expect(built).toHaveLength(14);
     const lake = built.find((f) => (f.properties.extra as WetlandExtra).code === "L2USAh")!;
     expect(lake.properties.id).toBe("nwi:24255589");
-    expect(lake.properties.extra).toMatchObject({ type: "Lake", system: "Lacustrine", subsystem: "Littoral", cls: "Unconsolidated Shore", regime: "Temporary Flooded" });
-    // Palustrine has no subsystem: NWI publishes null, which stays absent, never "".
+    expect(lake.properties.extra).toMatchObject({ type: "Lake", system: "Lacustrine", subsystem: "Littoral", cls: "Unconsolidated Shore", regime: "Temporarily Flooded" });
+    // Palustrine has no subsystem: it stays absent, never "".
     const pem = built.find((f) => (f.properties.extra as WetlandExtra).code === "PEM1Ch")!;
     expect((pem.properties.extra as WetlandExtra).subsystem).toBeUndefined();
     expect(pem.properties.details?.subsystem).toBeUndefined();
-    expect(pem.properties.details?.["code names"]).toBeUndefined();
-  });
-
-  it("keeps the first published name when NWI's table lists a code twice", () => {
-    // PUBFh came back twice, once without its water regime.
-    const codes = parseNwiCodes(nwiCodeRows.features.map((f) => f.attributes));
-    expect(codes.get("PUBFh")).toEqual({ system: "Palustrine", subsystem: undefined, cls: "Unconsolidated Bottom", regime: "Semipermanently Flooded" });
-    const reversed = parseNwiCodes([...nwiCodeRows.features].reverse().map((f) => f.attributes));
-    expect(reversed.get("PUBFh")?.regime).toBe("Semipermanently Flooded");
-  });
-
-  it("draws every polygon with its code and type when the code table did not answer, its names absent", () => {
-    const rows = nwiWetlands.features as unknown as Parameters<typeof buildWetlands>[0];
-    const built = buildWetlands(rows, [], null);
-    expect(built).toHaveLength(14);
-    const x = built[0].properties.extra as WetlandExtra;
-    expect(x.code).toBe("L2USAh");
-    expect(x.type).toBe("Lake");
-    expect(x.system).toBeUndefined();
-    expect(x.regime).toBeUndefined();
-    expect(built[0].properties.details?.["code names"]).toMatch(/did not answer/);
+    // The oracle: NWI's table 1 rows for every code in that answer (first row per code;
+    // NWI spells A "Temporary Flooded", Cowardin "Temporarily Flooded").
+    const table = new Map<string, Record<string, string | null>>();
+    for (const f of nwiCodeRows.features) if (!table.has(f.attributes.ATTRIBUTE)) table.set(f.attributes.ATTRIBUTE, f.attributes);
+    const codes = [...new Set(built.map((f) => (f.properties.extra as WetlandExtra).code))].sort();
+    expect(codes).toEqual(["L2USAh", "PEM1Ch", "PUBFh", "PUBHh", "PUSAh", "PUSCh", "R4SBAx", "R4SBC", "R5UBH"]);
+    for (const code of codes) {
+      const t = table.get(code)!;
+      expect(decodeCowardin(code), code).toEqual({
+        system: t.SYSTEM_NAME ?? undefined,
+        subsystem: t.SUBSYSTEM_NAME ?? undefined,
+        cls: t.CLASS_NAME ?? undefined,
+        regime: t.WATER_REGIME_NAME?.replace("Temporary Flooded", "Temporarily Flooded") ?? undefined,
+      });
+    }
   });
 
   it("reads NWI's 0 year as not recorded rather than as year 0", () => {
     const [s] = parseNwiSources([quad("Nowhere", -98.5, 0)]);
     expect(s.year).toBeUndefined();
     expect(nwiImagerySummary([s]).years).toEqual([]);
+  });
+
+  it("decodes Cowardin names locally from the ATTRIBUTE code", () => {
+    expect(decodeCowardin("PEM1A")).toEqual({
+      system: "Palustrine",
+      subsystem: undefined,
+      cls: "Emergent",
+      regime: "Temporarily Flooded",
+    });
+    expect(decodeCowardin("R2UBH")).toEqual({
+      system: "Riverine",
+      subsystem: "Lower Perennial",
+      cls: "Unconsolidated Bottom",
+      regime: "Permanently Flooded",
+    });
+    expect(decodeCowardin("L1UBHh")).toEqual({
+      system: "Lacustrine",
+      subsystem: "Limnetic",
+      cls: "Unconsolidated Bottom",
+      regime: "Permanently Flooded",
+    });
+    expect(decodeCowardin("E2EM1P")).toMatchObject({
+      system: "Estuarine",
+      cls: "Emergent",
+      regime: "Irregularly Flooded",
+    });
+    expect(decodeCowardin("E1UBL")).toMatchObject({ subsystem: "Subtidal", regime: "Subtidal" });
+    expect(decodeCowardin("")).toEqual({});
+    expect(decodeCowardin("XX9Q")).toEqual({});
   });
 
   it("tests points against a ring with the even-odd rule", () => {

@@ -8,6 +8,7 @@ import { Copy, ExternalLink } from "lucide-react";
 import { useGlobe } from "@/lib/store/globe";
 import type { LayerFeature } from "@/lib/layers/types";
 import type { Provenance } from "@/lib/provenance/types";
+import type { CitedStatement, EquityDossier } from "@/lib/companies/equity";
 
 interface EmployerDossier {
   rank: number;
@@ -59,6 +60,117 @@ function fmtEmployees(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k`;
   return `${n}`;
+}
+
+interface EquityEnvelope {
+  data: EquityDossier;
+  provenance: Provenance[];
+  caveats?: string[];
+  error?: string;
+}
+
+/** RSU/vesting dossier for one ticker, from /api/employers?op=equity. Pilot batch only. */
+function useEquityDossier(ticker: string | null) {
+  return useQuery({
+    queryKey: ["equity", ticker],
+    queryFn: () =>
+      getJson<EquityEnvelope>(
+        `/api/employers?op=equity&ticker=${encodeURIComponent(ticker ?? "")}`
+      ),
+    staleTime: 24 * 3600_000,
+    enabled: !!ticker,
+    // A 404 means "ticker not in the pilot batch" — not worth retrying.
+    retry: false,
+  });
+}
+
+function Cited({ c }: { c: CitedStatement }) {
+  const isSec = c.url.includes("sec.gov");
+  return (
+    <div className="mt-1.5">
+      <p className="text-[12px] leading-snug">&ldquo;{c.statement}&rdquo;</p>
+      <div className="mt-0.5 text-[10px] text-muted-foreground">
+        {c.form} · filed {c.filingDate} ·{" "}
+        <a
+          href={c.url}
+          target="_blank"
+          rel="noreferrer"
+          className="underline hover:text-foreground"
+        >
+          {isSec ? "EDGAR filing" : "Annual report"}
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function EquityCompensation({ ticker }: { ticker: string | null }) {
+  const q = useEquityDossier(ticker);
+
+  if (!ticker) return null;
+  if (q.isPending) {
+    return <p className="text-[12px] text-muted-foreground">Loading equity dossier…</p>;
+  }
+  if (q.isError || !q.data?.data) {
+    return (
+      <p className="text-[12px] leading-snug text-muted-foreground">
+        No equity dossier for this employer yet — the pilot covers 70 companies.
+      </p>
+    );
+  }
+  const d = q.data.data;
+  return (
+    <div>
+      {d.vesting.length > 0 && (
+        <div className="mt-1">
+          <div className="text-[11px] font-semibold">Vesting schedule</div>
+          {d.vesting.map((v, i) => (
+            <Cited key={i} c={v} />
+          ))}
+        </div>
+      )}
+      {d.equityPlan && (
+        <div className="mt-2">
+          <div className="text-[11px] font-semibold">Equity plan</div>
+          <Cited c={d.equityPlan} />
+        </div>
+      )}
+      {d.tradingPolicy && (
+        <div className="mt-2">
+          <div className="text-[11px] font-semibold">Insider trading policy</div>
+          <Cited c={d.tradingPolicy} />
+        </div>
+      )}
+      {d.blackoutWindowEstimate && (
+        <div className="mt-2">
+          {/* The estimate label is rendered verbatim, per the dossier contract. */}
+          <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+            {d.blackoutWindowEstimate.label}
+          </span>
+          <p className="mt-1 text-[12px] leading-snug">{d.blackoutWindowEstimate.statement}</p>
+          <p className="mt-0.5 text-[10px] text-muted-foreground">
+            How this was estimated: {d.blackoutWindowEstimate.method}
+          </p>
+        </div>
+      )}
+      {d.etfMembership && d.etfMembership.length > 0 && (
+        <div className="mt-2">
+          <div className="text-[11px] font-semibold">Held by ETFs</div>
+          <ul className="mt-0.5 space-y-0.5">
+            {d.etfMembership.map((m, i) => (
+              <li key={i} className="text-[12px] leading-snug">
+                {m.etf} — {m.weightPct.toFixed(2)}%
+                <span className="text-muted-foreground"> as of {m.asOf}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-0.5 text-[10px] text-muted-foreground">
+            Official issuer holdings files.
+          </p>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function EmployerAside({ feature }: { feature: LayerFeature }) {
@@ -117,10 +229,7 @@ export default function EmployerAside({ feature }: { feature: LayerFeature }) {
           <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             Equity compensation
           </div>
-          <p className="text-[12px] leading-snug text-muted-foreground">
-            RSU grants, vesting schedules, and insider transactions come from SEC Form 4
-            filings. Submit a filing via the RSU API to populate this section.
-          </p>
+          <EquityCompensation ticker={ticker} />
           <div className="mt-1.5 flex gap-2">
             <button
               className="rounded border border-border px-2 py-1 text-[11px] hover:bg-muted"
