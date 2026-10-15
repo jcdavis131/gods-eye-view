@@ -120,7 +120,10 @@ def build_series(frame, task):
         price = frame[src].to_numpy(dtype=np.float64)
         series = np.full_like(price, np.nan)
         series[HORIZON:] = price[:-HORIZON]
+        try:
         target = frame[task].to_numpy(dtype=np.float64)
+    except KeyError:
+        return None
         return series, target, kind
     if task not in frame.columns:
         return None
