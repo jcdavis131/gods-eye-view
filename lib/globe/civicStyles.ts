@@ -130,3 +130,25 @@ export const envpermitsStyle: LayerStyle = {
   lines: boxLines,
   scaleByDistance: [5e3, 1.0, 4e4, 0.6],
 };
+
+// ---------------------------------------------------------------- contaminated sites (EPA EMEF)
+
+/** EPA program listings by program; Superfund drawn largest. A colour is the program, never a severity. */
+export const CONTAMINANT_COLOR: Record<string, string> = {
+  sems: "#F87171",
+  tri: "#C084FC",
+  rcra: "#FBBF24",
+  acres: "#A3A3A3",
+};
+
+export const contaminantsStyle: LayerStyle = {
+  color: "#F87171",
+  icon: () => null,
+  colorFor: (f) => (isLoadedBox(f) ? LOADED_BOX : CONTAMINANT_COLOR[f.properties.kind ?? ""] ?? "#F87171"),
+  pointSize: (f) => (f.properties.kind === "sems" ? 9 : f.properties.kind === "rcra" ? 5 : 7),
+  label: (f) => f.properties.name,
+  labelMax: 20,
+  labelWhen: (f) => !isLoadedBox(f),
+  lines: boxLines,
+  scaleByDistance: [5e3, 1.0, 4e4, 0.6],
+};

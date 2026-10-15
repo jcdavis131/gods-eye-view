@@ -3,8 +3,8 @@
 // no Cesium or React in them, shared by /api/land and the browser layers.
 //
 // Every label here is either the upstream's own value or its published
-// definition: FEMA's zone meanings, the NWI Cowardin names that come back
-// joined in the same query, PAD-US's coded-value domains read from the
+// definition: FEMA's zone meanings, the Cowardin names decoded from NWI's
+// own ATTRIBUTE code, PAD-US's coded-value domains read from the
 // layer's metadata. Sentinels (-9999, -1000000) become undefined.
 
 import type { MultiPolygon, Polygon } from "geojson";
@@ -250,11 +250,12 @@ const COWARDIN_SYSTEMS: Record<string, string> = {
   P: "Palustrine",
 };
 
-/** Cowardin subsystems (digit after the system letter; only Riverine/Lacustrine use them). */
+/** Cowardin subsystems (digit after the system letter; Palustrine has none). */
 const COWARDIN_SUBSYSTEMS: Record<string, Record<string, string>> = {
   M: { 1: "Subtidal", 2: "Intertidal" },
   E: { 1: "Subtidal", 2: "Intertidal" },
-  R: { 1: "Tidal", 2: "Lower Perennial", 3: "Upper Perennial", 4: "Intermittent" },
+  // R5 is NWI's own "Unknown Perennial" (NWI's code table names it so, 2026-10-12).
+  R: { 1: "Tidal", 2: "Lower Perennial", 3: "Upper Perennial", 4: "Intermittent", 5: "Unknown Perennial" },
   L: { 1: "Limnetic", 2: "Littoral" },
 };
 
@@ -263,6 +264,7 @@ const COWARDIN_CLASSES: Record<string, string> = {
   RB: "Rock Bottom",
   UB: "Unconsolidated Bottom",
   AB: "Aquatic Bed",
+  RF: "Reef",
   US: "Unconsolidated Shore",
   ML: "Moss-Lichen",
   EM: "Emergent",
@@ -285,6 +287,8 @@ const COWARDIN_REGIMES: Record<string, string> = {
   H: "Permanently Flooded",
   J: "Intermittently Flooded",
   K: "Artificially Flooded",
+  L: "Subtidal",
+  M: "Irregularly Exposed",
   N: "Regularly Flooded",
   P: "Irregularly Flooded",
   S: "Temporarily Flooded–Fresh Tidal",
@@ -296,8 +300,8 @@ const COWARDIN_REGIMES: Record<string, string> = {
  * Decode the Cowardin system/subsystem/class/water-regime names from an NWI
  * ATTRIBUTE code (e.g. PEM1A → Palustrine / Emergent / Temporarily Flooded).
  * Local replacement for the NWI_Wetland_Codes join, which USFWS stopped
- * publishing with the 11.5 service republish. Unknown parts stay undefined —
- * never guessed.
+ * publishing with the 11.5 service republish; no second upstream call.
+ * Unknown parts stay undefined — never guessed.
  */
 export function decodeCowardin(code: string): {
   system?: string;
@@ -325,30 +329,33 @@ export function decodeCowardin(code: string): {
   return out;
 }
 
+/**
+ * Wetland polygons from NWI's Wetlands layer 0 (plain fields ATTRIBUTE,
+ * WETLAND_TYPE, ACRES, OBJECTID since USFWS dropped the joined code table in
+ * 2026), the Cowardin names decoded locally from the code.
+ */
 export function buildWetlands(
-  rows: Array<{ id?: number | string; geometry: GeoJSON.Geometry | null; properties: Record<string, unknown> }>,
+  rows: Array<{ id?: number | string; geometry: GeoJSON.Geometry | null; properties: Record<string, unknown> | null }>,
   sources: NwiSource[] = [],
 ): LayerFeature[] {
   const out: LayerFeature[] = [];
   rows.forEach((r, i) => {
     if (!isPoly(r.geometry)) return;
-    const p = r.properties;
-    // Plain field names: the NWI_Wetland_Codes join is gone from the republished
-    // service, so Cowardin names are decoded locally from the ATTRIBUTE code.
-    const code = str(p["ATTRIBUTE"]) ?? "unclassified";
+    const p = r.properties ?? {};
+    const code = str(p.ATTRIBUTE) ?? "unclassified";
     const cow = decodeCowardin(code);
     const src = sourceFor(r.geometry, sources);
     const x: WetlandExtra = {
       code,
-      type: str(p["WETLAND_TYPE"]),
-      acres: finite(p["ACRES"]),
+      type: str(p.WETLAND_TYPE),
+      acres: finite(p.ACRES),
       system: cow.system,
       subsystem: cow.subsystem,
       cls: cow.cls,
       regime: cow.regime,
       imageYear: src?.year,
     };
-    const oid = str(p["OBJECTID"]) ?? str(r.id) ?? `${code}:${i}`;
+    const oid = str(p.OBJECTID) ?? str(r.id) ?? `${code}:${i}`;
     out.push({
       type: "Feature",
       geometry: r.geometry,
@@ -383,6 +390,168 @@ export function nwiImagerySummary(sources: NwiSource[]): { years: number[]; proj
   const years = [...new Set(sources.map((s) => s.year).filter((y): y is number => y != null))].sort((a, b) => a - b);
   const projects = [...new Set(sources.map((s) => s.project).filter((p): p is string => !!p))].sort();
   return { years, projects };
+}
+
+// ---------------------------------------------------------------- NPS National Register
+
+/**
+ * The fields the route asks NPS's nrhp_locations layers for. Address, Vicinity and every
+ * bookkeeping field stay at the source: no street address is ever requested.
+ */
+export const NRHP_FIELDS = ["OBJECTID", "NRIS_Refnum", "RESNAME", "ResType", "City", "County", "State", "Is_NHL", "CertDate", "NARA_URL"] as const;
+
+/** What NPS publishes, and what it withholds (route caveat, InfoPanel banner, README). */
+export const NRHP_CAVEAT =
+  "Only National Register properties that NPS publishes as non-restricted (NPS describes the service as \"all public, NON-SENSITIVE OR RESTRICTED historic properties\"). Archaeological sites whose locations are withheld under NHPA section 304 / ARPA are not in this source and are not shown. Absence on the map does not mean no resource is present. This is not a substitute for Section 106 consultation or a SHPO file search.";
+
+export interface HistoricExtra {
+  /** NRIS reference number, NPS's id for the listing. */
+  refnum?: string;
+  /** building, structure, district, site or object, as NPS types it. */
+  resType?: string;
+  /** NPS flags National Historic Landmarks with "X"; anything else is not flagged. */
+  nhl: boolean;
+  /** Listing (certification) date as far as NPS publishes it: "2007-10" or "2007-10-15". */
+  listed?: string;
+  shape: "point" | "boundary";
+}
+
+/**
+ * NPS's CertDate, leniently: it is usually "YYYY-MM-" (no day). "2007-10-" is 2007-10,
+ * "2007-10-15" stays a day, "2007" a year; a blank or anything else is no date, never a guess.
+ */
+export function parseCertDate(v: unknown): string | undefined {
+  const s = str(v);
+  if (!s) return undefined;
+  const m = s.match(/^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?-?$/);
+  if (!m) return undefined;
+  const y = Number(m[1]);
+  if (y < 1966 || y > 2100) return undefined;
+  if (m[2] && (Number(m[2]) < 1 || Number(m[2]) > 12)) return undefined;
+  if (m[3] && (Number(m[3]) < 1 || Number(m[3]) > 31)) return undefined;
+  return [m[1], m[2], m[3]].filter(Boolean).join("-");
+}
+
+/**
+ * National Register listings as NPS publishes them: points (layer 0) or boundaries
+ * (layer 1). The feature is named by its NRIS number and type, so the search palette
+ * (which matches names) never goes from a person's name to a place: a property's name
+ * can be one ("Milam, Ben, Statue"). That name is shown in the dossier and drawn as
+ * the globe's label (lib/globe/landStyles.ts historicLabel), as NPS lists it, but it is
+ * never the feature's name and never searched.
+ */
+export function buildHistoric(
+  rows: Array<{ id?: number | string; geometry: GeoJSON.Geometry | null; properties: Record<string, unknown> | null }>,
+  shape: HistoricExtra["shape"],
+): LayerFeature[] {
+  const out: LayerFeature[] = [];
+  rows.forEach((r, i) => {
+    const g = r.geometry;
+    if (!g) return;
+    if (shape === "point" ? g.type !== "Point" : !isPoly(g)) return;
+    const p = r.properties ?? {};
+    const refnum = str(p.NRIS_Refnum);
+    const resType = str(p.ResType)?.toLowerCase();
+    const x: HistoricExtra = { refnum, resType, nhl: str(p.Is_NHL)?.toUpperCase() === "X", listed: parseCertDate(p.CertDate), shape };
+    const oid = str(p.OBJECTID) ?? str(r.id) ?? `${refnum ?? "nrhp"}:${i}`;
+    const nara = str(p.NARA_URL);
+    out.push({
+      type: "Feature",
+      geometry: g,
+      properties: {
+        id: `nrhp:${shape === "point" ? "pt" : "bnd"}:${oid}`,
+        layer: "historic",
+        name: `NRHP ${refnum ?? "listing"}${resType ? ` · ${resType}` : ""}${x.nhl ? " · NHL" : ""}`,
+        kind: resType ?? "property",
+        source: "NPS National Register",
+        details: {
+          "property name (as NPS lists it)": str(p.RESNAME),
+          "resource type": resType,
+          "national historic landmark": x.nhl ? "yes (NPS flags it as an NHL)" : undefined,
+          listed: x.listed,
+          city: str(p.City),
+          county: str(p.County),
+          state: str(p.State),
+          "nris refnum": refnum,
+          "nomination (National Archives)": nara && /^https:\/\//.test(nara) ? nara : undefined,
+          drawn: shape === "point" ? "NPS's point for the listing" : "NPS's boundary for the listing",
+          "what this is": "a property listed on the National Register of Historic Places, as NPS's public spatial data shows it",
+          "not shown": "archaeological sites whose locations are restricted under NHPA section 304 / ARPA; absence here is not absence on the ground",
+        },
+        extra: x,
+      },
+    });
+  });
+  return out;
+}
+
+// ---------------------------------------------------------------- USFWS critical habitat
+
+/** What a critical habitat designation is and is not (route caveat, picture note, README). */
+export const CRITHAB_CAVEAT =
+  "USFWS designated critical habitat, final and proposed: regulatory designations under the Endangered Species Act, not species range or occurrence. Many listed species have no designation, and a polygon does not mean the species is present. FWS says these GIS files are not the legal boundary; the Federal Register rule and 50 CFR 17 are. Marine and anadromous species under NOAA Fisheries are not included.";
+
+/** FWS fills some text fields with this instead of a value; it is no value, never shown. */
+export const FWS_PLACEHOLDER = "Please check current species specific shapefile";
+
+export interface CritHabSpecies {
+  common?: string;
+  scientific?: string;
+  /** Listing status as FWS publishes it: "Endangered", "Threatened", "Proposed Threatened"... */
+  listing?: string;
+  /** "Final" or "Proposed" (the designation, not the listing). */
+  designation?: string;
+  /** Federal Register citation of the rule, e.g. "78FR51328 51379". */
+  fedreg?: string;
+  /** Publication date of that rule, YYYY-MM-DD. */
+  published?: string;
+}
+
+/** FWS's text with its placeholder (and blanks) read as no value. */
+function fwsText(v: unknown): string | undefined {
+  const s = str(v);
+  if (!s || s.toLowerCase().startsWith(FWS_PLACEHOLDER.toLowerCase())) return undefined;
+  return s;
+}
+
+/** "20130820" -> "2013-08-20"; anything else is no date. */
+export function fwsDate(v: unknown): string | undefined {
+  const s = fwsText(v);
+  const m = s?.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (!m) return undefined;
+  if (Number(m[2]) < 1 || Number(m[2]) > 12 || Number(m[3]) < 1 || Number(m[3]) > 31) return undefined;
+  return `${m[1]}-${m[2]}-${m[3]}`;
+}
+
+/** Point-query rows from FWS's final (layer 0) or proposed (layer 2) critical habitat, one per species and rule. */
+export function parseCritHab(rows: Array<{ properties: Record<string, unknown> | null }>): CritHabSpecies[] {
+  const out: CritHabSpecies[] = [];
+  const seen = new Set<string>();
+  for (const r of rows) {
+    const p = r.properties ?? {};
+    const sp: CritHabSpecies = {
+      common: fwsText(p.comname),
+      scientific: fwsText(p.sciname),
+      listing: fwsText(p.listing_status),
+      designation: fwsText(p.status),
+      fedreg: fwsText(p.fedreg),
+      published: fwsDate(p.pubdate),
+    };
+    // A species' habitat can come back as several units of the same rule: one line each rule.
+    const key = [sp.scientific, sp.common, sp.designation, sp.fedreg].join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(sp);
+  }
+  return out;
+}
+
+/** One species' line in the ground dossier: proposed designations always say so. */
+export function critHabText(s: CritHabSpecies): string {
+  const name = [s.common, s.scientific ? `(${s.scientific})` : undefined].filter(Boolean).join(" ") || "species not named by FWS";
+  const designation = s.designation?.toLowerCase() === "proposed" ? "PROPOSED critical habitat (not final)" : s.designation?.toLowerCase() === "final" ? "final critical habitat" : `critical habitat (${s.designation ?? "designation status not published"})`;
+  const rule = [s.fedreg ? `${s.fedreg.replace(/^(\d+)FR(\d+)/, "$1 FR $2")}` : undefined, s.published ? `published ${s.published}` : undefined].filter(Boolean).join(", ");
+  return `${name} · ${s.listing ?? "listing status not published"} · ${designation}${rule ? ` · ${rule}` : ""}`;
 }
 
 // ---------------------------------------------------------------- USGS PAD-US

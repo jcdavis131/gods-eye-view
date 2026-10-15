@@ -30,6 +30,7 @@ const OPTION_KEYS: Partial<Record<LayerDefinition["id"], Array<keyof Prefs>>> = 
   satellites: ["satelliteGroups"],
   field: ["fieldPov"],
   sealevel: ["seaLevelFt"],
+  wayback: ["waybackRelease"],
 };
 
 export default function LayerHost() {

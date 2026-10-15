@@ -113,3 +113,19 @@ describe("the search allowlist on infrastructure layers", () => {
     expect(matchScore(sec, "ok170120n0030w0")).toBe(1);
   });
 });
+
+describe("historic places", () => {
+  it("finds a National Register listing by its NRIS number, never by the property's name (which can be a person's)", async () => {
+    const { buildHistoric } = await import("@/lib/land/features");
+    const [f] = buildHistoric(
+      // NPS's own record, layer 0, 2026-10-12.
+      [{ geometry: { type: "Point", coordinates: [-98.499705, 29.426095] }, properties: { OBJECTID: 1408741, NRIS_Refnum: "100005535", RESNAME: "Milam, Ben, Statue", ResType: "object", City: "San Antonio", County: "Bexar", State: "TEXAS", Is_NHL: null, CertDate: "2020-08-" } }],
+      "point",
+    );
+    expect(searchableDetail("property name (as NPS lists it)")).toBe(false);
+    expect(matchScore(f.properties, "milam")).toBe(0);
+    expect(matchScore(f.properties, "100005535")).toBeGreaterThan(0);
+    // A place field is still a place.
+    expect(matchScore(f.properties, "bexar")).toBe(1);
+  });
+});

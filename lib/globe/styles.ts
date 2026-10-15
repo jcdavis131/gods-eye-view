@@ -26,8 +26,8 @@ import { constructsStyle } from "./constructStyles";
 import { fieldStyle } from "./fieldStyles";
 import { alertsStyle } from "./alertStyles";
 import { firesStyle, hazardsStyle, wildfireStyle } from "./hazardStyles";
-import { floodStyle, publiclandsStyle, wetlandsStyle } from "./landStyles";
-import { contoursStyle, firehazardStyle, landcoverStyle, reliefStyle, sealevelStyle, slopeStyle, soilsStyle } from "./terrainStyles";
+import { floodStyle, historicStyle, publiclandsStyle, wetlandsStyle } from "./landStyles";
+import { contoursStyle, crithabStyle, firehazardStyle, landcoverStyle, reliefStyle, sealevelStyle, slopeStyle, soilsStyle, waybackStyle } from "./terrainStyles";
 import {
   airportsStyle,
   airqualityStyle,
@@ -43,7 +43,7 @@ import {
   transmissionStyle,
 } from "./infraStyles";
 import { parcelsStyle } from "./parcelStyles";
-import { envpermitsStyle, licencesStyle, permitsStyle, zoningStyle } from "./civicStyles";
+import { contaminantsStyle, envpermitsStyle, licencesStyle, permitsStyle, zoningStyle } from "./civicStyles";
 
 /** Distinctive major-group colours for the occupations layer: one hue per SOC major group. */
 const OCCUPATION_COLORS: Record<string, string> = {
@@ -463,6 +463,9 @@ export const STYLES: Partial<Record<LayerId, LayerStyle>> = {
   flood: floodStyle,
   wetlands: wetlandsStyle,
   publiclands: publiclandsStyle,
+  historic: historicStyle,
+  crithab: crithabStyle,
+  wayback: waybackStyle,
   relief: reliefStyle,
   slope: slopeStyle,
   contours: contoursStyle,
@@ -487,6 +490,7 @@ export const STYLES: Partial<Record<LayerId, LayerStyle>> = {
   permits: permitsStyle,
   licences: licencesStyle,
   envpermits: envpermitsStyle,
+  contaminants: contaminantsStyle,
   sports: sportsStyle,
   constructs: constructsStyle,
   field: fieldStyle,
@@ -529,6 +533,9 @@ export const FOLLOW_RANGE: Record<LayerId, number> = {
   flood: 3_000,
   wetlands: 3_000,
   publiclands: 40_000,
+  historic: 2_000,
+  crithab: 20_000,
+  wayback: 5_000,
   // Picture layers have no features to follow; a "ground here" answer sits at its click.
   relief: 5_000,
   slope: 5_000,
@@ -554,6 +561,7 @@ export const FOLLOW_RANGE: Record<LayerId, number> = {
   permits: 1_500,
   licences: 1_000,
   envpermits: 8_000,
+  contaminants: 8_000,
   sports: 500_000,
   constructs: 150_000,
   field: 400_000,

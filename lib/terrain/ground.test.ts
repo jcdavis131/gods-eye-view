@@ -89,3 +89,24 @@ describe("the geology part of the ground dossier", () => {
     expect(groundDetails({ lon: 0, lat: 0, parts: { geology: { loading: false, error: "macrostrat 502" } } }).geology).toMatch(/did not answer: macrostrat 502/);
   });
 });
+
+describe("critical habitat in the ground dossier", () => {
+  it("is asked when the Critical habitat layer is on, alone or with others", () => {
+    expect(partsFor({ crithab: true })).toEqual(["crithab"]);
+    expect(partsFor({ soils: true, crithab: true })).toEqual(["soils", "crithab"]);
+    expect(groundClickWanted({ crithab: true }, 20_000)).toBe(true);
+  });
+
+  it("names each designation, says PROPOSED, and says what an empty answer does not mean", () => {
+    const final = [{ common: "Austin blind Salamander", scientific: "Eurycea waterlooensis", listing: "Endangered", designation: "Final", fedreg: "78FR51328 51379", published: "2013-08-20" }];
+    const proposed = [{ common: "Pecos pupfish", scientific: "Cyprinodon pecosensis", listing: "Proposed Threatened", designation: "Proposed", fedreg: "89FR92744 92785", published: "2024-11-22" }];
+    const both = groundDetails({ lon: -97.7713, lat: 30.2638, parts: { crithab: { loading: false, data: { final, proposed } } } });
+    expect(both["critical habitat 1"]).toMatch(/^Austin blind Salamander .* final critical habitat · 78 FR 51328 51379, published 2013-08-20$/);
+    expect(both["critical habitat 2"]).toMatch(/PROPOSED critical habitat \(not final\)/);
+    const none = groundDetails({ lon: -98.5, lat: 29.4, parts: { crithab: { loading: false, data: { final: [], proposed: [] } } } });
+    expect(none["critical habitat"]).toMatch(/^no designated critical habitat at this point/);
+    const half = groundDetails({ lon: -98.5, lat: 29.4, parts: { crithab: { loading: false, data: { final: [], proposed: null } } } });
+    expect(half["critical habitat"]).toBeUndefined();
+    expect(half["critical habitat (proposed)"]).toMatch(/unknown, not absent/);
+  });
+});

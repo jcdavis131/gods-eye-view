@@ -34,6 +34,25 @@ export const MACROSTRAT_TILES = "https://tiles.macrostrat.org/carto/{z}/{x}/{y}.
  */
 export const WHP_TEMPLATE = `${WHP_IMAGE}/exportImage?bbox={westProjected},{southProjected},{eastProjected},{northProjected}&bboxSR=3857&imageSR=3857&size=256,256&format=png&renderingRule=${encodeURIComponent(JSON.stringify({ rasterFunction: "WHP_CLS_2023_8bit" }))}&f=image`;
 
+/** USFWS NWI national wetlands raster, version 5 (pinned: a new version is a new service name). */
+export const NWI_RASTER = "https://fwspublicservices.wim.usgs.gov/wetlandsmapservice/rest/services/Wetlands_Raster_v5/ImageServer";
+/**
+ * One Web Mercator tile of the NWI raster: exportImage for the tile's projected box. NWI's
+ * PNG keys 253,253,253 as transparent and paints NoData black, so `noData=0` is asked for
+ * (0 is not one of the raster's eight classes): the PNG then keys black, and land with no
+ * mapped wetland draws clear (27,441 of 65,536 pixels of a Louisiana tile, 2026-10-12).
+ */
+export const NWI_RASTER_TEMPLATE = `${NWI_RASTER}/exportImage?bbox={westProjected},{southProjected},{eastProjected},{northProjected}&bboxSR=3857&imageSR=3857&size=256,256&format=png&transparent=true&noData=0&f=image`;
+/** NWI's raster pixels are about 100 m; past level 11 the globe magnifies them. */
+export const NWI_RASTER_MAX_ZOOM = 11;
+
+/** USFWS critical habitat tile caches (ArcGIS Online), final and proposed; cached to level 14 (maxScale 36,111.9). */
+export const CRITHAB_TILES = {
+  final: "https://tiles.arcgis.com/tiles/QVENGdaPbd4LUkLV/arcgis/rest/services/usfws_critical_habitat_final/MapServer/tile/{z}/{y}/{x}",
+  proposed: "https://tiles.arcgis.com/tiles/QVENGdaPbd4LUkLV/arcgis/rest/services/usfws_critical_habitat_proposed/MapServer/tile/{z}/{y}/{x}",
+} as const;
+export const CRITHAB_MAX_ZOOM = 14;
+
 /** Deepest terrarium zoom published (about 4.8 m a pixel at the equator). */
 export const TERRARIUM_MAX_ZOOM = 15;
 
@@ -136,7 +155,7 @@ export function routeTileUrl(product: RenderProductId, z: number | string, x: nu
 // ---------------------------------------------------------------- direct sources
 
 export interface DirectSource {
-  id: "relief" | "soils" | "firehazard" | "sealevel" | "terrain" | "geology";
+  id: "relief" | "soils" | "firehazard" | "sealevel" | "terrain" | "geology" | "wetlands" | "crithab" | "wayback";
   title: string;
   source: SourceId;
   /** Host the browser fetches from (CSP img-src / connect-src must allow it). */
@@ -201,7 +220,38 @@ export const DIRECT_SOURCES: DirectSource[] = [
     maxZoom: 16,
     note: "512 px tiles from Macrostrat's compilation, which changes map scale with zoom; the Geology layer's click answer comes from its geologic_units/map API through /api/infra.",
   },
+  {
+    id: "wetlands",
+    title: "NWI wetlands, national raster v5 (USFWS, ImageServer exportImage)",
+    source: "usfws-nwi",
+    host: "fwspublicservices.wim.usgs.gov",
+    template: NWI_RASTER_TEMPLATE,
+    maxZoom: NWI_RASTER_MAX_ZOOM,
+    note: "About 100 m pixels in eight wetland types, drawn only above 10 km, where the Wetlands layer's polygons are not loaded; small wetlands can be missing at this scale.",
+  },
+  {
+    id: "crithab",
+    title: "Critical habitat, final and proposed (USFWS tile caches usfws_critical_habitat_final / _proposed)",
+    source: "usfws-crithab",
+    host: "tiles.arcgis.com",
+    template: CRITHAB_TILES.final,
+    maxZoom: CRITHAB_MAX_ZOOM,
+    note: "Two caches in FWS's own symbology, to level 14; a 404 is no tile there. The click answer comes from FWS's FeatureServer through /api/land?op=crithab.",
+  },
+  {
+    id: "wayback",
+    title: "Esri World Imagery Wayback (one tile set per release since 2014-02-20)",
+    source: "esri-wayback",
+    host: "wayback.maptiles.arcgis.com",
+    template: "https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/{release}/{z}/{y}/{x}",
+    maxZoom: 19,
+    note: "The browser loads tiles from Esri directly (CORS *, including on the 301 Esri sends to the release where a tile last changed); the release index comes from /api/terrain?op=wayback. Never proxied or cached here.",
+  },
 ];
+
+/** What the NWI raster is not (the Wetlands layer's note and the README). */
+export const NWI_RASTER_CAVEAT =
+  "Above 10 km the Wetlands layer draws NWI's national raster: about 100 m pixels in eight wetland types, generalised from the same inventory, so small wetlands can be missing at that scale. A habitat map from dated imagery, not a jurisdictional delineation.";
 
 /** Sea level rise scenarios offered (whole feet above MHHW; NOAA also publishes half feet). */
 export const SLR_FEET = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;

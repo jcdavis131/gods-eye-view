@@ -21,7 +21,8 @@ export function addBaseImagery(viewer: CesiumNS.Viewer): CesiumNS.ImageryLayer {
   const provider = new C.UrlTemplateImageryProvider({
     url: ESRI_IMAGERY_URL,
     maximumLevel: 19,
-    credit: new C.Credit("Imagery © Esri, Maxar, Earthstar Geographics, and the GIS User Community"),
+    // The World Imagery item's own attribution (accessInformation, read 2026-10-12).
+    credit: new C.Credit("Imagery © Esri, Vantor, Earthstar Geographics, and the GIS User Community"),
   });
   const layer = viewer.imageryLayers.addImageryProvider(provider);
   // A cold, quiet Earth: pulled-down saturation and a touch more contrast so

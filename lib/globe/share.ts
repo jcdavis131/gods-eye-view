@@ -25,6 +25,10 @@
 //   &terrain=1.5                 3D terrain on, at this vertical exaggeration (1 to 3)
 //   &slr=3                       the sea level rise scenario, feet above MHHW (1 to 10;
 //                                written only while the Sea level rise layer is on)
+//   &wb=63116                    the Esri World Imagery Wayback release the Historic
+//                                imagery layer draws (written only while it is on and a
+//                                release is picked; one Esri no longer lists falls back
+//                                to the newest)
 //   &aoi=1                       the Area panel open on the drawn area (shape=a:…)
 //   &here=29.42410,-98.49360     a "what's here" answer asked at this point (lat,lon,
 //                                5 decimals) once the camera is there
@@ -53,6 +57,7 @@ import { areaRing, useArea } from "@/lib/aoi/store";
 import { openHere, useHere } from "@/lib/whatshere/here";
 import { identifyGround, isGroundSelection, useGroundPick } from "@/lib/terrain/ground";
 import { isSlrFeet } from "@/lib/terrain/products";
+import { parseReleaseId } from "@/lib/terrain/wayback";
 
 export interface ShareState {
   lat?: number;
@@ -99,6 +104,8 @@ export interface ShareState {
   terrain?: number;
   /** Sea level rise scenario, whole feet above MHHW. */
   slr?: number;
+  /** Esri World Imagery Wayback release id. */
+  wb?: number;
 }
 
 /** Terrain exaggeration from a link: 1 to 3, else undefined. */
@@ -229,6 +236,8 @@ export function parseShare(search: string): ShareState {
   if (terrain != null) out.terrain = terrain;
   const slr = num("slr");
   if (isSlrFeet(slr)) out.slr = slr;
+  const wb = parseReleaseId(q.get("wb"));
+  if (wb != null) out.wb = wb;
   return out;
 }
 
@@ -261,6 +270,7 @@ export function shareQuery(s: ShareState): string {
   if (s.ground) q.set("ground", `${s.ground.lat.toFixed(5)},${s.ground.lon.toFixed(5)}`);
   if (s.terrain != null) q.set("terrain", String(Number(s.terrain.toFixed(2))));
   if (s.slr != null) q.set("slr", String(s.slr));
+  if (s.wb != null) q.set("wb", String(s.wb));
   // The Area panel belongs to a drawn area; without one it has nothing to show.
   if (s.aoi && completeShape(s.shape)?.kind === "area") q.set("aoi", "1");
   if (s.here) q.set("here", `${s.here.lat.toFixed(5)},${s.here.lon.toFixed(5)}`);
@@ -311,6 +321,7 @@ export function currentShare(): ShareState {
     ground,
     terrain: prefs.terrain ? prefs.terrainExaggeration : undefined,
     slr: st.layers.sealevel ? prefs.seaLevelFt : undefined,
+    wb: st.layers.wayback && prefs.waybackRelease != null ? prefs.waybackRelease : undefined,
     aoi: useArea.getState().open && areaRing(st.measure.shape) ? true : undefined,
     here: here ? { lat: here.lat, lon: here.lon } : undefined,
   };
@@ -373,7 +384,7 @@ export function startUrlSync(): () => void {
   const unsubPrefs = useSettings.subscribe((s, prev) => {
     const a = s.prefs;
     const b = prev.prefs;
-    if (a.terrain !== b.terrain || a.terrainExaggeration !== b.terrainExaggeration || a.seaLevelFt !== b.seaLevelFt) schedule();
+    if (a.terrain !== b.terrain || a.terrainExaggeration !== b.terrainExaggeration || a.seaLevelFt !== b.seaLevelFt || a.waybackRelease !== b.waybackRelease) schedule();
   });
   const unsubGround = useGroundPick.subscribe((s, prev) => {
     if (s.pick?.lon !== prev.pick?.lon || s.pick?.lat !== prev.pick?.lat) schedule();
@@ -434,13 +445,15 @@ export function applyShare(s: ShareState, opts: { fly?: boolean } = {}): void {
   if (s.market) st.setMarketReportOpen(true);
   if (s.space) st.setSpaceWeatherOpen(true);
   // Terrain and the sea level scenario are display settings: a link that carries them sets them.
-  if (s.terrain != null || s.slr != null) {
+  if (s.terrain != null || s.slr != null || s.wb != null) {
     const set = useSettings.getState().setPref;
     if (s.terrain != null) {
       set("terrain", true);
       set("terrainExaggeration", s.terrain);
     }
     if (s.slr != null) set("seaLevelFt", s.slr);
+    // An id Esri does not list is kept as asked; the layer falls back to the newest and says so.
+    if (s.wb != null) set("waybackRelease", s.wb);
   }
   // A shared ground answer: asked once the camera has arrived, of the layers now on.
   if (s.ground) {

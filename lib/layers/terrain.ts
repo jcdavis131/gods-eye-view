@@ -17,6 +17,8 @@
 //   landcover   NLCD 2021 land cover, rendered through /api/terrain
 //   sealevel    NOAA sea level rise inundation, 1 to 10 ft above MHHW
 //   geology     Macrostrat's geologic map; the click answer is the map unit (/api/infra)
+//   crithab     USFWS critical habitat, final and proposed; the click answer is the
+//               designations containing the point (/api/land?op=crithab)
 
 import type { FetchContext, FetchResult, LayerDefinition, LayerId, ViewState } from "./types";
 import { SLR_CAVEAT, SLR_DEFAULT_FT, SOIL_CAVEAT, WHP_CAVEAT, isSlrFeet } from "@/lib/terrain/products";
@@ -58,7 +60,7 @@ export function bandKey(max: number | undefined) {
   return (v: ViewState) => (max != null && v.height > max ? "above" : "in");
 }
 
-function picture(o: PictureOptions): LayerDefinition {
+export function picture(o: PictureOptions): LayerDefinition {
   return {
     id: o.id,
     label: o.label,
@@ -189,7 +191,22 @@ export const geologyLayer = picture({
   note: "Macrostrat geologic map, coloured by age; the map scale changes with zoom · click the ground for the unit, its age and the map it comes from",
 });
 
-export const TERRAIN_LAYERS: LayerDefinition[] = [reliefLayer, slopeLayer, contoursLayer, soilsLayer, firehazardLayer, landcoverLayer, sealevelLayer, geologyLayer];
+/**
+ * USFWS critical habitat, final and proposed: FWS's own tile caches at every height, and a
+ * click on the ground asks /api/land?op=crithab which designations contain the point.
+ */
+export const crithabLayer = picture({
+  id: "crithab",
+  label: "Critical habitat (ESA)",
+  description:
+    "USFWS designated critical habitat for threatened and endangered species, final and proposed, in FWS's own map. Click the ground for the species, its listing status, whether the designation is final or proposed, and the Federal Register rule. Regulatory designations, not range or occurrence.",
+  color: "#22C55E",
+  attribution: "U.S. Fish and Wildlife Service, critical habitat (final and proposed)",
+  source: "USFWS critical habitat",
+  note: "FWS's final and proposed designations · regulatory polygons, not where a species lives; many listed species have none · NOAA marine species not included · click the ground for the species and rule",
+});
+
+export const TERRAIN_LAYERS: LayerDefinition[] = [reliefLayer, slopeLayer, contoursLayer, soilsLayer, firehazardLayer, landcoverLayer, sealevelLayer, geologyLayer, crithabLayer];
 
 /** Layers whose click on the ground opens the "ground here" dossier. */
-export const GROUND_LAYERS: LayerId[] = ["soils", "firehazard", "landcover", "slope", "contours", "relief", "geology"];
+export const GROUND_LAYERS: LayerId[] = ["soils", "firehazard", "landcover", "slope", "contours", "relief", "geology", "crithab"];

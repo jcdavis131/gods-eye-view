@@ -2,13 +2,14 @@
 // Styles for the three land layers: FEMA flood zones, NWI wetlands and PAD-US
 // public & protected lands. All ground polygons with thin outlines, plus the
 // dashed outline of the box the flood and wetland layers loaded. Flood zones
-// also draw FEMA's own map of the zones under them, across the whole view.
+// also draw FEMA's own map of the zones under them, across the whole view;
+// wetlands draw NWI's national raster above 10 km, where no polygons load.
 
 import type { LayerStyle } from "./renderer";
 import type { LayerFeature } from "@/lib/layers/types";
-import type { Access, FloodZoneExtra, PublicLandExtra, WetlandExtra } from "@/lib/land/features";
+import type { Access, FloodZoneExtra, HistoricExtra, PublicLandExtra, WetlandExtra } from "@/lib/land/features";
 import { polyFills, polyOutlines, UNRATED } from "./hazardStyles";
-import { FLOOD_PICTURE } from "./terrainStyles";
+import { FLOOD_PICTURE, WETLANDS_PICTURE } from "./terrainStyles";
 
 // ---------------------------------------------------------------- loaded box
 
@@ -85,6 +86,8 @@ export const wetlandsStyle: LayerStyle = {
   labelWhen: (f) => !isLoadedBox(f),
   polygons: (f) => (isLoadedBox(f) ? null : polyFills(f, wetlandColor(f), 0.38)),
   lines: (f) => (isLoadedBox(f) ? polyOutlines(f, LOADED_BOX, 0.7, 1.5, true) : polyOutlines(f, wetlandColor(f), 0.7, 1)),
+  // NWI's national raster above 10 km, where no polygons are loaded (lib/globe/terrainStyles.ts).
+  tiles: () => [WETLANDS_PICTURE],
 };
 
 // ---------------------------------------------------------------- public & protected lands
@@ -132,4 +135,44 @@ export const publiclandsStyle: LayerStyle = {
     if (x.category === "Easement") return polyOutlines(f, EASEMENT, 0.8, 1.3);
     return polyOutlines(f, PROCLAMATION, 0.55, 1.2, true);
   },
+};
+
+// ---------------------------------------------------------------- historic places (NRHP)
+
+/** National Register listings by NPS's resource type; a National Historic Landmark is drawn larger. */
+export const HISTORIC_TYPE_COLOR: Record<string, string> = {
+  building: "#F59E0B",
+  structure: "#FB923C",
+  district: "#C084FC",
+  site: "#F472B6",
+  object: "#FDE68A",
+};
+const HISTORIC_OTHER = "#E5E7EB";
+
+function historicColor(f: LayerFeature): string {
+  return HISTORIC_TYPE_COLOR[(f.properties.extra as HistoricExtra | undefined)?.resType ?? ""] ?? HISTORIC_OTHER;
+}
+
+/** The globe's label is the property's name as NPS lists it (the feature name, which is searched, is its NRIS number). */
+function historicLabel(f: LayerFeature): string {
+  const n = f.properties.details?.["property name (as NPS lists it)"];
+  return typeof n === "string" && n ? n : f.properties.name;
+}
+
+export const historicStyle: LayerStyle = {
+  color: "#F59E0B",
+  icon: () => null,
+  colorFor: (f) => (isLoadedBox(f) ? LOADED_BOX : historicColor(f)),
+  pointSize: (f) => ((f.properties.extra as HistoricExtra | undefined)?.nhl ? 10 : 7),
+  label: historicLabel,
+  labelMax: 25,
+  labelWhen: (f) => !isLoadedBox(f),
+  labelAlways: (f) => !!(f.properties.extra as HistoricExtra | undefined)?.nhl && f.geometry.type === "Point",
+  polygons: (f) => (isLoadedBox(f) || f.geometry.type === "Point" ? null : polyFills(f, historicColor(f), 0.12)),
+  lines: (f) => {
+    if (isLoadedBox(f)) return polyOutlines(f, LOADED_BOX, 0.7, 1.5, true);
+    if (f.geometry.type === "Point") return null;
+    return polyOutlines(f, historicColor(f), 0.8, 1.5);
+  },
+  scaleByDistance: [2e3, 1.0, 2.5e4, 0.6],
 };

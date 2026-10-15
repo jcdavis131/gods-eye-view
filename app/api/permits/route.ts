@@ -18,6 +18,10 @@
 //   /api/permits?op=environmental&bbox=w,s,e,n        EPA ECHO Clean Water Act (NPDES) and
 //        Clean Air Act facilities and the Corps of Engineers' regulatory actions. Box at
 //        most 0.2 degrees, snapped to 0.05.
+//   /api/permits?op=contaminants&bbox=w,s,e,n         EPA Envirofacts EMEF program listings:
+//        Superfund (SEMS), Toxics Release Inventory, RCRA hazardous-waste handlers and
+//        Brownfields (ACRES), 1,000 per program at most. Same box rules. A listing is a
+//        regulatory status, not a finding of contamination; no address is requested.
 //
 // Every portal is asked for named columns, and no applicant, owner, contact or
 // filing-representative name is requested. A licence registry's legal or
@@ -32,7 +36,8 @@ import { badRequest, ok, options, withCors } from "@/lib/server/respond";
 import { preferIpv4 } from "@/lib/server/net";
 import { numParam, parseBbox, type Bbox } from "@/lib/civic/bbox";
 import { CHICAGO_DISCLAIMER } from "@/lib/civic/terms";
-import { buildingPermits, environmental, licences } from "@/lib/permits/sources";
+import { buildingPermits, contaminants, environmental, licences } from "@/lib/permits/sources";
+import { CONTAMINANTS_CAVEAT } from "@/lib/permits/contaminants";
 import { HOME_HEURISTIC, permitFeatures, licenceFeatures, envFeatures } from "@/lib/permits/geojson";
 
 export const maxDuration = 60;
@@ -97,6 +102,26 @@ async function opEnvironmental(b: Bbox) {
   });
 }
 
+async function opContaminants(b: Bbox) {
+  const a = await contaminants(b);
+  const caveats = [
+    CONTAMINANTS_CAVEAT,
+    "Facility names are as EPA publishes them and can be a person's name or a street address; they are shown in the record only and are never searched. No address or contact field is requested.",
+    BOX,
+  ];
+  if (a.coverage.some((c) => c.state === "partial")) caveats.push("A program hit the 1,000-listing cap for this box (RCRA is dense in industrial areas); its first 1,000 are shown and there are more. Ask for a smaller box for every listing.");
+  if (a.coverage.some((c) => c.state === "error")) caveats.push("A program did not answer this time; its listings are missing from this answer, not absent.");
+  return ok(
+    { type: "FeatureCollection", features: a.features },
+    {
+      meta: { source: "U.S. EPA Envirofacts EMEF (Superfund, TRI, RCRA, Brownfields)", bbox: b, coverage: a.coverage, cacheAge: a.age },
+      provenance: a.provenance,
+      caveats,
+      ttlS: a.coverage.some((c) => c.state === "error") ? 120 : 3600,
+    },
+  );
+}
+
 const BBOX_HELP = "bbox=w,s,e,n required, west < east and south < north, e.g. bbox=-87.635,41.88,-87.625,41.887";
 
 export async function GET(req: NextRequest) {
@@ -121,8 +146,13 @@ export async function GET(req: NextRequest) {
         if (!b) return badRequest(BBOX_HELP);
         return await opEnvironmental(b);
       }
+      case "contaminants": {
+        const b = parseBbox(q.get("bbox"), 0.2, 0.05);
+        if (!b) return badRequest(BBOX_HELP);
+        return await opContaminants(b);
+      }
       default:
-        return badRequest("unknown op: building | licences | environmental");
+        return badRequest("unknown op: building | licences | environmental | contaminants");
     }
   } catch (err) {
     return withCors(jsonError(err));

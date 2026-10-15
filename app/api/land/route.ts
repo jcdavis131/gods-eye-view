@@ -11,9 +11,23 @@
 //                                          regulatory map, not a forecast. Box at most
 //                                          ~9 km, snapped to a 0.02 degree grid.
 //   /api/land?op=wetlands&bbox=w,s,e,n     USFWS National Wetlands Inventory polygons with
-//                                          their Cowardin names and the year of the imagery
-//                                          each was mapped from (NWI Data_Source). Same box
-//                                          rules.
+//                                          their Cowardin names (decoded locally from each
+//                                          code) and the year of the imagery each was mapped
+//                                          from (NWI Data_Source). Same box rules; NWI answers
+//                                          at most 500 polygons a query.
+//   /api/land?op=historic&bbox=w,s,e,n[&polygons=1]
+//                                          National Register of Historic Places listings NPS
+//                                          publishes as non-restricted: points, and with
+//                                          polygons=1 boundaries too. Box at most 0.12
+//                                          degrees, snapped to 0.02; 2,000 per layer at most.
+//                                          Never an address, and never a listing whose
+//                                          Address NPS marks restricted (some boundaries
+//                                          carry one); archaeological sites withheld under
+//                                          NHPA s.304 / ARPA are not in the source.
+//   /api/land?op=crithab&lon=..&lat=..     USFWS designated critical habitat (final and
+//                                          proposed) containing a point: species, listing
+//                                          status, Federal Register rule and date. Regulatory
+//                                          polygons only; no occurrence data of any kind.
 //   /api/land?op=publiclands&bbox=w,s,e,n  USGS PAD-US 4.1 fee, easement, designation and
 //                                          proclamation areas with manager, owner agency,
 //                                          local owner, easement holder, public access and
@@ -35,14 +49,20 @@ import { badRequest, ok, options, withCors } from "@/lib/server/respond";
 import { preferIpv4, retrying } from "@/lib/server/net";
 import { provenance, type Provenance } from "@/lib/provenance/types";
 import { source } from "@/lib/provenance/sources";
+import { numParam, parseBbox, type Bbox } from "@/lib/civic/bbox";
 import {
   buildFloodZones,
+  buildHistoric,
+  CRITHAB_CAVEAT,
   buildPublicLands,
   buildWetlands,
+  NRHP_CAVEAT,
+  NRHP_FIELDS,
   NWI_CAVEAT,
   nwiImagerySummary,
   PADUS_CATEGORIES,
   PADUS_FIELDS,
+  parseCritHab,
   parseEpqs,
   parseNwiSources,
   type ElevationReading,
@@ -58,9 +78,26 @@ preferIpv4();
 
 const NFHL = "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28";
 const NWI = "https://fwspublicservices.wim.usgs.gov/wetlandsmapservice/rest/services/Wetlands/MapServer/0";
-/** NWI mapping projects: the imagery year, date, scale and type each quad was drawn from. */
-const NWI_SOURCE = "https://fwspublicservices.wim.usgs.gov/wetlandsmapservice/rest/services/Data_Source/MapServer/0";
+/**
+ * NWI mapping projects: the imagery year, date, scale and type each quad was drawn from
+ * (Data_Source layer 3, "Image Year"; layer 0 became "Historic map information" in 2026).
+ */
+const NWI_SOURCE = "https://fwspublicservices.wim.usgs.gov/wetlandsmapservice/rest/services/Data_Source/MapServer/3";
+/** NWI's layer 0 answers at most this many polygons a query (maxRecordCount, 2026-10-12). */
+const NWI_MAX_RECORDS = 500;
 const PADUS = "https://services.arcgis.com/v01gqwM5QqNysAAi/arcgis/rest/services/Manager_Name_PADUS/FeatureServer/0";
+/** NPS National Register spatial data: layer 0 points, layer 1 boundaries (public, non-restricted listings only). */
+const NRHP = "https://mapservices.nps.gov/arcgis/rest/services/cultural_resources/nrhp_locations/MapServer";
+/** Listings asked for per layer and box; past it the answer says so. */
+const NRHP_MAX = 2000;
+/** USFWS critical habitat: layer 0 final designations, layer 2 proposed. */
+const CRITHAB = "https://services.arcgis.com/QVENGdaPbd4LUkLV/arcgis/rest/services/USFWS_Critical_Habitat/FeatureServer";
+/**
+ * The fields asked for. unitname, effectdate and accuracy are left out: on the final layer
+ * unitname is FWS's placeholder ("Please check current species specific shapefile") on all
+ * 803 rows, and leadoffice is a numeric office code, not a name.
+ */
+const CRITHAB_FIELDS = "comname,sciname,listing_status,status,fedreg,pubdate";
 const EPQS = "https://epqs.nationalmap.gov/v1/json";
 
 const DAY = 24 * 3600_000;
@@ -76,29 +113,6 @@ const fetchedAt = (ageMs: number) => new Date(Date.now() - ageMs).toISOString();
 
 /** Said on every box answer: the box is what was asked, and nothing outside it. */
 const BOX_CAVEAT = "Only the returned `bbox` was loaded; outside it nothing is loaded, which is not the same as nothing being there.";
-
-type Bbox = [number, number, number, number];
-
-/** Clamp to `span` degrees around the centre and snap outward to a `grid` degree grid. */
-function snapBbox(v: Bbox, span: number, grid: number): Bbox {
-  let [w, s, e, n] = v;
-  const cx = (w + e) / 2;
-  const cy = (s + n) / 2;
-  w = Math.max(w, cx - span / 2, -180);
-  e = Math.min(e, cx + span / 2, 180);
-  s = Math.max(s, cy - span / 2, -90);
-  n = Math.min(n, cy + span / 2, 90);
-  const f = (x: number) => Number((Math.floor(x / grid) * grid).toFixed(4));
-  const c = (x: number) => Number((Math.ceil(x / grid) * grid).toFixed(4));
-  return [f(w), f(s), c(e), c(n)];
-}
-
-function parseBbox(raw: string | null, span: number, grid: number): Bbox | null {
-  const v = (raw ?? "").split(",").map(Number);
-  if (v.length !== 4 || !v.every(Number.isFinite)) return null;
-  if (v[0] >= v[2] || v[1] >= v[3]) return null;
-  return snapBbox(v as Bbox, span, grid);
-}
 
 interface OpResult {
   data: unknown;
@@ -220,7 +234,7 @@ async function opWetlands(bbox: Bbox): Promise<OpResult> {
     prov.push(
       provenance(source("usfws-nwi"), {
         kind: "published",
-        seriesId: "Data_Source MapServer layer 0 (mapping projects)",
+        seriesId: "Data_Source MapServer layer 3 (mapping projects, Image Year)",
         upstreamUrl: NWI_SOURCE,
         retrievedAt,
         notes: [imagery.years.length ? `imagery years in this box: ${imagery.years.join(", ")}` : "imagery year not recorded for the projects in this box"],
@@ -233,7 +247,7 @@ async function opWetlands(bbox: Bbox): Promise<OpResult> {
     BOX_CAVEAT,
   ];
   if (!imagery) caveats.push("NWI's Data_Source layer did not answer, so the imagery year of these polygons is unknown this time (imageYears: null).");
-  if (r.value.truncated) caveats.push("NWI's record limit was hit; ask for a smaller box for every polygon.");
+  if (r.value.truncated) caveats.push(`NWI's record limit (${NWI_MAX_RECORDS} polygons a query) was hit; ask for a smaller box for every polygon.`);
   return {
     data: { type: "FeatureCollection", features: buildWetlands(r.value.rows, sources ?? []) },
     meta: {
@@ -247,6 +261,128 @@ async function opWetlands(bbox: Bbox): Promise<OpResult> {
       cacheAge: r.age,
     },
     ttlS: imagery ? 3600 : 600,
+    provenance: prov,
+    caveats,
+  };
+}
+
+/**
+ * Listed properties only (removed listings and those with no status are left out),
+ * and never one whose Address NPS marks restricted. Layer 0 has none of those, but
+ * layer 1 (boundaries) does: 3 listed polygons read "Address Restricted" (2026-10-12,
+ * 22,858 listed, 22,855 after this filter). Address is filtered on, never requested;
+ * a null Address is not a restriction marker and is kept.
+ */
+const NRHP_WHERE = "STATUS='Listed' AND (Address IS NULL OR UPPER(Address) NOT LIKE '%RESTRICT%')";
+
+function nrhpQuery(layer: 0 | 1, bbox: Bbox) {
+  return arcgisQuery(
+    "nps-nrhp",
+    `${NRHP}/${layer}`,
+    {
+      where: NRHP_WHERE,
+      ...envelope(bbox),
+      outFields: NRHP_FIELDS.join(","),
+      returnGeometry: "true",
+      ...(layer === 1 ? { maxAllowableOffset: "0.00004", geometryPrecision: "6" } : {}),
+      resultRecordCount: String(NRHP_MAX),
+    },
+    { gate: "nps-nrhp", minIntervalMs: 300, timeoutMs: 25_000, tries: 2 },
+  );
+}
+
+/**
+ * National Register listings in a box: NPS's points, and with `boundaries` its polygons
+ * too (the layer asks for them only below 10 km). A boundary query that fails leaves the
+ * points standing and says the boundaries are missing.
+ */
+async function opHistoric(bbox: Bbox, boundaries: boolean): Promise<OpResult> {
+  const [pts, bnd] = await Promise.all([
+    cached("nrhp-pt:" + bbox.join(","), DAY, async () => {
+      const fc = await nrhpQuery(0, bbox);
+      return { features: buildHistoric(fc.features, "point"), truncated: truncated(fc) || fc.features.length >= NRHP_MAX };
+    }, LAND_DEADLINE),
+    boundaries
+      ? cached("nrhp-bnd:" + bbox.join(","), DAY, async () => {
+          const fc = await nrhpQuery(1, bbox);
+          return { features: buildHistoric(fc.features, "boundary"), truncated: truncated(fc) || fc.features.length >= NRHP_MAX };
+        }, LAND_DEADLINE).catch(() => null)
+      : Promise.resolve(null),
+  ]);
+  const retrievedAt = fetchedAt(pts.age);
+  const prov = [
+    provenance(source("nps-nrhp"), { kind: "published", seriesId: "nrhp_locations MapServer layer 0 (points), listed, restricted addresses excluded", upstreamUrl: `${NRHP}/0`, retrievedAt, notes: [`bbox ${bbox.join(",")}`] }),
+  ];
+  if (bnd) prov.push(provenance(source("nps-nrhp"), { kind: "published", seriesId: "nrhp_locations MapServer layer 1 (boundaries), listed, restricted addresses excluded", upstreamUrl: `${NRHP}/1`, retrievedAt: fetchedAt(bnd.age), notes: [`bbox ${bbox.join(",")}`] }));
+  const caveats = [
+    NRHP_CAVEAT,
+    "Property names are shown as NPS lists them and can include a person's name; they are not searchable. No street address is requested.",
+    BOX_CAVEAT,
+  ];
+  if (pts.value.truncated) caveats.push(`NPS's points were capped at the first ${NRHP_MAX.toLocaleString("en-US")} in this box; ask for a smaller box for every listing.`);
+  if (bnd?.value.truncated) caveats.push(`NPS's boundaries were capped at the first ${NRHP_MAX.toLocaleString("en-US")} in this box.`);
+  if (boundaries && !bnd) caveats.push("NPS's boundary layer did not answer this time; the points are shown, the boundaries are missing (boundaries: null).");
+  return {
+    data: { type: "FeatureCollection", features: [...pts.value.features, ...(bnd?.value.features ?? [])] },
+    meta: {
+      source: "National Park Service, National Register of Historic Places spatial data (public, non-restricted listings)",
+      bbox,
+      points: pts.value.features.length,
+      // null when boundaries were asked for and NPS did not answer; absent when not asked for.
+      ...(boundaries ? { boundaries: bnd ? bnd.value.features.length : null } : {}),
+      truncated: pts.value.truncated || !!bnd?.value.truncated,
+      maxRecords: NRHP_MAX,
+      cacheAge: pts.age,
+    },
+    ttlS: boundaries && !bnd ? 600 : 3600,
+    provenance: prov,
+    caveats,
+  };
+}
+
+/**
+ * Which designated critical habitat (final and proposed) contains a point: one query per
+ * layer, no geometry back, cached a day per point (5 decimals). A layer that fails is named
+ * as missing; both failing is an upstream error.
+ */
+async function opCritHab(lon: number, lat: number): Promise<OpResult> {
+  const x = Number(lon.toFixed(5));
+  const y = Number(lat.toFixed(5));
+  const ask = (layer: 0 | 2) =>
+    cached(`crithab:${layer}:${x},${y}`, DAY, async () => {
+      const fc = await arcgisQuery(
+        "usfws-crithab",
+        `${CRITHAB}/${layer}`,
+        {
+          where: "1=1",
+          geometry: `${x},${y}`,
+          geometryType: "esriGeometryPoint",
+          inSR: "4326",
+          spatialRel: "esriSpatialRelIntersects",
+          outFields: CRITHAB_FIELDS,
+          returnGeometry: "false",
+        },
+        { gate: "usfws-crithab", minIntervalMs: 300, timeoutMs: 20_000, tries: 2 },
+      );
+      return parseCritHab(fc.features);
+    });
+  const [fin, prop] = await Promise.all([ask(0).catch((e: unknown) => e as Error), ask(2).catch((e: unknown) => e as Error)]);
+  if (fin instanceof Error && prop instanceof Error) throw fin;
+  const final = fin instanceof Error ? null : fin.value;
+  const proposed = prop instanceof Error ? null : prop.value;
+  const age = Math.max(fin instanceof Error ? 0 : fin.age, prop instanceof Error ? 0 : prop.age);
+  const species = [...(final ?? []), ...(proposed ?? [])];
+  const caveats = [CRITHAB_CAVEAT];
+  if (!species.length && final && proposed) caveats.push("No designated critical habitat contains this point. That is not a finding that no listed species is here: most listed species have no designation, and range is not habitat.");
+  if (!final) caveats.push("FWS's final critical habitat layer did not answer this time (final: null); final designations here are unknown, not absent.");
+  if (!proposed) caveats.push("FWS's proposed critical habitat layer did not answer this time (proposed: null); proposed designations here are unknown, not absent.");
+  const prov: Provenance[] = [];
+  if (final) prov.push(provenance(source("usfws-crithab"), { kind: "published", seriesId: "USFWS_Critical_Habitat FeatureServer layer 0 (final)", upstreamUrl: `${CRITHAB}/0`, retrievedAt: fetchedAt(age), notes: [`point ${x},${y}`] }));
+  if (proposed) prov.push(provenance(source("usfws-crithab"), { kind: "published", seriesId: "USFWS_Critical_Habitat FeatureServer layer 2 (proposed)", upstreamUrl: `${CRITHAB}/2`, retrievedAt: fetchedAt(age), notes: [`point ${x},${y}`] }));
+  return {
+    data: { lon: x, lat: y, final, proposed },
+    meta: { source: "U.S. Fish and Wildlife Service, critical habitat (final and proposed)", cacheAge: age },
+    ttlS: final && proposed ? 3600 : 300,
     provenance: prov,
     caveats,
   };
@@ -416,13 +552,6 @@ function respond(r: OpResult) {
   return ok(r.data, { meta: r.meta, provenance: r.provenance, caveats: r.caveats, ttlS: r.ttlS });
 }
 
-/** A query parameter as a finite number; a missing or blank one is null, never 0 (Number(null) is 0). */
-function numParam(v: string | null): number | null {
-  if (v == null || v.trim() === "") return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
-
 const BBOX_HELP = "bbox=w,s,e,n required, west < east and south < north, e.g. bbox=-98.50,29.41,-98.47,29.44";
 
 export async function GET(req: NextRequest) {
@@ -440,6 +569,17 @@ export async function GET(req: NextRequest) {
         if (!b) return badRequest(BBOX_HELP);
         return respond(await opWetlands(b));
       }
+      case "historic": {
+        const b = parseBbox(q.get("bbox"), 0.12, 0.02);
+        if (!b) return badRequest(BBOX_HELP);
+        return respond(await opHistoric(b, q.get("polygons") === "1"));
+      }
+      case "crithab": {
+        const lon = numParam(q.get("lon"));
+        const lat = numParam(q.get("lat"));
+        if (lon == null || lat == null || Math.abs(lat) > 90 || Math.abs(lon) > 180) return badRequest("lon and lat required, e.g. lon=-97.7713&lat=30.2638");
+        return respond(await opCritHab(lon, lat));
+      }
       case "publiclands": {
         const b = parseBbox(q.get("bbox"), 2, 0.25);
         if (!b) return badRequest(BBOX_HELP);
@@ -452,7 +592,7 @@ export async function GET(req: NextRequest) {
         return respond(await opElevation(lon, lat));
       }
       default:
-        return badRequest("unknown op: flood | wetlands | publiclands | elevation");
+        return badRequest("unknown op: flood | wetlands | historic | crithab | publiclands | elevation");
     }
   } catch (err) {
     return withCors(jsonError(err));

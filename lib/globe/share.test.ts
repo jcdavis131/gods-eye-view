@@ -244,3 +244,31 @@ describe("a link minted before the parcels and infrastructure branches", () => {
     expect(shareQuery(state)).toBe(minted);
   });
 });
+
+describe("the Wayback release in the share link", () => {
+  it("round-trips wb= as a release id and drops anything that is not one", () => {
+    const s: ShareState = { layers: ["wayback"], wb: 63116 };
+    const q = shareQuery(s);
+    expect(q).toContain("wb=63116");
+    expect(parseShare(q)).toEqual(s);
+    expect(parseShare("?wb=0").wb).toBeUndefined();
+    expect(parseShare("?wb=-3").wb).toBeUndefined();
+    expect(parseShare("?wb=12.5").wb).toBeUndefined();
+    expect(parseShare("?wb=abc").wb).toBeUndefined();
+    expect(parseShare("?wb=").wb).toBeUndefined();
+  });
+
+  it("is written only while Historic imagery is on and a release is picked", async () => {
+    const { currentShare } = await import("./share");
+    const { useGlobe } = await import("@/lib/store/globe");
+    const { useSettings } = await import("@/lib/store/settings");
+    useSettings.getState().setPref("waybackRelease", 26334);
+    useGlobe.getState().setLayer("wayback", false);
+    expect(currentShare().wb).toBeUndefined();
+    useGlobe.getState().setLayer("wayback", true);
+    expect(currentShare().wb).toBe(26334);
+    useSettings.getState().setPref("waybackRelease", null);
+    expect(currentShare().wb).toBeUndefined();
+    useGlobe.getState().setLayer("wayback", false);
+  });
+});

@@ -1,18 +1,31 @@
 import { describe, expect, it } from "vitest";
 import type { MultiPolygon, Polygon } from "geojson";
+import nwiWetlands from "./fixtures/nwi-wetlands-mitchell.json";
+import nwiCodeRows from "./fixtures/nwi-codes-mitchell.json";
+import nrhpPoints from "./fixtures/nrhp-points-dc.json";
+import nrhpBoundaries from "./fixtures/nrhp-polygons-dc.json";
+import chProposedPecos from "./fixtures/crithab-2-pecos.json";
 import {
   buildFloodZones,
+  buildHistoric,
   buildPublicLands,
+  critHabText,
+  FWS_PLACEHOLDER,
+  fwsDate,
+  parseCritHab,
   buildWetlands,
   decodeCowardin,
   floodZoneMeaning,
+  NRHP_FIELDS,
   NWI_CAVEAT,
   nwiImagerySummary,
+  parseCertDate,
   parseEpqs,
   parseNwiSources,
   pointInRing,
   trimParts,
   type FloodZoneExtra,
+  type HistoricExtra,
   type PublicLandExtra,
   type WetlandExtra,
 } from "./features";
@@ -80,6 +93,34 @@ describe("wetlands and their imagery year", () => {
     expect(nwiImagerySummary(sources).years).toEqual([1983, 2010]);
   });
 
+  it("names each real polygon locally, matching NWI's own code table (both captured 2026-10-12)", () => {
+    const rows = nwiWetlands.features as unknown as Parameters<typeof buildWetlands>[0];
+    const built = buildWetlands(rows, []);
+    expect(built).toHaveLength(14);
+    const lake = built.find((f) => (f.properties.extra as WetlandExtra).code === "L2USAh")!;
+    expect(lake.properties.id).toBe("nwi:24255589");
+    expect(lake.properties.extra).toMatchObject({ type: "Lake", system: "Lacustrine", subsystem: "Littoral", cls: "Unconsolidated Shore", regime: "Temporarily Flooded" });
+    // Palustrine has no subsystem: it stays absent, never "".
+    const pem = built.find((f) => (f.properties.extra as WetlandExtra).code === "PEM1Ch")!;
+    expect((pem.properties.extra as WetlandExtra).subsystem).toBeUndefined();
+    expect(pem.properties.details?.subsystem).toBeUndefined();
+    // The oracle: NWI's table 1 rows for every code in that answer (first row per code;
+    // NWI spells A "Temporary Flooded", Cowardin "Temporarily Flooded").
+    const table = new Map<string, Record<string, string | null>>();
+    for (const f of nwiCodeRows.features) if (!table.has(f.attributes.ATTRIBUTE)) table.set(f.attributes.ATTRIBUTE, f.attributes);
+    const codes = [...new Set(built.map((f) => (f.properties.extra as WetlandExtra).code))].sort();
+    expect(codes).toEqual(["L2USAh", "PEM1Ch", "PUBFh", "PUBHh", "PUSAh", "PUSCh", "R4SBAx", "R4SBC", "R5UBH"]);
+    for (const code of codes) {
+      const t = table.get(code)!;
+      expect(decodeCowardin(code), code).toEqual({
+        system: t.SYSTEM_NAME ?? undefined,
+        subsystem: t.SUBSYSTEM_NAME ?? undefined,
+        cls: t.CLASS_NAME ?? undefined,
+        regime: t.WATER_REGIME_NAME?.replace("Temporary Flooded", "Temporarily Flooded") ?? undefined,
+      });
+    }
+  });
+
   it("reads NWI's 0 year as not recorded rather than as year 0", () => {
     const [s] = parseNwiSources([quad("Nowhere", -98.5, 0)]);
     expect(s.year).toBeUndefined();
@@ -110,6 +151,7 @@ describe("wetlands and their imagery year", () => {
       cls: "Emergent",
       regime: "Irregularly Flooded",
     });
+    expect(decodeCowardin("E1UBL")).toMatchObject({ subsystem: "Subtidal", regime: "Subtidal" });
     expect(decodeCowardin("")).toEqual({});
     expect(decodeCowardin("XX9Q")).toEqual({});
   });
@@ -118,6 +160,82 @@ describe("wetlands and their imagery year", () => {
     const ring = [[0, 0], [2, 0], [2, 2], [0, 2], [0, 0]];
     expect(pointInRing(1, 1, ring)).toBe(true);
     expect(pointInRing(3, 1, ring)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------- NPS National Register
+
+describe("National Register listings (captured from NPS around the National Mall, 2026-10-12)", () => {
+  const pts = buildHistoric(nrhpPoints.features as unknown as Parameters<typeof buildHistoric>[0], "point");
+  const bnd = buildHistoric(nrhpBoundaries.features as unknown as Parameters<typeof buildHistoric>[0], "boundary");
+
+  it("names a listing by its NRIS number and type, the property's name kept out of the searchable name", () => {
+    expect(pts).toHaveLength(60);
+    const urn = pts.find((f) => (f.properties.extra as HistoricExtra).refnum === "07001053")!;
+    expect(urn.properties.name).toBe("NRHP 07001053 · object");
+    expect(urn.properties.details?.["property name (as NPS lists it)"]).toBe("Cuban Friendship Urn");
+    expect(urn.properties.details?.listed).toBe("2007-10");
+    expect(urn.properties.details?.["nomination (National Archives)"]).toBe("https://catalog.archives.gov/id/117691539");
+    expect(urn.properties.extra).toMatchObject({ resType: "object", nhl: false, shape: "point" });
+  });
+
+  it("marks National Historic Landmarks only where NPS flags them", () => {
+    const nhl = pts.filter((f) => (f.properties.extra as HistoricExtra).nhl);
+    expect(nhl).toHaveLength(13);
+    expect(nhl[0].properties.name).toMatch(/· NHL$/);
+    expect(pts.find((f) => !(f.properties.extra as HistoricExtra).nhl)!.properties.details?.["national historic landmark"]).toBeUndefined();
+  });
+
+  it("draws boundaries from layer 1 and never carries an address", () => {
+    expect(bnd).toHaveLength(18);
+    expect(bnd.every((f) => f.geometry.type === "Polygon" || f.geometry.type === "MultiPolygon")).toBe(true);
+    expect(bnd[0].properties.id).toMatch(/^nrhp:bnd:/);
+    for (const f of [...pts, ...bnd]) expect(Object.keys(f.properties.details ?? {}).join(" ")).not.toMatch(/address/i);
+    expect(NRHP_FIELDS as readonly string[]).not.toContain("Address");
+    expect(NRHP_FIELDS as readonly string[]).not.toContain("Vicinity");
+  });
+
+  it("drops a NARA link NPS left blank rather than linking nowhere", () => {
+    const blank = bnd.find((f) => (f.properties.extra as HistoricExtra).refnum === "15000845")!;
+    expect(blank.properties.details?.["nomination (National Archives)"]).toBeUndefined();
+  });
+
+  it("reads NPS's partial CertDate leniently and never guesses", () => {
+    expect(parseCertDate("2007-10-")).toBe("2007-10");
+    expect(parseCertDate("2007-10-15")).toBe("2007-10-15");
+    expect(parseCertDate("1974")).toBe("1974");
+    expect(parseCertDate("")).toBeUndefined();
+    expect(parseCertDate(null)).toBeUndefined();
+    expect(parseCertDate("unknown")).toBeUndefined();
+    expect(parseCertDate("2007-13-")).toBeUndefined();
+    expect(parseCertDate("0000-00-")).toBeUndefined();
+    // A blank CertDate in the capture stays blank.
+    const undated = pts.filter((f) => (f.properties.extra as HistoricExtra).listed === undefined);
+    expect(undated.length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------- USFWS critical habitat
+
+describe("critical habitat at a point", () => {
+  it("reads FWS's placeholder text as no value, never as a value", () => {
+    // FWS fills unitname with this on every final row (2026-10-12); the route does not ask for it,
+    // and any field that carries it reads as absent.
+    const [s] = parseCritHab([{ properties: { comname: "Austin blind Salamander", sciname: "Eurycea waterlooensis", listing_status: "Endangered", status: "Final", fedreg: FWS_PLACEHOLDER, pubdate: FWS_PLACEHOLDER } }]);
+    expect(s.fedreg).toBeUndefined();
+    expect(s.published).toBeUndefined();
+    expect(fwsDate("20130820")).toBe("2013-08-20");
+    expect(fwsDate("2013")).toBeUndefined();
+  });
+
+  it("says PROPOSED on a proposed designation, with the rule as FWS cites it", () => {
+    const [s] = parseCritHab(chProposedPecos.features);
+    expect(critHabText(s)).toBe("Pecos pupfish (Cyprinodon pecosensis) · Proposed Threatened · PROPOSED critical habitat (not final) · 89 FR 92744 92785, published 2024-11-22");
+  });
+
+  it("lists a species once per rule when its habitat comes back as several units", () => {
+    const row = chProposedPecos.features[0];
+    expect(parseCritHab([row, row])).toHaveLength(1);
   });
 });
 

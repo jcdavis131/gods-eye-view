@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DIRECT_SOURCES, RENDER_PRODUCTS, TERRARIUM_ATTRIBUTION, WHP_TEMPLATE, isRenderProduct, isSlrFeet, routeTileUrl } from "./products";
+import { DIRECT_SOURCES, NWI_RASTER_TEMPLATE, RENDER_PRODUCTS, TERRARIUM_ATTRIBUTION, WHP_TEMPLATE, isRenderProduct, isSlrFeet, routeTileUrl } from "./products";
 import { SOURCES } from "@/lib/provenance/sources";
 
 describe("rendered products", () => {
@@ -53,6 +53,15 @@ describe("direct sources", () => {
   it("ask WHP for the tile's projected box through the imagery provider's own tags, with the classified function", () => {
     for (const tag of ["{westProjected}", "{southProjected}", "{eastProjected}", "{northProjected}"]) expect(WHP_TEMPLATE).toContain(tag);
     expect(decodeURIComponent(WHP_TEMPLATE)).toContain('{"rasterFunction":"WHP_CLS_2023_8bit"}');
+  });
+
+  it("ask NWI's raster v5 for the tile's projected box with 0 as NoData, so unmapped land draws clear", () => {
+    for (const tag of ["{westProjected}", "{southProjected}", "{eastProjected}", "{northProjected}"]) expect(NWI_RASTER_TEMPLATE).toContain(tag);
+    const u = new URL(NWI_RASTER_TEMPLATE.replace(/\{\w+\}/g, "0"));
+    expect(u.pathname).toBe("/wetlandsmapservice/rest/services/Wetlands_Raster_v5/ImageServer/exportImage");
+    expect(u.searchParams.get("noData")).toBe("0");
+    expect(u.searchParams.get("bboxSR")).toBe("3857");
+    expect(DIRECT_SOURCES.find((d) => d.id === "wetlands")).toMatchObject({ host: "fwspublicservices.wim.usgs.gov", source: "usfws-nwi" });
   });
 
   it("offer only the sea level scenarios NOAA caches in whole feet", () => {

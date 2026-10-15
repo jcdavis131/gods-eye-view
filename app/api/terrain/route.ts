@@ -11,6 +11,9 @@
 //   /api/terrain?op=point&product=firehazard|landcover|slope&lon=..&lat=..
 //        the WHP 2023 class, the NLCD 2021 class, or the 3DEP slope in degrees
 //        at a point, with the class table the service's own legend publishes
+//   /api/terrain?op=wayback
+//        Esri World Imagery Wayback's release index, [{release, date}] newest
+//        first (2014-02-20 onward), held a day; tiles are never proxied
 //   /api/terrain?op=products
 //        the catalog: every terrain picture, direct or rendered here, with its
 //        source, zoom range, class tables, caveats and the terrain tiles'
@@ -23,13 +26,14 @@
 
 import type { NextRequest } from "next/server";
 import { cached } from "@/lib/server/cache";
-import { jsonError } from "@/lib/server/upstream";
+import { jsonError, polite, UpstreamError, upstreamJson } from "@/lib/server/upstream";
 import { badRequest, CORS, ok, options, withCors } from "@/lib/server/respond";
-import { preferIpv4 } from "@/lib/server/net";
+import { preferIpv4, retrying } from "@/lib/server/net";
 import { provenance } from "@/lib/provenance/types";
 import { source } from "@/lib/provenance/sources";
 import {
   DIRECT_SOURCES,
+  NWI_RASTER_CAVEAT,
   RENDER_PRODUCTS,
   SLR_CAVEAT,
   SLR_FEET,
@@ -38,9 +42,10 @@ import {
   WHP_CAVEAT,
   isRenderProduct,
 } from "@/lib/terrain/products";
-import { NLCD_CLASSES, SLR_LEGEND, WHP_CLASSES } from "@/lib/terrain/classes";
+import { NLCD_CLASSES, NWI_RASTER_CLASSES, SLR_LEGEND, WHP_CLASSES } from "@/lib/terrain/classes";
 import { validTile } from "@/lib/terrain/webmercator";
 import { nlcdAt, renderTile, slopeAt, whpAt } from "@/lib/terrain/sources";
+import { parseWaybackConfig, WAYBACK_ATTRIBUTION, WAYBACK_CAVEAT, WAYBACK_CONFIG, waybackTiles } from "@/lib/terrain/wayback";
 
 export const maxDuration = 60;
 export const OPTIONS = options;
@@ -139,6 +144,38 @@ async function opPoint(q: URLSearchParams): Promise<Response> {
   );
 }
 
+/**
+ * Esri World Imagery Wayback's release index: [{release, date}] newest first, held a day.
+ * Metadata only: the route never takes a URL and never fetches or caches a tile (the
+ * browser loads them from Esri; the item's licence rules out exporting tiles offline).
+ */
+async function opWayback(): Promise<Response> {
+  const r = await cached("wayback-config", DAY, async () => {
+    const j = await retrying(() => polite("esri-wayback", 500, 30_000, () => upstreamJson<unknown>("esri-wayback", WAYBACK_CONFIG, { timeoutMs: 20_000 })), 2);
+    const releases = parseWaybackConfig(j);
+    if (!releases.length) throw new UpstreamError("esri-wayback", 502, "esri-wayback: the release index listed no dated release");
+    return releases;
+  });
+  const releases = r.value;
+  return ok(
+    { releases, newest: releases[0], oldest: releases[releases.length - 1], tiles: waybackTiles(0).replace("/tile/0/", "/tile/{release}/") },
+    {
+      meta: { source: source("esri-wayback").name, attribution: WAYBACK_ATTRIBUTION, cacheAge: r.age },
+      ttlS: 3600,
+      provenance: [
+        provenance(source("esri-wayback"), {
+          kind: "published",
+          seriesId: "waybackconfig.json (release index)",
+          upstreamUrl: WAYBACK_CONFIG,
+          retrievedAt: new Date(Date.now() - r.age).toISOString(),
+          notes: [`${releases.length} dated releases, ${releases[releases.length - 1].date} to ${releases[0].date}`],
+        }),
+      ],
+      caveats: [WAYBACK_CAVEAT, "Tiles load from Esri directly; this route serves the release index only."],
+    },
+  );
+}
+
 function opProducts(): Response {
   const rendered = Object.values(RENDER_PRODUCTS).map((p) => ({
     id: p.id,
@@ -156,9 +193,9 @@ function opProducts(): Response {
   return ok(
     {
       products: [...rendered, ...direct],
-      classes: { firehazard: WHP_CLASSES, landcover: NLCD_CLASSES, sealevel: SLR_LEGEND },
+      classes: { firehazard: WHP_CLASSES, landcover: NLCD_CLASSES, sealevel: SLR_LEGEND, wetlands: NWI_RASTER_CLASSES },
       sealevelFeet: SLR_FEET,
-      caveats: { firehazard: WHP_CAVEAT, sealevel: SLR_CAVEAT, soils: SOIL_CAVEAT },
+      caveats: { firehazard: WHP_CAVEAT, sealevel: SLR_CAVEAT, soils: SOIL_CAVEAT, wetlands: NWI_RASTER_CAVEAT },
       terrainAttribution: TERRARIUM_ATTRIBUTION,
     },
     { ttlS: 3600, provenance: [], caveats: ["The catalog of terrain pictures; each product's own source and caveat is on it."] },
@@ -176,8 +213,10 @@ export async function GET(req: NextRequest) {
         return await opPoint(q);
       case "products":
         return opProducts();
+      case "wayback":
+        return await opWayback();
       default:
-        return badRequest("unknown op: tile | point | products");
+        return badRequest("unknown op: tile | point | products | wayback");
     }
   } catch (err) {
     return withCors(jsonError(err));

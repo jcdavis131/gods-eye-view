@@ -1,16 +1,18 @@
 "use client";
 // Controls under a picture layer's row in the layer panel: its opacity, the
 // sea level rise scenario, and the class legend the publisher's own service
-// lists (WHP, NLCD, NOAA's sea level rise), so a colour on the globe can be
-// read without leaving the panel.
+// lists (WHP, NLCD, NOAA's sea level rise, NWI's wetlands raster), so a colour
+// on the globe can be read without leaving the panel.
 
+import { useEffect, useState } from "react";
 import { useSettings } from "@/lib/store/settings";
 import type { LayerId } from "@/lib/layers/types";
-import { NLCD_CLASSES, SLR_LEGEND, WHP_CLASSES } from "@/lib/terrain/classes";
+import { NLCD_CLASSES, NWI_RASTER_CLASSES, SLR_LEGEND, WHP_CLASSES } from "@/lib/terrain/classes";
 import { SLR_DEFAULT_FT, SLR_FEET, isSlrFeet } from "@/lib/terrain/products";
+import { releasesByYear, resolveRelease, type WaybackRelease } from "@/lib/terrain/wayback";
 
 /** Layers that draw a tiled picture (their own, or the FEMA map under flood zones). */
-export const PICTURE_LAYERS = new Set<LayerId>(["relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "flood", "geology"]);
+export const PICTURE_LAYERS = new Set<LayerId>(["relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "flood", "wetlands", "geology", "crithab", "wayback"]);
 
 const DEFAULT_ALPHA: Partial<Record<LayerId, number>> = {
   relief: 0.55,
@@ -21,7 +23,10 @@ const DEFAULT_ALPHA: Partial<Record<LayerId, number>> = {
   landcover: 0.7,
   sealevel: 0.75,
   flood: 0.8,
+  wetlands: 0.7,
   geology: 0.55,
+  crithab: 0.75,
+  wayback: 1,
 };
 
 function Swatches({ items }: { items: Array<{ label: string; color: string }> }) {
@@ -34,6 +39,67 @@ function Swatches({ items }: { items: Array<{ label: string; color: string }> })
         </li>
       ))}
     </ul>
+  );
+}
+
+/** Esri's Wayback release index, read once a page from /api/terrain?op=wayback (edge-cached). */
+let releasesOnce: Promise<WaybackRelease[]> | null = null;
+function loadReleases(): Promise<WaybackRelease[]> {
+  if (!releasesOnce) {
+    releasesOnce = fetch("/api/terrain?op=wayback")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((j: { data?: { releases?: WaybackRelease[] } }) => j.data?.releases ?? [])
+      .catch((err) => {
+        releasesOnce = null;
+        throw err;
+      });
+  }
+  return releasesOnce;
+}
+
+/** The release picker under Historic imagery: releases grouped by year, newest first. */
+function WaybackPicker() {
+  const wanted = useSettings((s) => s.prefs.waybackRelease);
+  const setPref = useSettings((s) => s.setPref);
+  const [list, setList] = useState<WaybackRelease[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    loadReleases().then(
+      (l) => live && setList(l),
+      (e: unknown) => live && setError(e instanceof Error ? e.message : String(e)),
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
+  if (error) return <div>Esri&apos;s release index did not load ({error}).</div>;
+  if (!list) return <div>Loading Esri&apos;s release index…</div>;
+  const { release, fallback } = resolveRelease(list, wanted);
+  return (
+    <>
+      <label className="flex items-center gap-2">
+        <span className="w-14 shrink-0 uppercase tracking-widest">Release</span>
+        <select
+          value={release?.release ?? ""}
+          onChange={(e) => setPref("waybackRelease", e.target.value ? Number(e.target.value) : null)}
+          className="min-w-0 flex-1 border border-border bg-transparent px-1 py-0.5 text-foreground"
+          aria-label="World Imagery Wayback release (publication date, not capture date)"
+        >
+          {releasesByYear(list).map((g) => (
+            <optgroup key={g.year} label={g.year} className="bg-background">
+              {g.releases.map((r) => (
+                <option key={r.release} value={r.release} className="bg-background">
+                  Release {r.date}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+      </label>
+      {fallback && <div>The release in the link is not in Esri&apos;s index; showing the newest.</div>}
+      <div>A release date is when Esri published the basemap, not when the pixels were captured; 2014 onward only.</div>
+    </>
   );
 }
 
@@ -50,7 +116,7 @@ export default function TileControls({ id }: { id: LayerId }) {
   return (
     <div className="mt-1.5 space-y-1 pl-4 text-[10px] text-muted-foreground md:text-[9px]">
       <label className="flex items-center gap-2">
-        <span className="w-14 shrink-0 uppercase tracking-widest">{id === "flood" ? "FEMA map" : "Opacity"}</span>
+        <span className="w-14 shrink-0 uppercase tracking-widest">{id === "flood" ? "FEMA map" : id === "wetlands" ? "Raster" : "Opacity"}</span>
         <input
           type="range"
           min={0.1}
@@ -85,6 +151,14 @@ export default function TileControls({ id }: { id: LayerId }) {
       {id === "landcover" && <Swatches items={NLCD_CLASSES.filter((c) => !/AK only/.test(c.label))} />}
       {id === "slope" && <div>USGS&apos;s colours: yellow to red is steeper; click the ground for the slope in degrees.</div>}
       {id === "soils" && <div>Map units outlined with their symbols; click the ground for the soil.</div>}
+      {id === "wayback" && <WaybackPicker />}
+      {id === "crithab" && <div>FWS&apos;s map of final and proposed designations; click the ground for the species and whether it is proposed. Not where a species lives.</div>}
+      {id === "wetlands" && (
+        <>
+          <div>Above 10 km: NWI&apos;s national raster, about 100 m, so small wetlands can be missing. Below 10 km: the polygons, to click.</div>
+          <Swatches items={NWI_RASTER_CLASSES} />
+        </>
+      )}
     </div>
   );
 }

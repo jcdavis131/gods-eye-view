@@ -96,3 +96,35 @@ describe("voice words for the infrastructure and geohazard layers", () => {
     expect(resolveLayer("dams")).toBe("dams");
   });
 });
+
+describe("voice words for the heritage, species, contamination and imagery layers", () => {
+  it("hears historic places by their plain names", () => {
+    expect(layerOf("show historic places over washington")).toMatchObject({ layer: "historic", place: "washington" });
+    expect(layerOf("show the national register")).toMatchObject({ layer: "historic" });
+    expect(layerOf("hide landmarks")).toMatchObject({ layer: "historic", on: false });
+  });
+});
+
+describe("voice words for critical habitat", () => {
+  it("hears critical habitat and endangered species", () => {
+    expect(layerOf("show critical habitat")).toMatchObject({ layer: "crithab" });
+    expect(layerOf("show endangered species near austin")).toMatchObject({ layer: "crithab", place: "austin" });
+  });
+});
+
+describe("voice words for contaminated sites", () => {
+  it("hears superfund, brownfields and hazardous waste, and keeps hazards with hazard alerts", () => {
+    expect(layerOf("show superfund sites")).toMatchObject({ layer: "contaminants" });
+    expect(layerOf("show brownfields over houston")).toMatchObject({ layer: "contaminants", place: "houston" });
+    expect(layerOf("show hazardous waste")).toMatchObject({ layer: "contaminants" });
+    expect(layerOf("show hazards")).toMatchObject({ layer: "hazards" });
+  });
+});
+
+describe("voice words for historic imagery", () => {
+  it("hears historic imagery before historic places", () => {
+    expect(layerOf("show historic imagery")).toMatchObject({ layer: "wayback" });
+    expect(layerOf("show wayback over austin")).toMatchObject({ layer: "wayback", place: "austin" });
+    expect(layerOf("show historic places")).toMatchObject({ layer: "historic" });
+  });
+});

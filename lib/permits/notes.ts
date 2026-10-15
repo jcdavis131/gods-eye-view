@@ -8,7 +8,7 @@ export interface CoverageLike {
   id: string;
   name: string;
   state: CoverageState;
-  count: number;
+  count: number | null;
   reason?: string;
 }
 
@@ -35,7 +35,7 @@ export function coverageTail(coverage: CoverageLike[]): string[] {
 export function coverageNote(lead: string, coverage: CoverageLike[]): string {
   const answered = coverage.filter((c) => c.state === "covered" || c.state === "partial");
   const parts = [lead];
-  if (answered.length) parts.push(`from ${answered.map((c) => `${c.name} ${c.count.toLocaleString("en-US")}`).join(", ")}`);
+  if (answered.length) parts.push(`from ${answered.map((c) => (c.count == null ? c.name : `${c.name} ${c.count.toLocaleString("en-US")}`)).join(", ")}`);
   parts.push(...coverageTail(coverage));
   return parts.join(" · ");
 }

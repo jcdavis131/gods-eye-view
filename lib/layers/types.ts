@@ -42,6 +42,9 @@ export type LayerId =
   | "flood"
   | "wetlands"
   | "publiclands"
+  | "historic"
+  | "crithab"
+  | "wayback"
   | "relief"
   | "slope"
   | "contours"
@@ -66,6 +69,7 @@ export type LayerId =
   | "permits"
   | "licences"
   | "envpermits"
+  | "contaminants"
   | "sports"
   | "constructs"
   | "field"
@@ -108,6 +112,9 @@ export const LAYER_IDS: LayerId[] = [
   "flood",
   "wetlands",
   "publiclands",
+  "historic",
+  "crithab",
+  "wayback",
   "relief",
   "slope",
   "contours",
@@ -132,6 +139,7 @@ export const LAYER_IDS: LayerId[] = [
   "permits",
   "licences",
   "envpermits",
+  "contaminants",
   "sports",
   "constructs",
   "field",
