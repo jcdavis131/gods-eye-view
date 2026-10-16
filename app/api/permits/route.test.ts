@@ -93,7 +93,7 @@ describe("/api/permits?op=building", () => {
   it("names Dallas as stale without asking anyone", async () => {
     const { body } = await get("op=building&bbox=-96.805,32.7675,-96.785,32.7825");
     expect(body.data.features).toEqual([]);
-    expect(body.coverage).toEqual([expect.objectContaining({ name: "Dallas", state: "stale" })]);
+    expect(body.coverage).toEqual([expect.objectContaining({ name: "Dallas", state: "stale", count: null })]);
     expect(calls).toEqual([]);
   });
 
@@ -108,7 +108,7 @@ describe("/api/permits?op=building", () => {
   it("names a city that failed as missing, and holds the answer briefly", async () => {
     failHosts = ["data.cityofchicago.org"];
     const { body, res } = await get("op=building&bbox=-87.64,41.8775,-87.62,41.8925");
-    expect(body.coverage).toEqual([expect.objectContaining({ name: "Chicago", state: "error" })]);
+    expect(body.coverage).toEqual([expect.objectContaining({ name: "Chicago", state: "error", count: null })]);
     expect(body.caveats?.join(" ")).toMatch(/missing from this answer, not absent/);
     expect(res.headers.get("cache-control")).toContain("s-maxage=120");
   });
@@ -160,6 +160,7 @@ describe("/api/permits?op=environmental", () => {
     failHosts = ["echodata.epa.gov"];
     const { body } = await get("op=environmental&bbox=-95.2,29.7,-95,29.8");
     expect(body.coverage.filter((c) => c.state === "error").length).toBe(2);
+    expect(body.coverage.filter((c) => c.state === "error").every((c) => c.count === null)).toBe(true);
     expect(body.data.features.length).toBe(172);
   });
 

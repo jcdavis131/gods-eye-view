@@ -59,7 +59,7 @@ export interface CoverageEntry {
   id: string;
   name: string;
   state: CoverageState;
-  /** Records returned; null where the source did not answer (missing, not none). */
+  /** Records returned; null where the source did not answer or was not asked (a stale, unfed or unwired city): missing, not none. */
   count: number | null;
   /** Why a source is stale, has no feed, is not wired or failed. */
   reason?: string;
@@ -109,7 +109,7 @@ export async function buildingPermits(b: Bbox, days: number): Promise<PermitsAns
   for (const r of results) {
     const c = PERMIT_CITIES[r.city];
     if (!r.ok) {
-      coverage.push({ id: c.id, name: c.name, state: "error", count: 0, reason: r.error, cadence: c.cadence });
+      coverage.push({ id: c.id, name: c.name, state: "error", count: null, reason: r.error, cadence: c.cadence });
       continue;
     }
     records.push(...r.records);
@@ -132,7 +132,7 @@ export async function buildingPermits(b: Bbox, days: number): Promise<PermitsAns
       }),
     );
   }
-  for (const g of permitGapsInBox(b)) coverage.push({ id: g.name.toLowerCase().replace(/\W+/g, "-"), name: g.name, state: g.state, count: 0, reason: g.reason });
+  for (const g of permitGapsInBox(b)) coverage.push({ id: g.name.toLowerCase().replace(/\W+/g, "-"), name: g.name, state: g.state, count: null, reason: g.reason });
   records.sort((a, z) => (z.issued ?? "").localeCompare(a.issued ?? ""));
   return { records, coverage, provenance: prov, age };
 }
@@ -174,7 +174,7 @@ export async function licences(b: Bbox): Promise<LicencesAnswer> {
   for (const r of results) {
     const s = LICENCE_SOURCES[r.id as LicenceSourceId];
     if (!r.ok) {
-      coverage.push({ id: s.id, name: s.name, state: "error", count: 0, reason: r.error, cadence: s.cadence });
+      coverage.push({ id: s.id, name: s.name, state: "error", count: null, reason: r.error, cadence: s.cadence });
       continue;
     }
     records.push(...r.records);
@@ -265,7 +265,7 @@ export async function environmental(b: Bbox): Promise<EnvAnswer> {
   let age = 0;
   for (const r of results) {
     if (!r.ok) {
-      coverage.push({ id: r.id, name: r.name, state: "error", count: 0, reason: r.error });
+      coverage.push({ id: r.id, name: r.name, state: "error", count: null, reason: r.error });
       continue;
     }
     records.push(...r.records);

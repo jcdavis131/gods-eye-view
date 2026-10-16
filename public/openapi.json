@@ -7097,7 +7097,7 @@
                 "integer",
                 "null"
               ],
-              "description": "Records returned; null where the source did not answer (state error): missing, not none."
+              "description": "Records returned; null where the source did not answer (state error) or was not asked (stale, no-feed, token-required, not-wired): missing, not none."
             },
             "reason": {
               "type": "string"
