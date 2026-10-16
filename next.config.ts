@@ -84,6 +84,13 @@ const nextConfig: NextConfig = {
     // not — so a request always gets one of them and never both.
     const embedQuery = [{ type: "query" as const, key: "embed", value: "1" }];
     return [
+      // The embedder's weights (public/embed/<model>-<commit8>/, lib/embed/pins.ts) carry their
+      // pin in the path, and the loader checks each file's sha256, so they never change in place.
+      // public/ defaults to max-age=0; these may be cached for good.
+      {
+        source: "/embed/:path*",
+        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+      },
       {
         source: "/:path*",
         missing: embedQuery,

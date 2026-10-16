@@ -17,8 +17,10 @@ type Rule = {
   headers: Array<{ key: string; value: string }>;
 };
 
-const rules = async (): Promise<Rule[]> => (await config.headers!()) as unknown as Rule[];
+const allRules = async (): Promise<Rule[]> => (await config.headers!()) as unknown as Rule[];
 const get = (r: Rule, key: string) => r.headers.find((h) => h.key.toLowerCase() === key.toLowerCase())?.value;
+/** The security rules (the ones carrying a CSP); the /embed cache rule is checked on its own below. */
+const rules = async (): Promise<Rule[]> => (await allRules()).filter((r) => get(r, "content-security-policy"));
 /** The rule that serves a normal page: the one that opts out of `embed=1`. */
 const plain = (rs: Rule[]) => rs.find((r) => r.missing?.some((m) => m.key === "embed"))!;
 /** The rule that serves the documented iframe view. */
@@ -31,6 +33,13 @@ const directive = (csp: string, name: string) =>
     .find((d) => d === name || d.startsWith(name + " "))!;
 
 describe("security headers", () => {
+  it("adds only the embedder-weights cache rule besides the security rules, and it sets no security header", async () => {
+    const extra = (await allRules()).filter((r) => !get(r, "content-security-policy"));
+    expect(extra.map((r) => r.source)).toEqual(["/embed/:path*"]);
+    // The weights' path carries the model pin (lib/embed/pins.ts) and each file is sha256-checked.
+    expect(extra[0].headers).toEqual([{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }]);
+  });
+
   it("covers every request with exactly one rule", async () => {
     const rs = await rules();
     expect(rs).toHaveLength(2);
