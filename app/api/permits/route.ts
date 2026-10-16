@@ -27,6 +27,9 @@
 //        polygons=1 property boundaries and munitions response sites. Same box rules. A listing
 //        is a regulatory status, not a finding of contamination; no address, contact or owner
 //        is requested.
+//   /api/permits?op=ust&bbox=w,s,e,n                  EPA UST Finder leaking-tank releases and
+//        tank facilities counted by county (a 2018-2021 snapshot), on county outlines. Box at
+//        most 4 degrees, snapped to 1. No tank site is ever requested: many are private homes.
 //   /api/permits?op=tri&trifid=77012HLLPT9701M[&year=2024]   what a TRI facility reported
 //        releasing on site that year (Form R), by chemical and medium, in its reported
 //        units, with totals per medium and unit, and its Form A certifications. Fields are
@@ -49,6 +52,8 @@ import { buildingPermits, contaminants, environmental, licences } from "@/lib/pe
 import { CONTAMINANTS_CAVEAT } from "@/lib/permits/contaminants";
 import { NPL_CAVEAT } from "@/lib/permits/npl";
 import { FUDS_CAVEAT } from "@/lib/permits/fuds";
+import { buildUst, UST_CAVEAT, UST_FINDER, UST_LAYERS, UST_MAX, ustParams } from "@/lib/permits/ust";
+import { runRows } from "@/lib/civic/request";
 import { HOME_HEURISTIC, permitFeatures, licenceFeatures, envFeatures } from "@/lib/permits/geojson";
 import { cacheDelete, cached, DeadlineError } from "@/lib/server/cache";
 import { retrying } from "@/lib/server/net";
@@ -137,6 +142,49 @@ async function opContaminants(b: Bbox, polygons: boolean) {
       provenance: a.provenance,
       caveats,
       ttlS: a.coverage.some((c) => c.state === "error") ? 120 : 3600,
+    },
+  );
+}
+
+const WEEK_MS = 7 * 24 * 3600_000;
+
+/**
+ * Leaking underground storage tanks by county (EPA UST Finder layers 3 and 2, a 2018-2021
+ * snapshot, held a week): release counts drawn on county outlines, facility counts joined by
+ * county name and state. The point layers are never asked. The facilities layer failing leaves
+ * the releases; the releases layer failing is an upstream error (nothing to draw).
+ */
+async function opUst(b: Bbox) {
+  const ask = (which: keyof typeof UST_LAYERS) =>
+    cached(`ust:${which}:${b.join(",")}`, WEEK_MS, async () => {
+      const res = await runRows("epa-ust-finder", { kind: "arcgis", layer: `${UST_FINDER}/${UST_LAYERS[which]}`, params: ustParams(which, b) }, 25_000);
+      return { rows: res.features, capped: res.truncated || res.features.length >= UST_MAX };
+    });
+  const [rel, fac] = await Promise.all([ask("releases"), ask("facilities").catch(() => null)]);
+  const built = buildUst(rel.value.rows, fac ? fac.value.rows : null);
+  const coverage = [
+    { id: "releases", name: "EPA UST Finder, releases by county", state: rel.value.capped ? "partial" : "covered", count: built.features.length },
+    { id: "facilities", name: "EPA UST Finder, facilities by county", state: fac ? (fac.value.capped ? "partial" : "covered") : "error", count: fac ? fac.value.rows.length : null },
+  ];
+  const caveats = [
+    UST_CAVEAT,
+    "The county layers carry no FIPS code: facilities are joined to releases by county name and state. A county whose name does not match, or is not unique, keeps its releases and says its facilities were not joined (`unjoined`).",
+    "Counts are as EPA publishes them; nothing is derived by subtraction, and a count EPA leaves empty reads 'not given', never 0.",
+    BOX,
+  ];
+  if (!fac) caveats.push("EPA's facilities-by-county layer did not answer this time: facility and tank counts are unknown, not zero.");
+  if (rel.value.capped) caveats.push(`The releases layer was capped at ${UST_MAX.toLocaleString("en-US")} counties for this box.`);
+  const prov: Provenance[] = [
+    provenance(source("epa-ust-finder"), { kind: "published", seriesId: "UST_Finder_Feature_Layer_2eb FeatureServer layer 3 (Releases_by_County), simplified to 0.01 degrees", upstreamUrl: `${UST_FINDER}/3`, retrievedAt: new Date(Date.now() - rel.age).toISOString(), notes: [`bbox ${b.join(",")}`] }),
+  ];
+  if (fac) prov.push(provenance(source("epa-ust-finder"), { kind: "published", seriesId: "UST_Finder_Feature_Layer_2eb FeatureServer layer 2 (Facilities_by_County), attributes", upstreamUrl: `${UST_FINDER}/2`, retrievedAt: new Date(Date.now() - fac.age).toISOString(), notes: [`bbox ${b.join(",")}`] }));
+  return ok(
+    { type: "FeatureCollection", features: built.features },
+    {
+      meta: { source: "U.S. EPA UST Finder (county layers)", bbox: b, coverage, unjoined: built.unjoined, cacheAge: Math.max(rel.age, fac?.age ?? 0) },
+      provenance: prov,
+      caveats,
+      ttlS: fac ? 86400 : 600,
     },
   );
 }
@@ -230,6 +278,11 @@ export async function GET(req: NextRequest) {
         if (!b) return badRequest(BBOX_HELP);
         return await opContaminants(b, q.get("polygons") === "1");
       }
+      case "ust": {
+        const b = parseBbox(q.get("bbox"), 4, 1);
+        if (!b) return badRequest(BBOX_HELP);
+        return await opUst(b);
+      }
       case "tri": {
         const trifid = (q.get("trifid") ?? "").trim();
         const y = q.get("year");
@@ -240,7 +293,7 @@ export async function GET(req: NextRequest) {
         return await opTri(trifid, year);
       }
       default:
-        return badRequest("unknown op: building | licences | environmental | contaminants | tri");
+        return badRequest("unknown op: building | licences | environmental | contaminants | tri | ust");
     }
   } catch (err) {
     return withCors(jsonError(err));

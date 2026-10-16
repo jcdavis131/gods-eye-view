@@ -23,6 +23,7 @@ import { NMFS_CAVEAT, RANGES_CAVEAT } from "@/lib/land/features";
 import { TRI_CAVEAT } from "@/lib/permits/tri";
 import { NPL_CAVEAT } from "@/lib/permits/npl";
 import { FUDS_CAVEAT } from "@/lib/permits/fuds";
+import { UST_CAVEAT } from "@/lib/permits/ust";
 
 export interface Exclusion {
   what: string;
@@ -75,7 +76,7 @@ export const SHELVES: Array<{ id: string; title: string; layers: LayerId[] }> = 
   { id: "land", title: "Land and heritage", layers: ["wetlands", "historic", "flood", "publiclands"] },
   { id: "species", title: "Species", layers: ["crithab"] },
   { id: "water", title: "Water quality", layers: ["impaired", "pfas"] },
-  { id: "contaminants", title: "Contaminants", layers: ["contaminants"] },
+  { id: "contaminants", title: "Contaminants", layers: ["contaminants", "ust"] },
   { id: "imagery", title: "Imagery and maps", layers: ["wayback", "topo"] },
   { id: "infrastructure", title: "Infrastructure", layers: ["dams"] },
 ];
@@ -487,6 +488,47 @@ export const COLLECTIONS: readonly Collection[] = [
     embedText: ["PROJECTSTATUS", "DERPPROGRAM", "RELATIVEPRIORITY"],
     ops: ["permits?op=contaminants"],
     sensitivity: "Agency-published DoD cleanup records; FEATURENAME is shown in the record and on the label only.",
+    round: 3,
+  },
+  {
+    id: "ust-releases-county",
+    title: "Leaking underground storage tank releases by county (EPA UST Finder)",
+    layer: "ust",
+    sources: ["epa-ust-finder"],
+    what: "EPA UST Finder's county counts of reported leaking underground storage tank (LUST) releases: total, open, and no further action, with the county's population as the layer gives it. Drawn as county outlines filled by open releases.",
+    recordIs: "A county's count of reported tank leaks in state records as of 2018-2021. A release is a reported leak; 'no further action' is the state's closure, not proof that no contamination remains. A snapshot, not current status.",
+    coverage: { spatial: "United States, by county; between 50 and 1,500 km, a 4 degree box", temporal: "state records as of 2018-2021; tribal records to October 2025", count: { value: 3220, of: "counties; their release counts sum to 530,062 of UST Finder's 530,798 release points (736 are in no county row)", countedOn: R3 } },
+    freshness: { statement: "The service describes itself as a national composite as of 2018-2021, tribal data to October 2025; EPA last edited this layer's data on 2026-02-13.", readFrom: "UST_Finder_Feature_Layer_2eb FeatureServer ?f=json serviceDescription, and layer 3 ?f=json editingInfo.dataLastEditDate", recordedOn: R3 },
+    excluded: [
+      { what: "individual release and facility sites (UST Finder layers 0 and 1)", why: "many are private homes ('%RESIDENCE%' matches 4,615 releases) and no field marks a residential site reliably; county counts carry no location below the county" },
+      { what: "an 'unknown status' count by subtraction", why: "13,179 releases nationally have an unknown status, yet some counties sum exactly; the arithmetic is not trustworthy, so nothing is derived" },
+      { what: "a per-capita rate", why: "not computed; the layer's population is shown as given" },
+    ],
+    caveats: [UST_CAVEAT],
+    searchable: ["County"],
+    embedText: ["County", "State", "Release_Count", "Open_Count", "No_Further_Action_Count"],
+    ops: ["permits?op=ust"],
+    sensitivity: "County aggregates only. No site, name or address is requested.",
+    round: 3,
+  },
+  {
+    id: "ust-facilities-county",
+    title: "Underground storage tank facilities by county (EPA UST Finder)",
+    layer: "ust",
+    sources: ["epa-ust-finder"],
+    what: "EPA UST Finder's county counts of UST facilities and tanks (open, closed, temporarily out of service), joined to the release counties by county name and state; the county layers carry no FIPS code.",
+    recordIs: "A county's count of tank facilities and tanks in state records as of 2018-2021. A snapshot, not current status.",
+    coverage: { spatial: "United States, by county; with the release counties", temporal: "state records as of 2018-2021", count: { value: 3220, of: "counties; their facility counts sum to 741,447 of UST Finder's 742,844 facility points", countedOn: R3 } },
+    freshness: { statement: "The service describes itself as a national composite as of 2018-2021, tribal data to October 2025; EPA last edited this layer's data on 2026-02-13.", readFrom: "UST_Finder_Feature_Layer_2eb FeatureServer ?f=json serviceDescription, and layer 2 ?f=json editingInfo.dataLastEditDate", recordedOn: R3 },
+    excluded: [
+      { what: "a FIPS join", why: "the layers have no FIPS code; the name join leaves a non-matching or non-unique county unjoined and says so (all 57 counties joined in the Gulf Coast test box, 2026-10-15)" },
+      { what: "facility names and addresses", why: "never requested; county counts only" },
+    ],
+    caveats: [UST_CAVEAT],
+    searchable: [],
+    embedText: ["State", "Facility_Count", "Open_USTs", "Closed_USTs", "TOS_USTs"],
+    ops: ["permits?op=ust"],
+    sensitivity: "County aggregates only. The NAME field here is the county's name; it is not embedded under that field name (the deny list keeps any bare NAME out).",
     round: 3,
   },
   // ------------------------------------------------------------ round 3: backfill, shipped layers

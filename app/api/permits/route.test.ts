@@ -27,6 +27,8 @@ import fuds1 from "@/lib/permits/fixtures/fuds-1-njny.json";
 import fuds2 from "@/lib/permits/fixtures/fuds-2-njny.json";
 import fuds3 from "@/lib/permits/fixtures/fuds-3-njny.json";
 import fuds4 from "@/lib/permits/fixtures/fuds-4-njny.json";
+import ust3 from "@/lib/permits/fixtures/ust-3-gulf.json";
+import ust2 from "@/lib/permits/fixtures/ust-2-gulf.json";
 
 type F = { geometry: GeoJSON.Geometry | null; properties: Record<string, unknown> | null };
 const asRows = (j: unknown): F[] => (Array.isArray(j) ? j.map((r) => ({ geometry: null, properties: r as Record<string, unknown> })) : (j as { features: F[] }).features);
@@ -69,6 +71,13 @@ vi.mock("@/lib/civic/request", () => ({
       // The list's real rows from both captures, filtered to the IN list as the server would.
       const ids = new Set((req.params?.where.match(/'([A-Z0-9]+)'/g) ?? []).map((x) => x.slice(1, -1)));
       return { features: [...nplStatusSv.features, ...nplStatusNj.features].filter((f) => ids.has(f.properties.Site_EPA_ID)) as unknown as F[], truncated: false };
+    }
+    const ust = url.match(/\/UST_Finder_Feature_Layer_2eb\/FeatureServer\/(\d)$/);
+    if (ust) {
+      arcParams.push({ layer: url, params: req.params ?? {} });
+      const fc = ({ 2: ust2, 3: ust3 } as unknown as Record<number, { features: F[] }>)[Number(ust[1])];
+      if (!fc) throw new Error(`unexpected UST Finder layer ${ust[1]}`);
+      return { features: fc.features, truncated: false };
     }
     const fuds = url.match(/\/fuds\/FeatureServer\/(\d)$/);
     if (fuds) {
@@ -334,6 +343,31 @@ describe("/api/permits?op=contaminants: Formerly Used Defense Sites", () => {
     const f = fudsOf(body);
     expect(f).toHaveLength(126);
     expect(f[0].properties.details.projects).toMatch(/^unknown/);
+  });
+});
+
+describe("/api/permits?op=ust", () => {
+  it("asks the two county layers only, in a 4 degree box, and joins facilities by county name", async () => {
+    const { status, body } = await get("op=ust&bbox=-96,28,-92,32");
+    expect(status).toBe(200);
+    const asked = arcParams.filter((a) => a.layer.includes("UST_Finder")).map((a) => a.layer.split("/").pop()).sort();
+    expect(asked).toEqual(["2", "3"]);
+    expect(body.bbox).toEqual([-96, 28, -92, 32]);
+    expect(body.data.features).toHaveLength(57);
+    expect(body.unjoined).toEqual({ releases: 0, facilities: 0 });
+    expect(body.coverage.map((c) => [c.name, c.state, c.count])).toEqual([
+      ["EPA UST Finder, releases by county", "covered", 57],
+      ["EPA UST Finder, facilities by county", "covered", 57],
+    ]);
+    expect(body.caveats?.join(" ")).toMatch(/Individual sites are not shown because many are private homes/);
+  });
+
+  it("keeps the releases and says facilities are unknown when that layer fails, and clamps a big box", async () => {
+    failHosts = ["UST_Finder_Feature_Layer_2eb/FeatureServer/2"];
+    const { body } = await get("op=ust&bbox=-100,25,-90,35");
+    expect((body.bbox as number[])[2] - (body.bbox as number[])[0]).toBeLessThanOrEqual(4);
+    expect(body.coverage.find((c) => c.name.includes("facilities"))).toMatchObject({ state: "error", count: null });
+    expect(body.data.features[0].properties.details).toMatchObject({ "UST facilities": expect.stringMatching(/^unknown/) });
   });
 });
 

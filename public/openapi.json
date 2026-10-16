@@ -2970,10 +2970,11 @@
                 "licences",
                 "environmental",
                 "contaminants",
-                "tri"
+                "tri",
+                "ust"
               ]
             },
-            "description": "building: city building permits. licences: licensed premises. environmental: EPA ECHO facilities and Corps actions. contaminants: EPA Superfund (with NPL status), TRI, RCRA and Brownfields listings and USACE Formerly Used Defense Sites, and with polygons=1 Superfund site boundaries, FUDS property boundaries and munitions response sites. tri: what one TRI facility reported releasing in a year."
+            "description": "building: city building permits. licences: licensed premises. environmental: EPA ECHO facilities and Corps actions. contaminants: EPA Superfund (with NPL status), TRI, RCRA and Brownfields listings and USACE Formerly Used Defense Sites, and with polygons=1 Superfund site boundaries, FUDS property boundaries and munitions response sites. tri: what one TRI facility reported releasing in a year. ust: EPA UST Finder leaking-tank releases and tank facilities counted by county (a 2018-2021 snapshot), in a box clamped to 4 degrees and snapped to 1; no individual site."
           },
           {
             "name": "bbox",
@@ -3053,6 +3054,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/PermitsTriResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PermitsUstResponse"
                     }
                   ]
                 }
@@ -7501,6 +7505,41 @@
           }
         ],
         "x-op": "tri"
+      },
+      "PermitsUstResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "description": "GeoJSON FeatureCollection: one Polygon/MultiPolygon per county (EPA UST Finder layer 3, simplified to 0.01 degrees), named '<County>, <State>'. properties.extra: releases, open, noFurtherAction (counts as published; null when EPA leaves one empty, never 0), facilities {facilities, openTanks, closedTanks, tosTanks} joined by county name and state, or null with facilitiesMissing 'unjoined' (no unique name match) or 'unanswered' (the facilities layer did not answer). No individual site is ever returned."
+              },
+              "bbox": {
+                "$ref": "#/components/schemas/Bbox"
+              },
+              "coverage": {
+                "$ref": "#/components/schemas/PermitsCoverage"
+              },
+              "unjoined": {
+                "type": "object",
+                "description": "Counties on each side whose name and state did not join uniquely.",
+                "properties": {
+                  "releases": {
+                    "type": "integer"
+                  },
+                  "facilities": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "ust"
       },
       "PermitsContaminantsResponse": {
         "allOf": [

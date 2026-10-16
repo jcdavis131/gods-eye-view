@@ -139,6 +139,7 @@ export const LAYER_LABEL_PRIORITY: Record<string, number> = {
   zoning: 29,
   envpermits: 27,
   contaminants: 26,
+  ust: 20,
   permits: 25,
   licences: 21,
   banks: 28,

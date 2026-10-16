@@ -217,3 +217,34 @@ export const contaminantsStyle: LayerStyle = {
   },
   scaleByDistance: [5e3, 1.0, 4e4, 0.6],
 };
+
+// ---------------------------------------------------------------- leaking tanks by county (EPA UST Finder)
+
+/** Open releases per county, in fixed count bins; a count EPA leaves empty is outlined grey, never filled as 0. */
+const UST_BINS = [
+  { from: 0, color: "#FFF7ED" },
+  { from: 1, color: "#FED7AA" },
+  { from: 10, color: "#FDBA74" },
+  { from: 50, color: "#FB923C" },
+  { from: 200, color: "#C2410C" },
+];
+const UST_NOT_GIVEN = "#94A3B8";
+
+function ustColor(f: LayerFeature): string {
+  const open = (f.properties.extra as { open?: number | null } | undefined)?.open;
+  if (open == null) return UST_NOT_GIVEN;
+  let c = UST_BINS[0].color;
+  for (const b of UST_BINS) if (open >= b.from) c = b.color;
+  return c;
+}
+
+export const ustStyle: LayerStyle = {
+  color: "#FB923C",
+  icon: () => null,
+  colorFor: (f) => (isLoadedBox(f) ? LOADED_BOX : ustColor(f)),
+  label: (f) => f.properties.name,
+  labelMax: 15,
+  labelWhen: (f) => !isLoadedBox(f),
+  polygons: (f) => (isLoadedBox(f) || f.properties.kind === "not-given" ? null : polyFills(f, ustColor(f), 0.45)),
+  lines: (f) => (isLoadedBox(f) ? polyOutlines(f, LOADED_BOX, 0.7, 1.5, true) : polyOutlines(f, f.properties.kind === "not-given" ? UST_NOT_GIVEN : "#9A3412", 0.6, 1, f.properties.kind === "not-given")),
+};

@@ -48,6 +48,7 @@ export type LayerId =
   | "topo"
   | "impaired"
   | "pfas"
+  | "ust"
   | "relief"
   | "slope"
   | "contours"
@@ -121,6 +122,7 @@ export const LAYER_IDS: LayerId[] = [
   "topo",
   "impaired",
   "pfas",
+  "ust",
   "relief",
   "slope",
   "contours",

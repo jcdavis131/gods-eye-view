@@ -122,6 +122,8 @@ describe("voice words for contaminated sites", () => {
     expect(layerOf("show formerly used defense sites")).toMatchObject({ layer: "contaminants" });
     expect(layerOf("show old military sites near sandy hook")).toMatchObject({ layer: "contaminants", place: "sandy hook" });
     expect(layerOf("show munitions")).toMatchObject({ layer: "contaminants" });
+    expect(layerOf("show leaking tanks over houston")).toMatchObject({ layer: "ust", place: "houston" });
+    expect(layerOf("show underground storage tanks")).toMatchObject({ layer: "ust" });
     expect(layerOf("show hazards")).toMatchObject({ layer: "hazards" });
   });
 });

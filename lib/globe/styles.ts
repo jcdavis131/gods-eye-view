@@ -43,7 +43,7 @@ import {
   transmissionStyle,
 } from "./infraStyles";
 import { parcelsStyle } from "./parcelStyles";
-import { contaminantsStyle, envpermitsStyle, licencesStyle, permitsStyle, zoningStyle } from "./civicStyles";
+import { contaminantsStyle, envpermitsStyle, licencesStyle, permitsStyle, ustStyle, zoningStyle } from "./civicStyles";
 
 /** Distinctive major-group colours for the occupations layer: one hue per SOC major group. */
 const OCCUPATION_COLORS: Record<string, string> = {
@@ -494,6 +494,7 @@ export const STYLES: Partial<Record<LayerId, LayerStyle>> = {
   licences: licencesStyle,
   envpermits: envpermitsStyle,
   contaminants: contaminantsStyle,
+  ust: ustStyle,
   sports: sportsStyle,
   constructs: constructsStyle,
   field: fieldStyle,
@@ -568,6 +569,7 @@ export const FOLLOW_RANGE: Record<LayerId, number> = {
   licences: 1_000,
   envpermits: 8_000,
   contaminants: 8_000,
+  ust: 120_000,
   sports: 500_000,
   constructs: 150_000,
   field: 400_000,
