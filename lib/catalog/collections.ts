@@ -24,6 +24,7 @@ import { TRI_CAVEAT } from "@/lib/permits/tri";
 import { NPL_CAVEAT } from "@/lib/permits/npl";
 import { FUDS_CAVEAT } from "@/lib/permits/fuds";
 import { UST_CAVEAT } from "@/lib/permits/ust";
+import { DENY_FIELD, EMBED_TEXT } from "./embedFields";
 
 export interface Exclusion {
   what: string;
@@ -61,7 +62,12 @@ export interface Collection {
   caveats: string[];
   /** Fields that identify a record and may be searched; never a name that can be a person's. */
   searchable: string[];
-  /** Fields safe to embed as record text (the embedding step). Never addresses, contacts or person-name fields. */
+  /**
+   * Fields safe to embed as record text (lib/catalog/recordText.ts). Never addresses, contacts,
+   * names (of anything: names stay with the letter-by-letter search), ids (matched by letters),
+   * free text, or measured quantities (counts, heights, populations); years, dates and
+   * published categories are kept as words.
+   */
   embedText: string[];
   /** Ops that serve it, as "route?op=x"; each must be in public/openapi.json. */
   ops: string[];
@@ -102,7 +108,7 @@ export const COLLECTIONS: readonly Collection[] = [
     ],
     caveats: ["A habitat inventory mapped from imagery that can be decades old, not a jurisdictional (Clean Water Act) delineation."],
     searchable: [],
-    embedText: ["ATTRIBUTE", "WETLAND_TYPE", "SYSTEM_NAME", "CLASS_NAME", "WATER_REGIME_NAME"],
+    embedText: EMBED_TEXT["nwi-wetlands"],
     ops: ["land?op=wetlands"],
     sensitivity: "Habitat polygons only; no ownership or personal data.",
     round: 1,
@@ -122,7 +128,7 @@ export const COLLECTIONS: readonly Collection[] = [
     ],
     caveats: ["Above 10 km the map is NWI's national ~100 m generalised raster, eight classes. Small wetlands can be missing at that scale."],
     searchable: [],
-    embedText: [],
+    embedText: EMBED_TEXT["nwi-wetlands-raster"],
     ops: ["terrain?op=products"],
     sensitivity: "A picture of habitat classes; no personal data.",
     round: 1,
@@ -147,7 +153,7 @@ export const COLLECTIONS: readonly Collection[] = [
       "Property names can include a person's name, as NPS lists them, and are not searchable.",
     ],
     searchable: ["NRIS_Refnum"],
-    embedText: ["NRIS_Refnum", "ResType", "Is_NHL", "CertDate", "City", "County", "State"],
+    embedText: EMBED_TEXT["nrhp-listed"],
     ops: ["land?op=historic"],
     sensitivity: "Agency-published, non-restricted listings only; restricted-address records are filtered out; property names (RESNAME) can be a person's and are never searched or embedded.",
     round: 1,
@@ -169,7 +175,7 @@ export const COLLECTIONS: readonly Collection[] = [
     ],
     caveats: ["Many listed species have no designation, and a polygon does not mean the species is present. Proposed designations are always labelled as proposed. Marine and anadromous species are in the NOAA Fisheries card."],
     searchable: [],
-    embedText: ["comname", "sciname", "listing_status", "status", "fedreg", "pubdate"],
+    embedText: EMBED_TEXT["fws-crithab"],
     ops: ["land?op=crithab"],
     sensitivity: "Agency-published regulatory polygons only; no occurrence points.",
     round: 1,
@@ -190,7 +196,7 @@ export const COLLECTIONS: readonly Collection[] = [
     ],
     caveats: [NMFS_CAVEAT],
     searchable: [],
-    embedText: ["COMNAME", "SCIENAME", "LISTSTATUS", "CHSTATUS", "UNIT", "FR", "PUBDATE", "HABTYPE"],
+    embedText: EMBED_TEXT["nmfs-crithab"],
     ops: ["land?op=crithab"],
     sensitivity: "Agency-published regulatory polygons and lines only; no occurrence points.",
     round: 2,
@@ -211,7 +217,7 @@ export const COLLECTIONS: readonly Collection[] = [
     ],
     caveats: [RANGES_CAVEAT],
     searchable: [],
-    embedText: ["Common_Name", "Scientific_Name", "ESA_Listing_Status", "Entity_Description", "Lead_Agency", "Taxonomic_Group"],
+    embedText: EMBED_TEXT["opp-ranges"],
     ops: ["land?op=crithab"],
     sensitivity: "Agency-published coarse ranges only, never drawn; no occurrence points.",
     round: 2,
@@ -233,7 +239,7 @@ export const COLLECTIONS: readonly Collection[] = [
     ],
     caveats: [IMPAIRED_CAVEAT],
     searchable: ["assessmentunitidentifier"],
-    embedText: ["assessmentunitidentifier", "assessmentunitname", "state", "organizationname", "reportingcycle", "ircategory", "on303dlist", "hastmdl", "cyclestatus"],
+    embedText: EMBED_TEXT["attains-impaired"],
     ops: ["water?op=impaired"],
     sensitivity: "Agency regulatory listings of water bodies; no personal data.",
     round: 2,
@@ -257,7 +263,7 @@ export const COLLECTIONS: readonly Collection[] = [
     ],
     caveats: [PFAS_CAVEAT],
     searchable: ["F_PWS_ID"],
-    embedText: ["Contaminant", "State", "Population_Served", "Result_At_or_Above_UCMR_MRL", "UCMR_Geolocation_Method"],
+    embedText: EMBED_TEXT["ucmr5-pfas"],
     ops: ["water?op=pfas"],
     sensitivity: "Per water system, never per tap or well; the non-community layer (which carries a parcel number) is not used. PWS_Name can be an apartment complex, a nursing home or a rental park: it is shown in the record and on the label only, never searched or embedded. The layer has no contact fields.",
     round: 3,
@@ -277,7 +283,7 @@ export const COLLECTIONS: readonly Collection[] = [
     ],
     caveats: [CWS_CAVEAT],
     searchable: ["PWSID"],
-    embedText: ["Pop_Cat_5", "Service_Area_Type", "Symbology_Field", "Primacy_Agency", "Data_Provider_Type"],
+    embedText: EMBED_TEXT["cws-service-areas"],
     ops: ["water?op=pfas"],
     sensitivity: "Utility service areas; no contact fields. PWS_Name is not searched or embedded.",
     round: 3,
@@ -301,7 +307,7 @@ export const COLLECTIONS: readonly Collection[] = [
       "EPA's Superfund (SEMS) site layer is the current National Priorities List: on 2026-10-15 every one of its 1,374 points was on EPA's NPL list by EPA ID, 1,337 final and 37 proposed. The 466 sites deleted from the NPL, and Superfund sites never listed, are not in it.",
     ],
     searchable: ["registry_id", "pgm_sys_id"],
-    embedText: ["pgm_sys_acrnm", "pgm_sys_id", "registry_id"],
+    embedText: EMBED_TEXT["emef-sems"],
     ops: ["permits?op=contaminants"],
     sensitivity: "Federal regulatory records; no address or contact field is requested. The facility name (primary_name) can be a person's or a street address and is never searched or embedded.",
     round: 1,
@@ -318,7 +324,7 @@ export const COLLECTIONS: readonly Collection[] = [
     excluded: [{ what: "location_address and every contact field", why: "never requested" }],
     caveats: ["A listing is a regulatory status, not a finding of contamination at the point."],
     searchable: ["registry_id", "pgm_sys_id"],
-    embedText: ["pgm_sys_acrnm", "pgm_sys_id", "registry_id"],
+    embedText: EMBED_TEXT["emef-tri"],
     ops: ["permits?op=contaminants"],
     sensitivity: "Federal regulatory records; no address or contact field is requested; the facility name is never searched or embedded.",
     round: 1,
@@ -339,7 +345,7 @@ export const COLLECTIONS: readonly Collection[] = [
     ],
     caveats: ["A listing is a regulatory status, not a finding of contamination at the point."],
     searchable: ["registry_id", "pgm_sys_id"],
-    embedText: ["pgm_sys_acrnm", "pgm_sys_id", "registry_id"],
+    embedText: EMBED_TEXT["emef-rcra"],
     ops: ["permits?op=contaminants"],
     sensitivity: "Federal regulatory records; no address or contact field is requested; the facility name is never searched or embedded.",
     round: 1,
@@ -356,7 +362,7 @@ export const COLLECTIONS: readonly Collection[] = [
     excluded: [{ what: "location_address and every contact field", why: "never requested; a Brownfields property's EPA name is often its street address, so it is never searched" }],
     caveats: ["A listing is a regulatory status, not a finding of contamination at the point."],
     searchable: ["registry_id", "pgm_sys_id"],
-    embedText: ["pgm_sys_acrnm", "pgm_sys_id", "registry_id"],
+    embedText: EMBED_TEXT["emef-acres"],
     ops: ["permits?op=contaminants"],
     sensitivity: "Federal regulatory records; no address or contact field is requested; the property name can be an address and is never searched or embedded.",
     round: 1,
@@ -379,7 +385,7 @@ export const COLLECTIONS: readonly Collection[] = [
     ],
     caveats: [TRI_CAVEAT],
     searchable: [],
-    embedText: ["cas_chem_name", "cas_registry_number", "environmental_medium", "unit_of_measure", "reporting_year"],
+    embedText: EMBED_TEXT["tri-releases"],
     ops: ["permits?op=tri"],
     sensitivity: "Federal regulatory records kept by allowlist; no person's name, phone or email leaves the parser.",
     round: 2,
@@ -402,7 +408,7 @@ export const COLLECTIONS: readonly Collection[] = [
     ],
     caveats: [NPL_CAVEAT],
     searchable: ["EPA_ID"],
-    embedText: ["NPL_STATUS_CODE", "FEDERAL_FACILITY_DETER_CODE", "EPA_PROGRAM", "SITE_FEATURE_TYPE", "COUNTY", "STATE_CODE"],
+    embedText: EMBED_TEXT["npl-boundaries"],
     ops: ["permits?op=contaminants"],
     sensitivity: "Agency regulatory records. EPA staff contacts and the street address are never requested. SITE_NAME is shown in the record and on the label, never searched or embedded: a site can be named for a person or a business.",
     round: 3,
@@ -422,8 +428,8 @@ export const COLLECTIONS: readonly Collection[] = [
     ],
     caveats: ["Dates are as EPA's list gives them (MM/DD/YYYY, shown as ISO dates); a missing or unreadable date is left out, never guessed."],
     searchable: ["Site_EPA_ID"],
-    embedText: ["Status", "Proposed_Date", "Listing_Date", "Construction_Completion_Date", "Deletion_Date"],
-    ops: ["permits?op=contaminants"],
+    embedText: EMBED_TEXT["npl-status"],
+    ops: ["permits?op=contaminants", "catalog?op=place-export"],
     sensitivity: "Federal regulatory list; no personal data is requested. Site_Name is not searched or embedded.",
     round: 3,
   },
@@ -444,7 +450,7 @@ export const COLLECTIONS: readonly Collection[] = [
     ],
     caveats: [FUDS_CAVEAT],
     searchable: ["FUDSUNIQUEPROPERTYNUMBER"],
-    embedText: ["STATUS", "ELIGIBILITY", "COUNTY", "STATE", "USACEDISTRICT", "FISCALYEAR"],
+    embedText: EMBED_TEXT["fuds-properties"],
     ops: ["permits?op=contaminants"],
     sensitivity: "Agency-published DoD cleanup records. The owner and narrative fields stay at the source. Property names (FEATURENAME, DODFORMERLYUSEDDEFENSESITENAME) can carry a private surname (13 names on layer 1 contain 'PROPERTY', e.g. 'BARTLETT PROPERTY (WURTSMITH AIR FORCE BASE)'); they are shown in the record and on the label, never searched or embedded.",
     round: 3,
@@ -465,7 +471,7 @@ export const COLLECTIONS: readonly Collection[] = [
     ],
     caveats: ["Costs are USACE's estimates to complete, in dollars as published; dates after today are planned."],
     searchable: ["FUDSPROPERTYID", "PROJECTNUMBER"],
-    embedText: ["ENVRESTORATIONCATEGORY", "DERPPROGRAM", "PROJECTSTATUS", "RISKVALUEMRSPP", "OVERLAPPINGFEDERALLANDAGENCY"],
+    embedText: EMBED_TEXT["fuds-projects"],
     ops: ["permits?op=contaminants"],
     sensitivity: "Agency-published DoD cleanup records. ENVRESTORATIONPROJECTNAME and DODFORMERLYUSEDDEFENSESITENAME are shown in the record only, never searched or embedded.",
     round: 3,
@@ -485,7 +491,7 @@ export const COLLECTIONS: readonly Collection[] = [
     ],
     caveats: ["A munitions response site marks where munitions may be present, not a confirmed hazard footprint. USACE publishes these polygons; they are shown to help people avoid hazards, with that caveat."],
     searchable: ["PROJECTNUMBER", "FUDSPROPERTYID"],
-    embedText: ["PROJECTSTATUS", "DERPPROGRAM", "RELATIVEPRIORITY"],
+    embedText: EMBED_TEXT["fuds-mrs"],
     ops: ["permits?op=contaminants"],
     sensitivity: "Agency-published DoD cleanup records; FEATURENAME is shown in the record and on the label only.",
     round: 3,
@@ -506,7 +512,7 @@ export const COLLECTIONS: readonly Collection[] = [
     ],
     caveats: [UST_CAVEAT],
     searchable: ["County"],
-    embedText: ["County", "State", "Release_Count", "Open_Count", "No_Further_Action_Count"],
+    embedText: EMBED_TEXT["ust-releases-county"],
     ops: ["permits?op=ust"],
     sensitivity: "County aggregates only. No site, name or address is requested.",
     round: 3,
@@ -526,7 +532,7 @@ export const COLLECTIONS: readonly Collection[] = [
     ],
     caveats: [UST_CAVEAT],
     searchable: [],
-    embedText: ["State", "Facility_Count", "Open_USTs", "Closed_USTs", "TOS_USTs"],
+    embedText: EMBED_TEXT["ust-facilities-county"],
     ops: ["permits?op=ust"],
     sensitivity: "County aggregates only. The NAME field here is the county's name; it is not embedded under that field name (the deny list keeps any bare NAME out).",
     round: 3,
@@ -551,7 +557,7 @@ export const COLLECTIONS: readonly Collection[] = [
       "The absence of a zone is not a finding of no flood risk: FEMA has not mapped everywhere, and zone D means no FEMA analysis.",
     ],
     searchable: ["FLD_ZONE", "FLD_AR_ID"],
-    embedText: ["FLD_ZONE", "ZONE_SUBTY", "SFHA_TF", "STATIC_BFE", "STUDY_TYP", "DFIRM_ID"],
+    embedText: EMBED_TEXT["fema-nfhl-zones"],
     ops: ["land?op=flood"],
     sensitivity: "Regulatory map polygons; no ownership or personal data.",
     round: 3,
@@ -574,7 +580,7 @@ export const COLLECTIONS: readonly Collection[] = [
       "The land inside a proclamation boundary is not all public, and an easement's owner keeps the land (the holder has the rights the easement grants).",
     ],
     searchable: ["Unit_Nm", "Loc_Nm"], // not on privately owned units (Own_Type PVT)
-    embedText: ["Category", "Own_Type", "Mang_Type", "Des_Tp", "State_Nm", "Pub_Access", "GAP_Sts", "IUCN_Cat"],
+    embedText: EMBED_TEXT["padus-units"],
     ops: ["land?op=publiclands"],
     sensitivity: "Ownership is shown as PAD-US publishes it (a federal inventory); what stays out is the search from an owner or easement holder to its holdings. A privately owned unit (Own_Type PVT) is often named for a family, so it is labelled by PAD-US id and its published name is shown in the record but never searched.",
     round: 3,
@@ -597,7 +603,7 @@ export const COLLECTIONS: readonly Collection[] = [
       "Condition assessments are the regulating agency's, with the date it assessed; many dams have none published.",
     ],
     searchable: ["NIDID"],
-    embedText: ["PRIMARY_PURPOSE", "PRIMARY_DAM_TYPE", "NID_HEIGHT", "HAZARD_POTENTIAL", "CONDITION_ASSESSMENT", "STATE", "YEAR_COMPLETED"],
+    embedText: EMBED_TEXT["nid-dams"],
     ops: ["infra?op=dams"],
     sensitivity: "Public infrastructure records; no owner or representative name is requested. NAME is not embedded. A privately owned dam can be named for its owner ('<Surname> Pond Dam'), so it is labelled by NID id and its published name is shown in the record but never searched; other dams keep their name as the label.",
     round: 3,
@@ -618,7 +624,7 @@ export const COLLECTIONS: readonly Collection[] = [
     ],
     caveats: [WAYBACK_CAVEAT],
     searchable: [],
-    embedText: [],
+    embedText: EMBED_TEXT["esri-wayback"],
     ops: ["terrain?op=wayback"],
     sensitivity: "Imagery as Esri publishes it; nothing is stored here.",
     round: 1,
@@ -639,7 +645,7 @@ export const COLLECTIONS: readonly Collection[] = [
     ],
     caveats: [WAYBACK_CAPTURE_CAVEAT],
     searchable: [],
-    embedText: ["SRC_DATE", "SRC_RES", "NICE_NAME", "NICE_DESC"],
+    embedText: EMBED_TEXT["wayback-capture"],
     ops: ["terrain?op=waybackdate"],
     sensitivity: "Imagery provenance only; no personal data.",
     round: 2,
@@ -660,7 +666,7 @@ export const COLLECTIONS: readonly Collection[] = [
     ],
     caveats: [TOPO_CAVEAT],
     searchable: [],
-    embedText: ["Map_Name", "Map_Scale", "DateCurrent", "Imprint_Year", "Survey_Year", "Citation"],
+    embedText: EMBED_TEXT["usgs-htmc"],
     ops: ["terrain?op=topo"],
     sensitivity: "Published federal maps; no personal data. Sheet names are place names.",
     round: 2,
@@ -688,11 +694,4 @@ export function parseOpRef(ref: string): { route: string; op: string } | null {
   return m ? { route: `/api/${m[1]}`, op: m[2] } : null;
 }
 
-/**
- * Field names that must never be searchable or embedded: addresses, contacts, owners,
- * certifiers, free-text descriptions, and names that can be a person's (NRHP RESNAME, EPA
- * primary_name and SITE_NAME, UST Name, a water system's PWS_Name, USACE's FUDS property,
- * site and project names, PAD-US Loc_Own).
- */
-export const DENY_FIELD =
-  /address|street|zip|postal|contact|phone|email|owner|certif|^primary_name$|^resname$|^name$|^site_name$|^pws_name$|^featurename$|^dodformerlyuseddefensesitename$|^envrestorationprojectname$|^officialsitename$|^featuredescription$|^site_feature_description$|^loc_own$/i;
+export { DENY_FIELD };

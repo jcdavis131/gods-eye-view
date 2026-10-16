@@ -12,6 +12,7 @@
 // in the dossier and never searched; the feature is named by its program id.
 
 import type { LayerFeature } from "@/lib/layers/types";
+import { recordText, withEmbedText } from "@/lib/catalog/recordText";
 import type { Bbox } from "@/lib/zoning/features";
 import type { NplJoin } from "./npl";
 
@@ -37,6 +38,9 @@ export const EMEF_LAYERS: EmefLayer[] = [
   { id: "rcra", layer: 4, service: "Hazardous waste", short: "RCRA", name: "RCRA hazardous waste handler (RCRAInfo)" },
   { id: "acres", layer: 5, service: "Brownfields", short: "Brownfields", name: "Brownfields property (ACRES)" },
 ];
+
+/** Each EMEF program's catalogue card (lib/catalog/collections.ts), for its record text. */
+const CARD_OF = { sems: "emef-sems", tri: "emef-tri", rcra: "emef-rcra", acres: "emef-acres", fuds: "fuds-properties" } as const;
 
 /** Asked for per layer and box; RCRA alone held 3,001 handlers in a 0.4 by 0.25 degree Houston box. */
 export const EMEF_MAX = 1000;
@@ -119,7 +123,8 @@ export function buildContaminants(
           "EPA record": url && /^https:\/\//.test(url) ? url : undefined,
           "what this is": program === "tri" ? "an EPA program listing: a regulatory status, not a finding of contamination at this point; what the facility reported releasing is under Reported releases" : "an EPA program listing: a regulatory status, not a finding of contamination at this point",
         },
-        extra: x,
+        // The program acronym only: the program and registry ids are matched by letters, primary_name never.
+        extra: withEmbedText(x, recordText(CARD_OF[program], { pgm_sys_acrnm: str(p.pgm_sys_acrnm) })),
       },
     });
   });

@@ -1,0 +1,233 @@
+// What may be embedded, per catalogue card: each card's embedText fields (the
+// catalogue reads them from here as `embedText: EMBED_TEXT[id]`), the deny
+// list, the reviewed *name fields, the label each field is embedded under, and
+// which cards' builders attach record text this round.
+//
+// A leaf module (no imports) so the route builders in lib/permits, lib/land,
+// lib/water and lib/infra can import recordText without a cycle through
+// collections.ts, which imports their caveats.
+//
+// Rules that apply to every card (embeddings round 1, 2026-10-16):
+//   names are never embedded, of anything (they stay with the palette's
+//     letter-by-letter match, which owns the label-by-id rules);
+//   ids are matched by letters, never embedded (NRIS_Refnum, ATTAINS unit ids,
+//     CAS numbers, DFIRM_ID, NMFS UNIT, EMEF program and registry ids, FR citations);
+//   free text is not embedded (USGS Citation, Wayback NICE_DESC);
+//   measured quantities are not embedded (counts, heights, populations,
+//     elevations, resolutions); years, dates and published categories are kept.
+//   ATTAINS assessmentunitname and organizationname stay out while the allowlist
+//   does not search them (embedding would be a side door).
+
+export const EMBED_TEXT = {
+  "nwi-wetlands": ["WETLAND_TYPE", "SYSTEM_NAME", "CLASS_NAME", "WATER_REGIME_NAME"],
+  "nwi-wetlands-raster": [],
+  "nrhp-listed": ["ResType", "Is_NHL", "CertDate", "City", "County", "State"],
+  "fws-crithab": ["comname", "sciname", "listing_status", "status", "pubdate"],
+  "nmfs-crithab": ["COMNAME", "SCIENAME", "LISTSTATUS", "CHSTATUS", "PUBDATE", "HABTYPE"],
+  "opp-ranges": ["Common_Name", "Scientific_Name", "ESA_Listing_Status", "Entity_Description", "Lead_Agency", "Taxonomic_Group"],
+  "attains-impaired": ["state", "reportingcycle", "ircategory", "on303dlist", "hastmdl", "cyclestatus"],
+  "ucmr5-pfas": ["Contaminant", "State", "Result_At_or_Above_UCMR_MRL", "UCMR_Geolocation_Method"],
+  "cws-service-areas": ["Pop_Cat_5", "Service_Area_Type", "Symbology_Field", "Primacy_Agency", "Data_Provider_Type"],
+  "emef-sems": ["pgm_sys_acrnm"],
+  "emef-tri": ["pgm_sys_acrnm"],
+  "emef-rcra": ["pgm_sys_acrnm"],
+  "emef-acres": ["pgm_sys_acrnm"],
+  "tri-releases": ["cas_chem_name", "environmental_medium", "unit_of_measure", "reporting_year"],
+  "npl-boundaries": ["NPL_STATUS_CODE", "FEDERAL_FACILITY_DETER_CODE", "EPA_PROGRAM", "SITE_FEATURE_TYPE", "COUNTY", "STATE_CODE"],
+  "npl-status": ["Status", "Proposed_Date", "Listing_Date", "Construction_Completion_Date", "Deletion_Date"],
+  "fuds-properties": ["STATUS", "ELIGIBILITY", "COUNTY", "STATE", "USACEDISTRICT", "FISCALYEAR"],
+  "fuds-projects": ["ENVRESTORATIONCATEGORY", "DERPPROGRAM", "PROJECTSTATUS", "RISKVALUEMRSPP", "OVERLAPPINGFEDERALLANDAGENCY"],
+  "fuds-mrs": ["PROJECTSTATUS", "DERPPROGRAM", "RELATIVEPRIORITY"],
+  "ust-releases-county": ["County", "State"],
+  "ust-facilities-county": ["State"],
+  "fema-nfhl-zones": ["FLD_ZONE", "ZONE_SUBTY", "SFHA_TF", "STUDY_TYP"],
+  "padus-units": ["Category", "Own_Type", "Mang_Type", "Des_Tp", "State_Nm", "Pub_Access", "GAP_Sts", "IUCN_Cat"],
+  "nid-dams": ["PRIMARY_PURPOSE", "PRIMARY_DAM_TYPE", "HAZARD_POTENTIAL", "CONDITION_ASSESSMENT", "STATE", "YEAR_COMPLETED"],
+  "esri-wayback": [],
+  "wayback-capture": ["SRC_DATE", "NICE_NAME"],
+  "usgs-htmc": ["Map_Name", "Map_Scale", "DateCurrent", "Imprint_Year", "Survey_Year"],
+} satisfies Record<string, string[]>;
+
+export type CollectionId = keyof typeof EMBED_TEXT;
+
+/**
+ * Field names that must never be searchable or embedded: addresses, contacts, owners,
+ * certifiers, free-text descriptions, and names that can be a person's (NRHP RESNAME, EPA
+ * primary_name and SITE_NAME, UST Name, a water system's PWS_Name, USACE's FUDS property,
+ * site and project names, PAD-US Loc_Own).
+ */
+export const DENY_FIELD =
+  /address|street|zip|postal|contact|phone|email|owner|certif|^primary_name$|^resname$|^name$|^site_name$|^pws_name$|^featurename$|^dodformerlyuseddefensesitename$|^envrestorationprojectname$|^officialsitename$|^featuredescription$|^site_feature_description$|^loc_own$/i;
+
+/** Field names that end in "name" and may be embedded: species and place names, never a person's or a holding's. Reviewed in round 1 of embeddings. */
+export const NAME_FIELDS_ALLOWED: ReadonlySet<string> = new Set([
+  "SYSTEM_NAME",
+  "CLASS_NAME",
+  "WATER_REGIME_NAME",
+  "Map_Name",
+  "NICE_NAME",
+  "State_Nm",
+  "comname",
+  "COMNAME",
+  "Common_Name",
+  "sciname",
+  "SCIENAME",
+  "Scientific_Name",
+  "cas_chem_name",
+]);
+
+/** The words a field is embedded under: static word vectors gain from the field's meaning, not its code. One label per upstream field name. */
+export const FIELD_LABEL: Readonly<Record<string, string>> = {
+  // NWI (decoded locally from the Cowardin code)
+  WETLAND_TYPE: "wetland type",
+  SYSTEM_NAME: "wetland system",
+  CLASS_NAME: "wetland class",
+  WATER_REGIME_NAME: "water regime",
+  // NRHP
+  ResType: "historic resource type",
+  Is_NHL: "national historic landmark",
+  CertDate: "listed on the National Register",
+  City: "city",
+  County: "county",
+  State: "state",
+  // critical habitat and ranges (click answers; no record vectors this round)
+  comname: "species",
+  sciname: "scientific name",
+  listing_status: "ESA listing status",
+  status: "critical habitat status",
+  pubdate: "rule published",
+  COMNAME: "species",
+  SCIENAME: "scientific name",
+  LISTSTATUS: "ESA listing status",
+  CHSTATUS: "critical habitat status",
+  PUBDATE: "rule published",
+  HABTYPE: "habitat type",
+  Common_Name: "species",
+  Scientific_Name: "scientific name",
+  ESA_Listing_Status: "ESA listing status",
+  Entity_Description: "listed entity",
+  Lead_Agency: "lead agency",
+  Taxonomic_Group: "taxonomic group",
+  // ATTAINS
+  state: "state",
+  reportingcycle: "reporting cycle",
+  ircategory: "impaired water category",
+  on303dlist: "on the 303(d) list",
+  hastmdl: "has a TMDL",
+  cyclestatus: "EPA action status",
+  // UCMR 5 and water systems (no record vectors this round)
+  Contaminant: "PFAS contaminant",
+  Result_At_or_Above_UCMR_MRL: "result at or above the reporting level",
+  UCMR_Geolocation_Method: "located by",
+  Pop_Cat_5: "population served category",
+  Service_Area_Type: "service area type",
+  Symbology_Field: "boundary source",
+  Primacy_Agency: "primacy agency",
+  Data_Provider_Type: "data provider type",
+  // EMEF
+  pgm_sys_acrnm: "EPA program",
+  // TRI (click answer)
+  cas_chem_name: "chemical",
+  environmental_medium: "released to",
+  unit_of_measure: "unit",
+  reporting_year: "reporting year",
+  // Superfund boundaries and NPL list
+  NPL_STATUS_CODE: "NPL status",
+  FEDERAL_FACILITY_DETER_CODE: "federal facility",
+  EPA_PROGRAM: "EPA program",
+  SITE_FEATURE_TYPE: "mapped feature",
+  COUNTY: "county",
+  STATE_CODE: "state",
+  Status: "NPL status",
+  Proposed_Date: "proposed to the NPL",
+  Listing_Date: "listed on the NPL",
+  Construction_Completion_Date: "construction complete",
+  Deletion_Date: "deleted from the NPL",
+  // FUDS
+  STATUS: "FUDS status",
+  ELIGIBILITY: "FUDS eligibility",
+  STATE: "state",
+  USACEDISTRICT: "USACE district",
+  FISCALYEAR: "data fiscal year",
+  ENVRESTORATIONCATEGORY: "restoration category",
+  DERPPROGRAM: "restoration program",
+  PROJECTSTATUS: "project status",
+  RISKVALUEMRSPP: "risk value",
+  OVERLAPPINGFEDERALLANDAGENCY: "overlapping federal land",
+  RELATIVEPRIORITY: "relative priority",
+  // NFHL
+  FLD_ZONE: "flood zone",
+  ZONE_SUBTY: "zone subtype",
+  SFHA_TF: "special flood hazard area",
+  STUDY_TYP: "flood study type",
+  // PAD-US
+  Category: "protected area category",
+  Own_Type: "owner type",
+  Mang_Type: "manager type",
+  Des_Tp: "designation",
+  State_Nm: "state",
+  Pub_Access: "public access",
+  GAP_Sts: "GAP status",
+  IUCN_Cat: "IUCN category",
+  // NID
+  PRIMARY_PURPOSE: "dam purpose",
+  PRIMARY_DAM_TYPE: "dam type",
+  HAZARD_POTENTIAL: "hazard potential",
+  CONDITION_ASSESSMENT: "condition assessment",
+  YEAR_COMPLETED: "year completed",
+  // Wayback capture metadata (click answer)
+  SRC_DATE: "capture date",
+  NICE_NAME: "imagery collection",
+  // USGS topo sheets (click answer)
+  Map_Name: "map sheet",
+  Map_Scale: "map scale",
+  DateCurrent: "edition year",
+  Imprint_Year: "imprint year",
+  Survey_Year: "survey year",
+};
+
+/**
+ * Cards whose builder attaches record text to each feature (properties.extra.embedText), so
+ * the palette can index loaded records by meaning. The rest have no record vectors this
+ * round, and why.
+ */
+export const RECORD_VECTOR_CARDS: ReadonlySet<string> = new Set([
+  "nwi-wetlands",
+  "nrhp-listed",
+  "attains-impaired",
+  "emef-sems",
+  "emef-tri",
+  "emef-rcra",
+  "emef-acres",
+  "npl-boundaries",
+  "fuds-properties",
+  "fuds-mrs",
+  "ust-releases-county",
+  "fema-nfhl-zones",
+  "padus-units",
+  "nid-dams",
+]);
+
+export const NO_RECORD_VECTORS: Readonly<Record<string, string>> = {
+  "nwi-wetlands-raster": "a picture of pixel classes; no record",
+  "fws-crithab": "a click answer listing species, not a feature on the globe",
+  "nmfs-crithab": "a click answer listing species, not a feature on the globe",
+  "opp-ranges": "a click answer listing species; ranges are never drawn",
+  "ucmr5-pfas": "results are assembled per system from three EPA layers; deferred to the next round",
+  "cws-service-areas": "drawn as the PFAS system's geometry; deferred with ucmr5-pfas",
+  "tri-releases": "asked from a TRI listing's record; never drawn",
+  "npl-status": "joined by EPA ID into the Superfund boundary and point records",
+  "fuds-projects": "listed in their property's record; not drawn",
+  "ust-facilities-county": "joined into the release county's record",
+  "esri-wayback": "a tile set per release; no record",
+  "wayback-capture": "a click answer on imagery, not a feature on the globe",
+  "usgs-htmc": "a click answer listing sheets, not a feature on the globe",
+};
+
+/** Fields that must never be embedded whatever a card says: the deny list, the dossier's "published name", and any *name field not reviewed. */
+export function embeddableField(field: string): boolean {
+  if (DENY_FIELD.test(field)) return false;
+  if (/^published name$/i.test(field)) return false;
+  if (/name$/i.test(field) && !NAME_FIELDS_ALLOWED.has(field)) return false;
+  return true;
+}

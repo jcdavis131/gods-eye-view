@@ -270,7 +270,11 @@ describe("public and protected lands", () => {
     expect(d["public access"]).toBe("open access");
     expect(String(d.note)).toMatch(/owner keeps the land/);
     // Only what the style and note need rides in `extra`; the rest travels once, as dossier lines.
-    expect(Object.keys(f.properties.extra as PublicLandExtra).sort()).toEqual(["access", "acres", "category"]);
+    // Plus the record text (lib/catalog/recordText.ts): decoded categories only, never the unit's name or the holder.
+    expect(Object.keys(f.properties.extra as PublicLandExtra).sort()).toEqual(["access", "acres", "category", "embedText"]);
+    const text = (f.properties.extra as { embedText: string }).embedText;
+    expect(text).toBe("protected area category: Easement; owner type: Regional Agency Special District; public access: Open Access");
+    expect(text).not.toMatch(/Palo Alto|Alamo/);
   });
 
   it("says access is unknown when PAD-US has no code, and leaves an unknown coded value as its code", () => {

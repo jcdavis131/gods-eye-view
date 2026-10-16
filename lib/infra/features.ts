@@ -21,6 +21,7 @@
 
 import type { LineString, MultiLineString, MultiPolygon, Point, Polygon } from "geojson";
 import type { LayerFeature, LayerId } from "@/lib/layers/types";
+import { recordText, withEmbedText } from "@/lib/catalog/recordText";
 
 type Line = LineString | MultiLineString;
 type Poly = Polygon | MultiPolygon;
@@ -443,7 +444,11 @@ export function buildDams(rows: Row[]): LayerFeature[] {
           "operational status": str(p.OPERATIONAL_STATUS),
           "NID record updated": isoDay(p.DATA_UPDATED),
         },
-        extra: { hazard, condition, heightFt, storageAcFt } satisfies DamExtra,
+        // Record text: never NAME (private or not), never the NID id (matched by letters), never a height or storage (measured).
+        extra: withEmbedText(
+          { hazard, condition, heightFt, storageAcFt } satisfies DamExtra,
+          recordText("nid-dams", { PRIMARY_PURPOSE: str(p.PRIMARY_PURPOSE), PRIMARY_DAM_TYPE: str(p.PRIMARY_DAM_TYPE), HAZARD_POTENTIAL: hazard, CONDITION_ASSESSMENT: condition, STATE: str(p.STATE), YEAR_COMPLETED: year }),
+        ),
       },
     });
   }
