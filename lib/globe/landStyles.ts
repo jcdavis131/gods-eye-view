@@ -9,6 +9,7 @@ import type { LayerStyle } from "./renderer";
 import type { LayerFeature } from "@/lib/layers/types";
 import type { Access, FloodZoneExtra, HistoricExtra, PublicLandExtra, WetlandExtra } from "@/lib/land/features";
 import type { ImpairedExtra } from "@/lib/water/impaired";
+import { pfasBin, type PfasExtra } from "@/lib/water/pfas";
 import { polyFills, polyOutlines, UNRATED } from "./hazardStyles";
 import { FLOOD_PICTURE, WETLANDS_PICTURE } from "./terrainStyles";
 
@@ -208,5 +209,53 @@ export const impairedStyle: LayerStyle = {
     return lineParts(f)
       .filter((p) => p.length > 1)
       .map((p) => ({ positions: p.map((c) => [c[0], c[1], 0] as [number, number, number]), color: impairedColor(f), width: 2.4, alpha: 0.9 }));
+  },
+};
+
+// ---------------------------------------------------------------- PFAS in drinking water (EPA UCMR 5)
+
+/**
+ * A system's highest single result, ng/L, in the legend's four bins (lib/layers/pfas.ts PFAS_BINS):
+ * a measured value, not a risk scale. Sampled with none at or above the reporting level: outlined
+ * blue. Not in UCMR 5: thin grey dashes. Unknown: amber dashes, never drawn as not-detected.
+ */
+const PFAS_FILL = ["#E9D5FF", "#C084FC", "#9333EA", "#6B21A8"];
+const PFAS_NOT_DETECTED = "#38BDF8";
+const PFAS_NOT_IN = "#94A3B8";
+const PFAS_UNKNOWN = "#F59E0B";
+
+function pfasColor(f: LayerFeature): string {
+  const x = f.properties.extra as PfasExtra | undefined;
+  if (!x) return PFAS_NOT_IN;
+  if (x.state === "detected") return PFAS_FILL[pfasBin(x.maxNgL) ?? 0];
+  if (x.state === "not-detected") return PFAS_NOT_DETECTED;
+  if (x.state === "unknown") return PFAS_UNKNOWN;
+  return PFAS_NOT_IN;
+}
+
+/** The label is the system's name as EPA lists it (the feature name, which is searched, is its PWSID). */
+function pfasLabel(f: LayerFeature): string {
+  const n = f.properties.details?.["water system (as EPA lists it)"];
+  return typeof n === "string" && n ? n : f.properties.name;
+}
+
+export const pfasStyle: LayerStyle = {
+  color: "#A855F7",
+  icon: () => null,
+  colorFor: (f) => (isLoadedBox(f) ? LOADED_BOX : pfasColor(f)),
+  label: pfasLabel,
+  labelMax: 20,
+  labelWhen: (f) => !isLoadedBox(f),
+  polygons: (f) => {
+    if (isLoadedBox(f)) return null;
+    const x = f.properties.extra as PfasExtra | undefined;
+    // A faint fill keeps every system clickable; only a detection is filled for real.
+    return polyFills(f, pfasColor(f), x?.state === "detected" ? 0.35 : 0.04);
+  },
+  lines: (f) => {
+    if (isLoadedBox(f)) return polyOutlines(f, LOADED_BOX, 0.7, 1.5, true);
+    const x = f.properties.extra as PfasExtra | undefined;
+    const dashed = x?.state === "not-in-ucmr5" || x?.state === "unknown" || x?.modelled === true;
+    return polyOutlines(f, pfasColor(f), 0.9, x?.state === "not-in-ucmr5" ? 1 : 2, dashed);
   },
 };

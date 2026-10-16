@@ -440,10 +440,11 @@
                 "matchup",
                 "normals",
                 "impaired",
+                "pfas",
                 "report"
               ]
             },
-            "description": "gauges: USGS latest continuous readings in a bbox (flow, stage, temperature, DO, conductance, pH, turbidity, reservoir elevation/storage). wells: USGS latest daily groundwater levels with aquifer names. nwps: NOAA NWPS gauges with flood categories. twdb: Texas reservoirs. drought: US Drought Monitor current polygons. history: 365 days of daily means for one site and parameter. matchup: instantaneous values for one site and parameter in a window. normals: USGS daily-mean discharge percentiles (5th to 95th) for a calendar day, per site (sites=, date=MM-DD). impaired: EPA ATTAINS assessment units states report as impaired (303(d)), lines and areas, in a box clamped to 0.12 degrees and snapped to 0.02 (not the 4 degree water box): category with its meaning, 303(d) listing and TMDL (null when not reported, never N), reporting cycle, overall status, EPA action status verbatim and the How's My Waterway link; 2,000 per layer; `coverage` says per layer whether it answered (a failed layer has count null: unknown, not none). A listing for the whole unit and one cycle, not a measurement; waters not returned were not reported impaired, which includes waters never assessed. report: the community water report for a point."
+            "description": "gauges: USGS latest continuous readings in a bbox (flow, stage, temperature, DO, conductance, pH, turbidity, reservoir elevation/storage). wells: USGS latest daily groundwater levels with aquifer names. nwps: NOAA NWPS gauges with flood categories. twdb: Texas reservoirs. drought: US Drought Monitor current polygons. history: 365 days of daily means for one site and parameter. matchup: instantaneous values for one site and parameter in a window. normals: USGS daily-mean discharge percentiles (5th to 95th) for a calendar day, per site (sites=, date=MM-DD). impaired: EPA ATTAINS assessment units states report as impaired (303(d)), lines and areas, in a box clamped to 0.12 degrees and snapped to 0.02 (not the 4 degree water box): category with its meaning, 303(d) listing and TMDL (null when not reported, never N), reporting cycle, overall status, EPA action status verbatim and the How's My Waterway link; 2,000 per layer; `coverage` says per layer whether it answered (a failed layer has count null: unknown, not none). A listing for the whole unit and one cycle, not a measurement; waters not returned were not reported impaired, which includes waters never assessed. pfas: PFAS in public drinking water, EPA UCMR 5 (2023-2025), for the water systems serving a box clamped to 0.12 degrees and snapped to 0.02: systems found by EPA's community water system service areas first, then by EPA's estimated location; each system detected, not-detected, not-in-ucmr5 or unknown, with the highest single result per PFAS in ng/L (never compared with a health limit); service-area polygons only with polygons=1. Samples are taken where treated water enters the distribution system, not at a tap. report: the community water report for a point."
           },
           {
             "$ref": "#/components/parameters/format"
@@ -454,7 +455,18 @@
             "schema": {
               "$ref": "#/components/schemas/Bbox"
             },
-            "description": "`w,s,e,n` degrees. Required for op=gauges, wells, nwps, impaired."
+            "description": "`w,s,e,n` degrees. Required for op=gauges, wells, nwps, impaired, pfas."
+          },
+          {
+            "name": "polygons",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            },
+            "description": "op=pfas: draw each system on its service-area polygon (the globe asks below 10 km); without it, systems are points at EPA's estimated location."
           },
           {
             "name": "param",
@@ -559,6 +571,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/WaterImpairedResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/WaterPfasResponse"
                     },
                     {
                       "$ref": "#/components/schemas/WaterReportResponse"
@@ -5652,6 +5667,110 @@
           }
         ],
         "x-op": "normals"
+      },
+      "WaterPfasResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "description": "GeoJSON FeatureCollection: one feature per water system that can be drawn, named 'PWS <PWSID>'; Polygon/MultiPolygon on the system's service area (polygons=1), otherwise a Point at EPA's estimated location (the globe draws it as a ring, never a pin). properties.kind is the state; properties.details holds the system's name as EPA lists it, pwsid, population served, state, the UCMR 5 line, one line per PFAS ('<PFAS> (ng/L)': highest single result and how many of the results reached the reporting level), the service area's source (system or state, or modelled by EPA), how it was drawn and the ECHO report link. properties.extra: state, pwsid, maxNgL (highest single result across PFAS, null when none reached the reporting level), modelled, placement (service-area | estimated-location) and results [{contaminant, maxNgL, detections, results}]."
+              },
+              "bbox": {
+                "$ref": "#/components/schemas/Bbox"
+              },
+              "polygons": {
+                "type": "boolean"
+              },
+              "units": {
+                "type": "string",
+                "enum": [
+                  "ng/L"
+                ]
+              },
+              "systems": {
+                "type": "object",
+                "description": "How many systems in the box are in each state. detected: at least one PFAS at or above the UCMR 5 minimum reporting level. not-detected: sampled, every result below it (a result, not a gap). not-in-ucmr5: no UCMR 5 rows (most systems serving under 3,300 people were sampled only as a representative 800). unknown: EPA's results did not answer for it this time (never read as not-detected).",
+                "properties": {
+                  "detected": {
+                    "type": "integer"
+                  },
+                  "not-detected": {
+                    "type": "integer"
+                  },
+                  "not-in-ucmr5": {
+                    "type": "integer"
+                  },
+                  "unknown": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "notDrawn": {
+                "type": "array",
+                "description": "Systems in the box that cannot be drawn honestly: no service-area polygon asked or published and no estimated location. Listed, never placed at a guessed point.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "pwsid": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "detected",
+                        "not-detected",
+                        "not-in-ucmr5",
+                        "unknown"
+                      ]
+                    },
+                    "why": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "coverage": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "enum": [
+                        "service-areas",
+                        "estimated-locations",
+                        "results"
+                      ]
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "covered",
+                        "partial",
+                        "error"
+                      ]
+                    },
+                    "count": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "pfas"
       },
       "WaterImpairedResponse": {
         "allOf": [

@@ -18,6 +18,7 @@ import type { SourceId } from "@/lib/provenance/sources";
 import { WAYBACK_CAPTURE_CAVEAT, WAYBACK_CAVEAT } from "@/lib/terrain/wayback";
 import { TOPO_CAVEAT } from "@/lib/terrain/topo";
 import { IMPAIRED_CAVEAT } from "@/lib/water/impaired";
+import { CWS_CAVEAT, PFAS_CAVEAT } from "@/lib/water/pfas";
 import { NMFS_CAVEAT, RANGES_CAVEAT } from "@/lib/land/features";
 import { TRI_CAVEAT } from "@/lib/permits/tri";
 import { NPL_CAVEAT } from "@/lib/permits/npl";
@@ -73,7 +74,7 @@ export interface Collection {
 export const SHELVES: Array<{ id: string; title: string; layers: LayerId[] }> = [
   { id: "land", title: "Land and heritage", layers: ["wetlands", "historic"] },
   { id: "species", title: "Species", layers: ["crithab"] },
-  { id: "water", title: "Water quality", layers: ["impaired"] },
+  { id: "water", title: "Water quality", layers: ["impaired", "pfas"] },
   { id: "contaminants", title: "Contaminants", layers: ["contaminants"] },
   { id: "imagery", title: "Imagery and maps", layers: ["wayback", "topo"] },
 ];
@@ -234,6 +235,50 @@ export const COLLECTIONS: readonly Collection[] = [
     ops: ["water?op=impaired"],
     sensitivity: "Agency regulatory listings of water bodies; no personal data.",
     round: 2,
+  },
+  {
+    id: "ucmr5-pfas",
+    title: "PFAS in public drinking water (EPA UCMR 5)",
+    layer: "pfas",
+    sources: ["epa-ucmr5-pat"],
+    what: "UCMR 5 PFAS results per public water system, as EPA's PFAS Analytic Tools publish them: for each system serving a box and each of 29 PFAS, the highest single result at or above the minimum reporting level in ng/L, how many results reached it and how many results there were; or that the system was sampled with none at or above it, was not in UCMR 5, or is unknown this time. Systems are found by their service areas first (cws-service-areas), then by EPA's estimated location.",
+    recordIs: "A water system's UCMR 5 results for one PFAS: samples taken where treated water enters the distribution system, 2023-2025. Not a tap, not current water quality, and not compared with any health limit.",
+    coverage: { spatial: "United States and territories, public water systems in UCMR 5; below 25 km (service areas below 10 km)", temporal: "UCMR 5 sampling, 2023-2025", count: { value: 1978735, of: "UCMR 5 rows in PAT layer 1 (38,562 at or above the reporting level); 221,831 UCMR 3 rows are not used", countedOn: R3 } },
+    freshness: { statement: "EPA last edited the layer's data on 2026-10-13 (03:16 UTC).", readFrom: "PFAS_Analytic_Tools_Layers FeatureServer/1 ?f=json editingInfo.dataLastEditDate", recordedOn: R3 },
+    excluded: [
+      { what: "Hazard Index rows", why: "53,408 rows with a null value and date; excluded by the request (Result_At_or_Above_UCMR_MRL IS NOT NULL)" },
+      { what: "Result_Above_HBSL and any health-limit comparison", why: "the flag is never Yes on UCMR 5 rows, and no threshold has been read from a live EPA source" },
+      { what: "UCMR 3 rows (2013-2015)", why: "different analytes and reporting levels; deferred" },
+      { what: "facility and sample-point names and ids", why: "never requested; a result is shown per system" },
+      { what: "an average", why: "the value shown is the highest single result" },
+      { what: "a system placed at a guessed point", why: "a system with no service area and no estimated location (3,011 UCMR 5 rows have no geolocation method) is listed as not drawn" },
+    ],
+    caveats: [PFAS_CAVEAT],
+    searchable: ["F_PWS_ID"],
+    embedText: ["Contaminant", "State", "Population_Served", "Result_At_or_Above_UCMR_MRL", "UCMR_Geolocation_Method"],
+    ops: ["water?op=pfas"],
+    sensitivity: "Per water system, never per tap or well; the non-community layer (which carries a parcel number) is not used. PWS_Name can be an apartment complex, a nursing home or a rental park: it is shown in the record and on the label only, never searched or embedded. The layer has no contact fields.",
+    round: 3,
+  },
+  {
+    id: "cws-service-areas",
+    title: "Community water system service areas (EPA)",
+    layer: "pfas",
+    sources: ["epa-cws-boundaries"],
+    what: "EPA's Community Water System service-area boundaries, the geography UCMR 5 results are drawn on below 10 km: each with its PWSID, population served and category, service-area type, whether the boundary comes from the system or state or is modelled by EPA, its original data provider, and the system's ECHO report.",
+    recordIs: "The area a community water system serves, as its state or the system mapped it or as EPA modelled it. Not a pipe network, and not a statement that every address inside is served.",
+    coverage: { spatial: "United States and territories, community water systems; below 10 km, 2,000 per box, simplified on the server", temporal: null, count: { value: 44615, of: "community water system polygons: 25,375 sourced from the system or state, 19,240 modelled by EPA", countedOn: R3 } },
+    freshness: { statement: "EPA last edited the layer's data on 2026-05-29.", readFrom: "Water_System_Boundaries FeatureServer/0 ?f=json editingInfo.dataLastEditDate", recordedOn: R3 },
+    excluded: [
+      { what: "transient and non-transient non-community systems' polygons", why: "that layer carries a parcel number; deferred, and PAT's estimated location places those systems" },
+      { what: "Model_Method, Verification_Status and Confirmed", why: "answered empty when probed; not requested" },
+    ],
+    caveats: [CWS_CAVEAT],
+    searchable: ["PWSID"],
+    embedText: ["Pop_Cat_5", "Service_Area_Type", "Symbology_Field", "Primacy_Agency", "Data_Provider_Type"],
+    ops: ["water?op=pfas"],
+    sensitivity: "Utility service areas; no contact fields. PWS_Name is not searched or embedded.",
+    round: 3,
   },
   // ------------------------------------------------------------ round 1: contaminants
   {

@@ -26,6 +26,15 @@
 //                                       cycle and EPA action status. Box at most
 //                                       0.12 degrees, snapped to 0.02; 2,000 per
 //                                       layer. A failed layer is unknown, not none.
+//   /api/water?op=pfas&bbox=w,s,e,n[&polygons=1]
+//                                       PFAS in public drinking water: EPA UCMR 5
+//                                       (2023-2025) results per water system that
+//                                       serves the box, drawn on EPA's service-area
+//                                       polygon (polygons=1) or at EPA's estimated
+//                                       location; each system detected, not-detected,
+//                                       not-in-ucmr5 or unknown. Box at most 0.12
+//                                       degrees, snapped to 0.02. ng/L, never compared
+//                                       with a health limit.
 //   /api/water?op=report&lon=..&lat=..  The community water report for a point,
 //                                       built server-side from the ops above
 //                                       (no satellite turbidity: that needs a
@@ -47,10 +56,28 @@ import { cached } from "@/lib/server/cache";
 import { jsonError } from "@/lib/server/upstream";
 import { badRequest, csv as csvResponse, ok, options, parseFormat, withCors, type CsvRow, type ResponseFormat } from "@/lib/server/respond";
 import type { Provenance } from "@/lib/provenance/types";
-import { arcgisQuery, envelope as arcgisEnvelope, truncated } from "@/lib/server/arcgis";
+import { arcgisQuery, arcgisRowsCapped, envelope as arcgisEnvelope, truncated } from "@/lib/server/arcgis";
 import { parseBbox as gridBbox, type Bbox as GridBbox } from "@/lib/civic/bbox";
 import { ATTAINS, ATTAINS_FIELDS, ATTAINS_LAYERS, ATTAINS_MAX, ATTAINS_WHERE, buildImpaired, IMPAIRED_CAVEAT } from "@/lib/water/impaired";
 import type { LayerFeature } from "@/lib/layers/types";
+import {
+  buildPfasSystems,
+  chunkIds,
+  CWS_BOUNDARIES,
+  CWS_CAVEAT,
+  CWS_MAX,
+  cwsParams,
+  PAT,
+  patCentroidParams,
+  patResultsParams,
+  PFAS_CAVEAT,
+  PFAS_MAX_BYTES,
+  PFAS_OFFSET,
+  PFAS_OFFSET_COARSE,
+  pfasFeatures,
+  UCMR5,
+  type PfasState,
+} from "@/lib/water/pfas";
 import { usgsProvenance } from "@/lib/water/provenance";
 import { flowNormals, MAX_SITES } from "@/lib/water/normals";
 import { provenance } from "@/lib/provenance/types";
@@ -259,6 +286,101 @@ async function impairedOp(bbox: GridBbox): Promise<OpResult> {
   };
 }
 
+/**
+ * Seconds for one PAT results chunk. The group-by is slow cold (4.3 s for 17 systems, 11.3 s for
+ * 50, 2026-10-15) and fast warm; chunks run in parallel, each is cached a day, and a chunk that
+ * does not answer leaves its systems "unknown", never "not detected".
+ */
+const PAT_TIMEOUT_MS = 20_000;
+
+/**
+ * PFAS in public drinking water (UCMR 5) for the systems that serve a box: service areas first
+ * (EPA's CWS boundaries; polygons only with `polygons`), then systems EPA places in the box by an
+ * estimated location only, then their UCMR 5 results by PWSID. Each cached a day. One answer
+ * failing leaves the others; both system lists failing is an upstream error.
+ */
+async function pfasOp(bbox: GridBbox, polygons: boolean): Promise<OpResult> {
+  const box = bbox.join(",");
+  const cwsAsk = async () => {
+    const q = (offset: string) => arcgisQuery("epa-cws-boundaries", CWS_BOUNDARIES, cwsParams(bbox, polygons, offset), { gate: "epa-cws-boundaries", minIntervalMs: 250, timeoutMs: 25_000, tries: 2 });
+    let fc = await q(PFAS_OFFSET);
+    let coarse = false;
+    if (polygons && JSON.stringify(fc.features).length > PFAS_MAX_BYTES) {
+      fc = await q(PFAS_OFFSET_COARSE);
+      coarse = true;
+    }
+    return { features: fc.features.map((f) => ({ geometry: f.geometry, properties: f.properties })), truncated: truncated(fc) || fc.features.length >= CWS_MAX, coarse };
+  };
+  const [cws, cen] = await Promise.all([
+    cached(`pfas-cws:${box}:${polygons ? "poly" : "rows"}`, DAY_MS, cwsAsk).catch((e: unknown) => e as Error),
+    cached(`pfas-pat-centroid:${box}`, DAY_MS, () => arcgisRowsCapped("epa-ucmr5-pat", PAT, patCentroidParams(bbox), { gate: "epa-ucmr5-pat", minIntervalMs: 250, timeoutMs: PAT_TIMEOUT_MS, tries: 1 })).catch((e: unknown) => e as Error),
+  ]);
+  if (cws instanceof Error && cen instanceof Error) throw cws;
+  const cwsOk = cws instanceof Error ? null : cws;
+  const cenOk = cen instanceof Error ? null : cen;
+  const ids = new Set<string>();
+  for (const f of cwsOk?.value.features ?? []) if (typeof f.properties?.PWSID === "string") ids.add(f.properties.PWSID.trim());
+  for (const a of cenOk?.value.rows ?? []) if (typeof a.F_PWS_ID === "string") ids.add(a.F_PWS_ID.trim());
+  const chunks = patResultsParams([...ids]);
+  const parts = await Promise.all(
+    chunks.map((params) =>
+      cached(`pfas-pat-results:${params.where}`, DAY_MS, () => arcgisRowsCapped("epa-ucmr5-pat", PAT, params, { gate: "epa-ucmr5-pat", minIntervalMs: 250, timeoutMs: PAT_TIMEOUT_MS, tries: 1 })).catch((e: unknown) => e as Error),
+    ),
+  );
+  const rows: Array<Record<string, unknown>> = [];
+  const unknownIds = new Set<string>();
+  let answered = 0;
+  let cut = 0;
+  let resultsAge = 0;
+  parts.forEach((r, i) => {
+    // A chunk that failed, or that the server cut at its record cap, leaves its systems unknown.
+    if (r instanceof Error || r.value.exceeded) {
+      if (!(r instanceof Error)) cut++;
+      for (const id of chunkIds(chunks[i].where)) unknownIds.add(id);
+      return;
+    }
+    answered++;
+    resultsAge = Math.max(resultsAge, r.age);
+    rows.push(...r.value.rows);
+  });
+  const allFailed = chunks.length > 0 && answered === 0;
+  const systems = buildPfasSystems(cwsOk?.value.features ?? null, cenOk?.value.rows ?? null, allFailed ? null : rows, unknownIds);
+  const { features, notDrawn } = pfasFeatures(systems, polygons);
+  const counts: Record<PfasState, number> = { detected: 0, "not-detected": 0, "not-in-ucmr5": 0, unknown: 0 };
+  for (const s of systems) counts[s.state]++;
+  const resultsState = !chunks.length ? "covered" : answered === chunks.length ? "covered" : answered ? "partial" : "error";
+  const coverage = [
+    { id: "service-areas", name: "EPA community water system service areas", state: cwsOk ? (cwsOk.value.truncated ? "partial" : "covered") : "error", count: cwsOk ? cwsOk.value.features.length : null },
+    { id: "estimated-locations", name: "EPA UCMR 5 systems placed by estimated location", state: cenOk ? (cenOk.value.exceeded ? "partial" : "covered") : "error", count: cenOk ? new Set(cenOk.value.rows.map((a) => a.F_PWS_ID)).size : null },
+    { id: "results", name: "EPA UCMR 5 results", state: resultsState, count: resultsState === "error" ? null : systems.filter((s) => s.state === "detected" || s.state === "not-detected").length },
+  ];
+  const caveats = [PFAS_CAVEAT, CWS_CAVEAT, "Water system names are as EPA lists them and can be an apartment complex, a nursing home or a rental park; they are shown in the record and on the label only and never searched. A system is found by its PWSID.", "Only the returned `bbox` was loaded; systems whose service areas and estimated locations are both outside it are not loaded, which is not the same as none being there."];
+  if (!polygons) caveats.push("Service-area polygons are sent only with polygons=1 (the layer asks below 10 km); without them each sampled system is a point at EPA's estimated location, drawn as a ring, and systems EPA gives no location are listed in `notDrawn`.");
+  if (cwsOk?.value.coarse) caveats.push(`The service areas in this box were large: they were simplified to about 200 m (maxAllowableOffset ${PFAS_OFFSET_COARSE}) to stay under ${(PFAS_MAX_BYTES / 1e6).toFixed(1)} MB.`);
+  if (!cwsOk) caveats.push("EPA's service-area layer did not answer this time: systems are placed by estimated location only, and systems with no UCMR 5 rows are missing from this answer, not absent.");
+  if (!cenOk) caveats.push("EPA's estimated-location query did not answer this time: systems without a service-area polygon are missing from this answer, not absent.");
+  if (resultsState !== "covered") caveats.push(`EPA's UCMR 5 results did not answer for ${unknownIds.size} of ${ids.size} systems this time${cut ? " (part of the answer was cut at the service's record cap)" : ""}: they are "unknown", never "not detected".`);
+  const prov: Provenance[] = [];
+  if (cwsOk) prov.push(provenance(source("epa-cws-boundaries"), { kind: "published", seriesId: `Water_System_Boundaries FeatureServer layer 0${polygons ? `, simplified to ${cwsOk.value.coarse ? PFAS_OFFSET_COARSE : PFAS_OFFSET} degrees` : ", attributes only"}`, upstreamUrl: CWS_BOUNDARIES, retrievedAt: new Date(Date.now() - cwsOk.age).toISOString(), notes: [`bbox ${box}`] }));
+  if (cenOk || answered) prov.push(provenance(source("epa-ucmr5-pat"), { kind: "published", seriesId: `PFAS_Analytic_Tools_Layers FeatureServer layer 1, UCMR_Cycle='${UCMR5}', grouped by PWSID and contaminant`, upstreamUrl: PAT, retrievedAt: new Date(Date.now() - Math.max(resultsAge, cenOk?.age ?? 0)).toISOString(), notes: [`${ids.size} systems asked, ${answered} of ${chunks.length} result chunks answered`] }));
+  return {
+    data: { type: "FeatureCollection", features },
+    meta: {
+      source: "U.S. EPA UCMR 5 via the PFAS Analytic Tools, drawn on EPA's Community Water System service areas",
+      bbox,
+      polygons,
+      units: "ng/L",
+      systems: counts,
+      notDrawn,
+      coverage,
+      cacheAge: Math.max(cwsOk?.age ?? 0, cenOk?.age ?? 0, resultsAge),
+    },
+    ttlS: resultsState === "covered" && cwsOk && cenOk ? 3600 : 300,
+    provenance: prov,
+    caveats,
+  };
+}
+
 /** JSON envelope, or CSV when asked and the op is tabular. */
 function respond(r: OpResult, format: ResponseFormat = "json", op = "") {
   if (format === "csv") {
@@ -332,6 +454,11 @@ export async function GET(req: NextRequest) {
         if (!b) return bad("bbox=w,s,e,n required, west < east and south < north, e.g. bbox=-76.62,39.26,-76.58,39.30");
         return respond(await impairedOp(b), format, op);
       }
+      case "pfas": {
+        const b = gridBbox(q.get("bbox"), 0.12, 0.02);
+        if (!b) return bad("bbox=w,s,e,n required, west < east and south < north, e.g. bbox=-75.54,40.12,-75.40,40.26");
+        return respond(await pfasOp(b, q.get("polygons") === "1"), format, op);
+      }
       case "report": {
         const lon = Number(q.get("lon"));
         const lat = Number(q.get("lat"));
@@ -341,7 +468,7 @@ export async function GET(req: NextRequest) {
         return respond(await reportOp(lon, lat, req.nextUrl.origin), format, op);
       }
       default:
-        return bad("unknown op: gauges | wells | nwps | twdb | drought | history | matchup | normals | impaired | report");
+        return bad("unknown op: gauges | wells | nwps | twdb | drought | history | matchup | normals | impaired | pfas | report");
     }
   } catch (err) {
     return withCors(jsonError(err));

@@ -37,6 +37,7 @@ import { wetlandsLayer } from "./wetlands";
 import { publiclandsLayer } from "./publiclands";
 import { historicLayer } from "./historic";
 import { impairedLayer } from "./impaired";
+import { pfasLayer } from "./pfas";
 import { TERRAIN_LAYERS } from "./terrain";
 import { waybackLayer } from "./wayback";
 import { topoLayer } from "./topo";
@@ -92,6 +93,7 @@ export const LAYERS: LayerDefinition[] = [
   floodLayer,
   wetlandsLayer,
   impairedLayer,
+  pfasLayer,
   publiclandsLayer,
   historicLayer,
   ...TERRAIN_LAYERS,

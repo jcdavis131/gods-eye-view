@@ -144,6 +144,15 @@ describe("voice words for historic topo maps", () => {
   });
 });
 
+describe("voice words for PFAS in drinking water", () => {
+  it("hears pfas and forever chemicals", () => {
+    expect(layerOf("show pfas")).toMatchObject({ layer: "pfas" });
+    expect(layerOf("show forever chemicals near collegeville")).toMatchObject({ layer: "pfas", place: "collegeville" });
+    expect(layerOf("show drinking water pfas")).toMatchObject({ layer: "pfas" });
+    expect(layerOf("show impaired waters")).toMatchObject({ layer: "impaired" });
+  });
+});
+
 describe("voice words for impaired waters", () => {
   it("hears impaired waters and the 303(d) list", () => {
     expect(layerOf("show impaired waters")).toMatchObject({ layer: "impaired" });

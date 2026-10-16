@@ -62,6 +62,16 @@ export async function arcgisRows<A = Record<string, unknown>>(
   params: Record<string, string>,
   opts: ArcgisOptions,
 ): Promise<A[]> {
+  return (await arcgisRowsCapped<A>(name, layerUrl, params, opts)).rows;
+}
+
+/** arcgisRows, plus whether the server cut the answer at its record limit (statistics queries included). */
+export async function arcgisRowsCapped<A = Record<string, unknown>>(
+  name: string,
+  layerUrl: string,
+  params: Record<string, string>,
+  opts: ArcgisOptions,
+): Promise<{ rows: A[]; exceeded: boolean }> {
   const qs = new URLSearchParams({ f: "json", ...params });
   const url = `${layerUrl}/query?${qs.toString()}`;
   return retrying(async () => {
@@ -69,11 +79,14 @@ export async function arcgisRows<A = Record<string, unknown>>(
       opts.gate,
       opts.minIntervalMs ?? 250,
       opts.backoffMs ?? 30_000,
-      () => upstreamJson<{ features?: Array<{ attributes?: A }>; error?: { code?: number; message?: string } }>(name, url, { timeoutMs: opts.timeoutMs ?? 20_000 }),
+      () =>
+        upstreamJson<{ features?: Array<{ attributes?: A }>; exceededTransferLimit?: boolean; error?: { code?: number; message?: string } }>(name, url, {
+          timeoutMs: opts.timeoutMs ?? 20_000,
+        }),
       opts.backoffOn,
     );
     if (j.error) throw new UpstreamError(name, j.error.code ?? 502, `${name}: ${j.error.message ?? "query error"}`);
-    return (j.features ?? []).map((f) => f.attributes).filter((a): a is A => !!a);
+    return { rows: (j.features ?? []).map((f) => f.attributes).filter((a): a is A => !!a), exceeded: j.exceededTransferLimit === true };
   }, opts.tries ?? 3);
 }
 
