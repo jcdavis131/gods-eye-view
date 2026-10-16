@@ -406,17 +406,23 @@ export function buildDams(rows: Row[]): LayerFeature[] {
     const heightFt = finite(p.NID_HEIGHT, 0);
     const storageAcFt = finite(p.NID_STORAGE, 0);
     const year = finite(p.YEAR_COMPLETED, 0);
+    // A privately owned dam is often named for its owner ("<Surname> Pond Dam"),
+    // and the palette matches feature names, so it is labelled by its NID id;
+    // the published name stays in the dossier under a key the palette never searches.
+    const isPrivate = str(p.PRIMARY_OWNER_TYPE)?.toLowerCase() === "private";
+    const damName = str(p.NAME);
     out.push({
       type: "Feature",
       geometry: { type: "Point", coordinates: [lon, lat, 0] },
       properties: {
         id: `nid:${nid}`,
         layer: "dams",
-        name: str(p.NAME) ?? `Dam ${nid}`,
+        name: isPrivate || !damName ? `Dam ${nid}` : damName,
         kind: (hazard ?? "not rated").toLowerCase(),
         source: "USACE National Inventory of Dams",
         details: {
           "NID id": nid,
+          "published name": isPrivate ? damName : undefined,
           "hazard potential": hazard ?? "not rated by source",
           "what hazard potential means": "the damage a failure would cause downstream (High: loss of life likely), not the dam's condition or how likely it is to fail",
           "condition assessment": condition,

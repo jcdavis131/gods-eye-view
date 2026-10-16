@@ -825,6 +825,12 @@ export function buildPublicLands(
     const accessText =
       x.access === "unknown" ? "unknown (not reported to PAD-US)" : label("Pub_Access", accessCode)?.toLowerCase() ?? x.access;
     const easement = category === "Easement";
+    // Privately owned units and easements are often named for a family
+    // ("Smith Family Farm"), and the palette matches feature names and the
+    // "local name" detail, so they are labelled by PAD-US id; the published
+    // name stays in the dossier under a key the palette never searches.
+    const isPrivate = str(p.Own_Type) === "PVT";
+    const publishedName = unit ?? localName;
     const t = trim ? trimParts(r.geometry, trim.box, trim.minDeg) : { geometry: r.geometry, dropped: 0 };
     out.push({
       type: "Feature",
@@ -832,7 +838,7 @@ export function buildPublicLands(
       properties: {
         id: `padus:${oid}`,
         layer: "publiclands",
-        name: unit ?? localName ?? designation ?? "protected area",
+        name: isPrivate ? `${designation ?? category} · PAD-US ${oid}` : unit ?? localName ?? designation ?? "protected area",
         kind: category.toLowerCase(),
         source: "USGS PAD-US 4.1",
         details: {
@@ -846,7 +852,8 @@ export function buildPublicLands(
           "easement holder": easement ? str(p.EsmtHldr) : undefined,
           "easement holder type": easement ? holderType(p.EHoldTyp) : undefined,
           designation,
-          "local name": localName !== unit ? localName : undefined,
+          "published name": isPrivate ? publishedName : undefined,
+          "local name": !isPrivate && localName !== unit ? localName : undefined,
           state: label("State_Nm", p.State_Nm),
           acres: x.acres != null ? x.acres.toLocaleString("en-US") : undefined,
           "GAP status": label("GAP_Sts", p.GAP_Sts),
