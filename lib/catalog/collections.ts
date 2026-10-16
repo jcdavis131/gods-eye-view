@@ -72,11 +72,12 @@ export interface Collection {
 
 /** Which shelf a layer's collections sit on (the /catalog page's grouping). */
 export const SHELVES: Array<{ id: string; title: string; layers: LayerId[] }> = [
-  { id: "land", title: "Land and heritage", layers: ["wetlands", "historic"] },
+  { id: "land", title: "Land and heritage", layers: ["wetlands", "historic", "flood", "publiclands"] },
   { id: "species", title: "Species", layers: ["crithab"] },
   { id: "water", title: "Water quality", layers: ["impaired", "pfas"] },
   { id: "contaminants", title: "Contaminants", layers: ["contaminants"] },
   { id: "imagery", title: "Imagery and maps", layers: ["wayback", "topo"] },
+  { id: "infrastructure", title: "Infrastructure", layers: ["dams"] },
 ];
 
 const R1 = "2026-10-12";
@@ -486,6 +487,77 @@ export const COLLECTIONS: readonly Collection[] = [
     embedText: ["PROJECTSTATUS", "DERPPROGRAM", "RELATIVEPRIORITY"],
     ops: ["permits?op=contaminants"],
     sensitivity: "Agency-published DoD cleanup records; FEATURENAME is shown in the record and on the label only.",
+    round: 3,
+  },
+  // ------------------------------------------------------------ round 3: backfill, shipped layers
+  {
+    id: "fema-nfhl-zones",
+    title: "Flood hazard zones (FEMA National Flood Hazard Layer)",
+    layer: "flood",
+    sources: ["fema-nfhl"],
+    what: "FEMA's regulatory flood hazard zones (NFHL layer 28) in a box below 5 km: zone and subtype with FEMA's own meaning, whether the ground is in the special flood hazard area, the static base flood elevation where FEMA published one, depth and its units and datum, and the FIRM study it comes from (DFIRM_ID, study type). Under the zones, FEMA's own rendering of the same layer as a picture.",
+    recordIs: "A flood hazard zone on FEMA's regulatory map (FIRM): the 1% annual-chance floodplain and others. Not a forecast, and the absence of a zone is not a finding of no flood risk.",
+    coverage: { spatial: "United States, where FEMA has digital flood maps; below 5 km in a ~9 km box", temporal: "each zone's effective FIRM study (by DFIRM_ID)", count: null },
+    freshness: { statement: "FEMA's map service publishes no edit date; each zone carries the FIRM study it comes from (DFIRM_ID). Not counted nationally: counts over the full extent are slow (a 0.02 degree San Antonio box answered 47 zones).", readFrom: "NFHL MapServer/28 ?f=json (no editingInfo, empty copyright and description)", recordedOn: R3 },
+    excluded: [
+      { what: "effective dates per panel", why: "not requested; the zone's FIRM study id is shown instead" },
+      { what: "preliminary and pending maps", why: "not in layer 28" },
+      { what: "a base flood elevation of -9999", why: "FEMA's 'none' sentinel; dropped, never shown as a number" },
+    ],
+    caveats: [
+      "A regulatory flood map (FIRM), not a forecast: it says nothing about whether anything is flooding now.",
+      "The absence of a zone is not a finding of no flood risk: FEMA has not mapped everywhere, and zone D means no FEMA analysis.",
+    ],
+    searchable: ["FLD_ZONE", "FLD_AR_ID"],
+    embedText: ["FLD_ZONE", "ZONE_SUBTY", "SFHA_TF", "STATIC_BFE", "STUDY_TYP", "DFIRM_ID"],
+    ops: ["land?op=flood"],
+    sensitivity: "Regulatory map polygons; no ownership or personal data.",
+    round: 3,
+  },
+  {
+    id: "padus-units",
+    title: "Protected areas and public lands (USGS PAD-US 4.1)",
+    layer: "publiclands",
+    sources: ["usgs-padus"],
+    what: "USGS's Protected Areas Database (PAD-US 4.1, Manager Name service) in the four categories the route asks for, fee lands, easements, designations and proclamation boundaries: each unit's owner and owner type, local owner, manager and manager type, designation, GAP status, IUCN category, public access, acres and year established, and for easements the holder and holder type, decoded with the service's own domains.",
+    recordIs: "A protected-area unit as PAD-US publishes it. Public access is PAD-US's code, not permission to enter; land inside a proclamation boundary is not all public; an easement's owner keeps the land.",
+    coverage: { spatial: "United States; below 250 km (the 600 largest units when zoomed out past 60 km)", temporal: "PAD-US 4.1 (2025)", count: { value: 647844, of: "units in the Fee, Easement, Designation and Proclamation categories", countedOn: R3 } },
+    freshness: { statement: "USGS last edited the service's data on 2025-06-04; the service cites PAD-US 4.1 (doi:10.5066/P96WBCHS).", readFrom: "PADUS4_1ManagerName FeatureServer/0 ?f=json editingInfo.dataLastEditDate and copyrightText", recordedOn: R3 },
+    excluded: [
+      { what: "the Marine and Other categories", why: "not asked by the route" },
+      { what: "Loc_Own, Own_Name and EsmtHldr as search keys or record text", why: "an owner or easement holder can be a private person; shown as PAD-US publishes them, never searched or embedded" },
+    ],
+    caveats: [
+      "Public access is PAD-US's code for each unit; it is not permission to enter.",
+      "The land inside a proclamation boundary is not all public, and an easement's owner keeps the land (the holder has the rights the easement grants).",
+    ],
+    searchable: ["Unit_Nm", "Loc_Nm"],
+    embedText: ["Category", "Own_Type", "Mang_Type", "Des_Tp", "State_Nm", "Pub_Access", "GAP_Sts", "IUCN_Cat"],
+    ops: ["land?op=publiclands"],
+    sensitivity: "Ownership is shown as PAD-US publishes it (a federal inventory); what stays out is the search from an owner or easement holder to its holdings.",
+    round: 3,
+  },
+  {
+    id: "nid-dams",
+    title: "Dams (USACE National Inventory of Dams)",
+    layer: "dams",
+    sources: ["usace-nid"],
+    what: "Dams in USACE's National Inventory of Dams public service: NID id, hazard potential with its meaning, the regulator's condition assessment and its date, purposes, dam type, height, storage, surface and drainage area, year completed, river, county, state, owner type, emergency action plan, operational status and the record's update date.",
+    recordIs: "A dam as NID lists it. Hazard potential is the damage a failure would cause downstream, not the dam's condition or how likely it is to fail.",
+    coverage: { spatial: "United States", temporal: null, count: { value: 92628, of: "dams in NID's public service (layer 0)", countedOn: R3 } },
+    freshness: { statement: "NID's public service publishes no edit date; each dam carries the date its record was updated (DATA_UPDATED).", readFrom: "National_Inventory_of_Dams_Public_Service FeatureServer/0 ?f=json (no editingInfo)", recordedOn: R3 },
+    excluded: [
+      { what: "owner and representative names (CONG_REPRESNTATIVE, OTHER_NAMES, FORMER_NAMES, DESIGNER_NAMES and the owner names)", why: "never requested" },
+      { what: "a condition where the regulator published none", why: "left out, never guessed" },
+    ],
+    caveats: [
+      "Hazard potential is the damage a failure would cause downstream (High: loss of life likely), not the dam's condition and not how likely it is to fail.",
+      "Condition assessments are the regulating agency's, with the date it assessed; many dams have none published.",
+    ],
+    searchable: ["NIDID"],
+    embedText: ["PRIMARY_PURPOSE", "PRIMARY_DAM_TYPE", "NID_HEIGHT", "HAZARD_POTENTIAL", "CONDITION_ASSESSMENT", "STATE", "YEAR_COMPLETED"],
+    ops: ["infra?op=dams"],
+    sensitivity: "Public infrastructure records; no owner or representative name is requested. NAME is not embedded. Open: the globe names a dam feature by NAME, so the ⌘K palette matches dam names today, and a dam can be named for a private owner ('<Surname> Pond Dam'). Naming dams by NID id instead is a change to a shipped layer and is left for review.",
     round: 3,
   },
   // ------------------------------------------------------------ round 1: imagery

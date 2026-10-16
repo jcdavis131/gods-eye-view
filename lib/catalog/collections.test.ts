@@ -36,6 +36,9 @@ describe("the catalogue", () => {
       "fuds-properties",
       "fuds-projects",
       "fuds-mrs",
+      "fema-nfhl-zones",
+      "padus-units",
+      "nid-dams",
       "esri-wayback",
       "wayback-capture",
       "usgs-htmc",
@@ -60,7 +63,7 @@ describe("the catalogue", () => {
   });
 
   it("gives every curated layer at least one card, and shelves every catalogued layer once", () => {
-    for (const l of ["wetlands", "historic", "crithab", "contaminants", "wayback", "topo", "impaired", "pfas"] as const) expect(collectionsForLayer(l).length, l).toBeGreaterThan(0);
+    for (const l of ["wetlands", "historic", "crithab", "contaminants", "wayback", "topo", "impaired", "pfas", "flood", "publiclands", "dams"] as const) expect(collectionsForLayer(l).length, l).toBeGreaterThan(0);
     const shelved = SHELVES.flatMap((s) => s.layers);
     expect(new Set(shelved).size).toBe(shelved.length);
     for (const l of catalogued()) expect(shelved, l).toContain(l);
