@@ -2958,7 +2958,7 @@
                 "tri"
               ]
             },
-            "description": "building: city building permits. licences: licensed premises. environmental: EPA ECHO facilities and Corps actions. contaminants: EPA Superfund (with NPL status), TRI, RCRA and Brownfields listings, and with polygons=1 Superfund site boundaries. tri: what one TRI facility reported releasing in a year."
+            "description": "building: city building permits. licences: licensed premises. environmental: EPA ECHO facilities and Corps actions. contaminants: EPA Superfund (with NPL status), TRI, RCRA and Brownfields listings and USACE Formerly Used Defense Sites, and with polygons=1 Superfund site boundaries, FUDS property boundaries and munitions response sites. tri: what one TRI facility reported releasing in a year."
           },
           {
             "name": "bbox",
@@ -2995,7 +2995,7 @@
                 "1"
               ]
             },
-            "description": "op=contaminants: also send polygons (EPA's Superfund site boundaries). The globe asks below 10 km; without it only points are sent."
+            "description": "op=contaminants: also send polygons (EPA's Superfund site boundaries, USACE FUDS property boundaries and munitions response sites). The globe asks below 10 km; without it only points are sent."
           },
           {
             "name": "days",
@@ -7422,7 +7422,7 @@
         ],
         "x-extra": {
           "type": "object",
-          "description": "properties.extra. program: sems | tri | rcra | acres. shape: absent or 'point' for a listing, 'boundary' for a Superfund site boundary (kind 'npl', polygons=1 only; nplCode is NPL_STATUS_CODE as published, null when not given; siteFeatures is how many mapped features the EPA ID has in the answer; they are not merged). npl, on Superfund points and boundaries: the site's row on EPA's NPL list; null when the list answered without a row for it ('not on EPA's NPL status list'); absent when the list did not answer (unknown, never 'not listed').",
+          "description": "properties.extra. program: sems | tri | rcra | acres | fuds. shape: absent or 'point' for a listing, 'property' for a FUDS property boundary and 'mrs' for a FUDS munitions response site (polygons=1 only; a FUDS point is not sent when its property's boundary is), 'boundary' for a Superfund site boundary (kind 'npl', polygons=1 only; nplCode is NPL_STATUS_CODE as published, null when not given; siteFeatures is how many mapped features the EPA ID has in the answer; they are not merged). npl, on Superfund points and boundaries: the site's row on EPA's NPL list; null when the list answered without a row for it ('not on EPA's NPL status list'); absent when the list did not answer (unknown, never 'not listed'). fudsStatus, on FUDS properties: with-projects | without-projects | all-closed-out (USACE's two STATUS vocabularies mapped to one; null when unknown). projects, on FUDS properties: the property's cleanup projects (number, name as USACE lists it, category and its expansion, program, status, risk, remedy-in-place / response-complete / closeout dates with '(planned)' after today, costToComplete in USD with 0 kept only on a completed project, else null, and overlapping federal land); null when USACE's project layer did not answer.",
           "properties": {
             "npl": {
               "type": [
@@ -7541,6 +7541,23 @@
           "state",
           "last changed (EPA)",
           "EPA site page",
+          "property (as USACE lists it)",
+          "FUDS property number",
+          "status",
+          "eligibility",
+          "has projects (USACE)",
+          "closest city",
+          "USACE district",
+          "data fiscal year",
+          "USACE FUDS portal",
+          "drawn",
+          "projects",
+          "project <number>",
+          "munitions response site (as USACE lists it)",
+          "site id",
+          "FUDS project number",
+          "restoration program",
+          "relative priority",
           "what this is"
         ]
       },

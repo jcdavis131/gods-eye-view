@@ -8,10 +8,13 @@
 //   TRI                Toxics Release Inventory reporters
 //   RCRA               hazardous-waste handlers (RCRAInfo)
 //   Brownfields        ACRES properties
+//   FUDS               USACE's Formerly Used Defense Sites (property points,
+//                      with their cleanup projects in the record)
 //
 // from EPA's Envirofacts EMEF map service through /api/permits, and below
 // CONTAMINANTS_BOUNDARY_MAX_M EPA's Superfund site boundaries too (polygons=1,
-// the historic layer's mechanism), coloured by NPL status. A listing is a
+// the historic layer's mechanism), coloured by NPL status, and FUDS property
+// boundaries and munitions response sites. A listing is a
 // regulatory status, not a finding of contamination at the point; a boundary
 // is a regulatory area, not a contamination footprint. A feature is named by
 // its program id or EPA ID; EPA's facility or site name is in the dossier and
@@ -64,15 +67,17 @@ async function fetchContaminants(ctx: FetchContext): Promise<FetchResult> {
   const meta = env as unknown as { bbox?: Bbox; coverage?: CoverageLike[] };
   const loaded: Bbox = Array.isArray(meta.bbox) && meta.bbox.length === 4 ? meta.bbox : want;
   const features = memos[tier].stable(env.data.features as unknown as LayerFeature[]);
-  let listings = 0;
-  let boundaries = 0;
+  const n = { listings: 0, boundary: 0, property: 0, mrs: 0 };
   for (const f of features) {
-    if ((f.properties.extra as ContaminantExtra | undefined)?.shape === "boundary") boundaries++;
-    else listings++;
+    const shape = (f.properties.extra as ContaminantExtra | undefined)?.shape;
+    if (shape === "boundary" || shape === "property" || shape === "mrs") n[shape]++;
+    else n.listings++;
   }
   const lead =
-    `${listings.toLocaleString("en-US")} listings in the dashed box (outside it: not loaded)` +
-    (tier === "near" ? `, ${boundaries} Superfund site boundaries` : ` · descend below ${CONTAMINANTS_BOUNDARY_MAX_M / 1000} km for Superfund site boundaries`) +
+    `${n.listings.toLocaleString("en-US")} listings in the dashed box (outside it: not loaded)` +
+    (tier === "near"
+      ? `, ${n.boundary} Superfund site boundaries, ${n.property} FUDS property boundaries, ${n.mrs} munitions response sites`
+      : ` · descend below ${CONTAMINANTS_BOUNDARY_MAX_M / 1000} km for Superfund site boundaries and FUDS boundaries`) +
     " · a listing is a regulatory status, not a finding of contamination";
   return {
     collection: { type: "FeatureCollection", features: [...features, civicLoadedBox("contaminants", loaded, "EPA program listings")] },
@@ -87,12 +92,12 @@ export const contaminantsLayer: LayerDefinition = {
   id: "contaminants",
   label: "Contaminated sites (EPA)",
   description:
-    "EPA program listings below 25 km inside a dashed box: Superfund sites (EPA's SEMS site layer: the current National Priorities List, final and proposed; sites deleted from the NPL and Superfund sites never listed are not in it), Toxics Release Inventory reporters, RCRA hazardous-waste handlers and Brownfields properties, coloured by program, each with its EPA record. Every Superfund site carries its NPL status and dates from EPA's NPL list; below 10 km EPA's Superfund site boundaries are drawn too, coloured by NPL status (a regulatory area, not a contamination footprint). A listing is a regulatory status, not a finding of contamination; a TRI reporter's record shows, on request, what it reported releasing that year. United States.",
+    "EPA program listings below 25 km inside a dashed box: Superfund sites (EPA's SEMS site layer: the current National Priorities List, final and proposed; sites deleted from the NPL and Superfund sites never listed are not in it), Toxics Release Inventory reporters, RCRA hazardous-waste handlers and Brownfields properties, coloured by program, each with its EPA record. Every Superfund site carries its NPL status and dates from EPA's NPL list; below 10 km EPA's Superfund site boundaries are drawn too, coloured by NPL status (a regulatory area, not a contamination footprint). USACE's Formerly Used Defense Sites are drawn as properties with their cleanup projects in the record, and below 10 km as property boundaries and munitions response sites (where munitions may be present, not a confirmed hazard). A listing is a regulatory status, not a finding of contamination; a TRI reporter's record shows, on request, what it reported releasing that year. United States.",
   color: "#F87171",
   updateIntervalMs: 6 * 60 * 60_000,
   defaultEnabled: false,
   viewDependent: true,
   viewKey: contaminantsViewKey,
-  attribution: "U.S. EPA Envirofacts (EMEF): SEMS, TRI, RCRAInfo, ACRES; EPA Superfund site boundaries (EPA_GEO) and the NPL status list",
+  attribution: "U.S. EPA Envirofacts (EMEF): SEMS, TRI, RCRAInfo, ACRES; EPA Superfund site boundaries (EPA_GEO) and the NPL status list; U.S. Army Corps of Engineers, FUDS (FY2024)",
   fetch: fetchContaminants,
 };

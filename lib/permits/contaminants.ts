@@ -17,7 +17,8 @@ import type { NplJoin } from "./npl";
 
 export const EMEF = "https://geopub.epa.gov/arcgis/rest/services/EMEF/efpoints/MapServer";
 
-export type ContaminantProgram = "sems" | "tri" | "rcra" | "acres";
+/** EMEF's four programs, and USACE's Formerly Used Defense Sites (lib/permits/fuds.ts). */
+export type ContaminantProgram = "sems" | "tri" | "rcra" | "acres" | "fuds";
 
 export interface EmefLayer {
   id: ContaminantProgram;
@@ -71,8 +72,8 @@ export interface ContaminantExtra {
   program: ContaminantProgram;
   registryId?: string;
   programId?: string;
-  /** A point listing unless said otherwise; Superfund boundaries are "boundary" (lib/permits/npl.ts). */
-  shape?: "point" | "boundary";
+  /** A point listing unless said otherwise: a Superfund "boundary" (lib/permits/npl.ts), a FUDS "property" boundary or "mrs" (lib/permits/fuds.ts). */
+  shape?: "point" | "boundary" | "property" | "mrs";
   /**
    * Superfund only: the site's row on EPA's NPL list; null when the list answered without a row for
    * it; absent (undefined) when the list did not answer, which is unknown, not "not listed".

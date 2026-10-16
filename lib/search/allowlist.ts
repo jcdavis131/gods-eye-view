@@ -82,6 +82,10 @@ export const SEARCHABLE_DETAILS: ReadonlySet<string> = new Set([
   // Superfund site boundaries: EPA's site id. Never the site name (SITE_NAME can carry a
   // person's or a business's name); the feature is named by its EPA ID instead
   "epa id",
+  // Formerly Used Defense Sites: USACE's property and project numbers. Never a property,
+  // site or project name (they can be a person's: "BARTLETT PROPERTY")
+  "fuds property number",
+  "fuds project number",
   // impaired waters: EPA ATTAINS assessment unit ids (state-assigned codes); the unit's
   // name is a place name but is not searched in this round
   "assessment unit id",

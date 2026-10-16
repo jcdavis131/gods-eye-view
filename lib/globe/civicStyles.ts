@@ -139,7 +139,18 @@ export const CONTAMINANT_COLOR: Record<string, string> = {
   tri: "#C084FC",
   rcra: "#FBBF24",
   acres: "#A3A3A3",
+  fuds: "#A3B23C",
 };
+
+/** FUDS: an olive program colour; a property with every project at closeout is drawn dimmer; munitions response sites dashed in a lighter olive. */
+const FUDS_CLOSED = "#6B7330";
+const FUDS_MRS = "#D9F99D";
+
+function fudsColor(f: LayerFeature): string {
+  const x = f.properties.extra as { shape?: string; fudsStatus?: string | null } | undefined;
+  if (x?.shape === "mrs") return FUDS_MRS;
+  return x?.fudsStatus === "all-closed-out" ? FUDS_CLOSED : CONTAMINANT_COLOR.fuds;
+}
 
 /**
  * Superfund site boundaries by NPL_STATUS_CODE: final solid red, proposed orange dashed, deleted
@@ -171,6 +182,10 @@ function contaminantLabel(f: LayerFeature): string {
     const n = f.properties.details?.["site (as EPA publishes it)"];
     return typeof n === "string" && n ? n : f.properties.name;
   }
+  if (f.properties.kind === "fuds") {
+    const n = f.properties.details?.["property (as USACE lists it)"] ?? f.properties.details?.["munitions response site (as USACE lists it)"];
+    return typeof n === "string" && n ? n : f.properties.name;
+  }
   const s = x?.npl?.status?.toLowerCase();
   const short = s === "npl site" ? "final" : s === "proposed npl site" ? "proposed" : s === "deleted npl site" ? "deleted" : s;
   return short ? `${f.properties.name} · NPL: ${short}` : f.properties.name;
@@ -179,19 +194,24 @@ function contaminantLabel(f: LayerFeature): string {
 export const contaminantsStyle: LayerStyle = {
   color: "#F87171",
   icon: () => null,
-  colorFor: (f) => (isLoadedBox(f) ? LOADED_BOX : isBoundary(f) ? nplOf(f).color : (CONTAMINANT_COLOR[f.properties.kind ?? ""] ?? "#F87171")),
+  colorFor: (f) => (isLoadedBox(f) ? LOADED_BOX : f.properties.kind === "fuds" ? fudsColor(f) : isBoundary(f) ? nplOf(f).color : (CONTAMINANT_COLOR[f.properties.kind ?? ""] ?? "#F87171")),
   pointSize: (f) => (f.properties.kind === "sems" ? 9 : f.properties.kind === "rcra" ? 5 : 7),
   label: contaminantLabel,
   labelMax: 20,
   labelWhen: (f) => !isLoadedBox(f),
   polygons: (f) => {
     if (isLoadedBox(f) || !isBoundary(f)) return null;
+    if (f.properties.kind === "fuds") return polyFills(f, fudsColor(f), (f.properties.extra as { shape?: string }).shape === "mrs" ? 0.08 : 0.12);
     const s = nplOf(f);
     return s.fill > 0 ? polyFills(f, s.color, s.fill) : null;
   },
   lines: (f) => {
     if (isLoadedBox(f)) return polyOutlines(f, LOADED_BOX, 0.7, 1.5, true);
     if (!isBoundary(f)) return null;
+    if (f.properties.kind === "fuds") {
+      const mrs = (f.properties.extra as { shape?: string }).shape === "mrs";
+      return polyOutlines(f, fudsColor(f), 0.85, mrs ? 1.5 : 2, mrs);
+    }
     const s = nplOf(f);
     return polyOutlines(f, s.color, 0.85, s.width, s.dashed);
   },

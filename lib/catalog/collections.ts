@@ -21,6 +21,7 @@ import { IMPAIRED_CAVEAT } from "@/lib/water/impaired";
 import { NMFS_CAVEAT, RANGES_CAVEAT } from "@/lib/land/features";
 import { TRI_CAVEAT } from "@/lib/permits/tri";
 import { NPL_CAVEAT } from "@/lib/permits/npl";
+import { FUDS_CAVEAT } from "@/lib/permits/fuds";
 
 export interface Exclusion {
   what: string;
@@ -377,6 +378,69 @@ export const COLLECTIONS: readonly Collection[] = [
     embedText: ["Status", "Proposed_Date", "Listing_Date", "Construction_Completion_Date", "Deletion_Date"],
     ops: ["permits?op=contaminants"],
     sensitivity: "Federal regulatory list; no personal data is requested. Site_Name is not searched or embedded.",
+    round: 3,
+  },
+  {
+    id: "fuds-properties",
+    title: "Formerly Used Defense Sites: properties (USACE FUDS)",
+    layer: "contaminants",
+    sources: ["usace-fuds"],
+    what: "Properties the Department of Defense once used and USACE is responsible for investigating and cleaning up, as USACE's FY2024 FUDS inventory publishes them: every property as a point (layer 1) and, below 10 km, the property's boundary where USACE has drawn one (layer 4), each with its FUDS property number, status, eligibility, county, state, closest city, USACE district, data year, FUDS portal page and its cleanup projects (fuds-projects).",
+    recordIs: "A property in the FUDS program. A program status, not a finding of contamination at the point; a property with no projects was found to need none or is not eligible.",
+    coverage: { spatial: "United States and its territories; points below 25 km, boundaries below 10 km, 1,000 per layer and box", temporal: "FY2024 data", count: { value: 10123, of: "property points (layer 1); 3,003 property boundaries (layer 4)", countedOn: R3 } },
+    freshness: { statement: "USACE updated the item on 2026-10-07; the layers carry FY2024 data (FISCALYEAR 2024 on every row checked) and USACE calls it preliminary.", readFrom: "item 3f8354667d5b4b1b8ad7a6e00c3cf3b1 (sharing/rest modified) and FeatureServer/1 and 4 ?f=json editingInfo.dataLastEditDate (2026-10-07)", recordedOn: R3 },
+    excluded: [
+      { what: "CURRENTOWNER", why: "free text holding private individuals' names, P.O. boxes and phone numbers; never requested" },
+      { what: "FEATUREDESCRIPTION", why: "unreviewed narratives; never requested" },
+      { what: "a property's point where its boundary is drawn", why: "one property, one symbol (27 of 126 points in the NJ/NY test box)" },
+      { what: "a guessed fiscal year or status", why: "FISCALYEAR is text on one layer and a number on the other and is read strictly; the two STATUS vocabularies map to one enum, and an unknown value is null" },
+    ],
+    caveats: [FUDS_CAVEAT],
+    searchable: ["FUDSUNIQUEPROPERTYNUMBER"],
+    embedText: ["STATUS", "ELIGIBILITY", "COUNTY", "STATE", "USACEDISTRICT", "FISCALYEAR"],
+    ops: ["permits?op=contaminants"],
+    sensitivity: "Agency-published DoD cleanup records. The owner and narrative fields stay at the source. Property names (FEATURENAME, DODFORMERLYUSEDDEFENSESITENAME) can carry a private surname (13 names on layer 1 contain 'PROPERTY', e.g. 'BARTLETT PROPERTY (WURTSMITH AIR FORCE BASE)'); they are shown in the record and on the label, never searched or embedded.",
+    round: 3,
+  },
+  {
+    id: "fuds-projects",
+    title: "Formerly Used Defense Sites: cleanup projects (USACE FUDS)",
+    layer: "contaminants",
+    sources: ["usace-fuds"],
+    what: "The cleanup projects on each FUDS property (layer 2): project number, restoration category (military munitions, hazardous, toxic and radioactive waste, containerized, building demolition and debris removal, potentially responsible party), program (IRP or MMRP), status, remedy-in-place, response-complete and closeout dates, risk value, USACE's cost-to-complete estimate and any overlapping federal land. Listed in their property's record; not drawn.",
+    recordIs: "One environmental restoration project on a FUDS property, as USACE tracks it. A date after today is USACE's planned date and is marked so.",
+    coverage: { spatial: "United States and its territories; the projects of the properties drawn in a box", temporal: "FY2024 data", count: { value: 5584, of: "projects (layer 2)", countedOn: R3 } },
+    freshness: { statement: "USACE updated the item on 2026-10-07; the layers carry FY2024 data (FISCALYEAR 2024 on every row checked) and USACE calls it preliminary.", readFrom: "item 3f8354667d5b4b1b8ad7a6e00c3cf3b1 (sharing/rest modified) and FeatureServer/2 ?f=json editingInfo.dataLastEditDate (2026-10-07)", recordedOn: R3 },
+    excluded: [
+      { what: "a cost to complete of 0 on a project that is not complete", why: "not an estimate; shown as 'not given' (3 such projects nationally on 2026-10-15). A 0 on a completed project is kept" },
+      { what: "a project whose property is not drawn in the box", why: "one site, one symbol: projects are listed under their property" },
+      { what: "the project's own point", why: "not drawn; the property carries it" },
+    ],
+    caveats: ["Costs are USACE's estimates to complete, in dollars as published; dates after today are planned."],
+    searchable: ["FUDSPROPERTYID", "PROJECTNUMBER"],
+    embedText: ["ENVRESTORATIONCATEGORY", "DERPPROGRAM", "PROJECTSTATUS", "RISKVALUEMRSPP", "OVERLAPPINGFEDERALLANDAGENCY"],
+    ops: ["permits?op=contaminants"],
+    sensitivity: "Agency-published DoD cleanup records. ENVRESTORATIONPROJECTNAME and DODFORMERLYUSEDDEFENSESITENAME are shown in the record only, never searched or embedded.",
+    round: 3,
+  },
+  {
+    id: "fuds-mrs",
+    title: "Formerly Used Defense Sites: munitions response sites (USACE FUDS)",
+    layer: "contaminants",
+    sources: ["usace-fuds"],
+    what: "Munitions Response Site polygons on FUDS properties (layer 3), with property number, site id, project number, status, program and relative priority. Drawn below 10 km, dashed.",
+    recordIs: "Where munitions may be present on a former defense property, as USACE maps it. Not a confirmed hazard footprint.",
+    coverage: { spatial: "United States and its territories; below 10 km, 1,000 per box", temporal: "FY2024 data", count: { value: 1682, of: "munitions response site polygons (layer 3); relative priority is null on 1,661", countedOn: R3 } },
+    freshness: { statement: "USACE updated the item on 2026-10-07; the layers carry FY2024 data (FISCALYEAR 2024 on every row checked) and USACE calls it preliminary.", readFrom: "item 3f8354667d5b4b1b8ad7a6e00c3cf3b1 (sharing/rest modified) and FeatureServer/3 ?f=json editingInfo.dataLastEditDate (2026-10-07)", recordedOn: R3 },
+    excluded: [
+      { what: "FEATUREDESCRIPTION and OFFICIALSITENAME", why: "never requested" },
+      { what: "a relative priority where USACE gives none", why: "shown as 'not given', never ranked" },
+    ],
+    caveats: ["A munitions response site marks where munitions may be present, not a confirmed hazard footprint. USACE publishes these polygons; they are shown to help people avoid hazards, with that caveat."],
+    searchable: ["PROJECTNUMBER", "FUDSPROPERTYID"],
+    embedText: ["PROJECTSTATUS", "DERPPROGRAM", "RELATIVEPRIORITY"],
+    ops: ["permits?op=contaminants"],
+    sensitivity: "Agency-published DoD cleanup records; FEATURENAME is shown in the record and on the label only.",
     round: 3,
   },
   // ------------------------------------------------------------ round 1: imagery

@@ -119,6 +119,9 @@ describe("voice words for contaminated sites", () => {
     expect(layerOf("show hazardous waste")).toMatchObject({ layer: "contaminants" });
     expect(layerOf("show national priorities list")).toMatchObject({ layer: "contaminants" });
     expect(layerOf("show npl sites near newark")).toMatchObject({ layer: "contaminants", place: "newark" });
+    expect(layerOf("show formerly used defense sites")).toMatchObject({ layer: "contaminants" });
+    expect(layerOf("show old military sites near sandy hook")).toMatchObject({ layer: "contaminants", place: "sandy hook" });
+    expect(layerOf("show munitions")).toMatchObject({ layer: "contaminants" });
     expect(layerOf("show hazards")).toMatchObject({ layer: "hazards" });
   });
 });

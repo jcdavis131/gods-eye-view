@@ -11,7 +11,10 @@
 //   contaminants      EPA EMEF Superfund (SEMS), TRI, RCRA and Brownfields listings in
 //                     a box, 1,000 per program at most; 6 h. With polygons, EPA's
 //                     Superfund site boundaries (1 day). Every Superfund point and
-//                     boundary is joined by EPA ID to EPA's NPL status list (1 day)
+//                     boundary is joined by EPA ID to EPA's NPL status list (1 day).
+//                     USACE's Formerly Used Defense Sites: property points and their
+//                     projects, and with polygons property boundaries and munitions
+//                     response sites (1 day each)
 //
 // Every request goes through lib/civic/request.ts (a gate per host, ten
 // minutes off after a 429 or a 503). A city that fails is named in
@@ -66,6 +69,7 @@ import {
   type NplDomains,
   type NplStatus,
 } from "./npl";
+import { buildFudsMrs, buildFudsProjects, buildFudsProperties, FUDS, FUDS_LAYERS, FUDS_MAX, fudsParams, type FudsLayerId } from "./fuds";
 import { codedDomains, type ArcgisLayerInfo } from "@/lib/server/arcgis";
 import type { LayerFeature } from "@/lib/layers/types";
 
@@ -382,7 +386,8 @@ async function nplDomains(): Promise<NplDomains | null> {
  */
 export async function contaminants(b: Bbox, polygons = false): Promise<ContaminantsAnswer> {
   const box = b.join(",");
-  const [emef, bnd] = await Promise.all([
+  const fudsLayers = FUDS_LAYERS.filter((l) => polygons || !l.polygons);
+  const [emef, bnd, fuds] = await Promise.all([
     Promise.all(
       EMEF_LAYERS.map((l) =>
         part(l.id, `EPA ${l.short}`, `emef:${l.id}:${box}`, 6 * 60 * MIN, async () => {
@@ -394,6 +399,7 @@ export async function contaminants(b: Bbox, polygons = false): Promise<Contamina
       ),
     ),
     polygons ? part("npl-boundaries", "EPA Superfund site boundaries", `npl-bnd:${box}`, DAY, () => arcgisRowsCapped("epa-npl-boundaries", NPL_BOUNDARIES, nplBoundaryParams(b), NPL_BOUNDARY_MAX)) : Promise.resolve(null),
+    Promise.all(fudsLayers.map((l) => part(`fuds-${l.id}`, l.name, `fuds:${l.id}:${box}`, DAY, () => arcgisRowsCapped("usace-fuds", `${FUDS}/${l.layer}`, fudsParams(l, b), FUDS_MAX)))),
   ]);
 
   // The NPL list, by EPA ID: every Superfund point's program id and every boundary's EPA_ID.
@@ -466,6 +472,49 @@ export async function contaminants(b: Bbox, polygons = false): Promise<Contamina
       );
     }
   }
+  // USACE FUDS: projects grouped onto their properties; a point is dropped where its property has a boundary.
+  const fudsOf = (id: FudsLayerId) => fuds.find((r) => r.id === `fuds-${id}`) ?? null;
+  const fPts = fudsOf("properties");
+  const fProj = fudsOf("projects");
+  const fPoly = fudsOf("property-polygons");
+  const fMrs = fudsOf("mrs");
+  const projects = fProj?.ok ? buildFudsProjects(fProj.value.rows, Date.now()) : null;
+  const fudsProps = buildFudsProperties(fPts?.ok ? fPts.value.rows : [], fPoly?.ok ? fPoly.value.rows : null, projects);
+  const fudsMrs = fMrs?.ok ? buildFudsMrs(fMrs.value.rows) : [];
+  features.push(...fudsProps, ...fudsMrs);
+  const fudsCount: Record<FudsLayerId, number | null> = {
+    properties: fudsProps.filter((f) => (f.properties.extra as ContaminantExtra).shape === "point").length,
+    "property-polygons": fudsProps.filter((f) => (f.properties.extra as ContaminantExtra).shape === "property").length,
+    mrs: fudsMrs.length,
+    // Projects in the box whose property is drawn here.
+    projects: projects ? fudsProps.reduce((n, f) => n + ((f.properties.extra as { projects?: unknown[] | null }).projects?.length ?? 0), 0) : null,
+  };
+  for (const r of fuds) {
+    const l = FUDS_LAYERS.find((x) => `fuds-${x.id}` === r.id)!;
+    if (!r.ok) {
+      coverage.push({ id: r.id, name: r.name, state: "error", count: null, reason: r.error });
+      continue;
+    }
+    age = Math.max(age, r.age);
+    coverage.push({
+      id: r.id,
+      name: r.name,
+      state: r.value.capped ? "partial" : "covered",
+      count: fudsCount[l.id],
+      reason: [capReason(r.value.capped, r.value.more, FUDS_MAX), l.id === "properties" && fPoly?.ok ? "a property with a boundary here is drawn as its boundary, not its point" : ""].filter(Boolean).join("; ") || undefined,
+      cadence: "USACE's FUDS inventory, FY2024 data (item updated 2026-10-07)",
+    });
+    prov.push(
+      provenance(source("usace-fuds"), {
+        kind: "published",
+        seriesId: `fuds FeatureServer layer ${l.layer} (${l.name.replace("USACE FUDS ", "")})`,
+        upstreamUrl: `${FUDS}/${l.layer}`,
+        retrievedAt: iso(r.age),
+        notes: [`${r.value.rows.length} rows in the box${r.value.capped ? ` (capped at ${FUDS_MAX})` : ""}`],
+      }),
+    );
+  }
+
   if (chunks.length) {
     const okParts = statusParts.filter((r) => r.ok);
     const state = okParts.length === statusParts.length ? "covered" : okParts.length ? "partial" : "error";

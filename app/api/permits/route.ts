@@ -22,9 +22,11 @@
 //        listings: Superfund (SEMS), Toxics Release Inventory, RCRA hazardous-waste handlers and
 //        Brownfields (ACRES), 1,000 per program at most; with polygons=1, EPA's Superfund site
 //        boundaries too. Every Superfund point and boundary carries its row on EPA's NPL list
-//        (joined by EPA ID), or says it has none, or that the list did not answer. Same box
-//        rules. A listing is a regulatory status, not a finding of contamination; no address
-//        or contact is requested.
+//        (joined by EPA ID), or says it has none, or that the list did not answer. And USACE's
+//        Formerly Used Defense Sites: property points with their cleanup projects, and with
+//        polygons=1 property boundaries and munitions response sites. Same box rules. A listing
+//        is a regulatory status, not a finding of contamination; no address, contact or owner
+//        is requested.
 //   /api/permits?op=tri&trifid=77012HLLPT9701M[&year=2024]   what a TRI facility reported
 //        releasing on site that year (Form R), by chemical and medium, in its reported
 //        units, with totals per medium and unit, and its Form A certifications. Fields are
@@ -46,6 +48,7 @@ import { CHICAGO_DISCLAIMER } from "@/lib/civic/terms";
 import { buildingPermits, contaminants, environmental, licences } from "@/lib/permits/sources";
 import { CONTAMINANTS_CAVEAT } from "@/lib/permits/contaminants";
 import { NPL_CAVEAT } from "@/lib/permits/npl";
+import { FUDS_CAVEAT } from "@/lib/permits/fuds";
 import { HOME_HEURISTIC, permitFeatures, licenceFeatures, envFeatures } from "@/lib/permits/geojson";
 import { cacheDelete, cached, DeadlineError } from "@/lib/server/cache";
 import { retrying } from "@/lib/server/net";
@@ -120,16 +123,17 @@ async function opContaminants(b: Bbox, polygons: boolean) {
   const caveats = [
     CONTAMINANTS_CAVEAT,
     NPL_CAVEAT,
-    "Facility and site names are as EPA publishes them and can be a person's name or a street address; they are shown in the record only and are never searched. No address or contact field is requested, and no EPA staff contact.",
+    FUDS_CAVEAT,
+    "Facility, site and property names are as EPA and USACE publish them and can be a person's name or a street address; they are shown in the record and on the label only and are never searched. No address or contact field is requested, no EPA staff contact, and neither USACE's current-owner field nor its narratives.",
     BOX,
   ];
-  if (!polygons) caveats.push("Superfund site boundaries are sent only with polygons=1 (the layer asks below 10 km).");
+  if (!polygons) caveats.push("Superfund site boundaries, FUDS property boundaries and munitions response sites are sent only with polygons=1 (the layer asks below 10 km).");
   if (a.coverage.some((c) => c.state === "partial")) caveats.push("A source was partial for this box: an EMEF program hit its 1,000-listing cap (RCRA is dense in industrial areas) and its first 1,000 are shown, or the boundaries hit their cap, or part of the NPL list did not answer; `coverage` says which. Ask for a smaller box for every listing.");
   if (a.coverage.some((c) => c.state === "error")) caveats.push("A source did not answer this time; its records are missing from this answer, not absent. When the NPL status list is the one, a site's status is unknown, not 'not listed'.");
   return ok(
     { type: "FeatureCollection", features: a.features },
     {
-      meta: { source: "U.S. EPA Envirofacts EMEF (Superfund, TRI, RCRA, Brownfields), EPA Superfund site boundaries and the NPL status list", bbox: b, polygons, coverage: a.coverage, cacheAge: a.age },
+      meta: { source: "U.S. EPA Envirofacts EMEF (Superfund, TRI, RCRA, Brownfields), EPA Superfund site boundaries and the NPL status list, USACE Formerly Used Defense Sites", bbox: b, polygons, coverage: a.coverage, cacheAge: a.age },
       provenance: a.provenance,
       caveats,
       ttlS: a.coverage.some((c) => c.state === "error") ? 120 : 3600,
