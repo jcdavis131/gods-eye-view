@@ -14,7 +14,9 @@ import Link from "next/link";
 
 import Breadcrumbs from "@/components/doc/Breadcrumbs";
 
+import { relatedCards } from "@/lib/catalog/cardIndex";
 import { COLLECTIONS, SHELVES, catalogued, type Collection } from "@/lib/catalog/collections";
+import { POTION } from "@/lib/embed/pins";
 import { LAYER_IDS } from "@/lib/layers/types";
 import { source } from "@/lib/provenance/sources";
 import { absoluteUrl } from "@/lib/seo/base";
@@ -113,12 +115,27 @@ function Card({ c }: { c: Collection }) {
         <dd className={dd}>{c.sensitivity}</dd>
         <dt className={dt}>Searchable fields</dt>
         <dd className={dd}>{c.searchable.length ? c.searchable.join(", ") : "none: the layer answers by place, not by name"}</dd>
+        <dt className={dt}>Embedded as record text</dt>
+        <dd className={dd}>{c.embedText.length ? c.embedText.join(", ") : "nothing: no record text"}</dd>
         <dt className={dt}>API</dt>
         {c.ops.map((op) => (
           <dd key={op} className={dd}>
             <code className="tabular-nums">/api/{op}</code>
           </dd>
         ))}
+        <dt className={dt}>Related collections</dt>
+        <dd className={dd}>
+          {relatedCards(c.id, 3).map((r, i) => (
+            <span key={r.id}>
+              {i > 0 && "; "}
+              <a href={`#${r.id}`} className="text-primary underline">
+                {r.title}
+              </a>{" "}
+              <span className="tabular-nums text-muted-foreground">{r.score.toFixed(2)}</span>
+            </span>
+          ))}
+          <span className="block text-[13px] text-muted-foreground">Nearest by text embedding of the card descriptions: they read alike, which is not a claim that the data agree.</span>
+        </dd>
       </dl>
     </section>
   );
@@ -165,6 +182,17 @@ export default function CatalogPage() {
 
       <footer className="mt-10 border-t border-border pt-4 text-[13px] text-muted-foreground">
         Not yet catalogued ({missing.length}): {missing.join(", ")}.
+        <p className="mt-3 max-w-[48rem]">
+          Search by meaning: each card&apos;s description, and the record text of the collections that have it (the fields listed under
+          &ldquo;Embedded as record text&rdquo;), are embedded with a small static model, so a query finds a collection or a loaded record by
+          what it means as well as by its words. Names and ids are matched by letters, never by meaning, and the names of privately held
+          dams and protected areas are not matched at all. Collections are ranked at{" "}
+          <a href="/api/catalog?op=search&q=wetland%20habitat" className="text-primary underline">
+            /api/catalog?op=search
+          </a>
+          .
+        </p>
+        <p className="mt-2 max-w-[48rem]">{POTION.credit}</p>
       </footer>
     </article>
   );
