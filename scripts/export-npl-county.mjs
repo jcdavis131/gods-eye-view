@@ -14,6 +14,8 @@
 // lib/places/data/counties.json (TIGERweb ACS2023, 3,222 counties). It fails
 // closed: a name that matches no county, or is ambiguous (a bare name where
 // the state has both "<X> County" and "<X> city"), is left out and listed.
+// The County string is matched whole first ("Lewis and Clark" is one county);
+// only when that fails is it split into a list, on "," and "/" only.
 // Connecticut's NPL rows name legacy counties, which ACS2023 replaced with
 // planning regions, so they do not match and are listed.
 //
@@ -124,7 +126,14 @@ function fips(state, county) {
   const st = keyOf(state);
   const m = byState.get(st);
   if (!m) return { geoid: null, reason: "state_not_in_counties", candidates: [] };
-  const parts = decodeEntities(county).split(/,|\band\b|\//).map(norm).filter(Boolean);
+  // The whole string first: "Lewis and Clark" (MT) and "King and Queen" (VA) are one county each,
+  // so "and" is never a separator. Lists are split only on "," and "/".
+  const whole = norm(county);
+  if (whole) {
+    const w = one(m, whole);
+    if (w.geoid) return w;
+  }
+  const parts = decodeEntities(county).split(/[,/]/).map(norm).filter(Boolean);
   if (!parts.length) return { geoid: null, reason: "no_county", candidates: countiesOf(st) };
   if (parts.length === 1) {
     const r = one(m, parts[0]);
@@ -221,7 +230,7 @@ const out = {
     join: "(State, County) to FIPS by normalised name; fails closed (unmatched and ambiguous names are listed, never guessed). Connecticut's NPL rows name legacy counties and do not match ACS2023 planning regions.",
     zero_vs_missing: "complete-census",
     zeroRule: "A county in counties.json that is not in `places` and not in `nullPlaces` has 0 for every feature and year: the NPL list is complete for the United States.",
-    nullRule: "A county a site could be in but was not placed in is null for every feature and year, listed in `nullPlaces` with the reason: join:multi_county (EPA lists the site in several counties, all named), join:ambiguous_county_or_city (a bare name where the state has both the county and the independent city), or join:unmatched_site_in_state (the name matched nothing, so the site could be in any county of its state, e.g. Connecticut's legacy counties).",
+    nullRule: "A county a site could be in but was not placed in is null for every feature and year, listed in `nullPlaces` with the reason: join:multi_county (EPA lists the site in several counties, all named), join:ambiguous_county_or_city (a bare name where the state has both the county and the independent city), or join:unmatched_site_in_state (the name, or any one name in a multi-county list, matched nothing, so the site could be in any county of its state and every county of that state is null, e.g. Connecticut's legacy counties and Alaska's Outer Ketchikan). A county string is matched whole first, so a single county named with 'and' (Lewis and Clark, MT; King and Queen, VA) is one county; lists are split only on commas and slashes.",
     years: YEARS,
     features: FEATURES,
     counts: {

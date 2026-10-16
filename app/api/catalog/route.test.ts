@@ -93,6 +93,10 @@ describe("/api/catalog?op=place-export", () => {
     expect(d.value).toHaveLength(d.places.length);
     for (const v of d.value) expect(v).toHaveLength(d.meta.years.length);
     for (const g of d.places) expect(d.nullPlaces[g]).toBeUndefined();
+    // Lewis and Clark, MT is one county, not "Lewis" + "Clark": a split on "and" once nulled all of Montana.
+    const sites = (r.body.data as { siteIds: Record<string, string[]> }).siteIds;
+    expect(sites["30049"]).toEqual(expect.arrayContaining(["MTD006230346", "MTSFN7578012"]));
+    expect(Object.keys(d.nullPlaces).filter((g) => g.startsWith("30")).every((g) => d.nullPlaces[g] === "join:multi_county")).toBe(true);
     expect((await get("op=place-export&collection=nope")).status).toBe(400);
     expect((await get("op=place-export")).status).toBe(400);
   });
