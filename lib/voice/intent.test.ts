@@ -128,3 +128,21 @@ describe("voice words for historic imagery", () => {
     expect(layerOf("show historic places")).toMatchObject({ layer: "historic" });
   });
 });
+
+describe("voice words for historic topo maps", () => {
+  it("hears topo maps before historic places and contour lines", () => {
+    expect(layerOf("show historic maps")).toMatchObject({ layer: "topo" });
+    expect(layerOf("show old maps over boston")).toMatchObject({ layer: "topo", place: "boston" });
+    expect(layerOf("show topo maps")).toMatchObject({ layer: "topo" });
+    expect(layerOf("show topo lines")).toMatchObject({ layer: "contours" });
+    expect(layerOf("show historic places")).toMatchObject({ layer: "historic" });
+  });
+});
+
+describe("voice words for impaired waters", () => {
+  it("hears impaired waters and the 303(d) list", () => {
+    expect(layerOf("show impaired waters")).toMatchObject({ layer: "impaired" });
+    expect(layerOf("show 303d list")).toMatchObject({ layer: "impaired" });
+    expect(layerOf("show polluted water over baltimore")).toMatchObject({ layer: "impaired", place: "baltimore" });
+  });
+});

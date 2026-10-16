@@ -9,6 +9,7 @@ import type { TileSpec } from "./tiles";
 import {
   CRITHAB_MAX_ZOOM,
   CRITHAB_TILES,
+  NMFS_EXPORT,
   NWI_RASTER_MAX_ZOOM,
   NWI_RASTER_TEMPLATE,
   RELIEF_TILES,
@@ -32,10 +33,12 @@ import {
 import { FLOOD_MAX_HEIGHT_M } from "@/lib/layers/flood";
 import { WETLANDS_MAX_HEIGHT_M } from "@/lib/layers/wetlands";
 import { parseReleaseId, WAYBACK_ATTRIBUTION, WAYBACK_MAX_ZOOM, waybackTiles } from "@/lib/terrain/wayback";
+import { HTMC_ATTRIBUTION, parseTopoYear, TOPO_MAX_ZOOM, TOPO_MIN_ZOOM, topoTiles } from "@/lib/terrain/topo";
 
 /** Stacking among pictures, bottom to top: relief under everything, lines on top. */
 export const TILE_Z = {
   wayback: 5,
+  topo: 7,
   relief: 10,
   landcover: 20,
   wetlands: 25,
@@ -163,7 +166,8 @@ export const WETLANDS_PICTURE: TileSpec = {
 };
 
 /**
- * USFWS critical habitat: FWS's final and proposed caches, in FWS's own symbology, at every
+ * USFWS critical habitat: FWS's final and proposed caches, and NOAA Fisheries' /export (polygons
+ * and river lines, transparent PNG, so not sparse), in FWS's own symbology, at every
  * height (cached to level 14, magnified beyond). Both are sparse: outside designated habitat
  * the caches answer 404, which is "no tile here".
  */
@@ -188,6 +192,15 @@ export const crithabStyle = picture("#22C55E", () => [
     z: TILE_Z.crithab + 1,
     credit: "Critical habitat (proposed): U.S. Fish and Wildlife Service",
   },
+  {
+    key: "crithab:noaa",
+    kind: "xyz",
+    url: NMFS_EXPORT,
+    maximumLevel: CRITHAB_MAX_ZOOM,
+    alpha: 0.75,
+    z: TILE_Z.crithab + 2,
+    credit: "Critical habitat (marine and anadromous): NOAA National Marine Fisheries Service",
+  },
 ]);
 
 /**
@@ -210,6 +223,29 @@ export const waybackStyle = picture("#94A3B8", ({ meta }) => {
       alpha: 1,
       z: TILE_Z.wayback,
       credit: `World Imagery Wayback${date ? ` (release ${date})` : ""}: ${WAYBACK_ATTRIBUTION}`,
+    },
+  ];
+});
+
+/**
+ * USGS historical topographic maps: the edition year the layer's fetch resolved (meta.topoYear),
+ * from Esri's HTMC ImageServer, above Wayback and under every other picture. Levels below 11 are
+ * drawn empty without asking (a coarser tile is blank: the sheets draw only finer than their MaxPS);
+ * a year with no sheet under a tile answers a blank PNG, not a 404, so the layer is not sparse.
+ */
+export const topoStyle = picture("#D6B370", ({ meta }) => {
+  const year = parseTopoYear(meta?.topoYear);
+  if (year == null) return null;
+  return [
+    {
+      key: `topo:${year}`,
+      kind: "xyz",
+      url: topoTiles(year),
+      maximumLevel: TOPO_MAX_ZOOM,
+      floorLevel: TOPO_MIN_ZOOM,
+      alpha: 1,
+      z: TILE_Z.topo,
+      credit: `USGS topographic map, ${year} edition: ${HTMC_ATTRIBUTION}`,
     },
   ];
 });

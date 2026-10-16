@@ -110,3 +110,72 @@ describe("critical habitat in the ground dossier", () => {
     expect(half["critical habitat (proposed)"]).toMatch(/unknown, not absent/);
   });
 });
+
+describe("historic topo maps in the ground dossier", () => {
+  it("is asked when the Historic topo maps layer is on", () => {
+    expect(partsFor({ topo: true })).toEqual(["topo"]);
+    expect(groundClickWanted({ topo: true }, 20_000)).toBe(true);
+  });
+
+  it("lists the drawn edition's sheets with citation and files, then the other editions", async () => {
+    const { parseHtmcSheets, tnmFiles, topoYears, withTnmFiles } = await import("./topo");
+    const htmc = (await import("./fixtures/htmc-point-sf.json")).default;
+    const tnm = (await import("./fixtures/tnm-htmc-sf.json")).default;
+    const sheets = withTnmFiles(parseHtmcSheets(htmc), tnmFiles(tnm));
+    const years = topoYears(sheets);
+    const d = groundDetails({ lon: -122.42, lat: 37.77, parts: { topo: { loading: false, data: { sheets, years, year: 1895 } } } });
+    expect(d["topographic maps"]).toBe(`31 sheets in ${years.length} editions here, 1895 to 1995`);
+    const keys = Object.keys(d).filter((k) => k.startsWith("topo 1895 sheet"));
+    expect(keys.length).toBeGreaterThan(0);
+    expect(Object.entries(d).some(([k, v]) => k.endsWith("GeoTIFF") && typeof v === "string" && v.startsWith("https://prd-tnm.s3.amazonaws.com/"))).toBe(true);
+    expect(d["other topo editions here"]).not.toContain("1895");
+    const none = groundDetails({ lon: -150, lat: 0, parts: { topo: { loading: false, data: { sheets: [], years: [], year: null } } } });
+    expect(none["topographic maps"]).toMatch(/^no USGS topographic sheet here/);
+  });
+});
+
+describe("Wayback capture dates in the ground dossier", () => {
+  it("is asked when Historic imagery is on", () => {
+    expect(partsFor({ wayback: true })).toEqual(["wayback"]);
+    expect(partsFor({ topo: true, wayback: true })).toEqual(["topo", "wayback"]);
+  });
+
+  it("says the release, every capture date, and never guesses one", async () => {
+    const { parseCaptures } = await import("./wayback");
+    const meta = (await import("./fixtures/wayback-meta-2014r01-5-sf.json")).default as { features: Array<{ attributes: Record<string, unknown> }> };
+    const captures = parseCaptures(meta.features.map((f) => f.attributes));
+    const d = groundDetails({ lon: -122.42, lat: 37.77, parts: { wayback: { loading: false, data: { release: { release: 10, date: "2014-02-20" }, z: 18, captures } } } });
+    expect(d["imagery captured"]).toBe("Release 2014-02-20 · captured 2010-10-26 and 2010-11-02 · 0.3 m · Microsoft (UC-G)");
+    expect(d["imagery collection (Esri)"]).toBe("US-CA-SanFran-Oakland");
+    const none = groundDetails({ lon: 0, lat: 0, parts: { wayback: { loading: false, data: { release: { release: 10, date: "2014-02-20" }, z: 18, captures: [] } } } });
+    expect(none["imagery captured"]).toBe("Release 2014-02-20 · Esri lists no capture date here");
+  });
+});
+
+describe("NOAA Fisheries critical habitat in the ground dossier", () => {
+  it("lists NOAA's species with the agency named, and says NOAA is unknown when it did not answer", async () => {
+    const { parseNmfs } = await import("@/lib/land/features");
+    const area = (await import("@/lib/land/fixtures/nmfs-226-seattle.json")).default as { features: Array<{ properties: Record<string, unknown> }> };
+    const noaa = parseNmfs(area.features, "area");
+    const d = groundDetails({ lon: -122.4, lat: 47.6, parts: { crithab: { loading: false, data: { final: [], proposed: [], noaa } } } });
+    expect(d["critical habitat"]).toBe("Whale, killer (Orcinus orca) · Endangered · final critical habitat · unit Puget Sound · 71 FR 69054, published 2006-11-29 · NOAA Fisheries");
+    const down = groundDetails({ lon: -122.4, lat: 47.6, parts: { crithab: { loading: false, data: { final: [], proposed: [], noaa: null } } } });
+    expect(down["critical habitat"]).toBeUndefined();
+    expect(down["critical habitat (NOAA Fisheries)"]).toMatch(/unknown, not absent/);
+  });
+});
+
+describe("species ranges in the ground dossier", () => {
+  it("groups the species by status, says range is not presence, and says unknown when the layer failed", async () => {
+    const { parseRanges } = await import("@/lib/land/features");
+    const austin = (await import("@/lib/land/fixtures/ranges-3-austin.json")).default as { features: Array<{ attributes: Record<string, unknown> }> };
+    const ranges = parseRanges(austin.features.map((f) => f.attributes));
+    const d = groundDetails({ lon: -97.74, lat: 30.27, parts: { crithab: { loading: false, data: { final: [], proposed: [], noaa: [], ranges } } } });
+    expect(d["listed species ranges here"]).toMatch(/^13 listed or proposed species whose range covers this point .* not where it is$/);
+    const groups = Object.keys(d).filter((k) => k.startsWith("range: "));
+    expect(groups[0]).toMatch(/^range: endangered \(\d+\)$/);
+    expect(String(d[groups[0]])).toContain("Bone Cave harvestman (Texella reyesi; arachnids; FWS; range 2018-01-24)");
+    const down = groundDetails({ lon: -97.74, lat: 30.27, parts: { crithab: { loading: false, data: { final: [], proposed: [], noaa: [], ranges: null } } } });
+    expect(down["listed species ranges here"]).toMatch(/unknown, not none/);
+  });
+});

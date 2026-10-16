@@ -133,6 +133,7 @@ export const LAYER_LABEL_PRIORITY: Record<string, number> = {
   wetlands: 30,
   publiclands: 30,
   historic: 29,
+  impaired: 28,
   parcels: 10,
   zoning: 29,
   envpermits: 27,
@@ -174,5 +175,6 @@ export const LAYER_LABEL_PRIORITY: Record<string, number> = {
   sealevel: 2,
   crithab: 2,
   wayback: 2,
+  topo: 2,
   geology: 2,
 };

@@ -199,14 +199,14 @@ export const crithabLayer = picture({
   id: "crithab",
   label: "Critical habitat (ESA)",
   description:
-    "USFWS designated critical habitat for threatened and endangered species, final and proposed, in FWS's own map. Click the ground for the species, its listing status, whether the designation is final or proposed, and the Federal Register rule. Regulatory designations, not range or occurrence.",
+    "Designated critical habitat for threatened and endangered species, final and proposed, in FWS's own map, with NOAA Fisheries' marine and anadromous species in NOAA's. Click the ground for the species, its listing status, whether the designation is final or proposed, and the Federal Register rule. Regulatory designations, not range or occurrence.",
   color: "#22C55E",
-  attribution: "U.S. Fish and Wildlife Service, critical habitat (final and proposed)",
+  attribution: "U.S. Fish and Wildlife Service, critical habitat (final and proposed); NOAA National Marine Fisheries Service",
   source: "USFWS critical habitat",
-  note: "FWS's final and proposed designations · regulatory polygons, not where a species lives; many listed species have none · NOAA marine species not included · click the ground for the species and rule",
+  note: "FWS's final and proposed designations, and NOAA Fisheries' for marine and anadromous species · regulatory polygons, not where a species lives; many listed species have none · click the ground for the species and rule",
 });
 
 export const TERRAIN_LAYERS: LayerDefinition[] = [reliefLayer, slopeLayer, contoursLayer, soilsLayer, firehazardLayer, landcoverLayer, sealevelLayer, geologyLayer, crithabLayer];
 
 /** Layers whose click on the ground opens the "ground here" dossier. */
-export const GROUND_LAYERS: LayerId[] = ["soils", "firehazard", "landcover", "slope", "contours", "relief", "geology", "crithab"];
+export const GROUND_LAYERS: LayerId[] = ["soils", "firehazard", "landcover", "slope", "contours", "relief", "geology", "crithab", "topo", "wayback"];

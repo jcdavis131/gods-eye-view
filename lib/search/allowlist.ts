@@ -79,6 +79,9 @@ export const SEARCHABLE_DETAILS: ReadonlySet<string> = new Set([
   // (EPA's primary_name can be a sole proprietor's own name or a street address)
   "program system id",
   "registry id",
+  // impaired waters: EPA ATTAINS assessment unit ids (state-assigned codes); the unit's
+  // name is a place name but is not searched in this round
+  "assessment unit id",
   // companies, banks, constructs: identifiers and categories their publishers assign
   "ticker",
   "cik",

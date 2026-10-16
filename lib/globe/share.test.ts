@@ -272,3 +272,30 @@ describe("the Wayback release in the share link", () => {
     useGlobe.getState().setLayer("wayback", false);
   });
 });
+
+describe("the topo edition in the share link", () => {
+  it("round-trips ty= as a year inside the collection and drops anything else", () => {
+    const s: ShareState = { layers: ["topo"], ty: 1895 };
+    const q = shareQuery(s);
+    expect(q).toContain("ty=1895");
+    expect(parseShare(q)).toEqual(s);
+    expect(parseShare("?ty=1878").ty).toBeUndefined();
+    expect(parseShare("?ty=2007").ty).toBeUndefined();
+    expect(parseShare("?ty=19.5").ty).toBeUndefined();
+    expect(parseShare("?ty=").ty).toBeUndefined();
+  });
+
+  it("is written only while Historic topo maps is on and a year is picked", async () => {
+    const { currentShare } = await import("./share");
+    const { useGlobe } = await import("@/lib/store/globe");
+    const { useSettings } = await import("@/lib/store/settings");
+    useSettings.getState().setPref("topoYear", 1956);
+    useGlobe.getState().setLayer("topo", false);
+    expect(currentShare().ty).toBeUndefined();
+    useGlobe.getState().setLayer("topo", true);
+    expect(currentShare().ty).toBe(1956);
+    useSettings.getState().setPref("topoYear", null);
+    expect(currentShare().ty).toBeUndefined();
+    useGlobe.getState().setLayer("topo", false);
+  });
+});

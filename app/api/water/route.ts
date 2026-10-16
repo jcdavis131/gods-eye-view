@@ -20,6 +20,12 @@
 //                                       (5th to 95th) for a calendar day,
 //                                       per site; what the field's streamflow
 //                                       condition compares the latest flow to.
+//   /api/water?op=impaired&bbox=w,s,e,n EPA ATTAINS assessment units states report
+//                                       as impaired (isimpaired='Y'), lines and
+//                                       areas, with category, 303(d) listing, TMDL,
+//                                       cycle and EPA action status. Box at most
+//                                       0.12 degrees, snapped to 0.02; 2,000 per
+//                                       layer. A failed layer is unknown, not none.
 //   /api/water?op=report&lon=..&lat=..  The community water report for a point,
 //                                       built server-side from the ops above
 //                                       (no satellite turbidity: that needs a
@@ -41,6 +47,10 @@ import { cached } from "@/lib/server/cache";
 import { jsonError } from "@/lib/server/upstream";
 import { badRequest, csv as csvResponse, ok, options, parseFormat, withCors, type CsvRow, type ResponseFormat } from "@/lib/server/respond";
 import type { Provenance } from "@/lib/provenance/types";
+import { arcgisQuery, envelope as arcgisEnvelope, truncated } from "@/lib/server/arcgis";
+import { parseBbox as gridBbox, type Bbox as GridBbox } from "@/lib/civic/bbox";
+import { ATTAINS, ATTAINS_FIELDS, ATTAINS_LAYERS, ATTAINS_MAX, ATTAINS_WHERE, buildImpaired, IMPAIRED_CAVEAT } from "@/lib/water/impaired";
+import type { LayerFeature } from "@/lib/layers/types";
 import { usgsProvenance } from "@/lib/water/provenance";
 import { flowNormals, MAX_SITES } from "@/lib/water/normals";
 import { provenance } from "@/lib/provenance/types";
@@ -195,6 +205,60 @@ async function reportOp(lon: number, lat: number, origin: string): Promise<OpRes
   return { data: a.report, meta: { source: "usgs+nwps+twdb+usdm", bbox: a.bbox, globe }, ttlS: 300, provenance: a.report.provenance, caveats: a.report.caveats };
 }
 
+const DAY_MS = 24 * 3600_000;
+
+/**
+ * EPA ATTAINS impaired assessment units in a box: lines (layer 1) and areas (layer 2) in
+ * parallel, each cached a day. A layer that fails is reported as unknown in `coverage`
+ * (count null), never as none; both failing is an upstream error.
+ */
+async function impairedOp(bbox: GridBbox): Promise<OpResult> {
+  const ask = (shape: "lines" | "areas") =>
+    cached(`attains:${shape}:${bbox.join(",")}`, DAY_MS, async () => {
+      const fc = await arcgisQuery(
+        "epa-attains",
+        `${ATTAINS}/${ATTAINS_LAYERS[shape]}`,
+        {
+          where: ATTAINS_WHERE,
+          ...arcgisEnvelope(bbox),
+          outFields: ATTAINS_FIELDS.join(","),
+          returnGeometry: "true",
+          geometryPrecision: "5",
+          maxAllowableOffset: "0.0002",
+          resultRecordCount: String(ATTAINS_MAX),
+        },
+        { gate: "epa-attains", minIntervalMs: 250, timeoutMs: 25_000, tries: 2 },
+      );
+      return { features: buildImpaired(fc.features, shape === "lines" ? "line" : "area"), truncated: truncated(fc) || fc.features.length >= ATTAINS_MAX };
+    });
+  const [l, a] = await Promise.all([ask("lines").catch((e: unknown) => e as Error), ask("areas").catch((e: unknown) => e as Error)]);
+  if (l instanceof Error && a instanceof Error) throw l;
+  const lines = l instanceof Error ? null : l;
+  const areas = a instanceof Error ? null : a;
+  const features: LayerFeature[] = [...(lines?.value.features ?? []), ...(areas?.value.features ?? [])];
+  const coverage = [
+    { id: "lines", name: "ATTAINS lines (streams)", state: lines ? (lines.value.truncated ? "partial" : "covered") : "error", count: lines ? lines.value.features.length : null },
+    { id: "areas", name: "ATTAINS areas (lakes, estuaries, watersheds)", state: areas ? (areas.value.truncated ? "partial" : "covered") : "error", count: areas ? areas.value.features.length : null },
+  ];
+  const caveats = [IMPAIRED_CAVEAT, "Only the returned `bbox` was loaded; outside it nothing is loaded, which is not the same as nothing being there."];
+  if (lines?.value.truncated) caveats.push(`lines: the first ${ATTAINS_MAX.toLocaleString("en-US")} in this box; zoom in for the rest.`);
+  if (areas?.value.truncated) caveats.push(`areas: the first ${ATTAINS_MAX.toLocaleString("en-US")} in this box; zoom in for the rest.`);
+  if (!lines) caveats.push("EPA's ATTAINS line layer did not answer this time; impaired streams here are unknown, not absent.");
+  if (!areas) caveats.push("EPA's ATTAINS area layer did not answer this time; impaired lakes, estuaries and watersheds here are unknown, not absent.");
+  const age = Math.max(lines?.age ?? 0, areas?.age ?? 0);
+  const prov: Provenance[] = [];
+  for (const [shape, r] of [["lines", lines], ["areas", areas]] as const) {
+    if (r) prov.push(provenance(source("epa-attains"), { kind: "published", seriesId: `ATTAINS_Assessment FeatureServer layer ${ATTAINS_LAYERS[shape]} (${shape}), ${ATTAINS_WHERE}`, upstreamUrl: `${ATTAINS}/${ATTAINS_LAYERS[shape]}`, retrievedAt: new Date(Date.now() - r.age).toISOString(), notes: [`bbox ${bbox.join(",")}`] }));
+  }
+  return {
+    data: { type: "FeatureCollection", features },
+    meta: { source: "U.S. EPA ATTAINS (state, territorial and tribal Integrated Reports)", bbox, coverage, truncated: !!(lines?.value.truncated || areas?.value.truncated), maxRecords: ATTAINS_MAX, cacheAge: age },
+    ttlS: lines && areas ? 3600 : 300,
+    provenance: prov,
+    caveats,
+  };
+}
+
 /** JSON envelope, or CSV when asked and the op is tabular. */
 function respond(r: OpResult, format: ResponseFormat = "json", op = "") {
   if (format === "csv") {
@@ -263,6 +327,11 @@ export async function GET(req: NextRequest) {
         if (month < 1 || month > 12 || day < 1 || day > 31) return bad("date=MM-DD");
         return respond(await normalsOp(sites, month, day), format, op);
       }
+      case "impaired": {
+        const b = gridBbox(q.get("bbox"), 0.12, 0.02);
+        if (!b) return bad("bbox=w,s,e,n required, west < east and south < north, e.g. bbox=-76.62,39.26,-76.58,39.30");
+        return respond(await impairedOp(b), format, op);
+      }
       case "report": {
         const lon = Number(q.get("lon"));
         const lat = Number(q.get("lat"));
@@ -272,7 +341,7 @@ export async function GET(req: NextRequest) {
         return respond(await reportOp(lon, lat, req.nextUrl.origin), format, op);
       }
       default:
-        return bad("unknown op: gauges | wells | nwps | twdb | drought | history | matchup | normals | report");
+        return bad("unknown op: gauges | wells | nwps | twdb | drought | history | matchup | normals | impaired | report");
     }
   } catch (err) {
     return withCors(jsonError(err));

@@ -26,8 +26,8 @@ import { constructsStyle } from "./constructStyles";
 import { fieldStyle } from "./fieldStyles";
 import { alertsStyle } from "./alertStyles";
 import { firesStyle, hazardsStyle, wildfireStyle } from "./hazardStyles";
-import { floodStyle, historicStyle, publiclandsStyle, wetlandsStyle } from "./landStyles";
-import { contoursStyle, crithabStyle, firehazardStyle, landcoverStyle, reliefStyle, sealevelStyle, slopeStyle, soilsStyle, waybackStyle } from "./terrainStyles";
+import { floodStyle, historicStyle, impairedStyle, publiclandsStyle, wetlandsStyle } from "./landStyles";
+import { contoursStyle, crithabStyle, firehazardStyle, landcoverStyle, reliefStyle, sealevelStyle, slopeStyle, soilsStyle, topoStyle, waybackStyle } from "./terrainStyles";
 import {
   airportsStyle,
   airqualityStyle,
@@ -464,8 +464,10 @@ export const STYLES: Partial<Record<LayerId, LayerStyle>> = {
   wetlands: wetlandsStyle,
   publiclands: publiclandsStyle,
   historic: historicStyle,
+  impaired: impairedStyle,
   crithab: crithabStyle,
   wayback: waybackStyle,
+  topo: topoStyle,
   relief: reliefStyle,
   slope: slopeStyle,
   contours: contoursStyle,
@@ -534,8 +536,10 @@ export const FOLLOW_RANGE: Record<LayerId, number> = {
   wetlands: 3_000,
   publiclands: 40_000,
   historic: 2_000,
+  impaired: 3_000,
   crithab: 20_000,
   wayback: 5_000,
+  topo: 5_000,
   // Picture layers have no features to follow; a "ground here" answer sits at its click.
   relief: 5_000,
   slope: 5_000,

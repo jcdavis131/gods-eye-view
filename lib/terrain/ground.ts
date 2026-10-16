@@ -15,6 +15,11 @@
 //                                            and the map it comes from
 //   crithab     /api/land?op=crithab         USFWS critical habitat (final and
 //                                            proposed) containing the point
+//   wayback     /api/terrain?op=waybackdate  when the drawn Wayback release's pixels
+//                                            were captured there (Esri's metadata)
+//   topo        /api/terrain?op=topo         USGS historical topographic sheets at the
+//                                            point: the drawn edition first, with
+//                                            citation, GeoPDF and GeoTIFF
 //
 // Only the layers that are on are asked, and only below GROUND_MAX_HEIGHT_M,
 // so a click from orbit still just deselects.
@@ -28,12 +33,15 @@ import { GROUND_LAYERS } from "@/lib/layers/terrain";
 import type { ClassAnswer } from "./classes";
 import { nccpiText, type SoilAnswer } from "./soil";
 import { ageRange, type GeologyAnswer } from "@/lib/infra/geology";
-import { critHabText, type CritHabSpecies } from "@/lib/land/features";
+import { critHabText, nmfsText, rangeGroup, rangeText, type CritHabSpecies, type NmfsSpecies, type RangeSpecies } from "@/lib/land/features";
+import { useSettings } from "@/lib/store/settings";
+import { resolveTopoYear, sheetText, type TopoSheet, type TopoYear } from "./topo";
+import { captureText, parseReleaseId, zoomForHeight, type WaybackCapture } from "./wayback";
 
 /** Above this camera height a ground click is not a question about the ground. */
 export const GROUND_MAX_HEIGHT_M = 150_000;
 
-export type GroundPart = "soils" | "firehazard" | "landcover" | "slope" | "elevation" | "geology" | "crithab";
+export type GroundPart = "soils" | "firehazard" | "landcover" | "slope" | "elevation" | "geology" | "crithab" | "topo" | "wayback";
 
 export interface PartState {
   loading: boolean;
@@ -68,6 +76,8 @@ const PART_OF: Partial<Record<LayerId, GroundPart>> = {
   relief: "elevation",
   geology: "geology",
   crithab: "crithab",
+  topo: "topo",
+  wayback: "wayback",
 };
 
 /** The parts to ask for, given which layers are on (each once, in a fixed order). */
@@ -96,7 +106,9 @@ const SOURCE_OF: Record<GroundPart, string> = {
   slope: "USGS 3DEP",
   elevation: "USGS 3DEP EPQS",
   geology: "Macrostrat",
-  crithab: "USFWS critical habitat",
+  crithab: "USFWS and NOAA Fisheries critical habitat",
+  topo: "USGS historical topo maps",
+  wayback: "Esri Wayback metadata",
 };
 
 type Details = NonNullable<LayerFeature["properties"]["details"]>;
@@ -174,13 +186,64 @@ export function groundDetails(p: Pick<GroundPick, "lon" | "lat" | "parts">): Det
   }
   const ch = p.parts.crithab;
   if (ch && !waiting(d, "critical habitat", ch, "USFWS")) {
-    const a = ch.data as { final: CritHabSpecies[] | null; proposed: CritHabSpecies[] | null } | null;
-    const all = [...(a?.final ?? []), ...(a?.proposed ?? [])];
-    if (all.length) all.forEach((s, i) => (d[all.length > 1 ? `critical habitat ${i + 1}` : "critical habitat"] = critHabText(s)));
-    else if (a?.final && a?.proposed) d["critical habitat"] = "no designated critical habitat at this point (most listed species have no designation; this says nothing about whether a species is here)";
+    const a = ch.data as { final: CritHabSpecies[] | null; proposed: CritHabSpecies[] | null; noaa?: NmfsSpecies[] | null; ranges?: RangeSpecies[] | null } | null;
+    const all = [...(a?.final ?? []).map(critHabText), ...(a?.proposed ?? []).map(critHabText), ...(a?.noaa ?? []).map(nmfsText)];
+    const noaaAsked = a != null && "noaa" in a;
+    if (all.length) all.forEach((t, i) => (d[all.length > 1 ? `critical habitat ${i + 1}` : "critical habitat"] = t));
+    else if (a?.final && a?.proposed && (!noaaAsked || a.noaa)) d["critical habitat"] = "no designated critical habitat at this point (most listed species have no designation; this says nothing about whether a species is here)";
     if (a && !a.final) d["critical habitat (final)"] = "FWS's final layer did not answer: unknown, not absent";
     if (a && !a.proposed) d["critical habitat (proposed)"] = "FWS's proposed layer did not answer: unknown, not absent";
-    d["critical habitat note"] = "a regulatory designation, not range or occurrence; FWS: the GIS files are not the legal boundary (the Federal Register rule is)";
+    if (noaaAsked && !a?.noaa) d["critical habitat (NOAA Fisheries)"] = "NOAA Fisheries did not answer: marine and anadromous designations unknown, not absent";
+    d["critical habitat note"] = "a regulatory designation, not range or occurrence; the GIS files are not the legal boundary (for FWS the Federal Register rule and 50 CFR 17 are, for NOAA the eCFR text)";
+    if (a && "ranges" in a) {
+      const r = a.ranges;
+      if (!r) d["listed species ranges here"] = "EPA's species range layer did not answer: unknown, not none";
+      else if (!r.length) d["listed species ranges here"] = "no listed or proposed species' range covers this point in EPA's range layer";
+      else {
+        d["listed species ranges here"] = `${r.length} listed or proposed species whose range covers this point (USFWS and NOAA ranges, via EPA): a range is where a species could occur, not where it is`;
+        const order = ["endangered", "threatened", "proposed"];
+        const groups = new Map<string, RangeSpecies[]>();
+        for (const s of r) {
+          const g = rangeGroup(s);
+          if (!groups.has(g)) groups.set(g, []);
+          groups.get(g)!.push(s);
+        }
+        const keys = [...groups.keys()].sort((x, y) => (order.indexOf(x) < 0 ? 9 : order.indexOf(x)) - (order.indexOf(y) < 0 ? 9 : order.indexOf(y)) || x.localeCompare(y));
+        for (const g of keys) d[`range: ${g} (${groups.get(g)!.length})`] = groups.get(g)!.map(rangeText).join("; ");
+      }
+    }
+  }
+  const tp = p.parts.topo;
+  if (tp && !waiting(d, "topographic maps", tp, "USGS (HTMC)")) {
+    const a = tp.data as TopoAnswer | null;
+    if (!a?.sheets.length) d["topographic maps"] = "no USGS topographic sheet here in the collection (1879-2006)";
+    else {
+      const year = a.year ?? a.years[a.years.length - 1]?.year;
+      const drawn = a.sheets.filter((s) => s.year === year);
+      d["topographic maps"] = `${a.sheets.length} sheets in ${a.years.length} editions here, ${a.years[0].year} to ${a.years[a.years.length - 1].year}`;
+      if (!drawn.length) d[`topo ${year}`] = `no ${year} sheet at this point`;
+      drawn.forEach((s, i) => {
+        const k = drawn.length > 1 ? `topo ${year} sheet ${i + 1}` : `topo ${year} sheet`;
+        d[k] = sheetText(s);
+        if (s.citation) d[`${k} citation (USGS)`] = s.citation;
+        if (s.geopdf) d[`${k} GeoPDF`] = s.geopdf;
+        if (s.geotiff) d[`${k} GeoTIFF`] = s.geotiff;
+      });
+      const others = a.years.filter((y) => y.year !== year).map((y) => y.year);
+      if (others.length) d["other topo editions here"] = others.join(", ");
+      d["topo note"] = "sheets found at the point rounded to 0.01° (about 1 km), so near a sheet edge a neighbour can be listed; the edition year is when USGS revised the map, not a survey date, and parts of a sheet can be decades older";
+    }
+  }
+  const wb = p.parts.wayback;
+  if (wb && !waiting(d, "imagery captured", wb, "Esri (Wayback metadata)")) {
+    const a = wb.data as WaybackDateAnswer | null;
+    if (!a) d["imagery captured"] = "Esri lists no capture date here";
+    else {
+      d["imagery captured"] = `Release ${a.release.date} · ${captureText(a.captures)}`;
+      const named = [...new Set(a.captures.map((c) => c.name).filter((n): n is string => !!n))];
+      if (named.length) d["imagery collection (Esri)"] = named.join("; ");
+      d["imagery note"] = `Esri's metadata for this release at about zoom level ${a.z}; a capture date is when the pixels were taken, a release date when Esri published them${a.fallback ? "; the release in the link is not in Esri's index, so these are the newest release's dates, as drawn" : ""}`;
+    }
   }
   d.point = `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}`;
   return d;
@@ -227,6 +290,22 @@ async function getJson(url: string): Promise<{ data?: unknown; error?: string }>
   return j;
 }
 
+/** What the Wayback capture answer holds (the route's data). */
+export interface WaybackDateAnswer {
+  release: { release: number; date: string };
+  z: number;
+  captures: WaybackCapture[];
+  /** The pref's release is not in Esri's index, so these are the newest release's dates (as the layer draws). */
+  fallback?: boolean;
+}
+
+/** What a topo answer holds in the pick: the sheets and years at the point, and the edition drawn. */
+export interface TopoAnswer {
+  sheets: TopoSheet[];
+  years: TopoYear[];
+  year: number | null;
+}
+
 const ASK: Record<GroundPart, (lon: string, lat: string) => Promise<unknown>> = {
   soils: async (lon, lat) => (await getJson(`/api/soil?op=point&lon=${lon}&lat=${lat}`)).data ?? null,
   firehazard: async (lon, lat) => ((await getJson(`/api/terrain?op=point&product=firehazard&lon=${lon}&lat=${lat}`)).data as { class?: unknown })?.class ?? null,
@@ -235,6 +314,26 @@ const ASK: Record<GroundPart, (lon: string, lat: string) => Promise<unknown>> = 
   elevation: async (lon, lat) => (await getJson(`/api/land?op=elevation&lon=${lon}&lat=${lat}`)).data ?? null,
   geology: async (lon, lat) => (await getJson(`/api/infra?op=geology&lon=${lon}&lat=${lat}`)).data ?? null,
   crithab: async (lon, lat) => (await getJson(`/api/land?op=crithab&lon=${lon}&lat=${lat}`)).data ?? null,
+  wayback: async (lon, lat) => {
+    const release = parseReleaseId(useSettings.getState().prefs.waybackRelease);
+    const z = zoomForHeight(useGlobe.getState().view.height, Number(lat));
+    const base = `/api/terrain?op=waybackdate&lon=${lon}&lat=${lat}&z=${z}`;
+    if (release == null) return (await getJson(base)).data ?? null;
+    try {
+      return (await getJson(`${base}&release=${release}`)).data ?? null;
+    } catch (err) {
+      // The layer draws the newest release when the pref's is not in Esri's index; the dates follow it.
+      if (!(err instanceof Error) || !/not in Esri's index/.test(err.message)) throw err;
+      const d = (await getJson(base)).data as WaybackDateAnswer | undefined;
+      return d ? { ...d, fallback: true } : null;
+    }
+  },
+  topo: async (lon, lat) => {
+    const d = (await getJson(`/api/terrain?op=topo&lon=${lon}&lat=${lat}`)).data as { sheets?: TopoSheet[]; years?: TopoYear[] } | undefined;
+    const years = d?.years ?? [];
+    const answer: TopoAnswer = { sheets: d?.sheets ?? [], years, year: resolveTopoYear(years, useSettings.getState().prefs.topoYear).year };
+    return answer;
+  },
 };
 
 /** Ask every ground layer that is on what is under this point, and open the dossier. */

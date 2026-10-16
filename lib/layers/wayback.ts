@@ -32,7 +32,7 @@ async function fetchWayback(ctx: FetchContext): Promise<FetchResult> {
     note: release
       ? `Esri World Imagery as published ${release.date} (a release date, not a capture date; pixels can be older)` +
         (fallback ? " · the release in the link is not in Esri's index, so the newest is shown" : "") +
-        ` · ${list.length} releases, ${list[list.length - 1].date} to ${list[0].date}`
+        ` · ${list.length} releases, ${list[list.length - 1].date} to ${list[0].date} · click the ground for the capture date`
       : "Esri's Wayback index listed no release",
     meta,
   };
@@ -42,7 +42,7 @@ export const waybackLayer: LayerDefinition = {
   id: "wayback",
   label: "Historic imagery (Wayback)",
   description:
-    "Esri World Imagery as it was published on a chosen release date, 2014 to now (World Imagery Wayback), over the base imagery: pick a release under the layer's row. A release date is not a capture date, and nothing before 2014 is here.",
+    "Esri World Imagery as it was published on a chosen release date, 2014 to now (World Imagery Wayback), over the base imagery: pick a release under the layer's row. A release date is not a capture date: click the ground for the capture date Esri lists there. Releases start in 2014.",
   color: "#94A3B8",
   updateIntervalMs: 24 * 60 * 60_000,
   defaultEnabled: false,

@@ -38,11 +38,16 @@ describe("picture layers", () => {
     expect(r.note).toMatch(/^6 ft above MHHW/);
   });
 
-  it("are registered ids with a label priority, and every ground layer is one of them", () => {
+  it("are registered ids with a label priority, and every ground layer is one of them or an imagery picture with a label priority", () => {
     for (const l of TERRAIN_LAYERS) {
       expect(LAYER_IDS).toContain(l.id);
       expect(LAYER_LABEL_PRIORITY[l.id]).toBeDefined();
     }
-    for (const g of GROUND_LAYERS) expect(TERRAIN_LAYERS.map((l) => l.id)).toContain(g);
+    // Historic imagery and topo maps answer a ground click too (capture dates, sheets) but are their own modules.
+    const imagery = ["wayback", "topo"];
+    for (const g of GROUND_LAYERS) {
+      if (imagery.includes(g)) expect(LAYER_LABEL_PRIORITY[g], g).toBeDefined();
+      else expect(TERRAIN_LAYERS.map((l) => l.id)).toContain(g);
+    }
   });
 });

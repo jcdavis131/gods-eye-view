@@ -298,3 +298,19 @@ describe("parseEpqs", () => {
     expect(r.resolutionM).toBeUndefined();
   });
 });
+
+describe("NOAA Fisheries fields", () => {
+  it("parses both slash date forms and NOAA's one yyyymmdd, and nothing else", async () => {
+    const { nmfsDate, nmfsFr } = await import("./features");
+    expect(nmfsDate("8/17/2017")).toBe("2017-08-17");
+    expect(nmfsDate("08/09/2023")).toBe("2023-08-09");
+    expect(nmfsDate("20240102")).toBe("2024-01-02");
+    expect(nmfsDate("13/01/2020")).toBeUndefined();
+    expect(nmfsDate("soon")).toBeUndefined();
+    expect(nmfsDate(" ")).toBeUndefined();
+    expect(nmfsFr("<a href='https://example.gov/rule' target='_top'>70 FR 52629</a>")).toEqual({ text: "70 FR 52629", url: "https://example.gov/rule" });
+    expect(nmfsFr("<a href='http://example.gov/rule'>70 FR 52629</a>")).toEqual({ text: "70 FR 52629", url: undefined });
+    expect(nmfsFr("73 FR 72210")).toEqual({ text: "73 FR 72210" });
+    expect(nmfsFr("<b>odd</b>")).toBeUndefined();
+  });
+});

@@ -14,6 +14,7 @@
 
 import { bboxParam } from "./webmercator";
 import type { SourceId } from "@/lib/provenance/sources";
+import { HTMC_HOST, TOPO_MAX_ZOOM, topoTiles } from "./topo";
 
 export const DEP_IMAGE = "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer";
 export const RELIEF_TILES = "https://basemap.nationalmap.gov/arcgis/rest/services/USGSShadedReliefOnly/MapServer/tile/{z}/{y}/{x}";
@@ -52,6 +53,9 @@ export const CRITHAB_TILES = {
   proposed: "https://tiles.arcgis.com/tiles/QVENGdaPbd4LUkLV/arcgis/rest/services/usfws_critical_habitat_proposed/MapServer/tile/{z}/{y}/{x}",
 } as const;
 export const CRITHAB_MAX_ZOOM = 14;
+
+/** NOAA Fisheries critical habitat (polygons 226 and lines 2), drawn by the MapServer's /export per tile. */
+export const NMFS_EXPORT = "https://maps.fisheries.noaa.gov/server/rest/services/All_NMFS_Critical_Habitat/MapServer/export?bbox={westProjected},{southProjected},{eastProjected},{northProjected}&bboxSR=3857&imageSR=3857&size=256,256&layers=show:226,2&format=png32&transparent=true&f=image";
 
 /** Deepest terrarium zoom published (about 4.8 m a pixel at the equator). */
 export const TERRARIUM_MAX_ZOOM = 15;
@@ -155,7 +159,7 @@ export function routeTileUrl(product: RenderProductId, z: number | string, x: nu
 // ---------------------------------------------------------------- direct sources
 
 export interface DirectSource {
-  id: "relief" | "soils" | "firehazard" | "sealevel" | "terrain" | "geology" | "wetlands" | "crithab" | "wayback";
+  id: "relief" | "soils" | "firehazard" | "sealevel" | "terrain" | "geology" | "wetlands" | "crithab" | "crithab-noaa" | "wayback" | "topo";
   title: string;
   source: SourceId;
   /** Host the browser fetches from (CSP img-src / connect-src must allow it). */
@@ -239,6 +243,15 @@ export const DIRECT_SOURCES: DirectSource[] = [
     note: "Two caches in FWS's own symbology, to level 14; a 404 is no tile there. The click answer comes from FWS's FeatureServer through /api/land?op=crithab.",
   },
   {
+    id: "crithab-noaa",
+    title: "Critical habitat, NOAA Fisheries (All_NMFS_Critical_Habitat MapServer export, layers 226 and 2)",
+    source: "noaa-nmfs-crithab",
+    host: "maps.fisheries.noaa.gov",
+    template: NMFS_EXPORT,
+    maxZoom: CRITHAB_MAX_ZOOM,
+    note: "Dynamic /export in NOAA's own symbology (CORS reflects the origin), drawn with the FWS caches; the click answer comes from layers 226 and 2 through /api/land?op=crithab.",
+  },
+  {
     id: "wayback",
     title: "Esri World Imagery Wayback (one tile set per release since 2014-02-20)",
     source: "esri-wayback",
@@ -246,6 +259,15 @@ export const DIRECT_SOURCES: DirectSource[] = [
     template: "https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/{release}/{z}/{y}/{x}",
     maxZoom: 19,
     note: "The browser loads tiles from Esri directly (CORS *, including on the 301 Esri sends to the release where a tile last changed); the release index comes from /api/terrain?op=wayback. Never proxied or cached here.",
+  },
+  {
+    id: "topo",
+    title: "USGS historical topographic maps, 1879-2006 (Esri USGS_Historical_Topographic_Maps ImageServer, one edition year at a time)",
+    source: "usgs-htmc",
+    host: HTMC_HOST,
+    template: topoTiles(1956).replace("DateCurrent%3D1956", "DateCurrent%3D{year}"),
+    maxZoom: TOPO_MAX_ZOOM,
+    note: "Dynamic exportImage, no tile cache (CORS reflects the origin); a sheet draws only from about level 11, and a year with no sheet under a tile is a blank PNG. The years and sheets at a point come from /api/terrain?op=topo.",
   },
 ];
 

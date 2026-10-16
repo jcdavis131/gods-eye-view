@@ -30,6 +30,7 @@ import ParcelAside from "./ParcelAside";
 import { flyTo } from "@/lib/globe/camera";
 import dynamic from "next/dynamic";
 import PowerWaterAside from "./PowerWaterAside";
+import TriAside from "./TriAside";
 
 const ChipViewer = dynamic(() => import("./ChipViewer"), {
   ssr: false,
@@ -163,7 +164,7 @@ export default function InfoPanel() {
   const details = Object.entries(p.details ?? {}).filter(([, v]) => v != null && v !== "" && v !== false);
   const isLiveLayer =
     !p.simulated &&
-    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "employers", "banks", "spending", "constructs", "field", "flood", "wetlands", "publiclands", "relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "transmission", "pipelines", "plants", "rail", "airports", "dams", "faults", "landslides", "geology", "plss", "parcels", "zoning", "permits", "licences", "envpermits", "historic", "crithab", "contaminants", "wayback"].includes(p.layer);
+    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "employers", "banks", "spending", "constructs", "field", "flood", "wetlands", "publiclands", "relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "transmission", "pipelines", "plants", "rail", "airports", "dams", "faults", "landslides", "geology", "plss", "parcels", "zoning", "permits", "licences", "envpermits", "historic", "crithab", "contaminants", "wayback", "topo", "impaired"].includes(p.layer);
   const banner = BANNER[p.layer];
   const iss = p.layer === "satellites" && p.id === "25544";
   const construct = p.layer === "constructs" || p.layer === "field" || p.layer === "alerts";
@@ -278,6 +279,7 @@ export default function InfoPanel() {
         {p.layer === "employers" && <EmployerAside key={p.id} feature={feature} />}
         {(p.layer === "banks" || p.layer === "spending") && <FinanceAside key={p.id} feature={feature} />}
         {parcel && <ParcelAside key={p.id} feature={feature} />}
+        {p.layer === "contaminants" && p.kind === "tri" && <TriAside key={p.id} feature={feature} />}
         {construct ? <ConstructAside key={p.id} feature={feature} /> : <ConstructContext key={`ctx:${p.layer}:${p.id}`} feature={feature} />}
         {well && (
           <GaugeHistory
@@ -352,6 +354,8 @@ const BANNER: Partial<Record<string, string>> = {
   historic: "NATIONAL REGISTER LISTING AS NPS PUBLISHES IT · RESTRICTED ARCHAEOLOGICAL SITES ARE WITHHELD AND NOT SHOWN · NOT A SECTION 106 REVIEW",
   crithab: "REGULATORY DESIGNATION · NOT SPECIES RANGE OR OCCURRENCE · FWS GIS IS NOT THE LEGAL BOUNDARY",
   contaminants: "AN EPA PROGRAM LISTING · A REGULATORY STATUS, NOT A FINDING OF CONTAMINATION AT THIS POINT",
+  impaired: "AS THE STATE REPORTED IT TO EPA · A LISTING FOR THE WHOLE ASSESSMENT UNIT, NOT A MEASUREMENT HERE · NOT SHOWN IS NOT CLEAN",
+  topo: "USGS MAP AS PUBLISHED · THE EDITION YEAR IS NOT A SURVEY DATE · PARTS OF A SHEET CAN BE DECADES OLDER",
 };
 
 /**

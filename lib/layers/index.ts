@@ -36,8 +36,10 @@ import { floodLayer } from "./flood";
 import { wetlandsLayer } from "./wetlands";
 import { publiclandsLayer } from "./publiclands";
 import { historicLayer } from "./historic";
+import { impairedLayer } from "./impaired";
 import { TERRAIN_LAYERS } from "./terrain";
 import { waybackLayer } from "./wayback";
+import { topoLayer } from "./topo";
 import { INFRA_LAYERS } from "./infra";
 import { airqualityLayer } from "./airquality";
 import { AIRNOW_ENABLED } from "@/lib/air/airnow";
@@ -89,10 +91,12 @@ export const LAYERS: LayerDefinition[] = [
   hazardsLayer,
   floodLayer,
   wetlandsLayer,
+  impairedLayer,
   publiclandsLayer,
   historicLayer,
   ...TERRAIN_LAYERS,
   waybackLayer,
+  topoLayer,
   ...INFRA_LAYERS,
   // Off until the operator decides on AirNow's data-user form (lib/air/airnow.ts).
   ...(AIRNOW_ENABLED ? [airqualityLayer] : []),

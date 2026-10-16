@@ -55,6 +55,12 @@ export default function AboutButton({ compact = false }: { compact?: boolean }) 
             </section>
             <section>
               <div className="hud-label mb-1">Signal sources</div>
+              <p className="mb-2 text-foreground/90">
+                <a href="/catalog" target="_blank" rel="noreferrer" className="text-primary underline-offset-2 hover:underline">
+                  Browse the catalogue
+                </a>
+                : each curated collection with its source, licence, coverage, freshness, and what is left out and why.
+              </p>
               <ul className="space-y-1">
                 {LAYERS.map((l) => (
                   <li key={l.id} className="flex gap-2">

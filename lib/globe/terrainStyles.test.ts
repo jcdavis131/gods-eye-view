@@ -28,12 +28,19 @@ describe("wetlands raster", () => {
 });
 
 describe("critical habitat", () => {
-  it("draws FWS's final and proposed caches as two sparse pictures, to level 14, from a registered host", async () => {
+  it("draws FWS's final and proposed caches as sparse pictures and NOAA Fisheries' export over them, to level 14, from registered hosts", async () => {
     const { crithabStyle } = await import("./terrainStyles");
     const specs = crithabStyle.tiles?.({}) ?? [];
-    expect(specs.map((s) => s.key)).toEqual(["crithab:final", "crithab:proposed"]);
+    expect(specs.map((s) => s.key)).toEqual(["crithab:final", "crithab:proposed", "crithab:noaa"]);
+    expect(specs[0].sparse).toBe(true);
+    expect(specs[1].sparse).toBe(true);
+    // NOAA's /export answers a transparent PNG everywhere, never a 404.
+    expect(specs[2].sparse).toBeUndefined();
+    const noaa = new URL(specs[2].url.replace(/\{\w+\}/g, "0"));
+    expect(noaa.host).toBe("maps.fisheries.noaa.gov");
+    expect(noaa.searchParams.get("layers")).toBe("show:226,2");
+    expect(noaa.searchParams.get("transparent")).toBe("true");
     for (const s of specs) {
-      expect(s.sparse).toBe(true);
       expect(s.maximumLevel).toBe(14);
       expect(s.maxHeight).toBeUndefined();
       expect(hosts().has(new URL(s.url.replace(/\{\w+\}/g, "0")).host)).toBe(true);
@@ -53,6 +60,25 @@ describe("historic imagery", () => {
     expect(a[0].url).toContain("/tile/63116/{z}/{y}/{x}");
     expect(a[0]).toMatchObject({ maximumLevel: 19, sparse: true });
     expect(a[0].credit).toContain("Esri, Vantor, Earthstar Geographics, and the GIS User Community");
+    expect(hosts().has(new URL(a[0].url.replace(/\{\w+\}/g, "0")).host)).toBe(true);
+  });
+});
+
+describe("historic topo maps", () => {
+  it("draws nothing until an edition is resolved, then that edition, keyed by it, from level 11 to 16", async () => {
+    const { topoStyle } = await import("./terrainStyles");
+    expect(topoStyle.tiles?.({})).toBeNull();
+    expect(topoStyle.tiles?.({ meta: { topoYear: 1700 } })).toBeNull();
+    const a = topoStyle.tiles?.({ meta: { topoYear: 1895 } }) ?? [];
+    const b = topoStyle.tiles?.({ meta: { topoYear: 1956 } }) ?? [];
+    expect(a[0].key).toBe("topo:1895");
+    expect(b[0].key).toBe("topo:1956");
+    expect(a[0].url).toContain("DateCurrent%3D1895");
+    expect(a[0]).toMatchObject({ floorLevel: 11, maximumLevel: 16, alpha: 1 });
+    expect(a[0].sparse).toBeUndefined();
+    expect(a[0].z).toBeGreaterThan(TILE_Z.wayback);
+    expect(a[0].z).toBeLessThan(TILE_Z.relief);
+    expect(a[0].credit).toContain("Historical Topographic Map Collection courtesy of the U.S. Geological Survey, Esri");
     expect(hosts().has(new URL(a[0].url.replace(/\{\w+\}/g, "0")).host)).toBe(true);
   });
 });
