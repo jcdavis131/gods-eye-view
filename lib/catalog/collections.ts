@@ -573,10 +573,10 @@ export const COLLECTIONS: readonly Collection[] = [
       "Public access is PAD-US's code for each unit; it is not permission to enter.",
       "The land inside a proclamation boundary is not all public, and an easement's owner keeps the land (the holder has the rights the easement grants).",
     ],
-    searchable: ["Unit_Nm", "Loc_Nm"],
+    searchable: ["Unit_Nm", "Loc_Nm"], // not on privately owned units (Own_Type PVT)
     embedText: ["Category", "Own_Type", "Mang_Type", "Des_Tp", "State_Nm", "Pub_Access", "GAP_Sts", "IUCN_Cat"],
     ops: ["land?op=publiclands"],
-    sensitivity: "Ownership is shown as PAD-US publishes it (a federal inventory); what stays out is the search from an owner or easement holder to its holdings.",
+    sensitivity: "Ownership is shown as PAD-US publishes it (a federal inventory); what stays out is the search from an owner or easement holder to its holdings. A privately owned unit (Own_Type PVT) is often named for a family, so it is labelled by PAD-US id and its published name is shown in the record but never searched.",
     round: 3,
   },
   {
@@ -599,7 +599,7 @@ export const COLLECTIONS: readonly Collection[] = [
     searchable: ["NIDID"],
     embedText: ["PRIMARY_PURPOSE", "PRIMARY_DAM_TYPE", "NID_HEIGHT", "HAZARD_POTENTIAL", "CONDITION_ASSESSMENT", "STATE", "YEAR_COMPLETED"],
     ops: ["infra?op=dams"],
-    sensitivity: "Public infrastructure records; no owner or representative name is requested. NAME is not embedded. Open: the globe names a dam feature by NAME, so the ⌘K palette matches dam names today, and a dam can be named for a private owner ('<Surname> Pond Dam'). Naming dams by NID id instead is a change to a shipped layer and is left for review.",
+    sensitivity: "Public infrastructure records; no owner or representative name is requested. NAME is not embedded. A privately owned dam can be named for its owner ('<Surname> Pond Dam'), so it is labelled by NID id and its published name is shown in the record but never searched; other dams keep their name as the label.",
     round: 3,
   },
   // ------------------------------------------------------------ round 1: imagery

@@ -174,6 +174,13 @@ describe("USACE National Inventory of Dams", () => {
       for (const k of keys) expect(k).not.toMatch(/owner name|designer|representative|other names|former names/);
     }
   });
+  it("labels a privately owned dam by its NID id; its name is in the record but not the label", () => {
+    const blueWing = out.find((f) => f.properties.id === "nid:TX01456")!;
+    expect(blueWing.properties.name).toBe("Dam TX01456");
+    expect(blueWing.properties.details?.["published name"]).toBe("Blue Wing Lake Dam");
+    expect(searchableDetail("published name")).toBe(false);
+    expect(out.find((f) => f.properties.id === "nid:TX01432")!.properties.details?.["published name"]).toBeUndefined();
+  });
   it("says 'not rated by source' when NID publishes no hazard class", () => {
     const row = JSON.parse(JSON.stringify(dams.features[0]));
     row.properties.HAZARD_POTENTIAL = null;

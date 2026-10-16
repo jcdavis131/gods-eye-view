@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MultiPolygon, Polygon } from "geojson";
+import { searchableDetail } from "@/lib/search/allowlist";
 import nwiWetlands from "./fixtures/nwi-wetlands-mitchell.json";
 import nwiCodeRows from "./fixtures/nwi-codes-mitchell.json";
 import nrhpPoints from "./fixtures/nrhp-points-dc.json";
@@ -242,6 +243,16 @@ describe("critical habitat at a point", () => {
 // ---------------------------------------------------------------- PAD-US
 
 describe("public and protected lands", () => {
+  it("labels a privately owned unit by PAD-US id, keeping its published name out of the searched fields", () => {
+    const [f] = buildPublicLands(
+      [{ geometry: square, properties: { OBJECTID: 7, Category: "Easement", Unit_Nm: "Smith Family Farm", Loc_Nm: "Smith Farm", Own_Type: "PVT", Pub_Access: "XA" } }],
+      new Map(),
+    );
+    expect(f.properties.name).toBe("Easement · PAD-US 7");
+    expect(f.properties.details?.["published name"]).toBe("Smith Family Farm");
+    expect(f.properties.details?.["local name"]).toBeUndefined();
+    expect(searchableDetail("published name")).toBe(false);
+  });
   it("brings easements through with their holder, keeping the holder type's published code", () => {
     const domains = new Map([
       ["Category", new Map([["Easement", "Easement"]])],
