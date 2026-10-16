@@ -37,6 +37,7 @@ import { wetlandsLayer } from "./wetlands";
 import { publiclandsLayer } from "./publiclands";
 import { historicLayer } from "./historic";
 import { impairedLayer } from "./impaired";
+import { pfasLayer } from "./pfas";
 import { TERRAIN_LAYERS } from "./terrain";
 import { waybackLayer } from "./wayback";
 import { topoLayer } from "./topo";
@@ -50,6 +51,7 @@ import { permitsLayer } from "./permits";
 import { licencesLayer } from "./licences";
 import { envpermitsLayer } from "./envpermits";
 import { contaminantsLayer } from "./contaminants";
+import { ustLayer } from "./ust";
 import { sportsLayer } from "./sports";
 import { constructsLayer } from "./constructs";
 import { fieldLayer } from "./field";
@@ -92,6 +94,7 @@ export const LAYERS: LayerDefinition[] = [
   floodLayer,
   wetlandsLayer,
   impairedLayer,
+  pfasLayer,
   publiclandsLayer,
   historicLayer,
   ...TERRAIN_LAYERS,
@@ -107,6 +110,7 @@ export const LAYERS: LayerDefinition[] = [
   licencesLayer,
   envpermitsLayer,
   contaminantsLayer,
+  ustLayer,
   sportsLayer,
   constructsLayer,
   fieldLayer,

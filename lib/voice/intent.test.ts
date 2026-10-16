@@ -117,6 +117,13 @@ describe("voice words for contaminated sites", () => {
     expect(layerOf("show superfund sites")).toMatchObject({ layer: "contaminants" });
     expect(layerOf("show brownfields over houston")).toMatchObject({ layer: "contaminants", place: "houston" });
     expect(layerOf("show hazardous waste")).toMatchObject({ layer: "contaminants" });
+    expect(layerOf("show national priorities list")).toMatchObject({ layer: "contaminants" });
+    expect(layerOf("show npl sites near newark")).toMatchObject({ layer: "contaminants", place: "newark" });
+    expect(layerOf("show formerly used defense sites")).toMatchObject({ layer: "contaminants" });
+    expect(layerOf("show old military sites near sandy hook")).toMatchObject({ layer: "contaminants", place: "sandy hook" });
+    expect(layerOf("show munitions")).toMatchObject({ layer: "contaminants" });
+    expect(layerOf("show leaking tanks over houston")).toMatchObject({ layer: "ust", place: "houston" });
+    expect(layerOf("show underground storage tanks")).toMatchObject({ layer: "ust" });
     expect(layerOf("show hazards")).toMatchObject({ layer: "hazards" });
   });
 });
@@ -136,6 +143,15 @@ describe("voice words for historic topo maps", () => {
     expect(layerOf("show topo maps")).toMatchObject({ layer: "topo" });
     expect(layerOf("show topo lines")).toMatchObject({ layer: "contours" });
     expect(layerOf("show historic places")).toMatchObject({ layer: "historic" });
+  });
+});
+
+describe("voice words for PFAS in drinking water", () => {
+  it("hears pfas and forever chemicals", () => {
+    expect(layerOf("show pfas")).toMatchObject({ layer: "pfas" });
+    expect(layerOf("show forever chemicals near collegeville")).toMatchObject({ layer: "pfas", place: "collegeville" });
+    expect(layerOf("show drinking water pfas")).toMatchObject({ layer: "pfas" });
+    expect(layerOf("show impaired waters")).toMatchObject({ layer: "impaired" });
   });
 });
 

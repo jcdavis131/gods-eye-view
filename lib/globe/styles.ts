@@ -26,7 +26,7 @@ import { constructsStyle } from "./constructStyles";
 import { fieldStyle } from "./fieldStyles";
 import { alertsStyle } from "./alertStyles";
 import { firesStyle, hazardsStyle, wildfireStyle } from "./hazardStyles";
-import { floodStyle, historicStyle, impairedStyle, publiclandsStyle, wetlandsStyle } from "./landStyles";
+import { floodStyle, historicStyle, impairedStyle, pfasStyle, publiclandsStyle, wetlandsStyle } from "./landStyles";
 import { contoursStyle, crithabStyle, firehazardStyle, landcoverStyle, reliefStyle, sealevelStyle, slopeStyle, soilsStyle, topoStyle, waybackStyle } from "./terrainStyles";
 import {
   airportsStyle,
@@ -43,7 +43,7 @@ import {
   transmissionStyle,
 } from "./infraStyles";
 import { parcelsStyle } from "./parcelStyles";
-import { contaminantsStyle, envpermitsStyle, licencesStyle, permitsStyle, zoningStyle } from "./civicStyles";
+import { contaminantsStyle, envpermitsStyle, licencesStyle, permitsStyle, ustStyle, zoningStyle } from "./civicStyles";
 
 /** Distinctive major-group colours for the occupations layer: one hue per SOC major group. */
 const OCCUPATION_COLORS: Record<string, string> = {
@@ -465,6 +465,7 @@ export const STYLES: Partial<Record<LayerId, LayerStyle>> = {
   publiclands: publiclandsStyle,
   historic: historicStyle,
   impaired: impairedStyle,
+  pfas: pfasStyle,
   crithab: crithabStyle,
   wayback: waybackStyle,
   topo: topoStyle,
@@ -493,6 +494,7 @@ export const STYLES: Partial<Record<LayerId, LayerStyle>> = {
   licences: licencesStyle,
   envpermits: envpermitsStyle,
   contaminants: contaminantsStyle,
+  ust: ustStyle,
   sports: sportsStyle,
   constructs: constructsStyle,
   field: fieldStyle,
@@ -537,6 +539,7 @@ export const FOLLOW_RANGE: Record<LayerId, number> = {
   publiclands: 40_000,
   historic: 2_000,
   impaired: 3_000,
+  pfas: 4_000,
   crithab: 20_000,
   wayback: 5_000,
   topo: 5_000,
@@ -566,6 +569,7 @@ export const FOLLOW_RANGE: Record<LayerId, number> = {
   licences: 1_000,
   envpermits: 8_000,
   contaminants: 8_000,
+  ust: 120_000,
   sports: 500_000,
   constructs: 150_000,
   field: 400_000,

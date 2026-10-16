@@ -164,7 +164,7 @@ export default function InfoPanel() {
   const details = Object.entries(p.details ?? {}).filter(([, v]) => v != null && v !== "" && v !== false);
   const isLiveLayer =
     !p.simulated &&
-    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "employers", "banks", "spending", "constructs", "field", "flood", "wetlands", "publiclands", "relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "transmission", "pipelines", "plants", "rail", "airports", "dams", "faults", "landslides", "geology", "plss", "parcels", "zoning", "permits", "licences", "envpermits", "historic", "crithab", "contaminants", "wayback", "topo", "impaired"].includes(p.layer);
+    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "employers", "banks", "spending", "constructs", "field", "flood", "wetlands", "publiclands", "relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "transmission", "pipelines", "plants", "rail", "airports", "dams", "faults", "landslides", "geology", "plss", "parcels", "zoning", "permits", "licences", "envpermits", "historic", "crithab", "contaminants", "wayback", "topo", "impaired", "pfas", "ust"].includes(p.layer);
   const banner = BANNER[p.layer];
   const iss = p.layer === "satellites" && p.id === "25544";
   const construct = p.layer === "constructs" || p.layer === "field" || p.layer === "alerts";
@@ -353,7 +353,9 @@ const BANNER: Partial<Record<string, string>> = {
   envpermits: "AS EPA ECHO OR THE CORPS PUBLISHES IT · COMPLIANCE IN ECHO'S OWN WORDS",
   historic: "NATIONAL REGISTER LISTING AS NPS PUBLISHES IT · RESTRICTED ARCHAEOLOGICAL SITES ARE WITHHELD AND NOT SHOWN · NOT A SECTION 106 REVIEW",
   crithab: "REGULATORY DESIGNATION · NOT SPECIES RANGE OR OCCURRENCE · FWS GIS IS NOT THE LEGAL BOUNDARY",
-  contaminants: "AN EPA PROGRAM LISTING · A REGULATORY STATUS, NOT A FINDING OF CONTAMINATION AT THIS POINT",
+  contaminants: "AN EPA PROGRAM LISTING OR SITE BOUNDARY · A REGULATORY STATUS OR AREA, NOT A FINDING OF CONTAMINATION HERE",
+  ust: "COUNTY COUNTS FROM STATE RECORDS AS OF 2018-2021 · A SNAPSHOT, NOT CURRENT STATUS · NO INDIVIDUAL SITES",
+  pfas: "UCMR 5 SAMPLES WHERE WATER ENTERS THE SYSTEM, 2023-2025 · NOT A TAP · NOT COMPARED WITH ANY HEALTH LIMIT",
   impaired: "AS THE STATE REPORTED IT TO EPA · A LISTING FOR THE WHOLE ASSESSMENT UNIT, NOT A MEASUREMENT HERE · NOT SHOWN IS NOT CLEAN",
   topo: "USGS MAP AS PUBLISHED · THE EDITION YEAR IS NOT A SURVEY DATE · PARTS OF A SHEET CAN BE DECADES OLDER",
 };

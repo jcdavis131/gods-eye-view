@@ -139,16 +139,112 @@ export const CONTAMINANT_COLOR: Record<string, string> = {
   tri: "#C084FC",
   rcra: "#FBBF24",
   acres: "#A3A3A3",
+  fuds: "#A3B23C",
 };
+
+/** FUDS: an olive program colour; a property with every project at closeout is drawn dimmer; munitions response sites dashed in a lighter olive. */
+const FUDS_CLOSED = "#6B7330";
+const FUDS_MRS = "#D9F99D";
+
+function fudsColor(f: LayerFeature): string {
+  const x = f.properties.extra as { shape?: string; fudsStatus?: string | null } | undefined;
+  if (x?.shape === "mrs") return FUDS_MRS;
+  return x?.fudsStatus === "all-closed-out" ? FUDS_CLOSED : CONTAMINANT_COLOR.fuds;
+}
+
+/**
+ * Superfund site boundaries by NPL_STATUS_CODE: final solid red, proposed orange dashed, deleted
+ * grey; any other code (not on the NPL, removed, part of another site, pre-proposal, withdrawn,
+ * not valid) a thin neutral outline; no status given dotted (dashed, lighter). A colour is the
+ * list status, never a severity.
+ */
+const NPL_FINAL = "#DC2626";
+const NPL_PROPOSED = "#F97316";
+const NPL_DELETED = "#9CA3AF";
+const NPL_OTHER = "#CBD5E1";
+const NPL_NONE = "#E5E7EB";
+
+function nplOf(f: LayerFeature): { color: string; fill: number; width: number; dashed: boolean } {
+  const code = (f.properties.extra as { nplCode?: string | null } | undefined)?.nplCode ?? null;
+  if (code === "F") return { color: NPL_FINAL, fill: 0.16, width: 2, dashed: false };
+  if (code === "P") return { color: NPL_PROPOSED, fill: 0.1, width: 2, dashed: true };
+  if (code === "D") return { color: NPL_DELETED, fill: 0.08, width: 1.5, dashed: false };
+  if (code == null) return { color: NPL_NONE, fill: 0, width: 1.2, dashed: true };
+  return { color: NPL_OTHER, fill: 0, width: 1, dashed: false };
+}
+
+const isBoundary = (f: LayerFeature) => f.geometry.type === "Polygon" || f.geometry.type === "MultiPolygon";
+
+/** The NPL list's status on a Superfund point's label ("SEMS NJD980654131 · NPL: final"). */
+function contaminantLabel(f: LayerFeature): string {
+  const x = f.properties.extra as { npl?: { status?: string | null } | null; shape?: string } | undefined;
+  if (x?.shape === "boundary") {
+    const n = f.properties.details?.["site (as EPA publishes it)"];
+    return typeof n === "string" && n ? n : f.properties.name;
+  }
+  if (f.properties.kind === "fuds") {
+    const n = f.properties.details?.["property (as USACE lists it)"] ?? f.properties.details?.["munitions response site (as USACE lists it)"];
+    return typeof n === "string" && n ? n : f.properties.name;
+  }
+  const s = x?.npl?.status?.toLowerCase();
+  const short = s === "npl site" ? "final" : s === "proposed npl site" ? "proposed" : s === "deleted npl site" ? "deleted" : s;
+  return short ? `${f.properties.name} · NPL: ${short}` : f.properties.name;
+}
 
 export const contaminantsStyle: LayerStyle = {
   color: "#F87171",
   icon: () => null,
-  colorFor: (f) => (isLoadedBox(f) ? LOADED_BOX : CONTAMINANT_COLOR[f.properties.kind ?? ""] ?? "#F87171"),
+  colorFor: (f) => (isLoadedBox(f) ? LOADED_BOX : f.properties.kind === "fuds" ? fudsColor(f) : isBoundary(f) ? nplOf(f).color : (CONTAMINANT_COLOR[f.properties.kind ?? ""] ?? "#F87171")),
   pointSize: (f) => (f.properties.kind === "sems" ? 9 : f.properties.kind === "rcra" ? 5 : 7),
-  label: (f) => f.properties.name,
+  label: contaminantLabel,
   labelMax: 20,
   labelWhen: (f) => !isLoadedBox(f),
-  lines: boxLines,
+  polygons: (f) => {
+    if (isLoadedBox(f) || !isBoundary(f)) return null;
+    if (f.properties.kind === "fuds") return polyFills(f, fudsColor(f), (f.properties.extra as { shape?: string }).shape === "mrs" ? 0.08 : 0.12);
+    const s = nplOf(f);
+    return s.fill > 0 ? polyFills(f, s.color, s.fill) : null;
+  },
+  lines: (f) => {
+    if (isLoadedBox(f)) return polyOutlines(f, LOADED_BOX, 0.7, 1.5, true);
+    if (!isBoundary(f)) return null;
+    if (f.properties.kind === "fuds") {
+      const mrs = (f.properties.extra as { shape?: string }).shape === "mrs";
+      return polyOutlines(f, fudsColor(f), 0.85, mrs ? 1.5 : 2, mrs);
+    }
+    const s = nplOf(f);
+    return polyOutlines(f, s.color, 0.85, s.width, s.dashed);
+  },
   scaleByDistance: [5e3, 1.0, 4e4, 0.6],
+};
+
+// ---------------------------------------------------------------- leaking tanks by county (EPA UST Finder)
+
+/** Open releases per county, in fixed count bins; a count EPA leaves empty is outlined grey, never filled as 0. */
+const UST_BINS = [
+  { from: 0, color: "#FFF7ED" },
+  { from: 1, color: "#FED7AA" },
+  { from: 10, color: "#FDBA74" },
+  { from: 50, color: "#FB923C" },
+  { from: 200, color: "#C2410C" },
+];
+const UST_NOT_GIVEN = "#94A3B8";
+
+function ustColor(f: LayerFeature): string {
+  const open = (f.properties.extra as { open?: number | null } | undefined)?.open;
+  if (open == null) return UST_NOT_GIVEN;
+  let c = UST_BINS[0].color;
+  for (const b of UST_BINS) if (open >= b.from) c = b.color;
+  return c;
+}
+
+export const ustStyle: LayerStyle = {
+  color: "#FB923C",
+  icon: () => null,
+  colorFor: (f) => (isLoadedBox(f) ? LOADED_BOX : ustColor(f)),
+  label: (f) => f.properties.name,
+  labelMax: 15,
+  labelWhen: (f) => !isLoadedBox(f),
+  polygons: (f) => (isLoadedBox(f) || f.properties.kind === "not-given" ? null : polyFills(f, ustColor(f), 0.45)),
+  lines: (f) => (isLoadedBox(f) ? polyOutlines(f, LOADED_BOX, 0.7, 1.5, true) : polyOutlines(f, f.properties.kind === "not-given" ? UST_NOT_GIVEN : "#9A3412", 0.6, 1, f.properties.kind === "not-given")),
 };

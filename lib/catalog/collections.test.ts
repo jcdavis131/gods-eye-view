@@ -24,11 +24,23 @@ describe("the catalogue", () => {
       "nmfs-crithab",
       "opp-ranges",
       "attains-impaired",
+      "ucmr5-pfas",
+      "cws-service-areas",
       "emef-sems",
       "emef-tri",
       "emef-rcra",
       "emef-acres",
       "tri-releases",
+      "npl-boundaries",
+      "npl-status",
+      "fuds-properties",
+      "fuds-projects",
+      "fuds-mrs",
+      "ust-releases-county",
+      "ust-facilities-county",
+      "fema-nfhl-zones",
+      "padus-units",
+      "nid-dams",
       "esri-wayback",
       "wayback-capture",
       "usgs-htmc",
@@ -53,7 +65,7 @@ describe("the catalogue", () => {
   });
 
   it("gives every curated layer at least one card, and shelves every catalogued layer once", () => {
-    for (const l of ["wetlands", "historic", "crithab", "contaminants", "wayback", "topo", "impaired"] as const) expect(collectionsForLayer(l).length, l).toBeGreaterThan(0);
+    for (const l of ["wetlands", "historic", "crithab", "contaminants", "wayback", "topo", "impaired", "pfas", "flood", "publiclands", "dams", "ust"] as const) expect(collectionsForLayer(l).length, l).toBeGreaterThan(0);
     const shelved = SHELVES.flatMap((s) => s.layers);
     expect(new Set(shelved).size).toBe(shelved.length);
     for (const l of catalogued()) expect(shelved, l).toContain(l);
@@ -63,7 +75,32 @@ describe("the catalogue", () => {
     for (const c of COLLECTIONS) {
       for (const f of [...c.searchable, ...c.embedText]) expect(DENY_FIELD.test(f), `${c.id}: ${f}`).toBe(false);
     }
-    for (const bad of ["location_address", "STREET_ADDR_TXT", "ZIP_CODE", "public_contact_person", "technical_contact_phone", "certif_name", "SITE_CONTACT_EMAIL", "primary_name", "RESNAME", "Name", "CURRENTOWNER"]) {
+    for (const bad of [
+      "location_address",
+      "STREET_ADDR_TXT",
+      "ZIP_CODE",
+      "public_contact_person",
+      "technical_contact_phone",
+      "certif_name",
+      "SITE_CONTACT_EMAIL",
+      "SITE_CONTACT_NAME",
+      "PRIMARY_TELEPHONE_NUM",
+      "primary_name",
+      "RESNAME",
+      "Name",
+      "Address",
+      "CURRENTOWNER",
+      "SITE_NAME",
+      "Site_Name",
+      "PWS_Name",
+      "FEATURENAME",
+      "DODFORMERLYUSEDDEFENSESITENAME",
+      "ENVRESTORATIONPROJECTNAME",
+      "OFFICIALSITENAME",
+      "FEATUREDESCRIPTION",
+      "SITE_FEATURE_DESCRIPTION",
+      "Loc_Own",
+    ]) {
       expect(DENY_FIELD.test(bad), bad).toBe(true);
     }
   });

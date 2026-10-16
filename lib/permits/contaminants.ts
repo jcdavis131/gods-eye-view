@@ -13,10 +13,12 @@
 
 import type { LayerFeature } from "@/lib/layers/types";
 import type { Bbox } from "@/lib/zoning/features";
+import type { NplJoin } from "./npl";
 
 export const EMEF = "https://geopub.epa.gov/arcgis/rest/services/EMEF/efpoints/MapServer";
 
-export type ContaminantProgram = "sems" | "tri" | "rcra" | "acres";
+/** EMEF's four programs, and USACE's Formerly Used Defense Sites (lib/permits/fuds.ts). */
+export type ContaminantProgram = "sems" | "tri" | "rcra" | "acres" | "fuds";
 
 export interface EmefLayer {
   id: ContaminantProgram;
@@ -30,7 +32,7 @@ export interface EmefLayer {
 }
 
 export const EMEF_LAYERS: EmefLayer[] = [
-  { id: "sems", layer: 0, service: "Superfund", short: "SEMS", name: "Superfund (SEMS): EPA's Superfund site layer, about 1,400 sites, roughly the National Priorities List; not every Superfund site" },
+  { id: "sems", layer: 0, service: "Superfund", short: "SEMS", name: "Superfund (SEMS): EPA's Superfund site layer, the current National Priorities List (final and proposed sites; sites deleted from the NPL and Superfund sites never listed are not in it)" },
   { id: "tri", layer: 1, service: "Toxic releases", short: "TRI", name: "Toxics Release Inventory reporter" },
   { id: "rcra", layer: 4, service: "Hazardous waste", short: "RCRA", name: "RCRA hazardous waste handler (RCRAInfo)" },
   { id: "acres", layer: 5, service: "Brownfields", short: "Brownfields", name: "Brownfields property (ACRES)" },
@@ -43,7 +45,7 @@ export const EMEF_MAX = 1000;
 export const EMEF_FIELDS = ["registry_id", "primary_name", "pgm_sys_acrnm", "pgm_sys_id", "facility_url"] as const;
 
 export const CONTAMINANTS_CAVEAT =
-  "EPA program listings: Superfund (EPA's SEMS site layer of about 1,400 sites, roughly the National Priorities List, not every Superfund site), Toxics Release Inventory reporters, RCRA hazardous-waste handlers and Brownfields properties. A listing is a regulatory status, not a finding of contamination at the point; a TRI reporter's record can show what it reported releasing (asked on click, never drawn). Points are EPA's facility coordinates. Water and air permits are in the Environmental permits layer.";
+  "EPA program listings: Superfund (EPA's SEMS site layer: its 1,374 points were exactly the current National Priorities List on 2026-10-15, 1,337 final and 37 proposed sites, joined by EPA ID; sites deleted from the NPL and Superfund sites never listed are not in it), Toxics Release Inventory reporters, RCRA hazardous-waste handlers and Brownfields properties. A listing is a regulatory status, not a finding of contamination at the point; a TRI reporter's record can show what it reported releasing (asked on click, never drawn). Points are EPA's facility coordinates. Water and air permits are in the Environmental permits layer.";
 
 export function emefParams(b: Bbox): Record<string, string> {
   const [w, s, e, n] = b;
@@ -70,6 +72,13 @@ export interface ContaminantExtra {
   program: ContaminantProgram;
   registryId?: string;
   programId?: string;
+  /** A point listing unless said otherwise: a Superfund "boundary" (lib/permits/npl.ts), a FUDS "property" boundary or "mrs" (lib/permits/fuds.ts). */
+  shape?: "point" | "boundary" | "property" | "mrs";
+  /**
+   * Superfund only: the site's row on EPA's NPL list; null when the list answered without a row for
+   * it; absent (undefined) when the list did not answer, which is unknown, not "not listed".
+   */
+  npl?: NplJoin;
 }
 
 /** One EMEF layer's rows as features, once per program listing (registry id + program id). */

@@ -6,6 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import lines from "@/lib/water/fixtures/attains-1-baltimore.json";
 import areas from "@/lib/water/fixtures/attains-2-baltimore.json";
+import cwsRows from "@/lib/water/fixtures/cws-collegeville.json";
+import cwsGeom from "@/lib/water/fixtures/cws-collegeville-geom.json";
+import patCentroid from "@/lib/water/fixtures/pat-centroid-collegeville.json";
+import patResults from "@/lib/water/fixtures/pat-results-collegeville.json";
 
 vi.mock("@/lib/server/cache", () => ({
   cached: async <T,>(_k: string, _ttl: number, produce: () => Promise<T>) => ({ value: await produce(), age: 0, hit: false }),
@@ -79,5 +83,82 @@ describe("op=impaired", () => {
     const { body } = await get("op=impaired&bbox=-76.62,39.26,-76.58,39.30");
     expect(body.coverage.find((c) => c.id === "lines")?.state).toBe("partial");
     expect(body.caveats.join(" ")).toMatch(/lines: the first 2,000 in this box; zoom in/);
+  });
+});
+
+// PFAS (UCMR 5): fetch answered with the Collegeville captures (2026-10-15) for the route's snapped box.
+const CWS = "https://services.arcgis.com/cJ9YHowT8TU7DUyn/arcgis/rest/services/Water_System_Boundaries/FeatureServer/0/query?";
+const PATQ = "https://services.arcgis.com/cJ9YHowT8TU7DUyn/arcgis/rest/services/PFAS_Analytic_Tools_Layers/FeatureServer/1/query?";
+
+describe("op=pfas", () => {
+  type PBody = Body & { systems: Record<string, number>; notDrawn: Array<{ pwsid: string; state: string }>; polygons: boolean };
+  const pfas = (fail: { results?: boolean; cws?: boolean } = {}) => (u: string) => {
+    if (u.startsWith(CWS)) {
+      if (fail.cws) return new Response("busy", { status: 503 });
+      return json(new URL(u).searchParams.get("returnGeometry") === "true" ? cwsGeom : cwsRows);
+    }
+    if (u.startsWith(PATQ)) {
+      const where = new URL(u).searchParams.get("where") ?? "";
+      if (where.includes("F_PWS_ID IN")) return fail.results ? new Response("busy", { status: 404 }) : json(patResults);
+      return json(patCentroid);
+    }
+    return null;
+  };
+
+  it("asks service areas first, then estimated locations, then UCMR 5 results by PWSID, and answers the four states", async () => {
+    answer = pfas();
+    const { status, body } = (await get("op=pfas&bbox=-75.55,40.13,-75.40,40.25")) as { status: number; body: PBody };
+    expect(status).toBe(200);
+    expect(body.bbox).toEqual([-75.54, 40.12, -75.4, 40.26]);
+    expect(calls.filter((u) => u.startsWith(CWS))).toHaveLength(1);
+    expect(new URL(calls.find((u) => u.startsWith(CWS))!).searchParams.get("returnGeometry")).toBe("false");
+    const results = calls.filter((u) => u.startsWith(PATQ) && u.includes("F_PWS_ID+IN"));
+    expect(results).toHaveLength(1);
+    const where = new URL(results[0]).searchParams.get("where")!;
+    expect(where).toContain("Result_At_or_Above_UCMR_MRL IS NOT NULL");
+    expect(where).toContain("'PA1460073'");
+    for (const u of calls) expect(u).not.toMatch(/HBSL|Facility_Name|Sample_Point/);
+    expect(body.systems).toEqual({ detected: 9, "not-detected": 0, "not-in-ucmr5": 7, unknown: 0 });
+    expect(body.data.features).toHaveLength(9);
+    expect(body.notDrawn).toHaveLength(7);
+    expect(body.coverage.map((c) => [c.id, c.state, c.count])).toEqual([
+      ["service-areas", "covered", 16],
+      ["estimated-locations", "covered", 5],
+      ["results", "covered", 9],
+    ]);
+    expect(body.caveats.join(" ")).toMatch(/not at any tap/);
+  });
+
+  it("with polygons=1 draws every system on its service area", async () => {
+    answer = pfas();
+    const { body } = (await get("op=pfas&bbox=-75.55,40.13,-75.40,40.25&polygons=1")) as { status: number; body: PBody };
+    expect(body.polygons).toBe(true);
+    expect(body.data.features).toHaveLength(16);
+    expect(body.notDrawn).toEqual([]);
+    const aqua = body.data.features.find((f) => f.properties.name === "PWS PA1460073")!;
+    expect(aqua.properties.details["UCMR 5"]).toMatch(/^PFAS at or above/);
+  });
+
+  it("reads every system unknown, never not-detected, when the results do not answer", async () => {
+    answer = pfas({ results: true });
+    const { status, body } = (await get("op=pfas&bbox=-75.55,40.13,-75.40,40.25")) as { status: number; body: PBody };
+    expect(status).toBe(200);
+    expect(body.systems).toEqual({ detected: 0, "not-detected": 0, "not-in-ucmr5": 0, unknown: 16 });
+    expect(body.coverage.find((c) => c.id === "results")).toMatchObject({ state: "error", count: null });
+    expect(body.caveats.join(" ")).toMatch(/"unknown", never "not detected"/);
+  });
+
+  it("keeps the systems EPA places by estimated location when the service areas fail", async () => {
+    answer = pfas({ cws: true });
+    const { status, body } = (await get("op=pfas&bbox=-75.55,40.13,-75.40,40.25")) as { status: number; body: PBody };
+    expect(status).toBe(200);
+    expect(body.coverage.find((c) => c.id === "service-areas")).toMatchObject({ state: "error", count: null });
+    expect(body.systems.detected).toBe(5);
+  });
+
+  it("refuses a bad box without asking", async () => {
+    answer = pfas();
+    expect((await get("op=pfas&bbox=-75.4,40.13,-75.55,40.25")).status).toBe(400);
+    expect(calls).toEqual([]);
   });
 });

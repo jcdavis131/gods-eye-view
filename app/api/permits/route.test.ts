@@ -18,6 +18,17 @@ import emefSems from "@/lib/permits/fixtures/emef-0-houston.json";
 import emefTri from "@/lib/permits/fixtures/emef-1-houston.json";
 import emefRcra from "@/lib/permits/fixtures/emef-4-houston.json";
 import emefAcres from "@/lib/permits/fixtures/emef-5-houston.json";
+import emefSemsSv from "@/lib/permits/fixtures/emef-0-sunnyvale.json";
+import nplBndSv from "@/lib/permits/fixtures/npl-bnd-sunnyvale.json";
+import nplStatusSv from "@/lib/permits/fixtures/npl-status-sunnyvale.json";
+import nplStatusNj from "@/lib/permits/fixtures/npl-status-nj.json";
+import nplInfo from "@/lib/permits/fixtures/npl-bnd-info.json";
+import fuds1 from "@/lib/permits/fixtures/fuds-1-njny.json";
+import fuds2 from "@/lib/permits/fixtures/fuds-2-njny.json";
+import fuds3 from "@/lib/permits/fixtures/fuds-3-njny.json";
+import fuds4 from "@/lib/permits/fixtures/fuds-4-njny.json";
+import ust3 from "@/lib/permits/fixtures/ust-3-gulf.json";
+import ust2 from "@/lib/permits/fixtures/ust-2-gulf.json";
 
 type F = { geometry: GeoJSON.Geometry | null; properties: Record<string, unknown> | null };
 const asRows = (j: unknown): F[] => (Array.isArray(j) ? j.map((r) => ({ geometry: null, properties: r as Record<string, unknown> })) : (j as { features: F[] }).features);
@@ -27,6 +38,8 @@ let failHosts: string[] = [];
 /** EMEF layers to answer as cut at the record limit (the flag ArcGIS sets), to test the cap note. */
 let truncatedLayers: number[] = [];
 const emefParams: Array<Record<string, string>> = [];
+/** Params of every non-EMEF ArcGIS query, by layer URL. */
+const arcParams: Array<{ layer: string; params: Record<string, string> }> = [];
 
 vi.mock("@/lib/server/cache", () => ({
   cached: async <T,>(_k: string, _ttl: number, produce: () => Promise<T>) => ({ value: await produce(), age: 0, hit: false }),
@@ -43,9 +56,34 @@ vi.mock("@/lib/civic/request", () => ({
     if (emef) {
       emefParams.push(req.params ?? {});
       const n = Number(emef[1]);
-      const fc = ({ 0: emefSems, 1: emefTri, 4: emefRcra, 5: emefAcres } as unknown as Record<number, { features: F[] }>)[n];
+      // Layer 0 answers the Sunnyvale capture for the Sunnyvale box, Houston's otherwise.
+      const sunnyvale = (req.params?.geometry ?? "").includes("-122.05");
+      const fc = ({ 0: sunnyvale ? emefSemsSv : emefSems, 1: emefTri, 4: emefRcra, 5: emefAcres } as unknown as Record<number, { features: F[] }>)[n];
       if (!fc) throw new Error(`unexpected EMEF layer ${n}`);
       return { features: fc.features, truncated: truncatedLayers.includes(n) };
+    }
+    if (url.includes("FAC_Superfund_Site_Boundaries_EPA_Public")) {
+      arcParams.push({ layer: url, params: req.params ?? {} });
+      return { features: nplBndSv.features as unknown as F[], truncated: false };
+    }
+    if (url.includes("Superfund_National_Priorities_List")) {
+      arcParams.push({ layer: url, params: req.params ?? {} });
+      // The list's real rows from both captures, filtered to the IN list as the server would.
+      const ids = new Set((req.params?.where.match(/'([A-Z0-9]+)'/g) ?? []).map((x) => x.slice(1, -1)));
+      return { features: [...nplStatusSv.features, ...nplStatusNj.features].filter((f) => ids.has(f.properties.Site_EPA_ID)) as unknown as F[], truncated: false };
+    }
+    const ust = url.match(/\/UST_Finder_Feature_Layer_2eb\/FeatureServer\/(\d)$/);
+    if (ust) {
+      arcParams.push({ layer: url, params: req.params ?? {} });
+      const fc = ({ 2: ust2, 3: ust3 } as unknown as Record<number, { features: F[] }>)[Number(ust[1])];
+      if (!fc) throw new Error(`unexpected UST Finder layer ${ust[1]}`);
+      return { features: fc.features, truncated: false };
+    }
+    const fuds = url.match(/\/fuds\/FeatureServer\/(\d)$/);
+    if (fuds) {
+      arcParams.push({ layer: url, params: req.params ?? {} });
+      const fc = ({ 1: fuds1, 2: fuds2, 3: fuds3, 4: fuds4 } as unknown as Record<number, { features: F[] }>)[Number(fuds[1])];
+      return { features: fc.features, truncated: false };
     }
     if (url.includes("ydr8-5enu")) return { features: asRows(chicagoPermits), truncated: false };
     if (url.includes("RESIDENTIALCONSTPERMIT")) return { features: asRows(denverPermits), truncated: false };
@@ -61,6 +99,7 @@ vi.mock("@/lib/civic/request", () => ({
     if (url.includes("air_rest_services.get_facilities")) return airQuery;
     if (url.includes("air_rest_services.get_qid")) return airRows;
     if (url.includes("orm-public-api")) return orm;
+    if (url.includes("FAC_Superfund_Site_Boundaries_EPA_Public/FeatureServer/0?f=json")) return nplInfo;
     throw new Error(`unexpected request ${url}`);
   },
 }));
@@ -78,6 +117,7 @@ beforeEach(() => {
   failHosts = [];
   truncatedLayers = [];
   emefParams.length = 0;
+  arcParams.length = 0;
 });
 
 describe("/api/permits?op=building", () => {
@@ -93,7 +133,7 @@ describe("/api/permits?op=building", () => {
   it("names Dallas as stale without asking anyone", async () => {
     const { body } = await get("op=building&bbox=-96.805,32.7675,-96.785,32.7825");
     expect(body.data.features).toEqual([]);
-    expect(body.coverage).toEqual([expect.objectContaining({ name: "Dallas", state: "stale" })]);
+    expect(body.coverage).toEqual([expect.objectContaining({ name: "Dallas", state: "stale", count: null })]);
     expect(calls).toEqual([]);
   });
 
@@ -108,7 +148,7 @@ describe("/api/permits?op=building", () => {
   it("names a city that failed as missing, and holds the answer briefly", async () => {
     failHosts = ["data.cityofchicago.org"];
     const { body, res } = await get("op=building&bbox=-87.64,41.8775,-87.62,41.8925");
-    expect(body.coverage).toEqual([expect.objectContaining({ name: "Chicago", state: "error" })]);
+    expect(body.coverage).toEqual([expect.objectContaining({ name: "Chicago", state: "error", count: null })]);
     expect(body.caveats?.join(" ")).toMatch(/missing from this answer, not absent/);
     expect(res.headers.get("cache-control")).toContain("s-maxage=120");
   });
@@ -160,6 +200,7 @@ describe("/api/permits?op=environmental", () => {
     failHosts = ["echodata.epa.gov"];
     const { body } = await get("op=environmental&bbox=-95.2,29.7,-95,29.8");
     expect(body.coverage.filter((c) => c.state === "error").length).toBe(2);
+    expect(body.coverage.filter((c) => c.state === "error").every((c) => c.count === null)).toBe(true);
     expect(body.data.features.length).toBe(172);
   });
 
@@ -200,9 +241,133 @@ describe("/api/permits?op=contaminants", () => {
     failHosts = ["geopub.epa.gov"];
     const down = await get("op=contaminants&bbox=-95.3,29.7,-95.15,29.8");
     expect(down.status).toBe(200);
-    expect(down.body.coverage.every((c) => c.state === "error")).toBe(true);
-    expect(down.body.coverage.every((c) => c.count === null)).toBe(true);
+    const emef = down.body.coverage.filter((c) => c.name.startsWith("EPA "));
+    expect(emef.map((c) => c.name).sort()).toEqual(["EPA Brownfields", "EPA RCRA", "EPA SEMS", "EPA TRI"]);
+    expect(emef.every((c) => c.state === "error" && c.count === null)).toBe(true);
+    // USACE's FUDS answered: one failing host never fails the others.
+    expect(down.body.coverage.filter((c) => c.name.startsWith("USACE")).every((c) => c.state === "covered")).toBe(true);
     expect(down.body.caveats?.join(" ")).toMatch(/missing from this answer, not absent/);
+  });
+});
+
+describe("/api/permits?op=contaminants: Superfund boundaries and the NPL list", () => {
+  const SV = "op=contaminants&bbox=-122.05,37.35,-121.95,37.45";
+  type Feat = { properties: { kind?: string; name: string; details: Record<string, unknown>; extra: Record<string, unknown> } };
+  const feats = (b: Body) => b.data.features as unknown as Feat[];
+
+  it("sends no polygons without polygons=1, and still joins every Superfund point to the NPL list by EPA ID", async () => {
+    const { status, body } = await get(SV);
+    expect(status).toBe(200);
+    expect(calls.some((u) => u.includes("FAC_Superfund_Site_Boundaries_EPA_Public"))).toBe(false);
+    expect(feats(body).some((f) => f.properties.kind === "npl")).toBe(false);
+    const sems = feats(body).filter((f) => f.properties.extra.program === "sems");
+    expect(sems).toHaveLength(10);
+    const amd = sems.find((f) => f.properties.name === "SEMS CAD048634059")!;
+    expect(amd.properties.details["NPL list"]).toBe("NPL Site");
+    expect((amd.properties.extra.npl as { listed: string }).listed).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(body.coverage.find((c) => c.name === "EPA NPL status list")).toMatchObject({ state: "covered", count: 10 });
+    expect(body.caveats?.join(" ")).toMatch(/only with polygons=1/);
+  });
+
+  it("with polygons=1 draws the boundaries, named fields only, and keeps a site that is not on the list apart from an unknown one", async () => {
+    const { body } = await get(`${SV}&polygons=1`);
+    const bnd = arcParams.find((a) => a.layer.includes("FAC_Superfund_Site_Boundaries_EPA_Public"))!;
+    expect(bnd.params.where).toBe("EPA_PROGRAM IS NULL OR EPA_PROGRAM LIKE 'Superfund%'");
+    expect(bnd.params.outFields).not.toMatch(/CONTACT|TELEPHONE|STREET|ZIP|GIS_AREA|DESCRIPTION|\*/);
+    const npl = feats(body).filter((f) => f.properties.kind === "npl");
+    expect(npl).toHaveLength(15);
+    expect(body.coverage.find((c) => c.name === "EPA Superfund site boundaries")).toMatchObject({ state: "covered", count: 15 });
+    // 14 sites in the box, 12 of them on the list.
+    expect(body.coverage.find((c) => c.name === "EPA NPL status list")).toMatchObject({ state: "covered", count: 12 });
+    const triple = npl.filter((f) => f.properties.name === "Superfund CAN000900265");
+    expect(triple).toHaveLength(2);
+    expect(triple[0].properties.details["NPL list"]).toBe("not on EPA's NPL status list");
+    expect(triple[0].properties.extra.siteFeatures).toBe(2);
+    expect(JSON.stringify(body.data)).not.toMatch(/<a |target=/);
+  });
+
+  it("says the NPL list is unknown, never 'not listed', when it fails, and keeps every point and boundary", async () => {
+    failHosts = ["Superfund_National_Priorities_List"];
+    const { status, body } = await get(`${SV}&polygons=1`);
+    expect(status).toBe(200);
+    expect(body.coverage.find((c) => c.name === "EPA NPL status list")).toMatchObject({ state: "error", count: null });
+    const sems = feats(body).filter((f) => f.properties.extra.program === "sems" && f.properties.kind !== "npl");
+    expect(sems).toHaveLength(10);
+    for (const f of [...sems, ...feats(body).filter((x) => x.properties.kind === "npl")]) {
+      expect(f.properties.details["NPL list"]).toMatch(/^unknown/);
+      expect("npl" in f.properties.extra).toBe(false);
+    }
+    expect(feats(body).filter((f) => f.properties.kind === "npl")).toHaveLength(15);
+  });
+
+  it("keeps the points when the boundary layer fails", async () => {
+    failHosts = ["FAC_Superfund_Site_Boundaries_EPA_Public"];
+    const { body } = await get(`${SV}&polygons=1`);
+    expect(body.coverage.find((c) => c.name === "EPA Superfund site boundaries")).toMatchObject({ state: "error", count: null });
+    expect(feats(body).filter((f) => f.properties.extra.program === "sems")).toHaveLength(10);
+  });
+});
+
+describe("/api/permits?op=contaminants: Formerly Used Defense Sites", () => {
+  const NJNY = "op=contaminants&bbox=-74.1,40.5,-73.9,40.7";
+  type Feat = { properties: { kind?: string; name: string; details: Record<string, unknown>; extra: Record<string, unknown> } };
+  const fudsOf = (b: Body) => (b.data.features as unknown as Feat[]).filter((f) => f.properties.extra.program === "fuds");
+
+  it("asks property points and projects, never the owner or the narratives, and no polygons without polygons=1", async () => {
+    const { body } = await get(NJNY);
+    const asked = arcParams.filter((a) => a.layer.includes("/fuds/"));
+    expect(asked.map((a) => a.layer.split("/").pop()).sort()).toEqual(["1", "2"]);
+    for (const a of asked) expect(a.params.outFields).not.toMatch(/CURRENTOWNER|FEATUREDESCRIPTION|OFFICIALSITENAME|\*/);
+    const f = fudsOf(body);
+    expect(f).toHaveLength(126);
+    expect(f.every((x) => x.properties.extra.shape === "point")).toBe(true);
+    expect(body.coverage.find((c) => c.name === "USACE FUDS properties")).toMatchObject({ state: "covered", count: 126 });
+    expect(body.coverage.find((c) => c.name === "USACE FUDS projects")).toMatchObject({ state: "covered", count: 72 });
+    expect(body.caveats?.join(" ")).toMatch(/Formerly Used Defense Sites inventory/);
+  });
+
+  it("with polygons=1 draws boundaries in place of their points, and munitions response sites", async () => {
+    const { body } = await get(`${NJNY}&polygons=1`);
+    const f = fudsOf(body);
+    const by = (s: string) => f.filter((x) => x.properties.extra.shape === s).length;
+    expect([by("point"), by("property"), by("mrs")]).toEqual([99, 29, 11]);
+    expect(body.coverage.find((c) => c.name === "USACE FUDS properties")).toMatchObject({ count: 99, reason: expect.stringMatching(/drawn as its boundary/) });
+    expect(body.coverage.find((c) => c.name === "USACE FUDS property boundaries")).toMatchObject({ state: "covered", count: 29 });
+    expect(body.coverage.find((c) => c.name === "USACE FUDS munitions response sites")).toMatchObject({ state: "covered", count: 11 });
+  });
+
+  it("says projects are unknown when the project layer fails, and keeps the properties", async () => {
+    failHosts = ["fuds/FeatureServer/2"];
+    const { body } = await get(NJNY);
+    expect(body.coverage.find((c) => c.name === "USACE FUDS projects")).toMatchObject({ state: "error", count: null });
+    const f = fudsOf(body);
+    expect(f).toHaveLength(126);
+    expect(f[0].properties.details.projects).toMatch(/^unknown/);
+  });
+});
+
+describe("/api/permits?op=ust", () => {
+  it("asks the two county layers only, in a 4 degree box, and joins facilities by county name", async () => {
+    const { status, body } = await get("op=ust&bbox=-96,28,-92,32");
+    expect(status).toBe(200);
+    const asked = arcParams.filter((a) => a.layer.includes("UST_Finder")).map((a) => a.layer.split("/").pop()).sort();
+    expect(asked).toEqual(["2", "3"]);
+    expect(body.bbox).toEqual([-96, 28, -92, 32]);
+    expect(body.data.features).toHaveLength(57);
+    expect(body.unjoined).toEqual({ releases: 0, facilities: 0 });
+    expect(body.coverage.map((c) => [c.name, c.state, c.count])).toEqual([
+      ["EPA UST Finder, releases by county", "covered", 57],
+      ["EPA UST Finder, facilities by county", "covered", 57],
+    ]);
+    expect(body.caveats?.join(" ")).toMatch(/Individual sites are not shown because many are private homes/);
+  });
+
+  it("keeps the releases and says facilities are unknown when that layer fails, and clamps a big box", async () => {
+    failHosts = ["UST_Finder_Feature_Layer_2eb/FeatureServer/2"];
+    const { body } = await get("op=ust&bbox=-100,25,-90,35");
+    expect((body.bbox as number[])[2] - (body.bbox as number[])[0]).toBeLessThanOrEqual(4);
+    expect(body.coverage.find((c) => c.name.includes("facilities"))).toMatchObject({ state: "error", count: null });
+    expect(body.data.features[0].properties.details).toMatchObject({ "UST facilities": expect.stringMatching(/^unknown/) });
   });
 });
 
