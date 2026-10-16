@@ -2939,7 +2939,7 @@
     "/api/permits": {
       "get": {
         "summary": "Building permits, business licences, environmental permits or EPA contaminated-site listings in a box; a TRI facility's reported releases",
-        "description": "op=tri: what one Toxics Release Inventory facility reported releasing on site in a reporting year, from EPA Envirofacts (the Form R join of tri_reporting_form, tri_release_qty and tri_chem_info, and the facility's Form A certifications): `rows` by chemical and medium with the amount in its reported unit (null when 'NA' was entered or when it is a range report, which shows its range instead; a reported 0 stays 0), the estimation basis; `totals` per medium AND unit (pounds and grams are never added; range and NA rows are never in a total); `formA` the chemicals certified on Form A, which reports no quantities (null when that call failed). Fields are kept by allowlist: the certifying official and every contact name, phone and email Envirofacts sends never leave the parser, and TRI's own coordinates are not used. Held 30 days per facility and year. op=building: permits the cities list as issued in the last `days` (7-90, default 30), newest first, at most 500 per city; boxes clamped to 0.03° and snapped to 0.0025°. Each record keeps its valuation under the column it came from (reported cost, estimated project cost, valuation...), the parcel key the city publishes (BBL, TCAD id, SCHEDNUM, PIN, block/lot), the zoning printed on the permit where there is one, the contractor company and the city's record link. Every portal is asked for named columns ($select or outFields), and no applicant, owner or contact name is requested; the contractor company is shown as the city publishes it and can be a sole trader's own name (never searched). op=licences: licensed premises, by trade name (an entity's legal name where there is no trade name; the legal or registrant name is requested only to test for an entity form and to compare it with the trade name, and is discarded otherwise, so a trade name that is a non-company registrant's own name is not shown and `nameNote` says why; a trade name is otherwise as published and can contain a person's name), and licences at apartment or unit addresses withheld as a home-business heuristic (`withheld` counts them); boxes clamped to 0.02°. op=environmental: EPA ECHO NPDES and air facilities (compliance in ECHO's own words; 'not reported by ECHO' when it gives none) and the Corps' regulatory actions (the applicant is never kept; a project name that opens 'Surname, Given' is withheld and `facilityNote` says so, though a project name can carry a person's name in another form; the search returns at most 300, the box's actions first and then actions from anywhere in the country, so only those inside the box are kept, sorted newest first here, and USACE is partial only when all 300 lay in the box); boxes clamped to 0.2° and snapped to 0.05°. op=contaminants: EPA Envirofacts EMEF program listings, Superfund (EPA's SEMS site layer of about 1,400 sites, roughly the National Priorities List, not every Superfund site), Toxics Release Inventory reporters, RCRA hazardous-waste handlers and Brownfields (ACRES), as features named by their program id, with EPA's facility name (as published; it can be a person's name or a street address and is never a search key), the program id, the FRS registry id and EPA's record link in `details`; a listing is a regulatory status, not a finding of contamination, and no release amounts are given; no address is requested; at most 1,000 per program (`coverage` says partial when hit); same box rules as environmental. `coverage` lists every source the box meets with its state: covered, partial (a cap was hit), stale (Dallas), no-feed (Houston), token-required (Denver commercial), not-wired (San Antonio) or error (did not answer this time: missing, not absent).",
+        "description": "op=tri: what one Toxics Release Inventory facility reported releasing on site in a reporting year, from EPA Envirofacts (the Form R join of tri_reporting_form, tri_release_qty and tri_chem_info, and the facility's Form A certifications): `rows` by chemical and medium with the amount in its reported unit (null when 'NA' was entered or when it is a range report, which shows its range instead; a reported 0 stays 0), the estimation basis; `totals` per medium AND unit (pounds and grams are never added; range and NA rows are never in a total); `formA` the chemicals certified on Form A, which reports no quantities (null when that call failed). Fields are kept by allowlist: the certifying official and every contact name, phone and email Envirofacts sends never leave the parser, and TRI's own coordinates are not used. Held 30 days per facility and year. op=building: permits the cities list as issued in the last `days` (7-90, default 30), newest first, at most 500 per city; boxes clamped to 0.03° and snapped to 0.0025°. Each record keeps its valuation under the column it came from (reported cost, estimated project cost, valuation...), the parcel key the city publishes (BBL, TCAD id, SCHEDNUM, PIN, block/lot), the zoning printed on the permit where there is one, the contractor company and the city's record link. Every portal is asked for named columns ($select or outFields), and no applicant, owner or contact name is requested; the contractor company is shown as the city publishes it and can be a sole trader's own name (never searched). op=licences: licensed premises, by trade name (an entity's legal name where there is no trade name; the legal or registrant name is requested only to test for an entity form and to compare it with the trade name, and is discarded otherwise, so a trade name that is a non-company registrant's own name is not shown and `nameNote` says why; a trade name is otherwise as published and can contain a person's name), and licences at apartment or unit addresses withheld as a home-business heuristic (`withheld` counts them); boxes clamped to 0.02°. op=environmental: EPA ECHO NPDES and air facilities (compliance in ECHO's own words; 'not reported by ECHO' when it gives none) and the Corps' regulatory actions (the applicant is never kept; a project name that opens 'Surname, Given' is withheld and `facilityNote` says so, though a project name can carry a person's name in another form; the search returns at most 300, the box's actions first and then actions from anywhere in the country, so only those inside the box are kept, sorted newest first here, and USACE is partial only when all 300 lay in the box); boxes clamped to 0.2° and snapped to 0.05°. op=contaminants: EPA Envirofacts EMEF program listings, Superfund (EPA's SEMS site layer: the current National Priorities List, final and proposed sites, each with its NPL status and dates joined from EPA's NPL list by EPA ID; with polygons=1, EPA's Superfund site boundaries too, coloured by NPL status), Toxics Release Inventory reporters, RCRA hazardous-waste handlers and Brownfields (ACRES), as features named by their program id, with EPA's facility name (as published; it can be a person's name or a street address and is never a search key), the program id, the FRS registry id and EPA's record link in `details`; a listing is a regulatory status, not a finding of contamination, and no release amounts are given; no address is requested; at most 1,000 per program (`coverage` says partial when hit); same box rules as environmental. `coverage` lists every source the box meets with its state: covered, partial (a cap was hit), stale (Dallas), no-feed (Houston), token-required (Denver commercial), not-wired (San Antonio) or error (did not answer this time: missing, not absent).",
         "tags": [
           "permits"
         ],
@@ -2958,7 +2958,7 @@
                 "tri"
               ]
             },
-            "description": "building: city building permits. licences: licensed premises. environmental: EPA ECHO facilities and Corps actions. contaminants: EPA Superfund, TRI, RCRA and Brownfields listings. tri: what one TRI facility reported releasing in a year."
+            "description": "building: city building permits. licences: licensed premises. environmental: EPA ECHO facilities and Corps actions. contaminants: EPA Superfund (with NPL status), TRI, RCRA and Brownfields listings, and with polygons=1 Superfund site boundaries. tri: what one TRI facility reported releasing in a year."
           },
           {
             "name": "bbox",
@@ -2985,6 +2985,17 @@
               "minimum": 1987
             },
             "description": "op=tri: reporting year, 1987 to this year. When absent, the newest complete year (two behind the calendar), then the one before if that holds nothing."
+          },
+          {
+            "name": "polygons",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            },
+            "description": "op=contaminants: also send polygons (EPA's Superfund site boundaries). The globe asks below 10 km; without it only points are sent."
           },
           {
             "name": "days",
@@ -7391,6 +7402,10 @@
               },
               "coverage": {
                 "$ref": "#/components/schemas/PermitsCoverage"
+              },
+              "polygons": {
+                "type": "boolean",
+                "description": "Whether polygons were asked for (polygons=1)."
               }
             }
           }
@@ -7405,6 +7420,96 @@
           "details",
           "extra"
         ],
+        "x-extra": {
+          "type": "object",
+          "description": "properties.extra. program: sems | tri | rcra | acres. shape: absent or 'point' for a listing, 'boundary' for a Superfund site boundary (kind 'npl', polygons=1 only; nplCode is NPL_STATUS_CODE as published, null when not given; siteFeatures is how many mapped features the EPA ID has in the answer; they are not merged). npl, on Superfund points and boundaries: the site's row on EPA's NPL list; null when the list answered without a row for it ('not on EPA's NPL status list'); absent when the list did not answer (unknown, never 'not listed').",
+          "properties": {
+            "npl": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "status": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "As the list words it: 'NPL Site', 'Proposed NPL Site', 'Deleted NPL Site'."
+                },
+                "score": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Hazard Ranking System score."
+                },
+                "proposed": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date"
+                },
+                "listed": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date"
+                },
+                "constructionComplete": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date"
+                },
+                "noticeOfIntentToDelete": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date"
+                },
+                "deleted": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date"
+                },
+                "partialDeletion": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "notices": {
+                  "type": "array",
+                  "description": "Federal Register notices and the site progress profile: the anchor's text, and its href only when it is https on an epa.gov host. No HTML.",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string"
+                      },
+                      "text": {
+                        "type": "string"
+                      },
+                      "url": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
         "x-details-keys": [
           "program",
           "facility (as EPA publishes it)",
@@ -7412,6 +7517,30 @@
           "registry id",
           "program system (as EPA codes it)",
           "EPA record",
+          "site (as EPA publishes it)",
+          "EPA ID",
+          "EPA program (as published)",
+          "NPL status (boundary layer)",
+          "federal facility",
+          "NPL list",
+          "HRS score",
+          "proposed to the NPL",
+          "listed on the NPL",
+          "construction complete",
+          "notice of intent to delete",
+          "deleted from the NPL",
+          "partial deletion",
+          "proposed rule (Federal Register)",
+          "final rule (Federal Register)",
+          "deletion notice (Federal Register)",
+          "site progress profile (EPA)",
+          "this feature",
+          "mapped features for this site here",
+          "city",
+          "county",
+          "state",
+          "last changed (EPA)",
+          "EPA site page",
           "what this is"
         ]
       },

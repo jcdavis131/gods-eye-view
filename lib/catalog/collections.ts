@@ -20,6 +20,7 @@ import { TOPO_CAVEAT } from "@/lib/terrain/topo";
 import { IMPAIRED_CAVEAT } from "@/lib/water/impaired";
 import { NMFS_CAVEAT, RANGES_CAVEAT } from "@/lib/land/features";
 import { TRI_CAVEAT } from "@/lib/permits/tri";
+import { NPL_CAVEAT } from "@/lib/permits/npl";
 
 export interface Exclusion {
   what: string;
@@ -64,7 +65,7 @@ export interface Collection {
   /** Sensitive-location and personal-data handling. */
   sensitivity: string;
   /** Curation round it entered. */
-  round: 1 | 2;
+  round: 1 | 2 | 3;
 }
 
 /** Which shelf a layer's collections sit on (the /catalog page's grouping). */
@@ -78,6 +79,7 @@ export const SHELVES: Array<{ id: string; title: string; layers: LayerId[] }> = 
 
 const R1 = "2026-10-12";
 const R2 = "2026-10-13";
+const R3 = "2026-10-15";
 
 export const COLLECTIONS: readonly Collection[] = [
   // ------------------------------------------------------------ round 1: land and heritage
@@ -244,10 +246,11 @@ export const COLLECTIONS: readonly Collection[] = [
     freshness: { statement: "The map service publishes no edit date; EPA links its metadata record from the layer description.", readFrom: "EMEF efpoints MapServer layer 0 ?f=json (no editingInfo)", recordedOn: R2 },
     excluded: [
       { what: "location_address, postal_code and every contact field", why: "never requested" },
-      { what: "site boundaries and NPL status", why: "not in this layer; deferred (EPA's FAC_Superfund_Site_Boundaries_EPA_Public)" },
+      { what: "site boundaries and NPL status", why: "not in this layer: boundaries are drawn from EPA's boundary layer (npl-boundaries) and status and dates are joined from the NPL list by EPA ID (npl-status)" },
+      { what: "sites deleted from the NPL and Superfund sites never listed", why: "not in this layer: its 1,374 points are exactly the current NPL (1,337 final, 37 proposed), joined by EPA ID on 2026-10-15" },
     ],
     caveats: [
-      "EPA's Superfund (SEMS) site layer: 1,374 points on 2026-10-13, about the size of the National Priorities List. It is roughly the NPL, not every Superfund site; non-NPL and archived SEMS sites are not to be assumed present.",
+      "EPA's Superfund (SEMS) site layer is the current National Priorities List: on 2026-10-15 every one of its 1,374 points was on EPA's NPL list by EPA ID, 1,337 final and 37 proposed. The 466 sites deleted from the NPL, and Superfund sites never listed, are not in it.",
     ],
     searchable: ["registry_id", "pgm_sys_id"],
     embedText: ["pgm_sys_acrnm", "pgm_sys_id", "registry_id"],
@@ -332,6 +335,49 @@ export const COLLECTIONS: readonly Collection[] = [
     ops: ["permits?op=tri"],
     sensitivity: "Federal regulatory records kept by allowlist; no person's name, phone or email leaves the parser.",
     round: 2,
+  },
+  {
+    id: "npl-boundaries",
+    title: "Superfund site boundaries (EPA)",
+    layer: "contaminants",
+    sources: ["epa-npl-boundaries"],
+    what: "Superfund site boundary polygons as EPA regions map them, harvested into EPA_GEO's national layer: site areas, ground boundaries, operable-unit outlines and extents of contamination, each with its EPA ID, NPL status decoded from the layer's own domain, federal-facility flag, EPA program as published, city, county, state and EPA site page, and the site's NPL list row joined by EPA ID (npl-status). Drawn below 10 km, coloured by NPL status.",
+    recordIs: "One mapped feature of a Superfund site: a regulatory area as an EPA region drew it. Not a contamination footprint. A site can have several overlapping features; they are not merged, and each says how many its site has.",
+    coverage: { spatial: "United States; below 10 km, 2,000 per box, simplified on the server to 0.0005 degrees (about 50 m)", temporal: null, count: { value: 2113, of: "polygons in the Superfund program filter, for 1,907 EPA IDs (2,114 in the layer)", countedOn: R3 } },
+    freshness: { statement: "EPA last edited the layer's data on 2026-10-15; the service describes it as harvested weekly from regional datasets.", readFrom: "FAC_Superfund_Site_Boundaries_EPA_Public FeatureServer/0 ?f=json editingInfo.dataLastEditDate (2026-10-15 16:23 UTC) and the service description", recordedOn: R3 },
+    excluded: [
+      { what: "EPA staff contact name, email and phone; street address, address comment and ZIP", why: "never requested" },
+      { what: "SITE_FEATURE_NAME and SITE_FEATURE_DESCRIPTION", why: "free text, not reviewed" },
+      { what: "GIS_AREA and its units", why: "the units mix acres, square miles, 'Miles' and null" },
+      { what: "one 'Michigan LUST' polygon", why: "a state tank-program record in a Superfund layer; the program filter (EPA_PROGRAM null or Superfund*) leaves it out" },
+      { what: "a decoded EPA_PROGRAM", why: "its live values (Superfund, Superfund Remedial, Superfund Removal, Superfund Site Assessment) do not match the field's own code list, so it is passed through as published" },
+    ],
+    caveats: [NPL_CAVEAT],
+    searchable: ["EPA_ID"],
+    embedText: ["NPL_STATUS_CODE", "FEDERAL_FACILITY_DETER_CODE", "EPA_PROGRAM", "SITE_FEATURE_TYPE", "COUNTY", "STATE_CODE"],
+    ops: ["permits?op=contaminants"],
+    sensitivity: "Agency regulatory records. EPA staff contacts and the street address are never requested. SITE_NAME is shown in the record and on the label, never searched or embedded: a site can be named for a person or a business.",
+    round: 3,
+  },
+  {
+    id: "npl-status",
+    title: "National Priorities List status (EPA)",
+    layer: "contaminants",
+    sources: ["epa-npl-status"],
+    what: "EPA's NPL list: each site's status (final, proposed, deleted), Hazard Ranking System score, proposal, listing, construction-completion, intent-to-delete and deletion dates, partial deletion, and its Federal Register notices and site progress profile. Joined by EPA ID to every Superfund point and boundary in a box, never by the box itself (a site's point can sit outside a box its polygon enters). Read in the record; not drawn on its own.",
+    recordIs: "A site's row on the NPL list. A site with no row is shown as not on EPA's NPL status list, which is not a finding that it is clean; a list that did not answer is shown as unknown.",
+    coverage: { spatial: "United States", temporal: "listings from 1983", count: { value: 1840, of: "sites: 1,337 final, 37 proposed, 466 deleted", countedOn: R3 } },
+    freshness: { statement: "EPA last edited the list's data on 2026-09-30.", readFrom: "Superfund NPL Sites with Status Information FeatureServer/0 ?f=json editingInfo.dataLastEditDate", recordedOn: R3 },
+    excluded: [
+      { what: "the HTML of the notice and profile fields", why: "only the anchor's text and an https epa.gov link are kept" },
+      { what: "City, County and the narrative fields", why: "the boundary carries the place; the narratives are not reviewed" },
+    ],
+    caveats: ["Dates are as EPA's list gives them (MM/DD/YYYY, shown as ISO dates); a missing or unreadable date is left out, never guessed."],
+    searchable: ["Site_EPA_ID"],
+    embedText: ["Status", "Proposed_Date", "Listing_Date", "Construction_Completion_Date", "Deletion_Date"],
+    ops: ["permits?op=contaminants"],
+    sensitivity: "Federal regulatory list; no personal data is requested. Site_Name is not searched or embedded.",
+    round: 3,
   },
   // ------------------------------------------------------------ round 1: imagery
   {
@@ -421,6 +467,9 @@ export function parseOpRef(ref: string): { route: string; op: string } | null {
 
 /**
  * Field names that must never be searchable or embedded: addresses, contacts, owners,
- * certifiers, and names that can be a person's (NRHP RESNAME, EPA primary_name, UST Name).
+ * certifiers, free-text descriptions, and names that can be a person's (NRHP RESNAME, EPA
+ * primary_name and SITE_NAME, UST Name, a water system's PWS_Name, USACE's FUDS property,
+ * site and project names, PAD-US Loc_Own).
  */
-export const DENY_FIELD = /address|street|zip|postal|contact|phone|email|owner|certif|^primary_name$|^resname$|^name$/i;
+export const DENY_FIELD =
+  /address|street|zip|postal|contact|phone|email|owner|certif|^primary_name$|^resname$|^name$|^site_name$|^pws_name$|^featurename$|^dodformerlyuseddefensesitename$|^envrestorationprojectname$|^officialsitename$|^featuredescription$|^site_feature_description$|^loc_own$/i;

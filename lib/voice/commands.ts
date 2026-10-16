@@ -208,6 +208,8 @@ const LAYER_ALIASES: Record<string, LayerId> = {
   contamination: "contaminants",
   contaminants: "contaminants",
   "superfund sites": "contaminants",
+  "national priorities list": "contaminants",
+  "npl sites": "contaminants",
   superfund: "contaminants",
   brownfields: "contaminants",
   brownfield: "contaminants",

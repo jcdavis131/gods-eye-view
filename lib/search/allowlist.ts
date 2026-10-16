@@ -79,6 +79,9 @@ export const SEARCHABLE_DETAILS: ReadonlySet<string> = new Set([
   // (EPA's primary_name can be a sole proprietor's own name or a street address)
   "program system id",
   "registry id",
+  // Superfund site boundaries: EPA's site id. Never the site name (SITE_NAME can carry a
+  // person's or a business's name); the feature is named by its EPA ID instead
+  "epa id",
   // impaired waters: EPA ATTAINS assessment unit ids (state-assigned codes); the unit's
   // name is a place name but is not searched in this round
   "assessment unit id",

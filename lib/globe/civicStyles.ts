@@ -141,14 +141,59 @@ export const CONTAMINANT_COLOR: Record<string, string> = {
   acres: "#A3A3A3",
 };
 
+/**
+ * Superfund site boundaries by NPL_STATUS_CODE: final solid red, proposed orange dashed, deleted
+ * grey; any other code (not on the NPL, removed, part of another site, pre-proposal, withdrawn,
+ * not valid) a thin neutral outline; no status given dotted (dashed, lighter). A colour is the
+ * list status, never a severity.
+ */
+const NPL_FINAL = "#DC2626";
+const NPL_PROPOSED = "#F97316";
+const NPL_DELETED = "#9CA3AF";
+const NPL_OTHER = "#CBD5E1";
+const NPL_NONE = "#E5E7EB";
+
+function nplOf(f: LayerFeature): { color: string; fill: number; width: number; dashed: boolean } {
+  const code = (f.properties.extra as { nplCode?: string | null } | undefined)?.nplCode ?? null;
+  if (code === "F") return { color: NPL_FINAL, fill: 0.16, width: 2, dashed: false };
+  if (code === "P") return { color: NPL_PROPOSED, fill: 0.1, width: 2, dashed: true };
+  if (code === "D") return { color: NPL_DELETED, fill: 0.08, width: 1.5, dashed: false };
+  if (code == null) return { color: NPL_NONE, fill: 0, width: 1.2, dashed: true };
+  return { color: NPL_OTHER, fill: 0, width: 1, dashed: false };
+}
+
+const isBoundary = (f: LayerFeature) => f.geometry.type === "Polygon" || f.geometry.type === "MultiPolygon";
+
+/** The NPL list's status on a Superfund point's label ("SEMS NJD980654131 · NPL: final"). */
+function contaminantLabel(f: LayerFeature): string {
+  const x = f.properties.extra as { npl?: { status?: string | null } | null; shape?: string } | undefined;
+  if (x?.shape === "boundary") {
+    const n = f.properties.details?.["site (as EPA publishes it)"];
+    return typeof n === "string" && n ? n : f.properties.name;
+  }
+  const s = x?.npl?.status?.toLowerCase();
+  const short = s === "npl site" ? "final" : s === "proposed npl site" ? "proposed" : s === "deleted npl site" ? "deleted" : s;
+  return short ? `${f.properties.name} · NPL: ${short}` : f.properties.name;
+}
+
 export const contaminantsStyle: LayerStyle = {
   color: "#F87171",
   icon: () => null,
-  colorFor: (f) => (isLoadedBox(f) ? LOADED_BOX : CONTAMINANT_COLOR[f.properties.kind ?? ""] ?? "#F87171"),
+  colorFor: (f) => (isLoadedBox(f) ? LOADED_BOX : isBoundary(f) ? nplOf(f).color : (CONTAMINANT_COLOR[f.properties.kind ?? ""] ?? "#F87171")),
   pointSize: (f) => (f.properties.kind === "sems" ? 9 : f.properties.kind === "rcra" ? 5 : 7),
-  label: (f) => f.properties.name,
+  label: contaminantLabel,
   labelMax: 20,
   labelWhen: (f) => !isLoadedBox(f),
-  lines: boxLines,
+  polygons: (f) => {
+    if (isLoadedBox(f) || !isBoundary(f)) return null;
+    const s = nplOf(f);
+    return s.fill > 0 ? polyFills(f, s.color, s.fill) : null;
+  },
+  lines: (f) => {
+    if (isLoadedBox(f)) return polyOutlines(f, LOADED_BOX, 0.7, 1.5, true);
+    if (!isBoundary(f)) return null;
+    const s = nplOf(f);
+    return polyOutlines(f, s.color, 0.85, s.width, s.dashed);
+  },
   scaleByDistance: [5e3, 1.0, 4e4, 0.6],
 };

@@ -44,7 +44,7 @@ describe("/api/catalog", () => {
   it("answers a layer's collections, and refuses a layer id that does not exist", async () => {
     const ok = await get("layer=contaminants");
     expect(ok.status).toBe(200);
-    expect((ok.body.data.collections as Array<{ id: string }>).map((c) => c.id)).toEqual(["emef-sems", "emef-tri", "emef-rcra", "emef-acres", "tri-releases"]);
+    expect((ok.body.data.collections as Array<{ id: string }>).map((c) => c.id)).toEqual(["emef-sems", "emef-tri", "emef-rcra", "emef-acres", "tri-releases", "npl-boundaries", "npl-status"]);
     expect((await get("layer=relief")).body.data.collections).toEqual([]);
     expect((await get("layer=nope")).status).toBe(400);
   });

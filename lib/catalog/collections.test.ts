@@ -29,6 +29,8 @@ describe("the catalogue", () => {
       "emef-rcra",
       "emef-acres",
       "tri-releases",
+      "npl-boundaries",
+      "npl-status",
       "esri-wayback",
       "wayback-capture",
       "usgs-htmc",
@@ -63,7 +65,32 @@ describe("the catalogue", () => {
     for (const c of COLLECTIONS) {
       for (const f of [...c.searchable, ...c.embedText]) expect(DENY_FIELD.test(f), `${c.id}: ${f}`).toBe(false);
     }
-    for (const bad of ["location_address", "STREET_ADDR_TXT", "ZIP_CODE", "public_contact_person", "technical_contact_phone", "certif_name", "SITE_CONTACT_EMAIL", "primary_name", "RESNAME", "Name", "CURRENTOWNER"]) {
+    for (const bad of [
+      "location_address",
+      "STREET_ADDR_TXT",
+      "ZIP_CODE",
+      "public_contact_person",
+      "technical_contact_phone",
+      "certif_name",
+      "SITE_CONTACT_EMAIL",
+      "SITE_CONTACT_NAME",
+      "PRIMARY_TELEPHONE_NUM",
+      "primary_name",
+      "RESNAME",
+      "Name",
+      "Address",
+      "CURRENTOWNER",
+      "SITE_NAME",
+      "Site_Name",
+      "PWS_Name",
+      "FEATURENAME",
+      "DODFORMERLYUSEDDEFENSESITENAME",
+      "ENVRESTORATIONPROJECTNAME",
+      "OFFICIALSITENAME",
+      "FEATUREDESCRIPTION",
+      "SITE_FEATURE_DESCRIPTION",
+      "Loc_Own",
+    ]) {
       expect(DENY_FIELD.test(bad), bad).toBe(true);
     }
   });

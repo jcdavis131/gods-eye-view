@@ -117,6 +117,8 @@ describe("voice words for contaminated sites", () => {
     expect(layerOf("show superfund sites")).toMatchObject({ layer: "contaminants" });
     expect(layerOf("show brownfields over houston")).toMatchObject({ layer: "contaminants", place: "houston" });
     expect(layerOf("show hazardous waste")).toMatchObject({ layer: "contaminants" });
+    expect(layerOf("show national priorities list")).toMatchObject({ layer: "contaminants" });
+    expect(layerOf("show npl sites near newark")).toMatchObject({ layer: "contaminants", place: "newark" });
     expect(layerOf("show hazards")).toMatchObject({ layer: "hazards" });
   });
 });

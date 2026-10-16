@@ -9,7 +9,9 @@
 //                     Corps' ORM actions in a box (the search pads its answer
 //                     with actions from elsewhere; only the box's are kept); 6 h
 //   contaminants      EPA EMEF Superfund (SEMS), TRI, RCRA and Brownfields listings in
-//                     a box, 1,000 per program at most; 6 h
+//                     a box, 1,000 per program at most; 6 h. With polygons, EPA's
+//                     Superfund site boundaries (1 day). Every Superfund point and
+//                     boundary is joined by EPA ID to EPA's NPL status list (1 day)
 //
 // Every request goes through lib/civic/request.ts (a gate per host, ten
 // minutes off after a 429 or a 503). A city that fails is named in
@@ -49,7 +51,22 @@ import {
   type EnvProgram,
   type EnvRecord,
 } from "./environmental";
-import { buildContaminants, EMEF, EMEF_LAYERS, EMEF_MAX, emefParams } from "./contaminants";
+import { buildContaminants, EMEF, EMEF_LAYERS, EMEF_MAX, emefParams, type ContaminantExtra } from "./contaminants";
+import {
+  attachNpl,
+  buildNplBoundaries,
+  buildNplStatus,
+  NPL_BOUNDARIES,
+  NPL_BOUNDARY_MAX,
+  NPL_BOUNDARY_WHERE,
+  NPL_STATUS,
+  nplBoundaryParams,
+  nplLookup,
+  nplStatusParams,
+  type NplDomains,
+  type NplStatus,
+} from "./npl";
+import { codedDomains, type ArcgisLayerInfo } from "@/lib/server/arcgis";
 import type { LayerFeature } from "@/lib/layers/types";
 
 const MIN = 60_000;
@@ -301,7 +318,7 @@ export async function environmental(b: Bbox): Promise<EnvAnswer> {
 
 export type { PermitCityId };
 
-// ------------------------------------------------------------------ contaminated sites (EPA EMEF)
+// ------------------------------------------------------------------ contaminated sites (EPA EMEF, Superfund boundaries, NPL status)
 
 export interface ContaminantsAnswer {
   features: LayerFeature[];
@@ -310,60 +327,172 @@ export interface ContaminantsAnswer {
   age: number;
 }
 
+const DAY = 24 * 60 * MIN;
+
+type Part<T> = { id: string; name: string; ok: true; value: T; age: number } | { id: string; name: string; ok: false; error: string };
+
+/** One upstream call through the cache; a failure is kept as an error for coverage, never thrown. */
+async function part<T>(id: string, name: string, key: string, ttlMs: number, run: () => Promise<T>): Promise<Part<T>> {
+  try {
+    const r = await cached(key, ttlMs, run);
+    return { id, name, ok: true, value: r.value, age: r.age };
+  } catch (err) {
+    return { id, name, ok: false, error: errorText(err) };
+  }
+}
+
+interface Rows {
+  rows: Array<{ id?: number | string; geometry: GeoJSON.Geometry | null; properties: Record<string, unknown> | null }>;
+  /** The upstream said it held more than it sent, or the answer filled the cap. */
+  capped: boolean;
+  more: boolean;
+}
+
+/** An ArcGIS layer query as rows, with the cap read from the flag and the count. */
+async function arcgisRowsCapped(name: string, layer: string, params: Record<string, string>, cap: number): Promise<Rows> {
+  const res = await runRows(name, { kind: "arcgis", layer, params }, 25_000);
+  return { rows: res.features, capped: res.truncated || res.features.length >= cap, more: res.truncated };
+}
+
+function capReason(capped: boolean, more: boolean, cap: number): string | undefined {
+  if (!capped) return undefined;
+  return more ? `the first ${cap.toLocaleString("en-US")} of more in this box` : `the first ${cap.toLocaleString("en-US")} in this box; there may be more`;
+}
+
+/** NPL_STATUS_CODE and FEDERAL_FACILITY_DETER_CODE labels from the boundary layer's own domains, held a week. */
+async function nplDomains(): Promise<NplDomains | null> {
+  try {
+    const r = await cached("npl-domains", 7 * DAY, async () => {
+      const d = codedDomains(await civicJson<ArcgisLayerInfo>("epa-npl-boundaries", `${NPL_BOUNDARIES}?f=json`, 20_000));
+      return { status: [...(d.get("NPL_STATUS_CODE") ?? [])], federal: [...(d.get("FEDERAL_FACILITY_DETER_CODE") ?? [])] };
+    });
+    return { status: new Map(r.value.status), federal: new Map(r.value.federal) };
+  } catch {
+    // The codes are then shown as published.
+    return null;
+  }
+}
+
 /**
- * EPA's Superfund, TRI, RCRA and Brownfields listings in a box: one EMEF layer query each,
- * in parallel, each cached six hours. A layer that fails is named in `coverage` as "error";
- * one that hit EMEF_MAX is "partial".
+ * EPA's Superfund, TRI, RCRA and Brownfields listings in a box: one EMEF layer query each, in
+ * parallel, each cached six hours; with `polygons` (below 10 km) Superfund site boundaries too,
+ * cached a day. Every Superfund point and boundary then gains its NPL list row, joined by EPA ID
+ * (never by box), in chunks of 50, cached a day. Each upstream that fails is named in `coverage`
+ * as "error" with count null and leaves the others standing; one that hit its cap is "partial".
  */
-export async function contaminants(b: Bbox): Promise<ContaminantsAnswer> {
-  const results = await Promise.all(
-    EMEF_LAYERS.map(async (l) => {
-      try {
-        const r = await cached(`emef:${l.id}:${b.join(",")}`, 6 * 60 * MIN, async () => {
+export async function contaminants(b: Bbox, polygons = false): Promise<ContaminantsAnswer> {
+  const box = b.join(",");
+  const [emef, bnd] = await Promise.all([
+    Promise.all(
+      EMEF_LAYERS.map((l) =>
+        part(l.id, `EPA ${l.short}`, `emef:${l.id}:${box}`, 6 * 60 * MIN, async () => {
           const rows = await runRows("epa-emef", { kind: "arcgis", layer: `${EMEF}/${l.layer}`, params: emefParams(b) }, 25_000);
           // `more`: EMEF said it held more than it sent. Exactly EMEF_MAX rows without
           // that flag is capped too, but there may be nothing beyond it.
           return { features: buildContaminants(l.id, rows.features), capped: rows.truncated || rows.features.length >= EMEF_MAX, more: rows.truncated };
-        });
-        return { l, ok: true as const, ...r.value, age: r.age };
-      } catch (err) {
-        return { l, ok: false as const, error: errorText(err) };
-      }
-    }),
-  );
+        }),
+      ),
+    ),
+    polygons ? part("npl-boundaries", "EPA Superfund site boundaries", `npl-bnd:${box}`, DAY, () => arcgisRowsCapped("epa-npl-boundaries", NPL_BOUNDARIES, nplBoundaryParams(b), NPL_BOUNDARY_MAX)) : Promise.resolve(null),
+  ]);
+
+  // The NPL list, by EPA ID: every Superfund point's program id and every boundary's EPA_ID.
+  const sems = emef.find((r) => r.id === "sems");
+  const ids = new Set<string>();
+  if (sems?.ok) for (const f of sems.value.features) if ((f.properties.extra as ContaminantExtra).programId) ids.add((f.properties.extra as ContaminantExtra).programId!);
+  if (bnd?.ok)
+    for (const r of bnd.value.rows) {
+      const id = r.properties?.EPA_ID;
+      if (typeof id === "string" && id.trim()) ids.add(id.trim());
+    }
+  const chunks = nplStatusParams([...ids]);
+  const [statusParts, domains] = await Promise.all([
+    Promise.all(chunks.map((params) => part("npl-status", "EPA NPL status list", `npl-status:${params.where}`, DAY, async () => (await runRows("epa-npl-status", { kind: "arcgis", layer: NPL_STATUS, params }, 25_000)).features))),
+    bnd?.ok ? nplDomains() : Promise.resolve(null),
+  ]);
+  const found = new Map<string, NplStatus>();
+  const unknown = new Set<string>();
+  statusParts.forEach((r, i) => {
+    if (r.ok) for (const [k, v] of buildNplStatus(r.value)) found.set(k, v);
+    else for (const id of chunks[i].where.match(/'([A-Z0-9]+)'/g) ?? []) unknown.add(id.slice(1, -1));
+  });
+  const lookup = nplLookup(found, unknown);
+
   const features: LayerFeature[] = [];
   const coverage: CoverageEntry[] = [];
   const prov: Provenance[] = [];
   let age = 0;
-  for (const r of results) {
-    const name = `EPA ${r.l.short}`;
+  for (const r of emef) {
+    const l = EMEF_LAYERS.find((x) => x.id === r.id)!;
     if (!r.ok) {
-      coverage.push({ id: r.l.id, name, state: "error", count: null, reason: r.error });
+      coverage.push({ id: r.id, name: r.name, state: "error", count: null, reason: r.error });
       continue;
     }
-    features.push(...r.features);
+    features.push(...(r.id === "sems" ? attachNpl(r.value.features, lookup) : r.value.features));
     age = Math.max(age, r.age);
     coverage.push({
-      id: r.l.id,
-      name,
-      state: r.capped ? "partial" : "covered",
-      count: r.features.length,
-      reason: r.capped
-        ? r.more
-          ? `the first ${EMEF_MAX.toLocaleString("en-US")} of more in this box`
-          : `the first ${EMEF_MAX.toLocaleString("en-US")} in this box; there may be more`
-        : undefined,
+      id: r.id,
+      name: r.name,
+      state: r.value.capped ? "partial" : "covered",
+      count: r.value.features.length,
+      reason: capReason(r.value.capped, r.value.more, EMEF_MAX),
       cadence: "as EPA's program systems update Envirofacts",
     });
     prov.push(
       provenance(source("epa-emef"), {
         kind: "published",
-        seriesId: `EMEF efpoints MapServer layer ${r.l.layer} (${r.l.service})`,
-        upstreamUrl: `${EMEF}/${r.l.layer}`,
+        seriesId: `EMEF efpoints MapServer layer ${l.layer} (${l.service})`,
+        upstreamUrl: `${EMEF}/${l.layer}`,
         retrievedAt: iso(r.age),
-        notes: [`${r.features.length} in the box${r.capped ? ` (capped at ${EMEF_MAX})` : ""}`],
+        notes: [`${r.value.features.length} in the box${r.value.capped ? ` (capped at ${EMEF_MAX})` : ""}`],
       }),
     );
+  }
+  if (bnd) {
+    if (!bnd.ok) coverage.push({ id: bnd.id, name: bnd.name, state: "error", count: null, reason: bnd.error });
+    else {
+      const built = buildNplBoundaries(bnd.value.rows, domains, lookup);
+      features.push(...built);
+      age = Math.max(age, bnd.age);
+      coverage.push({ id: bnd.id, name: bnd.name, state: bnd.value.capped ? "partial" : "covered", count: built.length, reason: capReason(bnd.value.capped, bnd.value.more, NPL_BOUNDARY_MAX), cadence: "harvested weekly from EPA regions' datasets" });
+      prov.push(
+        provenance(source("epa-npl-boundaries"), {
+          kind: "published",
+          seriesId: `FAC_Superfund_Site_Boundaries_EPA_Public layer 0, ${NPL_BOUNDARY_WHERE}, simplified to 0.0005 degrees`,
+          upstreamUrl: NPL_BOUNDARIES,
+          retrievedAt: iso(bnd.age),
+          notes: [`${built.length} mapped features for ${new Set(built.map((f) => (f.properties.extra as ContaminantExtra).programId)).size} sites in the box`],
+        }),
+      );
+    }
+  }
+  if (chunks.length) {
+    const okParts = statusParts.filter((r) => r.ok);
+    const state = okParts.length === statusParts.length ? "covered" : okParts.length ? "partial" : "error";
+    coverage.push({
+      id: "npl-status",
+      name: "EPA NPL status list",
+      state,
+      count: okParts.length ? found.size : null,
+      reason:
+        state === "error"
+          ? (statusParts[0] as { error: string }).error
+          : state === "partial"
+            ? `${unknown.size} of ${ids.size} sites unknown: part of the list did not answer`
+            : undefined,
+      cadence: "as EPA updates the NPL",
+    });
+    if (okParts.length) {
+      prov.push(
+        provenance(source("epa-npl-status"), {
+          kind: "published",
+          seriesId: "Superfund NPL Sites with Status Information layer 0, by Site_EPA_ID",
+          upstreamUrl: NPL_STATUS,
+          retrievedAt: iso(Math.max(...okParts.map((r) => (r.ok ? r.age : 0)))),
+          notes: [`${found.size} of ${ids.size} Superfund sites in the box are on the list; ${ids.size - found.size - unknown.size} are not`],
+        }),
+      );
+    }
   }
   return { features, coverage, provenance: prov, age };
 }

@@ -18,10 +18,13 @@
 //   /api/permits?op=environmental&bbox=w,s,e,n        EPA ECHO Clean Water Act (NPDES) and
 //        Clean Air Act facilities and the Corps of Engineers' regulatory actions. Box at
 //        most 0.2 degrees, snapped to 0.05.
-//   /api/permits?op=contaminants&bbox=w,s,e,n         EPA Envirofacts EMEF program listings:
-//        Superfund (SEMS), Toxics Release Inventory, RCRA hazardous-waste handlers and
-//        Brownfields (ACRES), 1,000 per program at most. Same box rules. A listing is a
-//        regulatory status, not a finding of contamination; no address is requested.
+//   /api/permits?op=contaminants&bbox=w,s,e,n[&polygons=1]   EPA Envirofacts EMEF program
+//        listings: Superfund (SEMS), Toxics Release Inventory, RCRA hazardous-waste handlers and
+//        Brownfields (ACRES), 1,000 per program at most; with polygons=1, EPA's Superfund site
+//        boundaries too. Every Superfund point and boundary carries its row on EPA's NPL list
+//        (joined by EPA ID), or says it has none, or that the list did not answer. Same box
+//        rules. A listing is a regulatory status, not a finding of contamination; no address
+//        or contact is requested.
 //   /api/permits?op=tri&trifid=77012HLLPT9701M[&year=2024]   what a TRI facility reported
 //        releasing on site that year (Form R), by chemical and medium, in its reported
 //        units, with totals per medium and unit, and its Form A certifications. Fields are
@@ -42,6 +45,7 @@ import { numParam, parseBbox, type Bbox } from "@/lib/civic/bbox";
 import { CHICAGO_DISCLAIMER } from "@/lib/civic/terms";
 import { buildingPermits, contaminants, environmental, licences } from "@/lib/permits/sources";
 import { CONTAMINANTS_CAVEAT } from "@/lib/permits/contaminants";
+import { NPL_CAVEAT } from "@/lib/permits/npl";
 import { HOME_HEURISTIC, permitFeatures, licenceFeatures, envFeatures } from "@/lib/permits/geojson";
 import { cacheDelete, cached, DeadlineError } from "@/lib/server/cache";
 import { retrying } from "@/lib/server/net";
@@ -111,19 +115,21 @@ async function opEnvironmental(b: Bbox) {
   });
 }
 
-async function opContaminants(b: Bbox) {
-  const a = await contaminants(b);
+async function opContaminants(b: Bbox, polygons: boolean) {
+  const a = await contaminants(b, polygons);
   const caveats = [
     CONTAMINANTS_CAVEAT,
-    "Facility names are as EPA publishes them and can be a person's name or a street address; they are shown in the record only and are never searched. No address or contact field is requested.",
+    NPL_CAVEAT,
+    "Facility and site names are as EPA publishes them and can be a person's name or a street address; they are shown in the record only and are never searched. No address or contact field is requested, and no EPA staff contact.",
     BOX,
   ];
-  if (a.coverage.some((c) => c.state === "partial")) caveats.push("A program hit the 1,000-listing cap for this box (RCRA is dense in industrial areas); its first 1,000 are shown and there are more. Ask for a smaller box for every listing.");
-  if (a.coverage.some((c) => c.state === "error")) caveats.push("A program did not answer this time; its listings are missing from this answer, not absent.");
+  if (!polygons) caveats.push("Superfund site boundaries are sent only with polygons=1 (the layer asks below 10 km).");
+  if (a.coverage.some((c) => c.state === "partial")) caveats.push("A source was partial for this box: an EMEF program hit its 1,000-listing cap (RCRA is dense in industrial areas) and its first 1,000 are shown, or the boundaries hit their cap, or part of the NPL list did not answer; `coverage` says which. Ask for a smaller box for every listing.");
+  if (a.coverage.some((c) => c.state === "error")) caveats.push("A source did not answer this time; its records are missing from this answer, not absent. When the NPL status list is the one, a site's status is unknown, not 'not listed'.");
   return ok(
     { type: "FeatureCollection", features: a.features },
     {
-      meta: { source: "U.S. EPA Envirofacts EMEF (Superfund, TRI, RCRA, Brownfields)", bbox: b, coverage: a.coverage, cacheAge: a.age },
+      meta: { source: "U.S. EPA Envirofacts EMEF (Superfund, TRI, RCRA, Brownfields), EPA Superfund site boundaries and the NPL status list", bbox: b, polygons, coverage: a.coverage, cacheAge: a.age },
       provenance: a.provenance,
       caveats,
       ttlS: a.coverage.some((c) => c.state === "error") ? 120 : 3600,
@@ -218,7 +224,7 @@ export async function GET(req: NextRequest) {
       case "contaminants": {
         const b = parseBbox(q.get("bbox"), 0.2, 0.05);
         if (!b) return badRequest(BBOX_HELP);
-        return await opContaminants(b);
+        return await opContaminants(b, q.get("polygons") === "1");
       }
       case "tri": {
         const trifid = (q.get("trifid") ?? "").trim();
