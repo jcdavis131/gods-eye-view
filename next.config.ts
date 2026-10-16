@@ -28,6 +28,9 @@ const nextConfig: NextConfig = {
   // two in step.
   outputFileTracingIncludes: {
     "/insights/**": ["./node_modules/@resvg/resvg-wasm/index_bg.wasm", "./lib/insights/render/fonts/*.ttf"],
+    // /api/catalog?op=search embeds the query with the pinned potion-base-8M, read from
+    // public/embed by lib/embed/loadNode.ts (the browser fetches the same files). About 8 MB.
+    "/api/catalog": ["./public/embed/**"],
   },
   webpack: (config) => {
     config.resolve = config.resolve ?? {};

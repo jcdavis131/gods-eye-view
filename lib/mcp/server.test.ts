@@ -38,6 +38,8 @@ const EXPECTED_TOOL_NAMES = [
   "upstream",
   "flow_normals",
   "live_events",
+  "catalog_search",
+  "place_export",
   "openapi",
 ];
 

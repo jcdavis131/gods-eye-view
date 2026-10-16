@@ -117,8 +117,20 @@
           "meta"
         ],
         "summary": "The catalogue: every curated collection eye draws or reads, with what a record is, its sources and licences, coverage, freshness, what is excluded and why, caveats and the ops that serve it",
-        "description": "Static (bundled with the app, no upstream call). Each collection names its layer, its sources (expanded from the source registry: name, publisher, url, licence), what one record means and does not mean, spatial and temporal coverage with a dated count where one was taken, freshness as the upstream states it with the field it was read from and the date it was read, exclusions with the reason for each, caveats, the fields that may be searched and the fields safe to embed (never an address, contact or a name that can be a person's), and its ops as `route?op=x`. Listed for people at /catalog. `uncatalogued` names the layers with no entry yet.",
+        "description": "Static (bundled with the app, no upstream call). Each collection names its layer, its sources (expanded from the source registry: name, publisher, url, licence), what one record means and does not mean, spatial and temporal coverage with a dated count where one was taken, freshness as the upstream states it with the field it was read from and the date it was read, exclusions with the reason for each, caveats, the fields that may be searched and the fields safe to embed (never an address, contact or a name that can be a person's), and its ops as `route?op=x`. Listed for people at /catalog. `uncatalogued` names the layers with no entry yet. op=search ranks the collections by meaning: the query (2-200 characters) is embedded with potion-base-8M and compared with each card's own description (cosine, 4 decimals); collections only, records are searched by meaning in the browser palette. op=place-export&collection=npl-status returns a committed per-county aggregate (NPL sites per county and year, 2015-2025) with its provenance, zero-vs-missing rule and unmatched sites.",
         "operationId": "catalog",
+        "x-provenance": {
+          "op=search": {
+            "model": "minishlab/potion-base-8M",
+            "commit": "bf8b056651a2c21b8d2565580b8569da283cab23",
+            "licence": "MIT",
+            "weights": "/embed/potion-base-8M-bf8b0566/ (int8 table, per-row scales, vocab, manifest.json with sha256s, LICENSE)",
+            "cardVectors": "lib/catalog/data/card-vectors.json (scripts/embed-catalog.mts)"
+          },
+          "op=place-export": {
+            "npl-status": "lib/catalog/data/npl-county.json (scripts/export-npl-county.mjs); source EPA Superfund NPL Sites with Status Information FeatureServer/0"
+          }
+        },
         "parameters": [
           {
             "name": "id",
@@ -136,11 +148,55 @@
               "type": "string"
             },
             "description": "A layer id, e.g. crithab: that layer's collections (an empty list for a layer not yet catalogued; 400 for an id that is not a layer)."
+          },
+          {
+            "name": "op",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "search",
+                "place-export"
+              ]
+            },
+            "description": "search: collections ranked by meaning (needs q). place-export: a committed per-county aggregate (needs collection). Omit for the catalogue itself."
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 200
+            },
+            "description": "op=search: the query text. 400 outside 2-200 characters."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10,
+              "default": 5
+            },
+            "description": "op=search: how many collections."
+          },
+          {
+            "name": "collection",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "npl-status"
+              ]
+            },
+            "description": "op=place-export: which aggregate."
           }
         ],
         "responses": {
           "200": {
-            "description": "The envelope; `data.collections` (or `data.collection` with id=).",
+            "description": "The envelope; `data.collections` (or `data.collection` with id=). op=search: `data.hits` [{ id, title, layer, score, ops, catalog }], `data.embedder` { id, model, commit, tableSha256, licence } and `data.matched` (false when no word of the query is in the model's vocabulary; hits is then empty). op=place-export: `data` { meta, places, value[place][year][feature], nullPlaces, siteIds }.",
             "headers": {
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"
