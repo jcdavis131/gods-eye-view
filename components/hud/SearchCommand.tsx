@@ -286,12 +286,14 @@ export default function SearchCommand() {
           <CommandGroup heading="Collections (by meaning of their catalogue card)">
             {cards.map((c) => {
               const def = LAYER_BY_ID[c.layer as keyof typeof LAYER_BY_ID];
-              return (
+              // The card opens its catalogue entry (/catalog#<id>) in a new tab, so the globe keeps
+              // its state; a second row offers to show the collection's layer.
+              return [
                 <CommandItem
                   key={`card:${c.id}`}
                   value={`card:${c.id}`}
                   onSelect={() => {
-                    if (def) setLayer(def.id, true);
+                    window.open(`/catalog#${encodeURIComponent(c.id)}`, "_blank", "noopener,noreferrer");
                     close();
                   }}
                   className="font-mono text-[11px]"
@@ -299,10 +301,23 @@ export default function SearchCommand() {
                   <Library className="size-3.5 text-muted-foreground" />
                   <span className="truncate">{c.title}</span>
                   <span className="ml-auto text-[9px] uppercase tracking-widest text-muted-foreground">
-                    show {def?.label ?? c.layer} · {c.score.toFixed(2)}
+                    catalogue · {c.score.toFixed(2)}
                   </span>
-                </CommandItem>
-              );
+                </CommandItem>,
+                def ? (
+                  <CommandItem
+                    key={`card-layer:${c.id}`}
+                    value={`card-layer:${c.id}`}
+                    onSelect={() => {
+                      setLayer(def.id, true);
+                      close();
+                    }}
+                    className="pl-7 font-mono text-[11px] text-muted-foreground"
+                  >
+                    <span className="truncate">show layer: {def.label}</span>
+                  </CommandItem>
+                ) : null,
+              ];
             })}
           </CommandGroup>
         )}
