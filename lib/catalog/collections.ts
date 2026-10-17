@@ -35,6 +35,9 @@ import { SCHOOLS_CAVEAT } from "@/lib/civic/schools";
 import { BDC_VINTAGE_NOTE, BROADBAND_CAVEAT } from "@/lib/civic/broadband";
 import { WRC_ALIAS_NOTE, WRC_CAVEAT } from "@/lib/hazards/wrc";
 import { TRIBAL_CAVEAT, TRIBAL_REFERENCE_ONLY } from "@/lib/land/tribal";
+import { FEMA_CREDIT, HISTORY_CAVEAT, USDM_CREDIT } from "@/lib/hazards/history";
+import { CT_HOUSING_NOTE, HOUSING_CAVEAT, QCT_YEAR_NOTE } from "@/lib/civic/housing";
+import { LANDSLIDE_SUSC_CAVEAT } from "@/lib/terrain/products";
 import { DENY_FIELD, EMBED_TEXT } from "./embedFields";
 
 export interface Exclusion {
@@ -85,7 +88,7 @@ export interface Collection {
   /** Sensitive-location and personal-data handling. */
   sensitivity: string;
   /** Curation round it entered. */
-  round: 1 | 2 | 3 | 4 | 5 | 6;
+  round: 1 | 2 | 3 | 4 | 5 | 6 | 7;
 }
 
 /** Which shelf a layer's collections sit on (the /catalog page's grouping). */
@@ -94,11 +97,12 @@ export const SHELVES: Array<{ id: string; title: string; layers: LayerId[] }> = 
   { id: "species", title: "Species", layers: ["crithab"] },
   { id: "water", title: "Water", layers: ["impaired", "pfas", "hydro"] },
   { id: "contaminants", title: "Contaminants", layers: ["contaminants", "ust"] },
-  { id: "hazards", title: "Hazards and risk", layers: ["riskindex", "wildfirerisk"] },
+  { id: "hazards", title: "Hazards and risk", layers: ["riskindex", "wildfirerisk", "landslidesusc"] },
   { id: "health", title: "Health", layers: ["health", "vulnerability", "hospitals"] },
   { id: "education", title: "Education", layers: ["schools"] },
   { id: "imagery", title: "Imagery and maps", layers: ["wayback", "topo", "naip"] },
   { id: "infrastructure", title: "Infrastructure", layers: ["dams", "broadband"] },
+  { id: "housing", title: "Housing", layers: ["housing"] },
 ];
 
 const R1 = "2026-10-12";
@@ -107,6 +111,7 @@ const R3 = "2026-10-15";
 const R4 = "2026-10-16";
 const R5 = "2026-10-16";
 const R6 = "2026-10-17";
+const R7 = "2026-10-17";
 
 export const COLLECTIONS: readonly Collection[] = [
   // ------------------------------------------------------------ round 1: land and heritage
@@ -1192,6 +1197,188 @@ export const COLLECTIONS: readonly Collection[] = [
     sensitivity:
       "Exterior extents of tribal trust and restricted-fee land as BIA publishes them; allotment-sized parts under 0.7 km2 are dropped, except each land area's largest part, which is drawn even when smaller (82 on the 2026-10-17 count) so no land area disappears; no allotment, parcel, owner or sacred-site data. LARNAME is a land area's name (all 335 read: reservations, rancherias, pueblos, communities; none a person's) and is embedded on Cam's call (2026-10-17).",
     round: 6,
+  },
+  // ------------------------------------------------------------ round 7: county hazard history, housing assistance, landslide susceptibility
+  {
+    id: "fema-declarations",
+    title: "Disaster declarations by county (FEMA OpenFEMA Disaster Declarations Summaries v2)",
+    layer: "riskindex",
+    sources: ["fema-openfema"],
+    what: "Every federal disaster declaration naming a county, as FEMA's OpenFEMA API publishes it: the disaster number, declaration type (major disaster DR, emergency EM, fire management FM), declaration and incident dates, incident type, title, the programs declared (IH, IA, PA, HM) and the designated area, counted per year by type for the county's hazard history; the list opens under a county click of the National Risk Index, Social vulnerability or Wildfire risk ranks layers.",
+    recordIs: "A federal decision that a disaster or emergency affected the county enough for federal help: a record of declarations, not a measure of damage or of how often hazards happen. Tribal and statewide designations name no county and are not attached to one.",
+    coverage: {
+      spatial: "The 50 states, DC and territories as FEMA codes them; Connecticut in its eight legacy counties, so its planning regions have none; Alaska as FEMA files its Regional Educational Attendance Areas under census-area codes; Oglala Lakota, SD and Kusilvak, AK are read under their current and their pre-2015 codes (113 and 270), where FEMA still files most of their rows, each disaster once",
+      temporal: "declarations since 1953",
+      count: { value: 70567, of: "rows in DisasterDeclarationsSummaries v2 ($inlinecount and the dataset's recordCount); 1,612 with county code 000 (tribal and statewide); 11 under Alaska's retired code 261 (Valdez-Cordova)", countedOn: R7 },
+    },
+    freshness: { statement: "lastDataSetRefresh 2026-10-17T20:46:55Z (refreshed as declarations are made); lastRefresh 2025-09-25.", readFrom: "OpenFEMA v1 OpenFemaDataSets metadata for DisasterDeclarationsSummaries (lastDataSetRefresh, lastRefresh, recordCount)", recordedOn: R7 },
+    excluded: [
+      { what: "FEMA's Individual Assistance, Public Assistance and NFIP claims datasets", why: "applicant-level or address-adjacent; a county's declarations answer the question without them" },
+      { what: "tribal and statewide designations (county code 000)", why: "they name no county, so they are counted in the answer's meta.notCounty and attached to none" },
+      { what: "declarations under Valdez-Cordova's code 261 (split in 2019)", why: "the code names no current county; listed as unmatched, never split between Chugach and Copper River" },
+      { what: "Connecticut's planning regions", why: "FEMA publishes the legacy counties; no crosswalk is invented" },
+      { what: "a zero for a year with no declaration", why: "waits on Cam's zero rule (HISTORY_ZERO_FILL is off): the year is absent, not 0" },
+    ],
+    caveats: [HISTORY_CAVEAT, FEMA_CREDIT],
+    searchable: ["disasterNumber"],
+    embedText: EMBED_TEXT["fema-declarations"],
+    ops: ["hazards?op=history"],
+    sensitivity: "Federal declarations by county as FEMA publishes them; no applicant, household or assistance-recipient data. Tribal and statewide designations name no county and are not attached to one. The declaration title and designated area are shown verbatim on click and never embedded.",
+    round: 7,
+  },
+  {
+    id: "usdm-county-dsci",
+    title: "Drought by county: U.S. Drought Monitor Drought Severity and Coverage Index (weekly)",
+    layer: "riskindex",
+    sources: ["usdm"],
+    what: "The U.S. Drought Monitor's county statistics: the weekly Drought Severity and Coverage Index (0 to 500) since January 2000 and this week's share of the county's area in each category (none, D0 abnormally dry to D4 exceptional drought), from USDM's data services, in the county's hazard history.",
+    recordIs: "A county's weekly drought index as USDM publishes it, a weighted sum of the area in each drought category: a published single number, not a forecast. The dossier also draws the highest week of each year, computed here and labelled so.",
+    coverage: {
+      spatial: "The 50 states, DC and Puerto Rico by county; Connecticut in its planning regions (the only round-7 source that publishes them), so a legacy Connecticut code answers no weeks",
+      temporal: "weekly since 2000-01-04 (Tuesday map dates)",
+      count: null,
+    },
+    freshness: { statement: "Weekly: the map is released on Thursday for the Tuesday before. The newest week on 2026-10-17 was 2026-10-13.", readFrom: "GetDSCI and GetDroughtSeverityStatisticsByAreaPercent answers (mapDate)", recordedOn: R7 },
+    excluded: [
+      { what: "a collection count", why: "USDM publishes none; 1,398 weeks per county is a series length, not a count of records" },
+      { what: "an annual statistic as a published value", why: "the dossier's yearly bars are the highest week, computed and labelled; the tower's annual mean or max waits on Cam" },
+    ],
+    caveats: [USDM_CREDIT, "Not a federal-only work: produced by the National Drought Mitigation Center at the University of Nebraska-Lincoln with USDA and NOAA; credited to all three. USDM's data-services page redirected a keyless request on 2026-10-17, so the credit is USDM's standard one."],
+    searchable: ["fips"],
+    embedText: EMBED_TEXT["usdm-county-dsci"],
+    ops: ["hazards?op=history"],
+    sensitivity: "Published county drought index; no person data.",
+    round: 7,
+  },
+  {
+    id: "noaa-cag-county",
+    title: "County climate: NOAA Climate at a Glance annual temperature and precipitation",
+    layer: "riskindex",
+    sources: ["noaa-cag"],
+    what: "NOAA NCEI's Climate at a Glance county time series: the January-December average temperature (degrees F) and precipitation (inches) for each year since 1895, as published, in the county's hazard history, with the 1901-2000 mean computed from the same series as a labelled reference line.",
+    recordIs: "A county's annual value from NOAA's gridded divisional record (nClimDiv), as published: a climate series, not a station reading and not a hazard.",
+    coverage: {
+      spatial: "The 50 states and DC by county, Connecticut only in its legacy counties (no planning regions), no Puerto Rico",
+      temporal: "annual since 1895 (Alaska 1925, Hawaii 1991)",
+      count: null,
+    },
+    freshness: { statement: "Monthly; a year's annual value appears after December. On 2026-10-17 the latest annual value was 2025.", readFrom: "data.json answers (the last key, e.g. 202512)", recordedOn: R7 },
+    excluded: [
+      { what: "Connecticut's planning regions and Puerto Rico", why: "not published (CT-110 and PR-127 answered 404 on 2026-10-17)" },
+      { what: "a collection count", why: "131 annual values is a series length per county, not a count of records" },
+    ],
+    caveats: ["Climate is NOAA's county series. A 1901-2000 mean is computed only where all 100 years are published (not Alaska or Hawaii)."],
+    searchable: ["fips"],
+    embedText: EMBED_TEXT["noaa-cag-county"],
+    ops: ["hazards?op=history"],
+    sensitivity: "Published county climate series; no person data.",
+    round: 7,
+  },
+  {
+    id: "spc-tornado-county",
+    title: "Tornadoes per county per year (NOAA Storm Prediction Center, 1950-2025)",
+    layer: "riskindex",
+    sources: ["noaa-spc"],
+    what: "SPC's record of tornadoes since 1950, baked into distinct tornadoes per county per year (lib/hazards/data/spc-tornado-county.json, scripts/bake-hazard-history.mjs) from SPC's all-tornadoes file: a tornado counts once in each county any of its rows names in f1 to f4, its state segments and its continuation rows past four counties included; the whole-track summary row of a multi-state tornado is skipped, because its state segments name the counties. In the county's hazard history.",
+    recordIs: "How many tornadoes SPC records in the county in a year. Not a casualty record, not a damage measure, and not comparable across eras: weak tornadoes before the 1990s radar network are undercounted.",
+    coverage: {
+      spatial: "The 50 states, DC, Puerto Rico and the Virgin Islands as SPC codes them; 3,036 current counties have at least one; Connecticut's eight legacy counties and 16 codes that name no current county are listed, not placed",
+      temporal: "1950-2025",
+      count: { value: 74956, of: "rows in 1950-2025_all_tornadoes.csv (Last-Modified 2026-04-24): 72,788 tornadoes in one state, 1,358 state segments of multi-state tornadoes, 140 continuation rows for tornadoes crossing more than four counties, and 670 whole-track summaries (skipped); 82,211 county-tornadoes placed in current counties; 11 tornado-state records name no county and are left out", countedOn: R7 },
+    },
+    freshness: { statement: "Annual; SPC publishes the year's final file in spring. The file read was last modified 2026-04-24.", readFrom: "Last-Modified header of 1950-2025_all_tornadoes.csv (2026-10-17)", recordedOn: R7 },
+    excluded: [
+      { what: "injury, fatality and loss columns", why: "not needed for a count; the counts are not a casualty record" },
+      { what: "NCEI Storm Events as the storms line", why: "42 % of its 2025 rows are forecast zones, not counties, and its scope changes in 1955 and 1996 (D7-1)" },
+      { what: "the whole-track summary rows of multi-state tornadoes (670)", why: "the tornado's state segments name its counties; counting both would count it twice" },
+      { what: "tornadoes with no county recorded (11 tornado-state records)", why: "counted in the bake's meta.noCounty, never placed" },
+      { what: "codes that name no current county", why: "Connecticut's legacy counties and 16 others are listed by code in meta; only Census-documented renames (Dade to Miami-Dade, Shannon to Oglala Lakota) are mapped" },
+    ],
+    caveats: ["Tornadoes are SPC's record since 1950, which undercounts weak tornadoes before the 1990s radar network, and tornadoes with no county recorded are left out."],
+    searchable: ["fips"],
+    embedText: EMBED_TEXT["spc-tornado-county"],
+    ops: ["hazards?op=history"],
+    sensitivity: "Counts of tornadoes per county per year baked from SPC's public record; casualty columns are not carried.",
+    round: 7,
+  },
+  {
+    id: "hud-hcv-tracts",
+    title: "Housing Choice Vouchers by census tract (HUD)",
+    layer: "housing",
+    sources: ["hud-egis"],
+    what: "HUD's count of Housing Choice Voucher households in each 2020 census tract and HUD's share of the tract's renter-occupied units (2020 Census DHC table H4), through December 2025, on HUD's own tract polygons in a box around the view below 100 km, coloured by the share or the count on fixed breaks (0-2-5-10-20-40-100 % and 11-25-50-100-250-500 households, this build's choice).",
+    recordIs: "Voucher households in a tract as HUD aggregates them. A null is HUD's suppression of tracts with 10 or fewer voucher holders (drawn grey, '10 or fewer, or none'), never 0 and never 'no vouchers'. A sum of published tracts would be a floor, so there is no county total.",
+    coverage: {
+      spatial: "The 50 states, DC and Puerto Rico by 2020 census tract; drawn below 100 km in a box of at most 0.3 degrees; Connecticut is not published (all 881 of its tracts null)",
+      temporal: "through December 2025 (last updated January 2026)",
+      count: { value: 85154, of: "tracts in Housing_Choice_Vouchers_by_Tract layer 0 (returnCountOnly); 47,463 with HCV_PUBLIC null, of which 881 are every Connecticut tract; 0 zeros; published minimum 11", countedOn: R7 },
+    },
+    freshness: { statement: "Layer data last edited 2026-07-21; description: 'Date of Coverage: Up to 12/2025, Last Updated: 01/2026'.", readFrom: "FeatureServer layer 0 editingInfo.dataLastEditDate (1784657444163) and the layer description", recordedOn: R7 },
+    excluded: [
+      { what: "EANAME (HUD's entitlement-area name)", why: "a place name not needed for the count; never fetched" },
+      { what: "LIHTC properties", why: "the layer carries contact names and phone numbers (CONTACT, CO_TEL); never fetched" },
+      { what: "Public Housing Developments", why: "near-personal shares at small developments; held" },
+      { what: "a county roll-up or place tower", why: "56 % of tracts are suppressed or unpublished, so a sum would be a floor dressed as a total" },
+      { what: "Connecticut as suppression", why: "HUD has a count for none of its 881 tracts, which is not the 10-or-fewer rule; drawn 'not published'" },
+    ],
+    caveats: [HOUSING_CAVEAT, CT_HOUSING_NOTE],
+    searchable: ["GEOID"],
+    embedText: EMBED_TEXT["hud-hcv-tracts"],
+    ops: ["civic?op=housing"],
+    sensitivity: "Voucher households per census tract as HUD aggregates them, with HUD's suppression of tracts with 10 or fewer; no tenant, landlord or address data. Fields are an allow-list (GEOID, HCV_PUBLIC, HCV_PUBLIC_PCT), never *.",
+    round: 7,
+  },
+  {
+    id: "hud-qct",
+    title: "LIHTC Qualified Census Tracts (HUD, titled 2026)",
+    layer: "housing",
+    sources: ["hud-egis"],
+    what: "HUD's list of Qualified Census Tracts for the Low-Income Housing Tax Credit, drawn as amber dashed outlines over the voucher tracts, from the QUALIFIED_CENSUS_TRACTS_2026 service; a tract click says whether it is on the list.",
+    recordIs: "A tract HUD designates for the tax credit (at least 50 % of households under 60 % of area median gross income, or a poverty rate of at least 25 %): a designation, not a measure of conditions.",
+    coverage: {
+      spatial: "The 50 states, DC and Puerto Rico by census tract; Connecticut in planning-region codes (09110-09190)",
+      temporal: "the designation year HUD titles 2026",
+      count: { value: 14496, of: "tracts in QUALIFIED_CENSUS_TRACTS_2026 layer 0 (returnCountOnly); the plain QUALIFIED_CENSUS_TRACTS service holds 15,727 under a layer named _2025", countedOn: R7 },
+    },
+    freshness: { statement: `Layer data last edited 2025-09-22. ${QCT_YEAR_NOTE}`, readFrom: "FeatureServer layer 0 editingInfo.dataLastEditDate (1758570469600); the service name, the item snippet and description, and the layer description", recordedOn: R7 },
+    excluded: [
+      { what: "the QCT 2025 service (15,727 tracts)", why: "superseded by the list HUD titles 2026" },
+      { what: "Difficult Development Areas 2026 (2,902)", why: "a second designation for a later phase (D7-2)" },
+      { what: "NAME (\"Census Tract 6.08\")", why: "a tract label; the GEOID is shown" },
+    ],
+    caveats: [QCT_YEAR_NOTE],
+    searchable: ["GEOID"],
+    embedText: EMBED_TEXT["hud-qct"],
+    ops: ["civic?op=housing"],
+    sensitivity: "A HUD tax-credit designation per census tract; no property or person data.",
+    round: 7,
+  },
+  {
+    id: "usgs-landslide-susc",
+    title: "Landslide susceptibility (USGS slope-relief threshold models, 2024)",
+    layer: "landslidesusc",
+    sources: ["usgs-landslide-susc"],
+    what: "USGS's 2024 picture of where terrain is steep and high enough for landslides, at 90 m for the 50 states and Puerto Rico, drawn from USGS's ArcGIS Online tile cache in its own colours (classes 1-5 as the tile service draws them), with each county's share of susceptible terrain and its count of inventoried landslides from the release's county table on a ground click and in the county's hazard history.",
+    recordIs: "A modelled terrain surface: where slope and relief pass the model's threshold. Not a forecast, not a hazard rating and not a record of landslides. The county share is susceptible km2 over the county's land km2, as USGS publishes it.",
+    coverage: {
+      spatial: "The 50 states and Puerto Rico; county shares on 2010 counties, so Connecticut's planning regions and six counties whose boundaries changed since 2010 (Chugach, Copper River, Petersburg Borough, Hoonah-Angoon, Prince of Wales-Hyder, and Bedford County, VA) have none",
+      temporal: null,
+      count: { value: 3221, of: "rows in county_analysis.csv (2010 counties); 3,207 joined to current FIPS (3,204 by exact name, 3 by Census renames); Hoonah-Angoon, Prince of Wales-Hyder and Bedford County, VA match by name but are left out, because Census lists their boundaries as changed in 2013; tiles cached at levels 1-12", countedOn: R7 },
+    },
+    freshness: { statement: "Data release published 2024-08-22; tiles last-modified 2024-09-06; static.", readFrom: "ScienceBase item 65ccea5bd34ef4b119cb3bac (dates, rights); tile Last-Modified headers", recordedOn: R7 },
+    excluded: [
+      { what: "the 90 m GeoTIFFs as values", why: "588 MB and 565 MB zips; the picture is enough" },
+      { what: "landslides.csv (67 MB)", why: "the Landslides layer already draws USGS's inventory (version 3)" },
+      { what: "the class under the click", why: "the tile service has no identify, and decoding tile colours into classes would be our own inversion" },
+      { what: "class names (low to high)", why: "neither the service, the item nor the FGDC record names the five classes or says which of the release's two models the tiles draw" },
+      { what: "Connecticut's planning regions and the six counties whose boundaries changed since 2010", why: "the county table is on 2010 counties; no crosswalk is invented, and a 2010 row is never attached to a changed boundary" },
+    ],
+    caveats: [LANDSLIDE_SUSC_CAVEAT],
+    searchable: [],
+    embedText: EMBED_TEXT["usgs-landslide-susc"],
+    ops: ["hazards?op=history"],
+    sensitivity: "A modelled terrain surface and county shares; no property, person or site data. CC0 1.0.",
+    round: 7,
   },
 ];
 

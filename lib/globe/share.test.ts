@@ -420,3 +420,28 @@ describe("broadband and wildfire risk picks in the share link", () => {
     useGlobe.getState().setLayer("wildfirerisk", false);
   });
 });
+
+describe("the housing measure in the share link", () => {
+  it("round-trips hv=count and drops anything else", () => {
+    const s: ShareState = { layers: ["housing"], hv: "count" };
+    const q = shareQuery(s);
+    expect(q).toContain("hv=count");
+    expect(parseShare(q)).toEqual(s);
+    for (const bad of ["?hv=share", "?hv=1", "?hv="]) expect(parseShare(bad).hv, bad).toBeUndefined();
+  });
+
+  it("is written only while the layer is on and the count is picked", async () => {
+    const { currentShare } = await import("./share");
+    const { useGlobe } = await import("@/lib/store/globe");
+    const { useSettings } = await import("@/lib/store/settings");
+    const set = useSettings.getState().setPref;
+    set("housingMeasure", "1");
+    useGlobe.getState().setLayer("housing", false);
+    expect(currentShare().hv).toBeUndefined();
+    useGlobe.getState().setLayer("housing", true);
+    expect(currentShare().hv).toBe("count");
+    set("housingMeasure", "0");
+    expect(currentShare().hv).toBeUndefined();
+    useGlobe.getState().setLayer("housing", false);
+  });
+});

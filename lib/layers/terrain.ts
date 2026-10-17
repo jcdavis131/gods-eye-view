@@ -14,6 +14,8 @@
 //   soils       NRCS SSURGO map units (Soil Data Mart WMS), below 40 km;
 //               the click answer adds the farmland class and NCCPI (/api/soil)
 //   firehazard  USFS Wildfire Hazard Potential 2023, classes 1–7
+//   landslidesusc  USGS slope-relief landslide susceptibility (2024), classes 1–5 as the
+//               tile service draws them; the click answer is the county's share (/api/hazards)
 //   landcover   NLCD 2021 land cover, rendered through /api/terrain
 //   sealevel    NOAA sea level rise inundation, 1 to 10 ft above MHHW
 //   geology     Macrostrat's geologic map; the click answer is the map unit (/api/infra)
@@ -21,7 +23,7 @@
 //               designations containing the point (/api/land?op=crithab)
 
 import type { FetchContext, FetchResult, LayerDefinition, LayerId, ViewState } from "./types";
-import { SLR_CAVEAT, SLR_DEFAULT_FT, SOIL_CAVEAT, WHP_CAVEAT, isSlrFeet } from "@/lib/terrain/products";
+import { LANDSLIDE_SUSC_CAVEAT, LANDSLIDE_SUSC_LEGEND, SLR_CAVEAT, SLR_DEFAULT_FT, SOIL_CAVEAT, WHP_CAVEAT, isSlrFeet } from "@/lib/terrain/products";
 
 /** Camera-height bands (metres): above them the layer's picture is hidden and its note says why. */
 export const SLOPE_MAX_HEIGHT_M = 250_000;
@@ -145,6 +147,18 @@ export const firehazardLayer = picture({
   note: "USFS WHP 2023 classes, 270 m, landscape as of 2020 · not a map of risk, not a forecast · click the ground for the class",
 });
 
+export const landslidesuscLayer = picture({
+  id: "landslidesusc",
+  label: "Landslide susceptibility (USGS)",
+  description:
+    "USGS's 2024 slope-relief threshold model of where terrain is steep and high enough for landslides, at 90 m, for the 50 states and Puerto Rico, in the tile service's classes 1-5 (higher means more of each 90 m cell is susceptible terrain). Susceptible terrain, not a forecast, not a hazard rating and not a record of landslides. Click the ground for the county's share of susceptible terrain.",
+  color: "#A16207",
+  attribution: "U.S. Geological Survey: Belair and others (2024), Slope-Relief Threshold Landslide Susceptibility Models for the United States and Puerto Rico, doi:10.5066/P13KAGU3 (CC0 1.0); tiles from USGS's ArcGIS Online service",
+  source: "USGS landslide susceptibility (2024)",
+  estimate: LANDSLIDE_SUSC_CAVEAT,
+  note: `${LANDSLIDE_SUSC_LEGEND} · cached to level 12 · terrain, not a forecast · click the ground for the county's share`,
+});
+
 export const landcoverLayer = picture({
   id: "landcover",
   label: "Land cover (NLCD 2021)",
@@ -206,7 +220,7 @@ export const crithabLayer = picture({
   note: "FWS's final and proposed designations, and NOAA Fisheries' for marine and anadromous species · regulatory polygons, not where a species lives; many listed species have none · click the ground for the species and rule",
 });
 
-export const TERRAIN_LAYERS: LayerDefinition[] = [reliefLayer, slopeLayer, contoursLayer, soilsLayer, firehazardLayer, landcoverLayer, sealevelLayer, geologyLayer, crithabLayer];
+export const TERRAIN_LAYERS: LayerDefinition[] = [reliefLayer, slopeLayer, contoursLayer, soilsLayer, firehazardLayer, landslidesuscLayer, landcoverLayer, sealevelLayer, geologyLayer, crithabLayer];
 
 /** Layers whose click on the ground opens the "ground here" dossier. */
-export const GROUND_LAYERS: LayerId[] = ["soils", "firehazard", "landcover", "slope", "contours", "relief", "geology", "crithab", "topo", "wayback", "hydro", "naip"];
+export const GROUND_LAYERS: LayerId[] = ["soils", "firehazard", "landslidesusc", "landcover", "slope", "contours", "relief", "geology", "crithab", "topo", "wayback", "hydro", "naip"];

@@ -1,7 +1,7 @@
-// Civic API: community indicators for counties and tracts, public schools, and
-// fixed broadband availability. CORS open, edge-cached, with the shared envelope
-// (lib/server/respond.ts). Round 4 added health, round 5 svi and schools, round 6
-// broadband; later rounds add ejscreen and housing here.
+// Civic API: community indicators for counties and tracts, public schools, fixed
+// broadband availability and housing assistance. CORS open, edge-cached, with the
+// shared envelope (lib/server/respond.ts). Round 4 added health, round 5 svi and
+// schools, round 6 broadband, round 7 housing; a later round adds ejscreen here.
 //
 //   /api/civic?op=health&level=county&measure=DIABETES
 //        CDC PLACES (2025 release): every county's age-adjusted prevalence for one
@@ -44,6 +44,14 @@
 //        One county with every technology column and the 6- and 12-month-previous counts
 //        as published, plus the shares as named ratios of two counts; 404 when BDC has no
 //        row (Connecticut's planning regions among them).
+//   /api/civic?op=housing&bbox=w,s,e,n
+//        HUD's Housing Choice Vouchers by tract (GEOID, HCV_PUBLIC, HCV_PUBLIC_PCT) and its
+//        Qualified Census Tracts titled 2026 (GEOID), each on its own 2020 tract polygons, in
+//        a box of at most 0.3 degrees (snapped to 0.05), one page of 2,000 each, held a week
+//        per box, as { hcv, qct }. A null HCV_PUBLIC is HUD's suppression (10 or fewer, or
+//        none), never 0; every Connecticut tract is null, which is "not published".
+//   /api/civic?op=housing&level=place&fips=48453002220
+//        One tract (11 digits): its voucher row and whether it is in the QCT list.
 //
 // All through the civic gate (one request a second to data.cdc.gov, one every 500 ms
 // to an ArcGIS organisation; a 429 or 503 closes it for ten minutes). A county or
@@ -80,6 +88,27 @@ import {
   type BdcRow,
 } from "@/lib/civic/broadband";
 import { parseBbox as gridBbox, type Bbox } from "@/lib/civic/bbox";
+import {
+  CT_HOUSING_NOTE,
+  HCV_DENOMINATOR_QUOTE,
+  HCV_FIELDS,
+  HCV_LAYER,
+  HCV_SUPPRESSION_QUOTE,
+  HOUSING_ATTRIBUTION,
+  HOUSING_BOX_DEG,
+  HOUSING_CAVEAT,
+  HOUSING_COUNT_BREAKS,
+  HOUSING_GRID,
+  HOUSING_PAGE,
+  HOUSING_SHARE_BREAKS,
+  housingBoxParams,
+  housingPlace,
+  housingPlaceParams,
+  pickFields,
+  QCT_FIELDS,
+  QCT_LAYER,
+  QCT_YEAR_NOTE,
+} from "@/lib/civic/housing";
 import { buildSchools, NCES_MAX_PAGES, NCES_PAGE, NCES_SCHOOLS, SCHOOL_FIELDS, SCHOOLS_ATTRIBUTION, SCHOOLS_CAVEAT } from "@/lib/civic/schools";
 import type { LayerFeature } from "@/lib/layers/types";
 import {
@@ -505,6 +534,85 @@ async function broadbandPlace(fips: string) {
   );
 }
 
+// ---------------------------------------------------------------- housing (HUD vouchers by tract, QCT titled 2026)
+
+const HOUSING_HELP = "op=housing needs bbox=w,s,e,n (at most 0.3 degrees a side) or level=place&fips=<11-digit tract GEOID>";
+const HOUSING_CAVEATS = [HOUSING_CAVEAT, QCT_YEAR_NOTE, CT_HOUSING_NOTE];
+
+const hudProv = (layer: string, seriesId: string, period: string, age: number, notes?: string[]) =>
+  provenance(source("hud-egis"), { kind: "published", seriesId, upstreamUrl: layer, period, retrievedAt: at(age), notes });
+
+async function housingBox(b: Bbox) {
+  const r = await cached(
+    `housing:bbox:${b.join(",")}`,
+    WEEK_MS,
+    async () => {
+      const [hcv, qct] = await Promise.all([
+        runRows("hud-egis", { kind: "arcgis", layer: HCV_LAYER, params: housingBoxParams(b, HCV_FIELDS) }, 25_000),
+        runRows("hud-egis", { kind: "arcgis", layer: QCT_LAYER, params: housingBoxParams(b, QCT_FIELDS) }, 25_000),
+      ]);
+      return {
+        hcv: pickFields(hcv.features, HCV_FIELDS),
+        qct: pickFields(qct.features, QCT_FIELDS),
+        hcvCut: hcv.truncated || hcv.features.length >= HOUSING_PAGE,
+        qctCut: qct.truncated || qct.features.length >= HOUSING_PAGE,
+      };
+    },
+    { deadlineMs: 35_000 },
+  );
+  const v = r.value;
+  const suppressed = v.hcv.filter((f) => f.properties.HCV_PUBLIC == null && !String(f.properties.GEOID ?? "").startsWith("09")).length;
+  const ct = v.hcv.filter((f) => String(f.properties.GEOID ?? "").startsWith("09")).length;
+  const caveats = [...HOUSING_CAVEATS, `HUD: "${HCV_SUPPRESSION_QUOTE}"; "${HCV_DENOMINATOR_QUOTE}".`];
+  if (v.hcvCut) caveats.push(`The voucher answer for this box was cut at ${HOUSING_PAGE} tracts: ask a smaller box for every tract.`);
+  if (v.qctCut) caveats.push(`The QCT answer for this box was cut at ${HOUSING_PAGE} tracts: ask a smaller box for every tract.`);
+  return ok(
+    { hcv: { type: "FeatureCollection", features: v.hcv }, qct: { type: "FeatureCollection", features: v.qct } },
+    {
+      meta: { source: HOUSING_ATTRIBUTION, bbox: b, count: v.hcv.length, qctCount: v.qct.length, suppressed, connecticutNotPublished: ct, capped: v.hcvCut || v.qctCut, shareBreaks: [...HOUSING_SHARE_BREAKS], countBreaks: [...HOUSING_COUNT_BREAKS], cacheAge: r.age },
+      ttlS: 86_400,
+      provenance: [
+        hudProv(HCV_LAYER, "Housing_Choice_Vouchers_by_Tract FeatureServer layer 0, tracts in the box", "through 12/2025 (last updated 01/2026)", r.age, [`bbox ${b.join(",")}`]),
+        hudProv(QCT_LAYER, "QUALIFIED_CENSUS_TRACTS_2026 FeatureServer layer 0, tracts in the box", "titled 2026 by HUD", r.age, [`bbox ${b.join(",")}`]),
+      ],
+      caveats,
+    },
+  );
+}
+
+/** Attribute rows (f=json) through HUD's ArcGIS organisation gate (one request every 500 ms). */
+function hudAttributes(layer: string, params: Record<string, string>, timeoutMs = 20_000) {
+  const { gate, minIntervalMs } = gateOf(layer);
+  return arcgisRowsCapped<Record<string, unknown>>("hud-egis", layer, params, { gate, minIntervalMs, timeoutMs, tries: 2 });
+}
+
+async function housingPlaceOp(geoid: string) {
+  const r = await cached(
+    `housing:place:${geoid}`,
+    WEEK_MS,
+    async () => {
+      const [h, q] = await Promise.all([hudAttributes(HCV_LAYER, housingPlaceParams(geoid, HCV_FIELDS)), hudAttributes(QCT_LAYER, housingPlaceParams(geoid, QCT_FIELDS))]);
+      return housingPlace(geoid, h.rows, q.rows);
+    },
+    { deadlineMs: 25_000 },
+  );
+  const p = r.value;
+  if (p.status === "not-in-layer" && p.qct === null) return notFound(`no voucher row for tract ${geoid}; QCT membership is unknown for a Connecticut legacy-county code (HUD's QCT list uses planning-region codes)`);
+  if (p.status === "not-in-layer" && !p.qct) return notFound(`not in either HUD layer: no voucher row and no QCT row for tract ${geoid}`);
+  return ok(
+    { level: "tract", ...p },
+    {
+      meta: { source: HOUSING_ATTRIBUTION, cacheAge: r.age },
+      ttlS: 86_400,
+      provenance: [
+        hudProv(HCV_LAYER, `Housing_Choice_Vouchers_by_Tract FeatureServer layer 0, GEOID='${geoid}', attributes`, "through 12/2025 (last updated 01/2026)", r.age),
+        hudProv(QCT_LAYER, `QUALIFIED_CENSUS_TRACTS_2026 FeatureServer layer 0, GEOID='${geoid}'`, "titled 2026 by HUD", r.age),
+      ],
+      caveats: [...HOUSING_CAVEATS, "vouchers null with status 'suppressed' means 10 or fewer, or none (HUD omits them); 'not-published-ct' means HUD publishes no Connecticut count; share is HUD's HCV_PUBLIC_PCT rounded to one decimal; qct null means unknown: a Connecticut legacy-county tract code, which HUD's QCT list (in planning-region codes) never uses."],
+    },
+  );
+}
+
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams;
   const op = q.get("op") ?? "";
@@ -557,8 +665,18 @@ export async function GET(req: NextRequest) {
         }
         return badRequest(BROADBAND_HELP);
       }
+      case "housing": {
+        const level = q.get("level");
+        if (level === "place") {
+          const fips = q.get("fips") ?? "";
+          return /^\d{11}$/.test(fips) ? await housingPlaceOp(fips) : badRequest(HOUSING_HELP);
+        }
+        if (level != null) return badRequest(HOUSING_HELP);
+        const b = gridBbox(q.get("bbox"), HOUSING_BOX_DEG, HOUSING_GRID);
+        return b ? await housingBox(b) : badRequest(HOUSING_HELP);
+      }
       default:
-        return badRequest("unknown op: health | svi | schools | broadband");
+        return badRequest("unknown op: health | svi | schools | broadband | housing");
     }
   } catch (err) {
     return withCors(jsonError(err));

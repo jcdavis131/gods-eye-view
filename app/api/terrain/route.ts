@@ -55,6 +55,7 @@ import { provenance } from "@/lib/provenance/types";
 import { source } from "@/lib/provenance/sources";
 import {
   DIRECT_SOURCES,
+  LANDSLIDE_SUSC_CAVEAT,
   NWI_RASTER_CAVEAT,
   RENDER_PRODUCTS,
   SLR_CAVEAT,
@@ -353,7 +354,7 @@ function opProducts(): Response {
       products: [...rendered, ...direct],
       classes: { firehazard: WHP_CLASSES, landcover: NLCD_CLASSES, sealevel: SLR_LEGEND, wetlands: NWI_RASTER_CLASSES },
       sealevelFeet: SLR_FEET,
-      caveats: { firehazard: WHP_CAVEAT, sealevel: SLR_CAVEAT, soils: SOIL_CAVEAT, wetlands: NWI_RASTER_CAVEAT },
+      caveats: { firehazard: WHP_CAVEAT, landslidesusc: LANDSLIDE_SUSC_CAVEAT, sealevel: SLR_CAVEAT, soils: SOIL_CAVEAT, wetlands: NWI_RASTER_CAVEAT },
       terrainAttribution: TERRARIUM_ATTRIBUTION,
     },
     { ttlS: 3600, provenance: [], caveats: ["The catalog of terrain pictures; each product's own source and caveat is on it."] },

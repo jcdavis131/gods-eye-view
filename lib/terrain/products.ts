@@ -37,6 +37,17 @@ export const MACROSTRAT_TILES = "https://tiles.macrostrat.org/carto/{z}/{x}/{y}.
  */
 export const WHP_TEMPLATE = `${WHP_IMAGE}/exportImage?bbox={westProjected},{southProjected},{eastProjected},{northProjected}&bboxSR=3857&imageSR=3857&size=256,256&format=png&renderingRule=${encodeURIComponent(JSON.stringify({ rasterFunction: "WHP_CLS_2023_8bit" }))}&f=image`;
 
+// USGS slope-relief landslide susceptibility (2024): USGS's ArcGIS Online tile cache, levels 1-12,
+// 512 px. The tiles are PNG bytes served as application/octet-stream with x-content-type-options:
+// nosniff (probed 2026-10-17); Chromium decodes them, iOS Safari is a preview check. The service
+// names neither the release's model it draws (weighted linear lw or quantile nonlinear n10) nor
+// its five classes; the legend says only what can be said.
+export const LANDSLIDE_SUSC_TILES = "https://tiles.arcgis.com/tiles/v01gqwM5QqNysAAi/arcgis/rest/services/US_Landslide_Susceptibility/MapServer/tile/{z}/{y}/{x}";
+export const LANDSLIDE_SUSC_MAX_ZOOM = 12;
+export const LANDSLIDE_SUSC_LEGEND = "Classes 1-5 as USGS's tile service draws them: higher means more of each 90 m cell is susceptible terrain.";
+export const LANDSLIDE_SUSC_CAVEAT =
+  "USGS's 2024 slope-relief model of where terrain is steep and high enough for landslides, at 90 m, for the 50 states and Puerto Rico. Susceptible terrain is not a forecast, not a hazard rating and not a record of landslides. The tile service does not say which of the release's two models it draws. County shares are USGS's, on 2010 counties, so Connecticut's planning regions and six counties whose boundaries changed since 2010 (Chugach, Copper River, Petersburg Borough, Hoonah-Angoon and Prince of Wales-Hyder in Alaska, and Bedford County, Virginia) have none.";
+
 /** USFWS NWI national wetlands raster, version 5 (pinned: a new version is a new service name). */
 export const NWI_RASTER = "https://fwspublicservices.wim.usgs.gov/wetlandsmapservice/rest/services/Wetlands_Raster_v5/ImageServer";
 /**
@@ -161,7 +172,7 @@ export function routeTileUrl(product: RenderProductId, z: number | string, x: nu
 // ---------------------------------------------------------------- direct sources
 
 export interface DirectSource {
-  id: "relief" | "soils" | "firehazard" | "sealevel" | "terrain" | "geology" | "wetlands" | "crithab" | "crithab-noaa" | "wayback" | "topo" | "hydro" | "naip";
+  id: "relief" | "soils" | "firehazard" | "landslidesusc" | "sealevel" | "terrain" | "geology" | "wetlands" | "crithab" | "crithab-noaa" | "wayback" | "topo" | "hydro" | "naip";
   title: string;
   source: SourceId;
   /** Host the browser fetches from (CSP img-src / connect-src must allow it). */
@@ -198,6 +209,15 @@ export const DIRECT_SOURCES: DirectSource[] = [
     template: WHP_TEMPLATE,
     maxZoom: 11,
     note: "270 m pixels; beyond zoom 11 the globe magnifies them without smoothing.",
+  },
+  {
+    id: "landslidesusc",
+    title: "Landslide susceptibility, slope-relief threshold models (USGS, US_Landslide_Susceptibility tile service)",
+    source: "usgs-landslide-susc",
+    host: "tiles.arcgis.com",
+    template: LANDSLIDE_SUSC_TILES,
+    maxZoom: LANDSLIDE_SUSC_MAX_ZOOM,
+    note: "Cached to level 12 (maxLOD 12; level 13 answers 404); closer, the globe magnifies level 12. 512 px PNG tiles served as application/octet-stream with nosniff.",
   },
   {
     id: "sealevel",

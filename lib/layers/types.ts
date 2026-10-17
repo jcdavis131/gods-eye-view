@@ -60,11 +60,13 @@ export type LayerId =
   | "broadband"
   | "wildfirerisk"
   | "tribal"
+  | "housing"
   | "relief"
   | "slope"
   | "contours"
   | "soils"
   | "firehazard"
+  | "landslidesusc"
   | "landcover"
   | "sealevel"
   | "transmission"
@@ -145,11 +147,13 @@ export const LAYER_IDS: LayerId[] = [
   "broadband",
   "wildfirerisk",
   "tribal",
+  "housing",
   "relief",
   "slope",
   "contours",
   "soils",
   "firehazard",
+  "landslidesusc",
   "landcover",
   "sealevel",
   "transmission",

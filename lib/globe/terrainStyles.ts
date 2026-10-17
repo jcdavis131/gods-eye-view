@@ -18,6 +18,8 @@ import {
   SLR_BASE,
   SLR_DEFAULT_FT,
   WHP_TEMPLATE,
+  LANDSLIDE_SUSC_MAX_ZOOM,
+  LANDSLIDE_SUSC_TILES,
   isSlrFeet,
   routeTileUrl,
   type RenderProductId,
@@ -46,6 +48,7 @@ export const TILE_Z = {
   landcover: 20,
   wetlands: 25,
   firehazard: 30,
+  landslidesusc: 32,
   soils: 40,
   slope: 50,
   sealevel: 60,
@@ -125,6 +128,22 @@ export const firehazardStyle = picture("#FF7A3D", () => [
     alpha: 0.65,
     z: TILE_Z.firehazard,
     credit: "Wildfire Hazard Potential 2023: USDA Forest Service",
+  },
+]);
+
+// USGS's own class colours at a fixed alpha, never recoloured. 512 px tiles cached at levels 1 to 12.
+export const landslidesuscStyle = picture("#A16207", () => [
+  {
+    key: "landslidesusc",
+    kind: "xyz",
+    url: LANDSLIDE_SUSC_TILES,
+    tileSize: 512,
+    maximumLevel: LANDSLIDE_SUSC_MAX_ZOOM,
+    floorLevel: 1,
+    nearest: true,
+    alpha: 0.65,
+    z: TILE_Z.landslidesusc,
+    credit: "Landslide susceptibility: USGS, Belair and others (2024), CC0",
   },
 ]);
 

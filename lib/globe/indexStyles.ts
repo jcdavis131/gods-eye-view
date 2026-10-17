@@ -1,4 +1,4 @@
-// County and tract index choropleths (rounds 4 to 6): FEMA's National Risk Index
+// County and tract index choropleths (rounds 4 to 7): FEMA's National Risk Index
 // in its five rating classes, CDC PLACES in quintile bins, and CDC/ATSDR SVI on
 // fixed percentile breaks. A feature with no class ("Not Applicable",
 // "Insufficient Data", "No Rating", "Data Unavailable", not in the index)
@@ -13,6 +13,7 @@ import type { HealthExtra } from "@/lib/layers/health";
 import { SVI_BIN_COLORS, SVI_NO_RANK_EDGE, type SviExtra } from "@/lib/civic/svi";
 import { BROADBAND_BIN_COLORS, BROADBAND_NO_DATA_EDGE, type BroadbandExtra } from "@/lib/civic/broadband";
 import { WRC_BIN_COLORS, WRC_NO_RANK_EDGE, type WrcExtra } from "@/lib/hazards/wrc";
+import { HOUSING_BIN_COLORS, HOUSING_NO_DATA_EDGE, HOUSING_SUPPRESSED_FILL, QCT_EDGE, type HousingExtra } from "@/lib/civic/housing";
 
 export function riskColor(f: LayerFeature): string {
   const x = f.properties.extra as NriExtra | undefined;
@@ -115,5 +116,41 @@ export const wildfireriskStyle: LayerStyle = {
   lines: (f) => {
     const ranked = (f.properties.extra as WrcExtra | undefined)?.bin != null;
     return polyOutlines(f, ranked ? "#1F2937" : WRC_NO_RANK_EDGE, ranked ? 0.45 : 0.85, 1, !ranked);
+  },
+};
+
+// ---------------------------------------------------------------- housing assistance (HUD vouchers by tract, QCT titled 2026)
+
+/** A published tract's bin colour; a suppressed tract's grey (never a scale colour); Connecticut's no-data edge. */
+export function housingColor(f: LayerFeature): string {
+  const x = f.properties.extra as HousingExtra | undefined;
+  if (!x) return HOUSING_NO_DATA_EDGE;
+  if (x.kind === "qct") return QCT_EDGE;
+  if (x.bin != null) return HOUSING_BIN_COLORS[x.bin];
+  return x.status === "suppressed" ? HOUSING_SUPPRESSED_FILL : HOUSING_NO_DATA_EDGE;
+}
+
+export const housingStyle: LayerStyle = {
+  color: "#0F766E",
+  icon: () => null,
+  colorFor: (f) => (isLoadedBox(f) ? "#E5E7EB" : housingColor(f)),
+  label: (f) => f.properties.name,
+  labelMax: 0,
+  // Tracts are named by GEOID only; nothing is labelled on the globe.
+  labelWhen: () => false,
+  polygons: (f) => {
+    const x = f.properties.extra as HousingExtra | undefined;
+    if (!x || x.kind === "qct") return null;
+    if (x.bin != null) return polyFills(f, housingColor(f), 0.55);
+    // Suppressed: a grey that is on no scale, lighter than any bin, so it reads as "few or none", not as low.
+    if (x.status === "suppressed") return polyFills(f, HOUSING_SUPPRESSED_FILL, 0.3);
+    return null;
+  },
+  lines: (f) => {
+    if (isLoadedBox(f)) return polyOutlines(f, "#E5E7EB", 0.7, 1.5, true);
+    const x = f.properties.extra as HousingExtra | undefined;
+    if (x?.kind === "qct") return polyOutlines(f, QCT_EDGE, 0.95, 2, true);
+    const drawn = x?.bin != null;
+    return polyOutlines(f, drawn ? "#1F2937" : HOUSING_NO_DATA_EDGE, drawn ? 0.3 : 0.85, 1, !drawn);
   },
 };

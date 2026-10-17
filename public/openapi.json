@@ -2384,8 +2384,8 @@
     },
     "/api/hazards": {
       "get": {
-        "summary": "Current wildfires, the last 24 hours of satellite fire detections, and hazard alerts; USFS Wildfire Risk to Communities ranks",
-        "description": "op=wildfire: every current US wildland fire from NIFC WFIGS, as perimeters (acres, percent contained, discovery date, the perimeter's capture time; `perimeter captured` says \"not published by WFIGS\" where it has none rather than borrowing the record's edit time) and incident points for fires with no perimeter yet. op=fires: NASA FIRMS hotspots of the last 24 hours (VIIRS S-NPP, VIIRS NOAA-20, MODIS) inside `bbox` as rows (see `columns`); over `max` they are binned to a square grid and each cell keeps its brightest detection (max FRP) with the count it stands for. Confidence stays on each instrument's scale (VIIRS low / nominal / high, MODIS 0-100 %). op=alerts: every active NWS alert (the polygon NWS published, or else the counties its SAME codes list, dashed on the globe), every GDACS event marked current (RSS, EVENTS4APP and a SEARCH for current Orange and Red events, merged), and NASA EONET open volcano events; severities as each publisher gives them, unrated as \"not rated by source\". GDACS quakes the USGS 24 h feed also has carry `alsoInUsgs`, and NWS alerts the live feed behind /api/live outlined carry `liveOutlined` (read from the same five-minute cache entry, within the same 20 s budget; when that feed failed or was late none is marked and `counts.nws.liveChecked` is false); none is dropped. Each alerts source gets 20 s; one that does not answer is named in `failed` and in `caveats`. Not a warning service. op=wrc: USDA Forest Service Wildfire Risk to Communities, 2nd edition (2024; LANDFIRE 2020 fuels; boundaries May 2025 from TIGER 2023), CC0 1.0. Four rank families by the service's own aliases (RISK_NATIONAL_RANK, BP_NATIONAL_RANK, WHP_NATIONAL_RANK, EA_HURISK_NATIONAL_RANK, and their _STATE_ ranks); the service does not say which of RISK_* and EA_HURISK_* is wildfirerisk.org's 'Risk to Homes'. Ranks are published as percent strings ('97.20%'); here they are numbers 0-100 with the strings kept in `raw`, and a blank (' ', DC and the 484 excluded communities) is null, never 0. level=county: every county's ranks, exposure shares and building and housing-unit counts, attributes only (two pages of 2,000, held a week); join by `geoid` onto county outlines (Connecticut in planning regions). level=place&bbox=: WRC's community (Census place) polygons in a box of at most 1 degree snapped to 0.05, at most 1,000, with exclude and exclude_re as published. level=fips&fips=: one county (5 digits) or community (7 digits); 404 when WRC has no row. Modelled relative ranks: not a forecast, not a local assessment.",
+        "summary": "Current wildfires, the last 24 hours of satellite fire detections, and hazard alerts; USFS Wildfire Risk to Communities ranks; county hazard history (FEMA declarations, USDM drought, NOAA climate, SPC tornadoes, USGS landslide susceptibility)",
+        "description": "op=wildfire: every current US wildland fire from NIFC WFIGS, as perimeters (acres, percent contained, discovery date, the perimeter's capture time; `perimeter captured` says \"not published by WFIGS\" where it has none rather than borrowing the record's edit time) and incident points for fires with no perimeter yet. op=fires: NASA FIRMS hotspots of the last 24 hours (VIIRS S-NPP, VIIRS NOAA-20, MODIS) inside `bbox` as rows (see `columns`); over `max` they are binned to a square grid and each cell keeps its brightest detection (max FRP) with the count it stands for. Confidence stays on each instrument's scale (VIIRS low / nominal / high, MODIS 0-100 %). op=alerts: every active NWS alert (the polygon NWS published, or else the counties its SAME codes list, dashed on the globe), every GDACS event marked current (RSS, EVENTS4APP and a SEARCH for current Orange and Red events, merged), and NASA EONET open volcano events; severities as each publisher gives them, unrated as \"not rated by source\". GDACS quakes the USGS 24 h feed also has carry `alsoInUsgs`, and NWS alerts the live feed behind /api/live outlined carry `liveOutlined` (read from the same five-minute cache entry, within the same 20 s budget; when that feed failed or was late none is marked and `counts.nws.liveChecked` is false); none is dropped. Each alerts source gets 20 s; one that does not answer is named in `failed` and in `caveats`. Not a warning service. op=wrc: USDA Forest Service Wildfire Risk to Communities, 2nd edition (2024; LANDFIRE 2020 fuels; boundaries May 2025 from TIGER 2023), CC0 1.0. Four rank families by the service's own aliases (RISK_NATIONAL_RANK, BP_NATIONAL_RANK, WHP_NATIONAL_RANK, EA_HURISK_NATIONAL_RANK, and their _STATE_ ranks); the service does not say which of RISK_* and EA_HURISK_* is wildfirerisk.org's 'Risk to Homes'. Ranks are published as percent strings ('97.20%'); here they are numbers 0-100 with the strings kept in `raw`, and a blank (' ', DC and the 484 excluded communities) is null, never 0. level=county: every county's ranks, exposure shares and building and housing-unit counts, attributes only (two pages of 2,000, held a week); join by `geoid` onto county outlines (Connecticut in planning regions). level=place&bbox=: WRC's community (Census place) polygons in a box of at most 1 degree snapped to 0.05, at most 1,000, with exclude and exclude_re as published. level=fips&fips=: one county (5 digits) or community (7 digits); 404 when WRC has no row. Modelled relative ranks: not a forecast, not a local assessment. op=history: one county's hazard history (fips=<5 digits>, or lon and lat for the county containing the point, from TIGERweb's 1:20M counties). data.series[] are lib/series Series ({ id, title, unit, frequency, geo, provenance, points: [{ t: epoch ms, v }] }): fema:dr:<fips>, fema:em:<fips> and fema:fm:<fips> (FEMA OpenFEMA Disaster Declarations Summaries v2: distinct disasterNumber per year of declarationDate, by declaration type, never blended); usdm:dsci:<fips> (the U.S. Drought Monitor's weekly Drought Severity and Coverage Index, 0-500, since 2000, t = mapDate); cag:tavg:<fips> and cag:pcp:<fips> (NOAA NCEI Climate at a Glance annual average temperature, F, and precipitation, in, since 1895; Alaska from 1925, Hawaii from 1991, none for Puerto Rico); spc:tornadoes:<fips> (NOAA SPC tornado rows naming the county per year, 1950-2025, baked from SPC's file). data.declarations[]: FEMA's rows newest first (disasterNumber, declarationType, declarationDate, incidentType, declarationTitle verbatim, incident dates, programs IH/IA/PA/HM, designatedArea verbatim), at most `declarations`; data.declarationRows counts them all. data.droughtNow: the newest week's categorical D0-D4 area shares (statisticsType=2). data.landslide: USGS's county row (prop_susc, susc_area and county_area in km2, v2_ls_count, v2_density) or null. data.missing[]: { source, reason } for every part with none: join:legacy_ct_counties (Connecticut's planning regions get drought only: FEMA, NOAA, SPC and USGS publish the legacy counties), join:boundary_changed_since_2010, source:not_in_release, source:not_published_for_puerto_rico or source:failed (unknown, not empty; a caveat says so). A year with no FEMA declaration or SPC tornado is absent, not 0, until the zero rule is decided (meta.zeroFill). meta.notCounty and meta.unmatched count FEMA rows that name no current county. part=landslide answers { fips, name, state, landslide, missing } from the bake alone. One upstream failing is a caveat, never a 500; 404 for a FIPS that is not a current county.",
         "tags": [
           "hazards"
         ],
@@ -2401,10 +2401,11 @@
                 "fires",
                 "alerts",
                 "nri",
-                "wrc"
+                "wrc",
+                "history"
               ]
             },
-            "description": "wildfire: NIFC WFIGS perimeters and incident points (US). fires: NASA FIRMS 24 h hotspots in a bbox. alerts: NWS + GDACS + EONET. nri: FEMA National Risk Index, December 2025, as FEMA publishes it: composite risk score and rating, expected annual loss (EAL_VALT, dollars a year) and its rating, social vulnerability (SOVI_*, which FEMA says comes from the Census Community Resilience Estimate, not CDC SVI) and community resilience (RESL_*), and the 18 hazard ratings (*_RISKR). level=county (default; the box is snapped as op=areas snaps it, at most 18 degrees on a 1 degree grid): attribute rows only, to join by STCOFIPS onto county outlines (Connecticut in planning regions 09110-09190). level=tract (box at most 0.4 degrees, snapped to 0.05, around the box's centre): NRI's tract polygons as GeoJSON, paged by 2,000, at most two pages (dense 0.4 degree boxes over New York City hold 2,544 to 2,884 tracts and take both pages). Ratings are verbatim; Not Applicable, Insufficient Data, No Rating and Data Unavailable are not a class. A relative index (a percentile among all counties, or all tracts), not a likelihood; county and tract scores are not comparable. op=nri&fips=: one county (5 digits, by STCOFIPS) or tract (11 digits, by TRACTFIPS) with the same named fields and no geometry, `data: { level, fips, row }`; 404 'not in the index' when FEMA has no row (for a click answer and the MCP social_vulnerability pairing). wrc: USFS Wildfire Risk to Communities ranks (county, community polygons, or one GEOID)."
+            "description": "wildfire: NIFC WFIGS perimeters and incident points (US). fires: NASA FIRMS 24 h hotspots in a bbox. alerts: NWS + GDACS + EONET. nri: FEMA National Risk Index, December 2025, as FEMA publishes it: composite risk score and rating, expected annual loss (EAL_VALT, dollars a year) and its rating, social vulnerability (SOVI_*, which FEMA says comes from the Census Community Resilience Estimate, not CDC SVI) and community resilience (RESL_*), and the 18 hazard ratings (*_RISKR). level=county (default; the box is snapped as op=areas snaps it, at most 18 degrees on a 1 degree grid): attribute rows only, to join by STCOFIPS onto county outlines (Connecticut in planning regions 09110-09190). level=tract (box at most 0.4 degrees, snapped to 0.05, around the box's centre): NRI's tract polygons as GeoJSON, paged by 2,000, at most two pages (dense 0.4 degree boxes over New York City hold 2,544 to 2,884 tracts and take both pages). Ratings are verbatim; Not Applicable, Insufficient Data, No Rating and Data Unavailable are not a class. A relative index (a percentile among all counties, or all tracts), not a likelihood; county and tract scores are not comparable. op=nri&fips=: one county (5 digits, by STCOFIPS) or tract (11 digits, by TRACTFIPS) with the same named fields and no geometry, `data: { level, fips, row }`; 404 'not in the index' when FEMA has no row (for a click answer and the MCP social_vulnerability pairing). wrc: USFS Wildfire Risk to Communities ranks (county, community polygons, or one GEOID). history: one county's hazard history (FEMA declarations, USDM drought, NOAA climate, SPC tornadoes, USGS landslide susceptibility)."
           },
           {
             "name": "bbox",
@@ -2447,7 +2448,59 @@
               "type": "string",
               "pattern": "^(\\d{5}|\\d{7}|\\d{11})$"
             },
-            "description": "op=nri: one county (5-digit FIPS) or tract (11-digit FIPS) instead of a box. op=wrc&level=fips: a 5-digit county or 7-digit place GEOID."
+            "description": "op=nri: one county (5-digit FIPS) or tract (11-digit FIPS) instead of a box. op=wrc&level=fips: a 5-digit county or 7-digit place GEOID. op=history: a 5-digit county FIPS (or lon and lat instead)."
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            },
+            "description": "op=history: with lat, instead of fips: the county containing the point (TIGERweb 1:20M counties, Connecticut in planning regions)."
+          },
+          {
+            "name": "lat",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            },
+            "description": "op=history: with lon, instead of fips."
+          },
+          {
+            "name": "years",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 131
+            },
+            "description": "op=history: return only the last N calendar years of every series (default all)."
+          },
+          {
+            "name": "declarations",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000,
+              "default": 1000
+            },
+            "description": "op=history: how many FEMA declarations to list, newest first; the per-year series always count every row."
+          },
+          {
+            "name": "part",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "landslide"
+              ]
+            },
+            "description": "op=history: landslide answers only the baked USGS landslide row (no upstream call), for the ground click."
           }
         ],
         "responses": {
@@ -2479,6 +2532,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/HazardsWrcResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HazardsHistoryResponse"
                     }
                   ]
                 }
@@ -2492,7 +2548,7 @@
             "$ref": "#/components/responses/Upstream"
           },
           "404": {
-            "description": "op=nri&fips=: FEMA publishes no row for this FIPS (not in the index); `{ error }`. op=wrc&level=fips: WRC has no row for this GEOID (not in this release)."
+            "description": "op=nri&fips=: FEMA publishes no row for this FIPS (not in the index); `{ error }`. op=history: the FIPS is not a current county (or no county contains the point). op=wrc&level=fips: WRC has no row for this GEOID (not in this release)."
           }
         }
       },
@@ -3959,8 +4015,8 @@
     },
     "/api/civic": {
       "get": {
-        "summary": "Community indicators by county and tract (CDC PLACES health estimates, CDC/ATSDR SVI), public schools (NCES), and fixed broadband availability (FCC BDC via Esri)",
-        "description": "op=health: CDC PLACES, 2025 release (data year 2023; 2022 for five measures), model-based estimates for 40 measures. level=county&measure=: every county's age-adjusted prevalence for one measure from one whole-measure pull (held a week), with national quintile `breaks`; join by `fips` onto county outlines (Connecticut in planning regions). level=tract&measure=&counties=: crude prevalence for every published tract of at most 6 counties, asked by countyfips (never within_box). level=place&fips=: every measure for one county, age-adjusted. A county or tract with no row is not published, never 0. Estimates, not counts of diagnosed people; not for ranking small differences. op=svi: CDC/ATSDR Social Vulnerability Index 2022 (ACS 2018-2022). level=county: every county's overall percentile (RPL_THEMES) and four theme percentiles (Socioeconomic Status, Household Characteristics, Racial and Ethnic Minority Status, Housing Type and Transportation) and F_TOTAL, attributes only, as compact rows { fips, name, state, rpl: [overall, theme1..theme4], flags } (held a week); join by `fips` onto county outlines (Connecticut in planning regions). level=tract&bbox=: SVI's own tract polygons (GeoJSON, simplified to 0.0005 degrees) in a box of at most 0.4 degrees snapped to 0.05, at most two pages of 2,000. level=place&fips=: one county (5 digits) or tract (11 digits) with the 16 estimates (EP_) and margins (MP_); 404 when CDC has no row. CDC's -999 ('not ranked': 778 tracts, 0 counties on 2026-10-16) is null at level=county and level=place (rankings, flags, estimates and margins), never 0; level=tract passes CDC's properties through as published, so an unranked tract carries the raw -999 in every RPL_ field and F_TOTAL: not ranked, never least vulnerable. A percentile among US counties (or tracts), 0 least to 1 most vulnerable; not FEMA's NRI social vulnerability (/api/hazards?op=nri, from the Census Community Resilience Estimate), and the two are never merged. op=schools&bbox=: NCES EDGE public schools, school year 2024-25 (EDGE_ADMINDATA_PUBLICSCH_2425), as a GeoJSON FeatureCollection of points in a box of at most 0.2 degrees (snapped to 0.05), at most two pages of 2,000, held a day: directory fields, enrollment (TOTAL), free or reduced-price lunch (TOTFRL), FTE and STUTERATIO as NCES publishes them; no race, sex or grade-level enrollment cell is requested. A negative is a CCD reporting code (-1 not reported, -2 not applicable), never 0. Inactive and Future schools are left out and counted in `hidden`. op=broadband: FCC Broadband Data Collection, December 2025, as Esri Policy Maps summarizes it (the summary layer is under the Esri Master License Agreement; the figures are the FCC's). level=county: every county's Broadband Serviceable Location counts as compact arrays, `columns` = [geoid, total, unserved, underserved, served, fiber, cable, ltfw, providers, unserved12] (two pages of 2,000, held a week); join by `geoid` onto county outlines. Connecticut is published only in its eight legacy counties (09001-09015), listed in meta.unmatched and never crosswalked; its planning regions have no row. level=hex&bbox=: BDC's own H3 resolution-8 hexagons (GeoJSON) in a box of at most 0.3 degrees snapped to 0.05, one page of 2,000; counts as published, including single-location hexagons. level=place&fips=: one county with every technology column, providers, Esri's 6- and 12-month-previous counts, and shares[] as named ratios of two published counts (null where TotalBSLs is 0); 404 when BDC has no row. Served, underserved and unserved are the FCC tiers by speed and technology; satellite and unlicensed fixed wireless count as unserved. Availability as providers report it: not subscription, not measured speed.",
+        "summary": "Community indicators by county and tract (CDC PLACES health estimates, CDC/ATSDR SVI), public schools (NCES), fixed broadband availability (FCC BDC via Esri) and housing assistance (HUD vouchers by tract, Qualified Census Tracts)",
+        "description": "op=health: CDC PLACES, 2025 release (data year 2023; 2022 for five measures), model-based estimates for 40 measures. level=county&measure=: every county's age-adjusted prevalence for one measure from one whole-measure pull (held a week), with national quintile `breaks`; join by `fips` onto county outlines (Connecticut in planning regions). level=tract&measure=&counties=: crude prevalence for every published tract of at most 6 counties, asked by countyfips (never within_box). level=place&fips=: every measure for one county, age-adjusted. A county or tract with no row is not published, never 0. Estimates, not counts of diagnosed people; not for ranking small differences. op=svi: CDC/ATSDR Social Vulnerability Index 2022 (ACS 2018-2022). level=county: every county's overall percentile (RPL_THEMES) and four theme percentiles (Socioeconomic Status, Household Characteristics, Racial and Ethnic Minority Status, Housing Type and Transportation) and F_TOTAL, attributes only, as compact rows { fips, name, state, rpl: [overall, theme1..theme4], flags } (held a week); join by `fips` onto county outlines (Connecticut in planning regions). level=tract&bbox=: SVI's own tract polygons (GeoJSON, simplified to 0.0005 degrees) in a box of at most 0.4 degrees snapped to 0.05, at most two pages of 2,000. level=place&fips=: one county (5 digits) or tract (11 digits) with the 16 estimates (EP_) and margins (MP_); 404 when CDC has no row. CDC's -999 ('not ranked': 778 tracts, 0 counties on 2026-10-16) is null at level=county and level=place (rankings, flags, estimates and margins), never 0; level=tract passes CDC's properties through as published, so an unranked tract carries the raw -999 in every RPL_ field and F_TOTAL: not ranked, never least vulnerable. A percentile among US counties (or tracts), 0 least to 1 most vulnerable; not FEMA's NRI social vulnerability (/api/hazards?op=nri, from the Census Community Resilience Estimate), and the two are never merged. op=schools&bbox=: NCES EDGE public schools, school year 2024-25 (EDGE_ADMINDATA_PUBLICSCH_2425), as a GeoJSON FeatureCollection of points in a box of at most 0.2 degrees (snapped to 0.05), at most two pages of 2,000, held a day: directory fields, enrollment (TOTAL), free or reduced-price lunch (TOTFRL), FTE and STUTERATIO as NCES publishes them; no race, sex or grade-level enrollment cell is requested. A negative is a CCD reporting code (-1 not reported, -2 not applicable), never 0. Inactive and Future schools are left out and counted in `hidden`. op=broadband: FCC Broadband Data Collection, December 2025, as Esri Policy Maps summarizes it (the summary layer is under the Esri Master License Agreement; the figures are the FCC's). level=county: every county's Broadband Serviceable Location counts as compact arrays, `columns` = [geoid, total, unserved, underserved, served, fiber, cable, ltfw, providers, unserved12] (two pages of 2,000, held a week); join by `geoid` onto county outlines. Connecticut is published only in its eight legacy counties (09001-09015), listed in meta.unmatched and never crosswalked; its planning regions have no row. level=hex&bbox=: BDC's own H3 resolution-8 hexagons (GeoJSON) in a box of at most 0.3 degrees snapped to 0.05, one page of 2,000; counts as published, including single-location hexagons. level=place&fips=: one county with every technology column, providers, Esri's 6- and 12-month-previous counts, and shares[] as named ratios of two published counts (null where TotalBSLs is 0); 404 when BDC has no row. Served, underserved and unserved are the FCC tiers by speed and technology; satellite and unlicensed fixed wireless count as unserved. Availability as providers report it: not subscription, not measured speed. op=housing: HUD's Housing Choice Vouchers by tract (GEOID, HCV_PUBLIC voucher households, HCV_PUBLIC_PCT HUD's share of 2020 Census renter-occupied units) and HUD's Qualified Census Tracts titled 2026 (GEOID), each on its own 2020 tract polygons; bbox=: a box of at most 0.3 degrees snapped to 0.05, one page of 2,000 each, as data { hcv, qct } FeatureCollections, held a week per box; only those named fields are read (never *). HCV_PUBLIC is null where HUD omits tracts with 10 or fewer voucher holders (47,463 of 85,154 tracts), never 0; every Connecticut tract (881, filed under the legacy counties) is null, which is 'not published', not suppression. QCT Connecticut tracts use planning-region codes. HUD titles the QCT list 2026; its item snippet says 2025 and its layer description 2024. level=place&fips=<11-digit tract>: { geoid, vouchers, share, status (published, suppressed, not-published-ct, not-in-layer), qct (true, false, or null: unknown for a Connecticut legacy-county tract code, which the planning-region QCT list never uses) }; 404 when neither layer has the tract.",
         "tags": [
           "civic"
         ],
@@ -3975,10 +4031,11 @@
                 "health",
                 "svi",
                 "schools",
-                "broadband"
+                "broadband",
+                "housing"
               ]
             },
-            "description": "health: CDC PLACES. svi: CDC/ATSDR Social Vulnerability Index 2022. schools: NCES public schools 2024-25. broadband: FCC Broadband Data Collection, December 2025, via Esri."
+            "description": "health: CDC PLACES. svi: CDC/ATSDR Social Vulnerability Index 2022. schools: NCES public schools 2024-25. broadband: FCC Broadband Data Collection, December 2025, via Esri. housing: HUD Housing Choice Vouchers by tract and Qualified Census Tracts (titled 2026), by box or one tract."
           },
           {
             "name": "level",
@@ -3993,7 +4050,7 @@
               ],
               "default": "county"
             },
-            "description": "op=health: county (one measure, every county), tract (one measure, up to 6 counties' tracts) or place (every measure, one county). op=svi: county (every county, attributes), tract (polygons in bbox) or place (one county or tract by fips). op=broadband: county (every county, attributes), hex (H3 hexagons in bbox) or place (one county by fips)."
+            "description": "op=health: county (one measure, every county), tract (one measure, up to 6 counties' tracts) or place (every measure, one county). op=svi: county (every county, attributes), tract (polygons in bbox) or place (one county or tract by fips). op=broadband: county (every county, attributes), hex (H3 hexagons in bbox) or place (one county by fips). op=housing: place (one tract by fips); omit level for a box."
           },
           {
             "name": "measure",
@@ -4061,7 +4118,7 @@
               "type": "string",
               "pattern": "^(\\d{5}|\\d{11})$"
             },
-            "description": "level=place: a five-digit county FIPS (op=health), or a five-digit county or 11-digit tract FIPS (op=svi). op=broadband&level=place: a five-digit county FIPS."
+            "description": "level=place: a five-digit county FIPS (op=health), or a five-digit county or 11-digit tract FIPS (op=svi). op=broadband&level=place: a five-digit county FIPS. op=housing&level=place: an 11-digit tract GEOID."
           },
           {
             "name": "bbox",
@@ -4069,7 +4126,7 @@
             "schema": {
               "$ref": "#/components/schemas/Bbox"
             },
-            "description": "op=svi&level=tract: `w,s,e,n`, at most 0.4 degrees a side around the box's centre, snapped outward to 0.05. op=schools: at most 0.2 degrees, snapped to 0.05. op=broadband&level=hex: at most 0.3 degrees, snapped to 0.05."
+            "description": "op=svi&level=tract: `w,s,e,n`, at most 0.4 degrees a side around the box's centre, snapped outward to 0.05. op=schools: at most 0.2 degrees, snapped to 0.05. op=broadband&level=hex: at most 0.3 degrees, snapped to 0.05. op=housing: `w,s,e,n`, at most 0.3 degrees a side around the box's centre, snapped outward to 0.05."
           }
         ],
         "responses": {
@@ -4098,6 +4155,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/CivicBroadbandResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CivicHousingResponse"
                     }
                   ]
                 }
@@ -10317,6 +10377,112 @@
           "ServedBSLsLTFW",
           "UniqueProviders",
           "UnservedBSLs_12monthPrevious"
+        ]
+      },
+      "HazardsHistoryResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "description": "{ fips, name, state, series: Series[], declarations: [{ disasterNumber, declarationType, declarationDate, incidentType, declarationTitle, incidentBeginDate, incidentEndDate, programs, designatedArea, placeCode, tribalRequest }], declarationRows, droughtNow: { mapDate, validStart, validEnd, none, d0, d1, d2, d3, d4 } | null, landslide: { prop_susc, susc_area, county_area, v2_ls_count, v2_density } | null, missing: [{ source, reason, detail? }] }; part=landslide: { fips, name, state, landslide, missing }"
+              },
+              "zeroFill": {
+                "type": "boolean",
+                "description": "whether a year with no FEMA declaration or SPC tornado is 0 (true) or absent (false, the default until the zero rule is decided)"
+              },
+              "notCounty": {
+                "type": "integer",
+                "description": "FEMA rows whose county code is 000 (tribal and statewide designations), attached to no county"
+              },
+              "unmatched": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "FEMA county codes that name no current county"
+              },
+              "ctRegime": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "description": "Connecticut planning regions: which geography each source publishes"
+              },
+              "asOf": {
+                "type": "object",
+                "description": "per source: when it was read, or its latest period"
+              }
+            }
+          }
+        ],
+        "x-op": "history",
+        "x-series": [
+          "fema:dr:<fips>",
+          "fema:em:<fips>",
+          "fema:fm:<fips>",
+          "usdm:dsci:<fips>",
+          "cag:tavg:<fips>",
+          "cag:pcp:<fips>",
+          "spc:tornadoes:<fips>"
+        ]
+      },
+      "CivicHousingResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "description": "bbox: { hcv: FeatureCollection (GEOID, HCV_PUBLIC, HCV_PUBLIC_PCT), qct: FeatureCollection (GEOID) }; level=place: { level, geoid, vouchers, share, status, qct }"
+              },
+              "count": {
+                "type": "integer"
+              },
+              "qctCount": {
+                "type": "integer"
+              },
+              "suppressed": {
+                "type": "integer",
+                "description": "voucher tracts in the box with HCV_PUBLIC null outside Connecticut (HUD: 10 or fewer, or none)"
+              },
+              "connecticutNotPublished": {
+                "type": "integer",
+                "description": "Connecticut voucher tracts in the box (every one null: not published)"
+              },
+              "shareBreaks": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "description": "the fixed percent breaks the globe uses for HUD's share: 2, 5, 10, 20, 40"
+              },
+              "countBreaks": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "description": "the fixed breaks for voucher households: 25, 50, 100, 250, 500"
+              },
+              "capped": {
+                "type": "boolean",
+                "description": "an answer was cut at 2,000 tracts"
+              }
+            }
+          }
+        ],
+        "x-op": "housing",
+        "x-feature-properties": [
+          "GEOID",
+          "HCV_PUBLIC",
+          "HCV_PUBLIC_PCT"
         ]
       },
       "HazardsWrcResponse": {

@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import { useSettings } from "@/lib/store/settings";
 import type { LayerId } from "@/lib/layers/types";
 import { NLCD_CLASSES, NWI_RASTER_CLASSES, SLR_LEGEND, WHP_CLASSES } from "@/lib/terrain/classes";
-import { SLR_DEFAULT_FT, SLR_FEET, isSlrFeet } from "@/lib/terrain/products";
+import { LANDSLIDE_SUSC_LEGEND, SLR_DEFAULT_FT, SLR_FEET, isSlrFeet } from "@/lib/terrain/products";
 import { releasesByYear, resolveRelease, type WaybackRelease } from "@/lib/terrain/wayback";
 import { resolveTopoYear, yearLabel } from "@/lib/terrain/topo";
 import { useTopoHere } from "@/lib/layers/topo";
@@ -16,7 +16,7 @@ import { useNaipHere } from "@/lib/layers/naip";
 import { resolveNaipYear } from "@/lib/terrain/naip";
 
 /** Layers that draw a tiled picture (their own, or the FEMA map under flood zones). */
-export const PICTURE_LAYERS = new Set<LayerId>(["relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "flood", "wetlands", "geology", "crithab", "wayback", "topo", "hydro", "naip"]);
+export const PICTURE_LAYERS = new Set<LayerId>(["relief", "slope", "contours", "soils", "firehazard", "landslidesusc", "landcover", "sealevel", "flood", "wetlands", "geology", "crithab", "wayback", "topo", "hydro", "naip"]);
 
 const DEFAULT_ALPHA: Partial<Record<LayerId, number>> = {
   naip: 1,
@@ -26,6 +26,7 @@ const DEFAULT_ALPHA: Partial<Record<LayerId, number>> = {
   contours: 0.9,
   soils: 0.9,
   firehazard: 0.65,
+  landslidesusc: 0.65,
   landcover: 0.7,
   sealevel: 0.75,
   flood: 0.8,
@@ -226,6 +227,7 @@ export default function TileControls({ id }: { id: LayerId }) {
         </label>
       )}
       {id === "firehazard" && <Swatches items={WHP_CLASSES} />}
+      {id === "landslidesusc" && <div>{LANDSLIDE_SUSC_LEGEND} Click the ground for the county&apos;s share of susceptible terrain.</div>}
       {id === "sealevel" && <Swatches items={SLR_LEGEND} />}
       {id === "landcover" && <Swatches items={NLCD_CLASSES.filter((c) => !/AK only/.test(c.label))} />}
       {id === "slope" && <div>USGS&apos;s colours: yellow to red is steeper; click the ground for the slope in degrees.</div>}

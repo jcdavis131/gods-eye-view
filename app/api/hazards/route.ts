@@ -45,6 +45,18 @@
 //   /api/hazards?op=wrc&level=fips&fips=08013 (or a 7-digit place GEOID)
 //                                         One county or community, attributes only; 404 "not
 //                                         in this release" when WRC has no row.
+//   /api/hazards?op=history&fips=48453[&years=1..131][&declarations=0..1000]
+//   /api/hazards?op=history&lon=-97.74&lat=30.27   (the county containing the point, TIGERweb 1:20M)
+//                                         County hazard history: FEMA OpenFEMA declarations
+//                                         per year by type (DR, EM, FM) and the list; USDM's
+//                                         weekly DSCI since 2000 and this week's D0-D4 shares;
+//                                         NOAA Climate at a Glance annual temperature and
+//                                         precipitation since 1895; SPC tornadoes per year since
+//                                         1950 and USGS landslide susceptibility (both baked,
+//                                         lib/hazards/data). One upstream failing is a caveat,
+//                                         not a 500. Connecticut's planning regions get drought
+//                                         only (the others publish legacy counties). part=landslide
+//                                         answers the baked landslide row alone, with no upstream.
 //
 // FIRMS confidence stays on each instrument's own scale: VIIRS low / nominal /
 // high, MODIS 0–100 %. Nothing here merges or rescales them.
@@ -113,6 +125,33 @@ import {
   wrcRow,
   type WrcRow,
 } from "@/lib/hazards/wrc";
+import { countyGeoidAt } from "@/lib/hazards/sources";
+import { polite, UpstreamError, upstreamJson } from "@/lib/server/upstream";
+import { countyByFips } from "@/lib/places/registry";
+import type { LandslideBake, SpcBake } from "@/lib/hazards/bake";
+import spcBakeJson from "@/lib/hazards/data/spc-tornado-county.json";
+import landslideBakeJson from "@/lib/hazards/data/landslide-county.json";
+import {
+  assembleHistory,
+  BAKED_ON,
+  BOUNDARY_CHANGED_SINCE_2010,
+  cagUrl,
+  CT_HISTORY_LINE,
+  CT_REGION,
+  FEMA_MAX,
+  femaUrl,
+  landslideLine,
+  parseCag,
+  parseDroughtNow,
+  parseDsci,
+  parseFema,
+  skips,
+  usdmCategoryUrl,
+  usdmDsciUrl,
+  type CagElement,
+  type MissingReason,
+  type Part,
+} from "@/lib/hazards/history";
 import { NRI_CAVEATS, NRI_CITATION, NRI_COUNTIES, NRI_COUNTY_FIELDS, NRI_MAX_PAGES, NRI_PAGE, NRI_SOVI_NOTE, NRI_TERMS, NRI_TRACT_BOX_DEG, NRI_TRACT_FIELDS, NRI_TRACTS } from "@/lib/hazards/nri";
 
 export const maxDuration = 60;
@@ -584,6 +623,79 @@ async function opWrcFips(fips: string): Promise<OpResult | null> {
   };
 }
 
+// ---------------------------------------------------------------- history (county hazard history)
+
+const SPC_BAKE = spcBakeJson as unknown as SpcBake;
+const LANDSLIDE_BAKE = landslideBakeJson as unknown as LandslideBake;
+const DAY_MS = 24 * 3600_000;
+/** One request every 300 ms to FEMA and to NCEI, 500 ms to USDM; a 429 or 503 closes the gate for ten minutes. */
+const FEMA_GATE = { gate: "fema-openfema", minIntervalMs: 300 };
+const USDM_GATE = { gate: "usdm", minIntervalMs: 500 };
+const CAG_GATE = { gate: "noaa-cag", minIntervalMs: 300 };
+const HISTORY_HELP =
+  "op=history needs fips=<5-digit county FIPS> or lon=&lat= (exactly one); optional years=1..131 (the last N calendar years; default all), declarations=0..1000 (how many declarations to list; default 1000) and part=landslide (the baked landslide row only)";
+
+function gatedJson(name: string, g: { gate: string; minIntervalMs: number }, url: string, timeoutMs = 20_000): Promise<unknown> {
+  return polite(g.gate, g.minIntervalMs, 600_000, () => upstreamJson(name, url, { timeoutMs }), [429, 503]);
+}
+
+/** One upstream through the cache; a failure becomes an error part (a caveat), a 404 a not-in-release skip. */
+async function part<T>(key: string, ttlMs: number, url: string, load: () => Promise<T>): Promise<Part<T>> {
+  try {
+    const r = await cached(key, ttlMs, load, { deadlineMs: 25_000, coolMs: 60_000 });
+    return { value: r.value, retrievedAt: fetchedAt(r.age), url };
+  } catch (err) {
+    if (err instanceof UpstreamError && err.status === 404) return { skip: "source:not_in_release" };
+    return { error: err instanceof Error ? err.message : String(err), url };
+  }
+}
+
+const skipPart = <T,>(reason: MissingReason): Part<T> => ({ skip: reason });
+
+async function opHistory(fips: string, years: number | null, declarationsCap: number, landslideOnly: boolean): Promise<OpResult> {
+  const c = countyByFips(fips)!;
+  if (landslideOnly) {
+    const ls = landslideLine(LANDSLIDE_BAKE, fips);
+    return {
+      data: { fips, name: c.name, state: c.stusab, landslide: ls.line, missing: ls.reason ? [{ source: "USGS landslide susceptibility", reason: ls.reason, detail: BOUNDARY_CHANGED_SINCE_2010[fips] }] : [] },
+      meta: { source: "USGS landslide susceptibility (2024), county table baked in lib/hazards/data", part: "landslide" },
+      ttlS: 86_400,
+      provenance: ls.line
+        ? [provenance(source("usgs-landslide-susc"), { kind: "published", seriesId: "county_analysis.csv (2010 counties), keyed by FIPS (lib/hazards/data/landslide-county.json)", upstreamUrl: LANDSLIDE_BAKE.meta.url, period: "2024 release", retrievedAt: `${BAKED_ON}T00:00:00.000Z`, notes: ["CC0 1.0"] })]
+        : [],
+      caveats: [
+        "USGS's 2024 slope-relief model: the share of the county's land that is susceptible terrain, not a forecast. Landslide counts are version 2 of USGS's inventory, whose mapping effort varies by state.",
+        ...(CT_REGION.test(fips) ? [CT_HISTORY_LINE] : []),
+      ],
+    };
+  }
+  const now = Date.now();
+  const sk = skips(fips, c.stusab);
+  const year = new Date(now).getUTCFullYear();
+  const cag = (el: CagElement) => {
+    const url = cagUrl(c.stusab, fips, el, year);
+    return sk.cag ? Promise.resolve(skipPart<ReturnType<typeof parseCag>>(sk.cag)) : part(`history:cag:${el}:${fips}`, WEEK_MS, url, async () => parseCag(await gatedJson("noaa-cag", CAG_GATE, url)));
+  };
+  const femaU = femaUrl(fips);
+  const dsciU = usdmDsciUrl(fips, now);
+  const catU = usdmCategoryUrl(fips, now);
+  const [fema, dsci, droughtNow, tavg, pcp] = await Promise.all([
+    sk.fema ? Promise.resolve(skipPart<ReturnType<typeof parseFema>>(sk.fema)) : part(`history:fema:${fips}`, DAY_MS, femaU, async () => parseFema(await gatedJson("fema-openfema", FEMA_GATE, femaU))),
+    part(`history:usdm:dsci:${fips}`, DAY_MS, dsciU, async () => parseDsci(await gatedJson("usdm", USDM_GATE, dsciU, 25_000))),
+    part(`history:usdm:now:${fips}`, DAY_MS, catU, async () => parseDroughtNow(await gatedJson("usdm", USDM_GATE, catU))),
+    cag("tavg"),
+    cag("pcp"),
+  ]);
+  const a = assembleHistory({ fips, name: c.name, stusab: c.stusab, now, years, declarationsCap, fema, dsci, droughtNow, tavg, pcp, spc: SPC_BAKE, landslide: LANDSLIDE_BAKE });
+  return {
+    data: a.data,
+    meta: { source: "FEMA OpenFEMA, U.S. Drought Monitor, NOAA NCEI Climate at a Glance, NOAA SPC, USGS", ...a.meta, count: a.data.series.length, declarationsListed: a.data.declarations.length },
+    ttlS: 3600,
+    provenance: a.provenance,
+    caveats: a.caveats,
+  };
+}
+
 function respond(r: OpResult) {
   return ok(r.data, { meta: r.meta, provenance: r.provenance, caveats: r.caveats, ttlS: r.ttlS });
 }
@@ -634,8 +746,34 @@ export async function GET(req: NextRequest) {
         }
         return badRequest(WRC_HELP);
       }
+      case "history": {
+        const fipsQ = q.get("fips");
+        const lonQ = q.get("lon");
+        const latQ = q.get("lat");
+        const yearsQ = q.get("years");
+        const declQ = q.get("declarations");
+        const partQ = q.get("part");
+        if ((fipsQ != null) === (lonQ != null || latQ != null)) return badRequest(HISTORY_HELP);
+        if (partQ != null && partQ !== "landslide") return badRequest(HISTORY_HELP);
+        const years = yearsQ == null ? null : Number(yearsQ);
+        if (years != null && !(Number.isInteger(years) && years >= 1 && years <= 131)) return badRequest(HISTORY_HELP);
+        const decl = declQ == null ? FEMA_MAX : Number(declQ);
+        if (!(Number.isInteger(decl) && decl >= 0 && decl <= FEMA_MAX)) return badRequest(HISTORY_HELP);
+        let fips = fipsQ ?? "";
+        if (fipsQ == null) {
+          const lon = Number(lonQ);
+          const lat = Number(latQ);
+          if (lonQ == null || latQ == null || !(Number.isFinite(lon) && Number.isFinite(lat) && Math.abs(lon) <= 180 && Math.abs(lat) <= 90)) return badRequest(HISTORY_HELP);
+          const g = await countyGeoidAt(lon, lat);
+          if (!g) return notFound(`no county: TIGERweb places no county at ${lon}, ${lat}`);
+          fips = g;
+        }
+        if (!/^\d{5}$/.test(fips)) return badRequest(HISTORY_HELP);
+        if (!countyByFips(fips)) return notFound(`not a current county: ${fips} is not one of the 3,222 county equivalents in Census's 2023 geography (Connecticut in planning regions 09110-09190)`);
+        return respond(await opHistory(fips, years, decl, partQ === "landslide"));
+      }
       default:
-        return badRequest(`unknown op: wildfire | fires | alerts | nri | wrc (FIRMS files: ${FIRMS_FILES.map((f) => f.id).join(", ")})`);
+        return badRequest(`unknown op: wildfire | fires | alerts | nri | wrc | history (FIRMS files: ${FIRMS_FILES.map((f) => f.id).join(", ")})`);
     }
   } catch (err) {
     return withCors(jsonError(err));

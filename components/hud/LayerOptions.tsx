@@ -4,7 +4,8 @@
 // "Landmarks only" chip on Historic places, the CDC PLACES measure picker, and
 // the CDC/ATSDR SVI theme picker with its fixed-break legend, and the
 // "Closed too" chip on Hospitals, the broadband measure picker, the wildfire
-// risk rank picker, and the Trust land (BIA) legend.
+// risk rank picker, the Trust land (BIA) legend, and the housing measure
+// picker with HUD's suppression line.
 
 import type { LayerId } from "@/lib/layers/types";
 import { useSettings } from "@/lib/store/settings";
@@ -14,9 +15,10 @@ import { parseSviTheme, SVI_BIN_COLORS, SVI_BIN_LABELS, SVI_NO_RANK_EDGE, SVI_TH
 import { BROADBAND_BIN_COLORS, BROADBAND_MEASURES, BROADBAND_NO_DATA_EDGE, binLabelsFor, parseBroadbandMeasure } from "@/lib/civic/broadband";
 import { parseWrcMeasure, parseWrcScope, WRC_BIN_COLORS, WRC_BIN_LABELS, WRC_NO_RANK_EDGE, WRC_RANKS } from "@/lib/hazards/wrc";
 import { TRIBAL_COLOR } from "@/lib/land/tribal";
+import { HOUSING_BIN_COLORS, HOUSING_MEASURES, HOUSING_NO_DATA_EDGE, HOUSING_SUPPRESSED_FILL, housingBinLabels, parseHousingMeasure, QCT_EDGE, SUPPRESSED_LEGEND } from "@/lib/civic/housing";
 
 /** Layers with controls here. */
-export const OPTION_LAYERS = new Set<LayerId>(["riskindex", "historic", "health", "vulnerability", "hospitals", "broadband", "wildfirerisk", "tribal"]);
+export const OPTION_LAYERS = new Set<LayerId>(["riskindex", "historic", "health", "vulnerability", "hospitals", "broadband", "wildfirerisk", "tribal", "housing"]);
 
 function RiskPicker() {
   const pick = parseNriPick(useSettings((s) => s.prefs.nriHazard));
@@ -218,6 +220,51 @@ function BroadbandPicker() {
   );
 }
 
+function HousingPicker() {
+  const m = parseHousingMeasure(useSettings((s) => s.prefs.housingMeasure));
+  const setPref = useSettings((s) => s.setPref);
+  return (
+    <>
+      <label className="flex items-center gap-2">
+        <span className="w-14 shrink-0 uppercase tracking-widest">Measure</span>
+        <select
+          value={String(m)}
+          onChange={(e) => setPref("housingMeasure", e.target.value)}
+          className="min-w-0 flex-1 border border-border bg-transparent px-1 py-0.5 text-foreground"
+          aria-label="HUD housing vouchers: measure drawn"
+        >
+          {HOUSING_MEASURES.map((x, i) => (
+            <option key={x.id} value={String(i)} className="bg-background">
+              {x.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <ul className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
+        {HOUSING_BIN_COLORS.map((c, i) => (
+          <li key={c} className="flex items-center gap-1 text-[9px] text-muted-foreground">
+            <span className="inline-block size-2 shrink-0 border border-black/40" style={{ background: c }} aria-hidden />
+            {housingBinLabels(m)[i]}
+          </li>
+        ))}
+        <li className="flex items-center gap-1 text-[9px] text-muted-foreground">
+          <span className="inline-block size-2 shrink-0 border border-dashed opacity-60" style={{ background: HOUSING_SUPPRESSED_FILL, borderColor: HOUSING_NO_DATA_EDGE }} aria-hidden />
+          {SUPPRESSED_LEGEND}
+        </li>
+        <li className="flex items-center gap-1 text-[9px] text-muted-foreground">
+          <span className="inline-block size-2 shrink-0 border border-dashed" style={{ borderColor: HOUSING_NO_DATA_EDGE }} aria-hidden />
+          not published for Connecticut
+        </li>
+        <li className="flex items-center gap-1 text-[9px] text-muted-foreground">
+          <span className="inline-block size-2 shrink-0 border-2 border-dashed" style={{ borderColor: QCT_EDGE }} aria-hidden />
+          Qualified Census Tract (HUD, titled 2026)
+        </li>
+      </ul>
+      <div>Housing Choice Voucher households per 2020 tract, through December 2025. The share is HUD&apos;s: vouchers over renter-occupied units (2020 Census). A Qualified Census Tract is a tax-credit designation, not a measure of conditions. Below 100 km, in a box around the view.</div>
+    </>
+  );
+}
+
 function WrcPicker() {
   const m = parseWrcMeasure(useSettings((s) => s.prefs.wrcMeasure));
   const scope = parseWrcScope(useSettings((s) => s.prefs.wrcScope));
@@ -289,5 +336,5 @@ function TribalLegend() {
 
 export default function LayerOptions({ id }: { id: LayerId }) {
   if (!OPTION_LAYERS.has(id)) return null;
-  return <div className="mt-1.5 space-y-1 pl-4 text-[10px] text-muted-foreground md:text-[9px]">{id === "riskindex" && <RiskPicker />}{id === "historic" && <LandmarksChip />}{id === "health" && <MeasurePicker />}{id === "vulnerability" && <SviThemePicker />}{id === "hospitals" && <ClosedHospitalsChip />}{id === "broadband" && <BroadbandPicker />}{id === "wildfirerisk" && <WrcPicker />}{id === "tribal" && <TribalLegend />}</div>;
+  return <div className="mt-1.5 space-y-1 pl-4 text-[10px] text-muted-foreground md:text-[9px]">{id === "riskindex" && <RiskPicker />}{id === "historic" && <LandmarksChip />}{id === "health" && <MeasurePicker />}{id === "vulnerability" && <SviThemePicker />}{id === "hospitals" && <ClosedHospitalsChip />}{id === "broadband" && <BroadbandPicker />}{id === "wildfirerisk" && <WrcPicker />}{id === "tribal" && <TribalLegend />}{id === "housing" && <HousingPicker />}</div>;
 }

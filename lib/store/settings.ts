@@ -148,6 +148,8 @@ export interface Prefs {
   sviTheme: string;
   /** Broadband: the measure drawn, "0" unserved share, "1" underserved share, "2" fiber share, "3" providers. */
   broadbandMeasure: string;
+  /** Housing assistance: the measure drawn, "0" HUD's share of renter units, "1" voucher households. */
+  housingMeasure: string;
   /** Wildfire risk ranks: the WRC rank family drawn, "0" RISK, "1" BP, "2" WHP, "3" EA_HURISK. */
   wrcMeasure: string;
   /** Wildfire risk ranks: national or state rank. */
@@ -188,6 +190,7 @@ export const DEFAULT_PREFS: Prefs = {
   placesMeasure: "DIABETES",
   sviTheme: "0",
   broadbandMeasure: "0",
+  housingMeasure: "0",
   wrcMeasure: "0",
   wrcScope: "national",
   hospitalStatus: "open",

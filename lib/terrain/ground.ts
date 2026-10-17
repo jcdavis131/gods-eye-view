@@ -7,6 +7,9 @@
 //
 //   soils       /api/soil?op=point           map unit, farmland class, NCCPI
 //   firehazard  /api/terrain?op=point        WHP 2023 class
+//   landslidesusc /api/hazards?op=history&part=landslide  the county's share of
+//                                            susceptible terrain (USGS 2024); the class
+//                                            under the click is not reported (no identify)
 //   landcover   /api/terrain?op=point        NLCD 2021 class
 //   slope       /api/terrain?op=point        3DEP slope, degrees
 //   relief,     /api/land?op=elevation       3DEP ground elevation and the
@@ -43,11 +46,12 @@ import { resolveTopoYear, sheetText, type TopoSheet, type TopoYear } from "./top
 import { captureText, parseReleaseId, zoomForHeight, type WaybackCapture } from "./wayback";
 import { reachDetails, type Reach } from "@/lib/water/nldi";
 import { naipItemText, resolveNaipYear, type NaipYear } from "./naip";
+import type { LandslideLine, MissingReason } from "@/lib/hazards/history";
 
 /** Above this camera height a ground click is not a question about the ground. */
 export const GROUND_MAX_HEIGHT_M = 150_000;
 
-export type GroundPart = "soils" | "firehazard" | "landcover" | "slope" | "elevation" | "geology" | "crithab" | "topo" | "wayback" | "hydro" | "naip";
+export type GroundPart = "soils" | "firehazard" | "landslidesusc" | "landcover" | "slope" | "elevation" | "geology" | "crithab" | "topo" | "wayback" | "hydro" | "naip";
 
 export interface PartState {
   loading: boolean;
@@ -76,6 +80,7 @@ export const useGroundPick = create<PickState>()((set) => ({
 const PART_OF: Partial<Record<LayerId, GroundPart>> = {
   soils: "soils",
   firehazard: "firehazard",
+  landslidesusc: "landslidesusc",
   landcover: "landcover",
   slope: "slope",
   contours: "elevation",
@@ -110,6 +115,7 @@ export function groundId(lon: number, lat: number): string {
 const SOURCE_OF: Record<GroundPart, string> = {
   soils: "NRCS SSURGO",
   firehazard: "USFS WHP 2023",
+  landslidesusc: "USGS landslide susceptibility 2024",
   landcover: "MRLC NLCD 2021",
   slope: "USGS 3DEP",
   elevation: "USGS 3DEP EPQS",
@@ -160,6 +166,8 @@ export function groundDetails(p: Pick<GroundPick, "lon" | "lat" | "parts">): Det
     const c = whp.data as ClassAnswer | null;
     d["wildfire hazard potential"] = c ? `${c.label} (class ${c.code} of WHP 2023)` : "no class here (WHP covers the conterminous US)";
   }
+  const ls = p.parts.landslidesusc;
+  if (ls && !waiting(d, "landslide susceptibility", ls, "USGS (county table)")) Object.assign(d, landslideGroundLines(ls.data as LandslideGroundAnswer | null));
   const lc = p.parts.landcover;
   if (lc && !waiting(d, "land cover", lc, "MRLC")) {
     const c = lc.data as ClassAnswer | null;
@@ -276,6 +284,43 @@ export function groundDetails(p: Pick<GroundPick, "lon" | "lat" | "parts">): Det
   return d;
 }
 
+/** What /api/hazards?op=history&part=landslide answers for the county under a click. */
+export interface LandslideGroundAnswer {
+  fips: string;
+  name: string;
+  state: string;
+  landslide: LandslideLine | null;
+  missing: Array<{ source: string; reason: MissingReason; detail?: string }>;
+}
+
+/** The county's landslide lines for the ground dossier; the class under the click is never reported. */
+export function landslideGroundLines(a: LandslideGroundAnswer | null): Details {
+  const d: Details = {};
+  if (!a) {
+    d["landslide susceptibility"] = "no county here";
+    return d;
+  }
+  const where = `${a.name}, ${a.state}`;
+  const l = a.landslide;
+  if (!l) {
+    const r = a.missing[0]?.reason;
+    d["landslide susceptibility"] =
+      r === "join:legacy_ct_counties"
+        ? `not published for ${where}: USGS's county table uses Connecticut's old counties`
+        : r === "join:boundary_changed_since_2010"
+          ? `not published for ${where}: USGS's county table is on 2010 counties and this one's boundary changed since`
+          : `not in USGS's county table for ${where}`;
+  } else {
+    d["landslide susceptibility"] =
+      l.prop_susc == null
+        ? `${where}: share not published`
+        : `${(l.prop_susc * 100).toFixed(1)} % of ${where} is susceptible terrain (USGS 2024${l.susc_area != null && l.county_area != null ? `, ${Math.round(l.susc_area).toLocaleString("en-US")} of ${Math.round(l.county_area).toLocaleString("en-US")} km2 of land` : ""})`;
+    if (l.v2_ls_count != null) d["mapped landslides (USGS inventory v2)"] = `${l.v2_ls_count.toLocaleString("en-US")} in the county's susceptible terrain (mapping effort varies by state; version 2 of USGS's inventory, not the Landslides layer's version 3)`;
+  }
+  d["landslide note"] = "a county share from USGS's table; the class drawn under the click is not reported (the tile service has no identify)";
+  return d;
+}
+
 /** The dossier feature for a pick. */
 export function groundFeature(p: GroundPick): LayerFeature {
   const asked = (Object.keys(p.parts) as GroundPart[]).map((k) => SOURCE_OF[k]);
@@ -348,6 +393,7 @@ export interface TopoAnswer {
 const ASK: Record<GroundPart, (lon: string, lat: string) => Promise<unknown>> = {
   soils: async (lon, lat) => (await getJson(`/api/soil?op=point&lon=${lon}&lat=${lat}`)).data ?? null,
   firehazard: async (lon, lat) => ((await getJson(`/api/terrain?op=point&product=firehazard&lon=${lon}&lat=${lat}`)).data as { class?: unknown })?.class ?? null,
+  landslidesusc: async (lon, lat) => (await getJson(`/api/hazards?op=history&lon=${lon}&lat=${lat}&part=landslide`)).data ?? null,
   landcover: async (lon, lat) => ((await getJson(`/api/terrain?op=point&product=landcover&lon=${lon}&lat=${lat}`)).data as { class?: unknown })?.class ?? null,
   slope: async (lon, lat) => ((await getJson(`/api/terrain?op=point&product=slope&lon=${lon}&lat=${lat}`)).data as { degrees?: unknown })?.degrees ?? null,
   elevation: async (lon, lat) => (await getJson(`/api/land?op=elevation&lon=${lon}&lat=${lat}`)).data ?? null,
