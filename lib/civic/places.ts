@@ -4,9 +4,9 @@
 // SoQL for each call, the row parsers, the joins and the quantile bins. The
 // route is /api/civic?op=health.
 //
-//   county  one whole-measure pull per measure, age-adjusted (2,958 counties
-//           for most measures, 3,145 for the five 2022 ones, 2,300 for the
-//           social-needs module), joined by FIPS onto the shared county
+//   county  one whole-measure pull per measure, age-adjusted (2,957 counties
+//           for most measures, 3,144 for the five 2022 ones, 2,299 for the
+//           social-needs module, plus one national row the parser drops), joined by FIPS onto the shared county
 //           outlines (lib/layers/areas.ts); never a per-location or
 //           within_box query in a pan path (one cold per-location call took
 //           13.8 s on 2026-10-16, a within_box 19.6 s)
@@ -29,48 +29,48 @@ export const PLACES_CAVEAT =
   "Model-based estimates from CDC's BRFSS survey, ACS and the Census population; they are not counts of diagnosed people and are not for ranking small differences. Tracts with very small populations are not published.";
 export const PLACES_ATTRIBUTION = "Centers for Disease Control and Prevention, PLACES: Local Data for Better Health, 2025 release";
 
-/** The 40 measures (data.cdc.gov swc5-untb, grouped by measureid on 2026-10-16): CDC's wording, short name, category, data year and how many counties have an age-adjusted row. */
+/** The 40 measures (data.cdc.gov swc5-untb, grouped by measureid on 2026-10-16): CDC's wording, short name, category, data year and how many age-adjusted rows CDC publishes (the counties with a value, plus one national row, locationid 59 "US", which the parser drops). */
 export const PLACES_MEASURES = {
-  "ACCESS2": { name: "Current lack of health insurance among adults aged 18-64 years", short: "Health Insurance", category: "Prevention", year: 2023, counties: 2958 },
-  "ARTHRITIS": { name: "Arthritis among adults", short: "Arthritis", category: "Health Outcomes", year: 2023, counties: 2958 },
-  "BINGE": { name: "Binge drinking among adults", short: "Binge Drinking", category: "Health Risk Behaviors", year: 2023, counties: 2958 },
-  "BPHIGH": { name: "High blood pressure among adults", short: "High Blood Pressure", category: "Health Outcomes", year: 2023, counties: 2958 },
-  "BPMED": { name: "Taking medicine to control high blood pressure among adults with high blood pressure", short: "High Blood Pressure Medication", category: "Prevention", year: 2023, counties: 2958 },
-  "CANCER": { name: "Cancer (non-skin) or melanoma among adults", short: "Cancer (non-skin) or Melanoma", category: "Health Outcomes", year: 2023, counties: 2958 },
-  "CASTHMA": { name: "Current asthma among adults", short: "Current Asthma", category: "Health Outcomes", year: 2023, counties: 2958 },
-  "CHD": { name: "Coronary heart disease among adults", short: "Coronary Heart Disease", category: "Health Outcomes", year: 2023, counties: 2958 },
-  "CHECKUP": { name: "Visits to doctor for routine checkup within the past year among adults", short: "Annual Checkup", category: "Prevention", year: 2023, counties: 2958 },
-  "CHOLSCREEN": { name: "Cholesterol screening among adults", short: "Cholesterol Screening", category: "Prevention", year: 2023, counties: 2958 },
-  "COGNITION": { name: "Cognitive disability among adults", short: "Cognitive Disability", category: "Disability", year: 2023, counties: 2958 },
-  "COLON_SCREEN": { name: "Colorectal cancer screening among adults aged 45–75 years", short: "Colorectal Cancer Screening", category: "Prevention", year: 2022, counties: 3145 },
-  "COPD": { name: "Chronic obstructive pulmonary disease among adults", short: "COPD", category: "Health Outcomes", year: 2023, counties: 2958 },
-  "CSMOKING": { name: "Current cigarette smoking among adults", short: "Current Cigarette Smoking", category: "Health Risk Behaviors", year: 2023, counties: 2958 },
-  "DENTAL": { name: "Visited dentist or dental clinic in the past year among adults", short: "Dental Visit", category: "Prevention", year: 2022, counties: 3145 },
-  "DEPRESSION": { name: "Depression among adults", short: "Depression", category: "Health Outcomes", year: 2023, counties: 2958 },
-  "DIABETES": { name: "Diagnosed diabetes among adults", short: "Diabetes", category: "Health Outcomes", year: 2023, counties: 2958 },
-  "DISABILITY": { name: "Any disability among adults", short: "Any Disability", category: "Disability", year: 2023, counties: 2958 },
-  "EMOTIONSPT": { name: "Lack of social and emotional support among adults", short: "Lack of Social/Emotional Support", category: "Health-Related Social Needs", year: 2023, counties: 2300 },
-  "FOODINSECU": { name: "Food insecurity in the past 12 months among adults", short: "Food Insecurity", category: "Health-Related Social Needs", year: 2023, counties: 2300 },
-  "FOODSTAMP": { name: "Received food stamps in the past 12 months among adults", short: "Food Stamps", category: "Health-Related Social Needs", year: 2023, counties: 2300 },
-  "GHLTH": { name: "Fair or poor self-rated health status among adults", short: "General Health", category: "Health Status", year: 2023, counties: 2958 },
-  "HEARING": { name: "Hearing disability among adults", short: "Hearing Disability", category: "Disability", year: 2023, counties: 2958 },
-  "HIGHCHOL": { name: "High cholesterol among adults who have ever been screened", short: "High Cholesterol", category: "Health Outcomes", year: 2023, counties: 2958 },
-  "HOUSINSECU": { name: "Housing insecurity in the past 12 months among adults", short: "Housing Insecurity", category: "Health-Related Social Needs", year: 2023, counties: 2300 },
-  "INDEPLIVE": { name: "Independent living disability among adults", short: "Independent Living Disability", category: "Disability", year: 2023, counties: 2958 },
-  "LACKTRPT": { name: "Lack of reliable transportation in the past 12 months among adults", short: "Transportation Barriers", category: "Health-Related Social Needs", year: 2023, counties: 2300 },
-  "LONELINESS": { name: "Loneliness among adults", short: "Loneliness", category: "Health-Related Social Needs", year: 2023, counties: 2300 },
-  "LPA": { name: "No leisure-time physical activity among adults", short: "Physical Inactivity", category: "Health Risk Behaviors", year: 2023, counties: 2958 },
-  "MAMMOUSE": { name: "Mammography use among women aged 50-74 years", short: "Mammography", category: "Prevention", year: 2022, counties: 3145 },
-  "MHLTH": { name: "Frequent mental distress among adults", short: "Frequent Mental Distress", category: "Health Status", year: 2023, counties: 2958 },
-  "MOBILITY": { name: "Mobility disability among adults", short: "Mobility Disability", category: "Disability", year: 2023, counties: 2958 },
-  "OBESITY": { name: "Obesity among adults", short: "Obesity", category: "Health Outcomes", year: 2023, counties: 2958 },
-  "PHLTH": { name: "Frequent physical distress among adults", short: "Frequent Physical Distress", category: "Health Status", year: 2023, counties: 2958 },
-  "SELFCARE": { name: "Self-care disability among adults", short: "Self-care Disability", category: "Disability", year: 2023, counties: 2958 },
-  "SHUTUTILITY": { name: "Utility services shut-off threat in the past 12 months among adults", short: "Utility Services Threat", category: "Health-Related Social Needs", year: 2023, counties: 2300 },
-  "SLEEP": { name: "Short sleep duration among adults", short: "Short Sleep Duration", category: "Health Risk Behaviors", year: 2022, counties: 3145 },
-  "STROKE": { name: "Stroke among adults", short: "Stroke", category: "Health Outcomes", year: 2023, counties: 2958 },
-  "TEETHLOST": { name: "All teeth lost among adults aged >=65 years", short: "All Teeth Lost", category: "Health Outcomes", year: 2022, counties: 3145 },
-  "VISION": { name: "Vision disability among adults", short: "Vision Disability", category: "Disability", year: 2023, counties: 2958 },
+  "ACCESS2": { name: "Current lack of health insurance among adults aged 18-64 years", short: "Health Insurance", category: "Prevention", year: 2023, rows: 2958 },
+  "ARTHRITIS": { name: "Arthritis among adults", short: "Arthritis", category: "Health Outcomes", year: 2023, rows: 2958 },
+  "BINGE": { name: "Binge drinking among adults", short: "Binge Drinking", category: "Health Risk Behaviors", year: 2023, rows: 2958 },
+  "BPHIGH": { name: "High blood pressure among adults", short: "High Blood Pressure", category: "Health Outcomes", year: 2023, rows: 2958 },
+  "BPMED": { name: "Taking medicine to control high blood pressure among adults with high blood pressure", short: "High Blood Pressure Medication", category: "Prevention", year: 2023, rows: 2958 },
+  "CANCER": { name: "Cancer (non-skin) or melanoma among adults", short: "Cancer (non-skin) or Melanoma", category: "Health Outcomes", year: 2023, rows: 2958 },
+  "CASTHMA": { name: "Current asthma among adults", short: "Current Asthma", category: "Health Outcomes", year: 2023, rows: 2958 },
+  "CHD": { name: "Coronary heart disease among adults", short: "Coronary Heart Disease", category: "Health Outcomes", year: 2023, rows: 2958 },
+  "CHECKUP": { name: "Visits to doctor for routine checkup within the past year among adults", short: "Annual Checkup", category: "Prevention", year: 2023, rows: 2958 },
+  "CHOLSCREEN": { name: "Cholesterol screening among adults", short: "Cholesterol Screening", category: "Prevention", year: 2023, rows: 2958 },
+  "COGNITION": { name: "Cognitive disability among adults", short: "Cognitive Disability", category: "Disability", year: 2023, rows: 2958 },
+  "COLON_SCREEN": { name: "Colorectal cancer screening among adults aged 45–75 years", short: "Colorectal Cancer Screening", category: "Prevention", year: 2022, rows: 3145 },
+  "COPD": { name: "Chronic obstructive pulmonary disease among adults", short: "COPD", category: "Health Outcomes", year: 2023, rows: 2958 },
+  "CSMOKING": { name: "Current cigarette smoking among adults", short: "Current Cigarette Smoking", category: "Health Risk Behaviors", year: 2023, rows: 2958 },
+  "DENTAL": { name: "Visited dentist or dental clinic in the past year among adults", short: "Dental Visit", category: "Prevention", year: 2022, rows: 3145 },
+  "DEPRESSION": { name: "Depression among adults", short: "Depression", category: "Health Outcomes", year: 2023, rows: 2958 },
+  "DIABETES": { name: "Diagnosed diabetes among adults", short: "Diabetes", category: "Health Outcomes", year: 2023, rows: 2958 },
+  "DISABILITY": { name: "Any disability among adults", short: "Any Disability", category: "Disability", year: 2023, rows: 2958 },
+  "EMOTIONSPT": { name: "Lack of social and emotional support among adults", short: "Lack of Social/Emotional Support", category: "Health-Related Social Needs", year: 2023, rows: 2300 },
+  "FOODINSECU": { name: "Food insecurity in the past 12 months among adults", short: "Food Insecurity", category: "Health-Related Social Needs", year: 2023, rows: 2300 },
+  "FOODSTAMP": { name: "Received food stamps in the past 12 months among adults", short: "Food Stamps", category: "Health-Related Social Needs", year: 2023, rows: 2300 },
+  "GHLTH": { name: "Fair or poor self-rated health status among adults", short: "General Health", category: "Health Status", year: 2023, rows: 2958 },
+  "HEARING": { name: "Hearing disability among adults", short: "Hearing Disability", category: "Disability", year: 2023, rows: 2958 },
+  "HIGHCHOL": { name: "High cholesterol among adults who have ever been screened", short: "High Cholesterol", category: "Health Outcomes", year: 2023, rows: 2958 },
+  "HOUSINSECU": { name: "Housing insecurity in the past 12 months among adults", short: "Housing Insecurity", category: "Health-Related Social Needs", year: 2023, rows: 2300 },
+  "INDEPLIVE": { name: "Independent living disability among adults", short: "Independent Living Disability", category: "Disability", year: 2023, rows: 2958 },
+  "LACKTRPT": { name: "Lack of reliable transportation in the past 12 months among adults", short: "Transportation Barriers", category: "Health-Related Social Needs", year: 2023, rows: 2300 },
+  "LONELINESS": { name: "Loneliness among adults", short: "Loneliness", category: "Health-Related Social Needs", year: 2023, rows: 2300 },
+  "LPA": { name: "No leisure-time physical activity among adults", short: "Physical Inactivity", category: "Health Risk Behaviors", year: 2023, rows: 2958 },
+  "MAMMOUSE": { name: "Mammography use among women aged 50-74 years", short: "Mammography", category: "Prevention", year: 2022, rows: 3145 },
+  "MHLTH": { name: "Frequent mental distress among adults", short: "Frequent Mental Distress", category: "Health Status", year: 2023, rows: 2958 },
+  "MOBILITY": { name: "Mobility disability among adults", short: "Mobility Disability", category: "Disability", year: 2023, rows: 2958 },
+  "OBESITY": { name: "Obesity among adults", short: "Obesity", category: "Health Outcomes", year: 2023, rows: 2958 },
+  "PHLTH": { name: "Frequent physical distress among adults", short: "Frequent Physical Distress", category: "Health Status", year: 2023, rows: 2958 },
+  "SELFCARE": { name: "Self-care disability among adults", short: "Self-care Disability", category: "Disability", year: 2023, rows: 2958 },
+  "SHUTUTILITY": { name: "Utility services shut-off threat in the past 12 months among adults", short: "Utility Services Threat", category: "Health-Related Social Needs", year: 2023, rows: 2300 },
+  "SLEEP": { name: "Short sleep duration among adults", short: "Short Sleep Duration", category: "Health Risk Behaviors", year: 2022, rows: 3145 },
+  "STROKE": { name: "Stroke among adults", short: "Stroke", category: "Health Outcomes", year: 2023, rows: 2958 },
+  "TEETHLOST": { name: "All teeth lost among adults aged >=65 years", short: "All Teeth Lost", category: "Health Outcomes", year: 2022, rows: 3145 },
+  "VISION": { name: "Vision disability among adults", short: "Vision Disability", category: "Disability", year: 2023, rows: 2958 },
 } as const;
 
 export type PlacesMeasure = keyof typeof PLACES_MEASURES;

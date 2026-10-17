@@ -2,8 +2,8 @@
 // (swc5-untb grouped by measureid), Travis County's every-measure answer (the critique's
 // places_cty.body), Capitol Planning Region's (09110) DIABETES tracts, fabric's TIGER tracts for
 // a Hartford box (eye.jcamd.com), and the whole-measure DIABETES pull trimmed to the seven
-// Northeast states the county-outline fixture covers (135 of its 2,958 rows; the full count is
-// in the measure list). Fixtures are minified; values are as CDC sent them.
+// Northeast states the county-outline fixture covers (135 of its 2,958 rows, 2,957 counties and the national row; the full
+// count is in the measure list). Fixtures are minified; values are as CDC sent them.
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -27,9 +27,9 @@ describe("the PLACES measure list", () => {
     for (const r of rows) {
       const m = PLACES_MEASURES[r.measureid as keyof typeof PLACES_MEASURES];
       expect(m, r.measureid).toBeDefined();
-      expect(m).toMatchObject({ name: r.measure, short: r.short_question_text, category: r.category, year: Number(r.year), counties: Number(r.count) });
+      expect(m).toMatchObject({ name: r.measure, short: r.short_question_text, category: r.category, year: Number(r.year), rows: Number(r.count) });
     }
-    expect(PLACES_MEASURES.DIABETES.counties).toBe(2958);
+    expect(PLACES_MEASURES.DIABETES.rows).toBe(2958);
     for (const s of SOCIAL_NEEDS) expect(PLACES_MEASURES[s].category).toBe("Health-Related Social Needs");
   });
 });
