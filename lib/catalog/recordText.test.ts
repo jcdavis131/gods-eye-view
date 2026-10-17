@@ -126,7 +126,7 @@ describe("record text", () => {
     const lar = recordFixtures().find((r) => r.card === "bia-lar")!.features;
     const wind = lar.find((f) => f.properties.name === "Wind River");
     expect(receivedRecordText(wind!.properties)).toBe("BIA land area: Wind River; BIA trust land area, BIA region: Rocky Mountain");
-    const wrc = buildWrcPlaces((wrcBoulder as { features: never[] }).features, 0, "national");
+    const wrc = buildWrcPlaces((wrcBoulder as unknown as { features: never[] }).features, 0, "national");
     const texts = new Set(wrc.map((f) => receivedRecordText(f.properties)));
     expect(texts).toContain("state: CO; wildfire risk community, national risk rank: 95 or more percentile; wildfire likelihood (burn probability), national rank: 95 or more percentile");
     // The excluded community: not ranked, never low, with USFS's reason.
