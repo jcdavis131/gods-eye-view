@@ -68,6 +68,13 @@ export const EMBED_TEXT = {
   "wrc-counties": ["STUSPS"],
   "wrc-communities": ["STUSPS", "exclude_re"],
   "bia-lar": ["LARNAME"],
+  "fema-declarations": ["incidentType", "declarationType"],
+  "usdm-county-dsci": [],
+  "noaa-cag-county": [],
+  "spc-tornado-county": [],
+  "hud-hcv-tracts": [],
+  "hud-qct": [],
+  "usgs-landslide-susc": [],
 } satisfies Record<string, string[]>;
 
 export type CollectionId = keyof typeof EMBED_TEXT;
@@ -276,6 +283,9 @@ export const FIELD_LABEL: Readonly<Record<string, string>> = {
   exclude_re: "not ranked by USFS because",
   // BIA LAR. REGION is not embedded: its label is NPS's ("NPS region"), and BIA's regions are not NPS's.
   LARNAME: "BIA land area",
+  // OpenFEMA declarations (FEMA's published categories, as words; the title and designated area are never embedded)
+  incidentType: "incident type",
+  declarationType: "declaration type",
 };
 
 /**
@@ -336,6 +346,13 @@ export const NO_RECORD_VECTORS: Readonly<Record<string, string>> = {
   "fcc-bdc-counties": "joined in the browser onto the shared county outlines, as svi-counties; record vectors deferred to the next round",
   "fcc-bdc-hex": "hexagon rows carry no text, only counts and an H3 id",
   "wrc-counties": "joined in the browser onto the shared county outlines, as svi-counties; record vectors deferred to the next round",
+  "fema-declarations": "dossier series and a declaration list for one county; no record is drawn on the globe, so its embedText describes the card only",
+  "usdm-county-dsci": "dossier series; one county's numbers, no record text",
+  "noaa-cag-county": "dossier series; one county's numbers, no record text",
+  "spc-tornado-county": "dossier series baked from SPC's file; one county's counts, no record text",
+  "hud-hcv-tracts": "tract numbers only; no record text",
+  "hud-qct": "tract numbers only; no record text",
+  "usgs-landslide-susc": "picture layer; county shares are dossier numbers",
 };
 
 /** Fields that must never be embedded whatever a card says: the deny list, the dossier's "published name", and any *name field not reviewed. */

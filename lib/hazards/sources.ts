@@ -22,7 +22,7 @@
 
 import type { MultiPolygon, Polygon } from "geojson";
 import { cached, type CachedOptions } from "@/lib/server/cache";
-import { arcgisQuery, truncated } from "@/lib/server/arcgis";
+import { arcgisQuery, arcgisRowsCapped, truncated } from "@/lib/server/arcgis";
 import { polite, upstream, upstreamJson } from "@/lib/server/upstream";
 import { retrying } from "@/lib/server/net";
 import {
@@ -179,6 +179,30 @@ export function nwsAlerts() {
 // ---------------------------------------------------------------- TIGERweb counties for NWS
 
 export const TIGER_COUNTY_20M = "https://tigerweb.geo.census.gov/arcgis/rest/services/Generalized_ACS2023/State_County/MapServer/13";
+
+/**
+ * The county (5-digit GEOID) containing a point, from the same 1:20M TIGERweb layer as
+ * lib/economy/sources.ts tigerCountyAt and lib/places/data/counties.json (Connecticut as planning
+ * regions). Attributes only, held a day; null when the point is in no county. Here rather than
+ * importing tigerCountyAt, whose module loads the economy tables at import.
+ */
+export function countyGeoidAt(lon: number, lat: number): Promise<string | null> {
+  return cached(
+    `tiger:geoid-at:${lon.toFixed(3)},${lat.toFixed(3)}`,
+    24 * 3600_000,
+    async () => {
+      const j = await arcgisRowsCapped<{ GEOID?: string }>(
+        "tigerweb",
+        TIGER_COUNTY_20M,
+        { geometry: JSON.stringify({ x: lon, y: lat }), geometryType: "esriGeometryPoint", inSR: "4326", spatialRel: "esriSpatialRelIntersects", outFields: "GEOID", returnGeometry: "false" },
+        { gate: "tigerweb", minIntervalMs: 150, timeoutMs: 15_000, tries: 2 },
+      );
+      const g = j.rows.map((r) => r.GEOID).find((x): x is string => typeof x === "string" && /^\d{5}$/.test(x));
+      return g ?? null;
+    },
+    { deadlineMs: 15_000 },
+  ).then((c) => c.value);
+}
 const countyCache = new Map<string, { name: string; geometry: Polygon | MultiPolygon; at: number } | { missing: true; at: number }>();
 const countyPending = new Set<string>();
 

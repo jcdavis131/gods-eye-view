@@ -48,6 +48,9 @@
 //                                it is on and not RISK_NATIONAL_RANK)
 //   &wrs=state                   the same layer ranks within the state (written only while
 //                                it is on and the state rank is picked)
+//   &hv=count                    the Housing assistance layer colours by voucher households
+//                                (written only while it is on and the count is picked; HUD's
+//                                share of renter units is the default)
 //   &aoi=1                       the Area panel open on the drawn area (shape=a:…)
 //   &here=29.42410,-98.49360     a "what's here" answer asked at this point (lat,lon,
 //                                5 decimals) once the camera is there
@@ -82,6 +85,7 @@ import { parseNaipYear } from "@/lib/terrain/naip";
 import { parseSviTheme } from "@/lib/civic/svi";
 import { parseBroadbandMeasure } from "@/lib/civic/broadband";
 import { parseWrcMeasure } from "@/lib/hazards/wrc";
+import { parseHousingMeasure } from "@/lib/civic/housing";
 
 /** A broadband measure or WRC rank family from a link: 1 to 3 (0, the default, is never written). */
 export function parseMeasureParam(v: string | null | undefined): number | undefined {
@@ -154,6 +158,8 @@ export interface ShareState {
   wr?: number;
   /** WRC state ranks. National is the default and is never written. */
   wrs?: "state";
+  /** Housing: colour by voucher households. HUD's share is the default and is never written. */
+  hv?: "count";
 }
 
 /** Terrain exaggeration from a link: 1 to 3, else undefined. */
@@ -298,6 +304,7 @@ export function parseShare(search: string): ShareState {
   const wr = parseMeasureParam(q.get("wr"));
   if (wr != null) out.wr = wr;
   if (q.get("wrs") === "state") out.wrs = "state";
+  if (q.get("hv") === "count") out.hv = "count";
   return out;
 }
 
@@ -338,6 +345,7 @@ export function shareQuery(s: ShareState): string {
   if (s.bb != null) q.set("bb", String(s.bb));
   if (s.wr != null) q.set("wr", String(s.wr));
   if (s.wrs) q.set("wrs", s.wrs);
+  if (s.hv) q.set("hv", s.hv);
   // The Area panel belongs to a drawn area; without one it has nothing to show.
   if (s.aoi && completeShape(s.shape)?.kind === "area") q.set("aoi", "1");
   if (s.here) q.set("here", `${s.here.lat.toFixed(5)},${s.here.lon.toFixed(5)}`);
@@ -396,6 +404,7 @@ export function currentShare(): ShareState {
     bb: st.layers.broadband && parseBroadbandMeasure(prefs.broadbandMeasure) !== 0 ? parseBroadbandMeasure(prefs.broadbandMeasure) : undefined,
     wr: st.layers.wildfirerisk && parseWrcMeasure(prefs.wrcMeasure) !== 0 ? parseWrcMeasure(prefs.wrcMeasure) : undefined,
     wrs: st.layers.wildfirerisk && prefs.wrcScope === "state" ? "state" : undefined,
+    hv: st.layers.housing && parseHousingMeasure(prefs.housingMeasure) === 1 ? "count" : undefined,
     aoi: useArea.getState().open && areaRing(st.measure.shape) ? true : undefined,
     here: here ? { lat: here.lat, lon: here.lon } : undefined,
   };
@@ -458,7 +467,7 @@ export function startUrlSync(): () => void {
   const unsubPrefs = useSettings.subscribe((s, prev) => {
     const a = s.prefs;
     const b = prev.prefs;
-    if (a.terrain !== b.terrain || a.terrainExaggeration !== b.terrainExaggeration || a.seaLevelFt !== b.seaLevelFt || a.waybackRelease !== b.waybackRelease || a.topoYear !== b.topoYear || a.naipYear !== b.naipYear || a.sviTheme !== b.sviTheme || a.hospitalStatus !== b.hospitalStatus || a.broadbandMeasure !== b.broadbandMeasure || a.wrcMeasure !== b.wrcMeasure || a.wrcScope !== b.wrcScope) schedule();
+    if (a.terrain !== b.terrain || a.terrainExaggeration !== b.terrainExaggeration || a.seaLevelFt !== b.seaLevelFt || a.waybackRelease !== b.waybackRelease || a.topoYear !== b.topoYear || a.naipYear !== b.naipYear || a.sviTheme !== b.sviTheme || a.hospitalStatus !== b.hospitalStatus || a.broadbandMeasure !== b.broadbandMeasure || a.wrcMeasure !== b.wrcMeasure || a.wrcScope !== b.wrcScope || a.housingMeasure !== b.housingMeasure) schedule();
   });
   const unsubGround = useGroundPick.subscribe((s, prev) => {
     if (s.pick?.lon !== prev.pick?.lon || s.pick?.lat !== prev.pick?.lat) schedule();
@@ -519,7 +528,7 @@ export function applyShare(s: ShareState, opts: { fly?: boolean } = {}): void {
   if (s.market) st.setMarketReportOpen(true);
   if (s.space) st.setSpaceWeatherOpen(true);
   // Terrain and the sea level scenario are display settings: a link that carries them sets them.
-  if (s.terrain != null || s.slr != null || s.wb != null || s.ty != null || s.ny != null || s.sv != null || s.hs != null || s.bb != null || s.wr != null || s.wrs != null) {
+  if (s.terrain != null || s.slr != null || s.wb != null || s.ty != null || s.ny != null || s.sv != null || s.hs != null || s.bb != null || s.wr != null || s.wrs != null || s.hv != null) {
     const set = useSettings.getState().setPref;
     if (s.terrain != null) {
       set("terrain", true);
@@ -537,6 +546,7 @@ export function applyShare(s: ShareState, opts: { fly?: boolean } = {}): void {
     if (s.bb != null) set("broadbandMeasure", String(s.bb));
     if (s.wr != null) set("wrcMeasure", String(s.wr));
     if (s.wrs) set("wrcScope", s.wrs);
+    if (s.hv) set("housingMeasure", "1");
   }
   // A shared ground answer: asked once the camera has arrived, of the layers now on.
   if (s.ground) {

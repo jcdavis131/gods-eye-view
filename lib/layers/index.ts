@@ -60,6 +60,7 @@ import { healthLayer } from "./health";
 import { schoolsLayer } from "./schools";
 import { vulnerabilityLayer } from "./vulnerability";
 import { broadbandLayer } from "./broadband";
+import { housingLayer } from "./housing";
 import { wildfireriskLayer } from "./wildfirerisk";
 import { tribalLayer } from "./tribal";
 import { sportsLayer } from "./sports";
@@ -131,6 +132,7 @@ export const LAYERS: LayerDefinition[] = [
   broadbandLayer,
   wildfireriskLayer,
   tribalLayer,
+  housingLayer,
   sportsLayer,
   constructsLayer,
   fieldLayer,

@@ -34,6 +34,8 @@ import TriAside from "./TriAside";
 import NldiAside from "./NldiAside";
 import HealthAside from "./HealthAside";
 import SviAside from "./SviAside";
+import HazardHistoryAside from "./HazardHistoryAside";
+import { countyHistoryFips } from "@/lib/hazards/history";
 import type { SviExtra } from "@/lib/civic/svi";
 import type { HealthExtra } from "@/lib/layers/health";
 import { useGroundPick, type ReachAnswer } from "@/lib/terrain/ground";
@@ -171,8 +173,10 @@ export default function InfoPanel() {
   const details = Object.entries(p.details ?? {}).filter(([, v]) => v != null && v !== "" && v !== false);
   const isLiveLayer =
     !p.simulated &&
-    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "employers", "banks", "spending", "constructs", "field", "flood", "wetlands", "publiclands", "relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "transmission", "pipelines", "plants", "rail", "airports", "dams", "faults", "landslides", "geology", "plss", "parcels", "zoning", "permits", "licences", "envpermits", "historic", "crithab", "contaminants", "wayback", "topo", "impaired", "pfas", "ust", "hydro", "riskindex", "naip", "heritage", "health", "vulnerability", "broadband", "wildfirerisk", "tribal", "hospitals", "schools"].includes(p.layer);
+    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "employers", "banks", "spending", "constructs", "field", "flood", "wetlands", "publiclands", "relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "transmission", "pipelines", "plants", "rail", "airports", "dams", "faults", "landslides", "geology", "plss", "parcels", "zoning", "permits", "licences", "envpermits", "historic", "crithab", "contaminants", "wayback", "topo", "impaired", "pfas", "ust", "hydro", "riskindex", "naip", "heritage", "health", "vulnerability", "broadband", "wildfirerisk", "tribal", "hospitals", "schools", "housing", "landslidesusc"].includes(p.layer);
   const banner = BANNER[p.layer];
+  // County hazard history under a county-level click of the three county hazard choropleths.
+  const historyFips = countyHistoryFips(p.layer, p.extra);
   const iss = p.layer === "satellites" && p.id === "25544";
   const construct = p.layer === "constructs" || p.layer === "field" || p.layer === "alerts";
   const gauge = p.layer === "water" && (p.kind === "gauge" || p.kind === "reservoir") && p.id.startsWith("usgs:") ? (p.extra as GaugeExtra) : null;
@@ -281,6 +285,7 @@ export default function InfoPanel() {
 
         {p.layer === "health" && (p.extra as HealthExtra | undefined)?.level === "county" && <HealthAside key={`places:${p.id}`} fips={(p.extra as HealthExtra).fips} />}
         {p.layer === "vulnerability" && (p.extra as SviExtra | undefined)?.fips && <SviAside key={`svi:${p.id}`} fips={(p.extra as SviExtra).fips} level={(p.extra as SviExtra).level} />}
+        {historyFips && <HazardHistoryAside key={`history:${historyFips}`} fips={historyFips} />}
         {hydroPick && <NldiAside key={`nldi:${p.id}`} reach={hydroPick} />}
         {gauge && lonlat && <NldiAside key={`nldi:${p.id}`} lon={lonlat[0]} lat={lonlat[1]} />}
         {gauge?.primary && (
@@ -353,6 +358,7 @@ const BANNER: Partial<Record<string, string>> = {
   health: "CDC PLACES \u00b7 MODEL-BASED ESTIMATES, NOT COUNTS OF DIAGNOSED PEOPLE \u00b7 NOT FOR RANKING SMALL DIFFERENCES",
   heritage: "NPS DESIGNATIONS, NOT OWNERSHIP \u00b7 BATTLEFIELDS ARE SURVEY AREAS, MOSTLY PRIVATE LAND \u00b7 A HERITAGE AREA IS NOT FEDERAL LAND",
   naip: "USDA NAIP AS FLOWN \u00b7 A YEAR IS A MOSAIC OF FLIGHTS \u00b7 THE DATE ON CLICK IS THE PHOTO UNDER THE CURSOR",
+  housing: "HUD HOUSING CHOICE VOUCHERS BY TRACT \u00b7 GREY: 10 OR FEWER, OR NONE (HUD SUPPRESSES) \u00b7 QCT IS A TAX-CREDIT DESIGNATION, NOT A MEASURE OF CONDITIONS",
   riskindex: "FEMA NATIONAL RISK INDEX \u00b7 A RELATIVE INDEX, NOT A LIKELIHOOD \u00b7 COUNTY AND TRACT SCORES ARE NOT COMPARABLE",
   hydro: "NHD PICTURE \u00b7 TRACE AND FLOW ON THE NHDPLUS V2 NETWORK \u00b7 MODELLED FLOW, NOT A MEASUREMENT",
   flood: "REGULATORY FLOOD MAP · NOT A FORECAST",

@@ -27,7 +27,7 @@ import { fieldStyle } from "./fieldStyles";
 import { alertsStyle } from "./alertStyles";
 import { firesStyle, hazardsStyle, wildfireStyle } from "./hazardStyles";
 import { floodStyle, heritageStyle, historicStyle, impairedStyle, pfasStyle, publiclandsStyle, tribalStyle, wetlandsStyle } from "./landStyles";
-import { contoursStyle, crithabStyle, firehazardStyle, hydroStyle, landcoverStyle, naipStyle, reliefStyle, sealevelStyle, slopeStyle, soilsStyle, topoStyle, waybackStyle } from "./terrainStyles";
+import { contoursStyle, crithabStyle, firehazardStyle, hydroStyle, landcoverStyle, landslidesuscStyle, naipStyle, reliefStyle, sealevelStyle, slopeStyle, soilsStyle, topoStyle, waybackStyle } from "./terrainStyles";
 import {
   airportsStyle,
   airqualityStyle,
@@ -45,7 +45,7 @@ import {
 } from "./infraStyles";
 import { parcelsStyle } from "./parcelStyles";
 import { contaminantsStyle, envpermitsStyle, licencesStyle, permitsStyle, schoolsStyle, ustStyle, zoningStyle } from "./civicStyles";
-import { broadbandStyle, healthStyle, riskindexStyle, vulnerabilityStyle, wildfireriskStyle } from "./indexStyles";
+import { broadbandStyle, healthStyle, housingStyle, riskindexStyle, vulnerabilityStyle, wildfireriskStyle } from "./indexStyles";
 
 /** Distinctive major-group colours for the occupations layer: one hue per SOC major group. */
 const OCCUPATION_COLORS: Record<string, string> = {
@@ -479,6 +479,7 @@ export const STYLES: Partial<Record<LayerId, LayerStyle>> = {
   contours: contoursStyle,
   soils: soilsStyle,
   firehazard: firehazardStyle,
+  landslidesusc: landslidesuscStyle,
   landcover: landcoverStyle,
   sealevel: sealevelStyle,
   transmission: transmissionStyle,
@@ -506,6 +507,7 @@ export const STYLES: Partial<Record<LayerId, LayerStyle>> = {
   hospitals: hospitalsStyle,
   vulnerability: vulnerabilityStyle,
   broadband: broadbandStyle,
+  housing: housingStyle,
   wildfirerisk: wildfireriskStyle,
   tribal: tribalStyle,
   sports: sportsStyle,
@@ -565,6 +567,7 @@ export const FOLLOW_RANGE: Record<LayerId, number> = {
   contours: 2_000,
   soils: 5_000,
   firehazard: 20_000,
+  landslidesusc: 20_000,
   landcover: 10_000,
   sealevel: 20_000,
   transmission: 15_000,
@@ -592,6 +595,7 @@ export const FOLLOW_RANGE: Record<LayerId, number> = {
   hospitals: 60_000,
   vulnerability: 200_000,
   broadband: 200_000,
+  housing: 30_000,
   wildfirerisk: 200_000,
   tribal: 300_000,
   sports: 500_000,

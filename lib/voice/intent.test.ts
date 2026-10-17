@@ -147,6 +147,13 @@ describe("voice words for community health", () => {
     expect(layerOf("show wildfires")).toMatchObject({ layer: "wildfire" });
     expect(layerOf("show trust land")).toMatchObject({ layer: "tribal" });
     expect(layerOf("show reservations over south dakota")).toMatchObject({ layer: "tribal", place: "south dakota" });
+    expect(layerOf("show housing vouchers over austin")).toMatchObject({ layer: "housing", place: "austin" });
+    expect(layerOf("show section 8")).toMatchObject({ layer: "housing" });
+    expect(layerOf("show qualified census tracts")).toMatchObject({ layer: "housing" });
+    expect(layerOf("show housing")).toMatchObject({ layer: "realestate" });
+    expect(layerOf("show landslide susceptibility over colorado")).toMatchObject({ layer: "landslidesusc", place: "colorado" });
+    expect(layerOf("show landslides")).toMatchObject({ layer: "landslides" });
+    expect(layerOf("show landslide risk")).not.toMatchObject({ layer: "landslidesusc" });
   });
 });
 
