@@ -497,10 +497,12 @@
                 "normals",
                 "impaired",
                 "pfas",
+                "reach",
+                "trace",
                 "report"
               ]
             },
-            "description": "gauges: USGS latest continuous readings in a bbox (flow, stage, temperature, DO, conductance, pH, turbidity, reservoir elevation/storage). wells: USGS latest daily groundwater levels with aquifer names. nwps: NOAA NWPS gauges with flood categories. twdb: Texas reservoirs. drought: US Drought Monitor current polygons. history: 365 days of daily means for one site and parameter. matchup: instantaneous values for one site and parameter in a window. normals: USGS daily-mean discharge percentiles (5th to 95th) for a calendar day, per site (sites=, date=MM-DD). impaired: EPA ATTAINS assessment units states report as impaired (303(d)), lines and areas, in a box clamped to 0.12 degrees and snapped to 0.02 (not the 4 degree water box): category with its meaning, 303(d) listing and TMDL (null when not reported, never N), reporting cycle, overall status, EPA action status verbatim and the How's My Waterway link; 2,000 per layer; `coverage` says per layer whether it answered (a failed layer has count null: unknown, not none). A listing for the whole unit and one cycle, not a measurement; waters not returned were not reported impaired, which includes waters never assessed. pfas: PFAS in public drinking water, EPA UCMR 5 (2023-2025), for the water systems serving a box clamped to 0.12 degrees and snapped to 0.02: systems found by EPA's community water system service areas first, then by EPA's estimated location; each system detected, not-detected, not-in-ucmr5 or unknown, with the highest single result per PFAS in ng/L (never compared with a health limit); service-area polygons only with polygons=1. Samples are taken where treated water enters the distribution system, not at a tap. report: the community water report for a point."
+            "description": "gauges: USGS latest continuous readings in a bbox (flow, stage, temperature, DO, conductance, pH, turbidity, reservoir elevation/storage). wells: USGS latest daily groundwater levels with aquifer names. nwps: NOAA NWPS gauges with flood categories. twdb: Texas reservoirs. drought: US Drought Monitor current polygons. history: 365 days of daily means for one site and parameter. matchup: instantaneous values for one site and parameter in a window. normals: USGS daily-mean discharge percentiles (5th to 95th) for a calendar day, per site (sites=, date=MM-DD). impaired: EPA ATTAINS assessment units states report as impaired (303(d)), lines and areas, in a box clamped to 0.12 degrees and snapped to 0.02 (not the 4 degree water box): category with its meaning, 303(d) listing and TMDL (null when not reported, never N), reporting cycle, overall status, EPA action status verbatim and the How's My Waterway link; 2,000 per layer; `coverage` says per layer whether it answered (a failed layer has count null: unknown, not none). A listing for the whole unit and one cycle, not a measurement; waters not returned were not reported impaired, which includes waters never assessed. pfas: PFAS in public drinking water, EPA UCMR 5 (2023-2025), for the water systems serving a box clamped to 0.12 degrees and snapped to 0.02: systems found by EPA's community water system service areas first, then by EPA's estimated location; each system detected, not-detected, not-in-ucmr5 or unknown, with the highest single result per PFAS in ng/L (never compared with a health limit); service-area polygons only with polygons=1. Samples are taken where treated water enters the distribution system, not at a tap. report: the community water report for a point. reach: the NHDPlus V2 reach a point (lon, lat; snapped to 0.001 degrees) drains to: USGS NLDI's catchment containing the point (comid), then EPA's NHDPlus V2.1 attributes by comid (GNIS name, NHD feature type, Strahler order, total drainage area km², modelled mean annual flow in cfs as EROM gauge-adjusted QE_MA and runoff-only QA_MA). A point with no catchment (ocean, outside the network) answers 200 with comid null; -9999 and missing values are null, never 0; flows are model output, not measurements. trace: one NLDI navigation from a reach (comid from op=reach): mode=down the main stem downstream as a MultiLineString (distance default 100 km), mode=gauges the USGS stream gauges upstream as Points (default 150 km), mode=basin the drainage basin as one polygon (NLDI's simplified basin, at most 2,000 vertices); distance is always sent and capped at 500 km. A river path on the NHDPlus V2 network, not the HUC-12 chain of /api/fabric?op=downstream."
           },
           {
             "$ref": "#/components/parameters/format"
@@ -584,6 +586,38 @@
               "pattern": "^\\d{2}-\\d{2}$"
             },
             "description": "op=normals: MM-DD, the calendar day; today (UTC) when omitted."
+          },
+          {
+            "name": "comid",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "description": "op=trace: NHDPlus V2 comid, from op=reach (e.g. 23398863, the Boise River at Boise)."
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "down",
+                "basin",
+                "gauges"
+              ]
+            },
+            "description": "op=trace: down (main stem downstream), basin (drainage basin), gauges (USGS stream gauges upstream)."
+          },
+          {
+            "name": "distance",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            },
+            "description": "op=trace with mode=down or gauges: km of channel to navigate (default 100 for down, 150 for gauges; at most 500). The gauge count depends on it."
           }
         ],
         "responses": {
@@ -630,6 +664,12 @@
                     },
                     {
                       "$ref": "#/components/schemas/WaterPfasResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/WaterReachResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/WaterTraceResponse"
                     },
                     {
                       "$ref": "#/components/schemas/WaterReportResponse"
@@ -3829,7 +3869,7 @@
           "minimum": -180,
           "maximum": 180
         },
-        "description": "op=report: longitude of the point."
+        "description": "op=report, op=reach: longitude of the point."
       },
       "lat": {
         "name": "lat",
@@ -3839,7 +3879,7 @@
           "minimum": -90,
           "maximum": 90
         },
-        "description": "op=report: latitude of the point."
+        "description": "op=report, op=reach: latitude of the point."
       }
     },
     "headers": {
@@ -9470,6 +9510,159 @@
           }
         ],
         "x-op": "conflict"
+      },
+      "WaterReachResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "lon": {
+                    "type": "number"
+                  },
+                  "lat": {
+                    "type": "number"
+                  },
+                  "comid": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "description": "null: NLDI has no NHDPlus V2 catchment at the point"
+                  },
+                  "reach": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "comid": {
+                        "type": "integer"
+                      },
+                      "name": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "description": "GNIS name; null when unnamed"
+                      },
+                      "reachcode": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "ftype": {
+                        "type": [
+                          "integer",
+                          "null"
+                        ]
+                      },
+                      "ftypeWord": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "description": "NHD's word for the FType (558 artificial path, 460 stream/river, ...); an unknown code reads 'NHD FType <n>'"
+                      },
+                      "streamOrder": {
+                        "type": [
+                          "integer",
+                          "null"
+                        ],
+                        "description": "Strahler order; null where NHDPlus assigns none (0 or -9)"
+                      },
+                      "drainageKm2": {
+                        "type": [
+                          "number",
+                          "null"
+                        ],
+                        "description": "TotDASqKm; null where EPA publishes -9999"
+                      },
+                      "flowCfs": {
+                        "type": [
+                          "number",
+                          "null"
+                        ],
+                        "description": "QE_MA, EROM mean annual flow adjusted to gauges, cfs (model output)"
+                      },
+                      "runoffCfs": {
+                        "type": [
+                          "number",
+                          "null"
+                        ],
+                        "description": "QA_MA, EROM runoff-only mean annual flow, cfs (model output)"
+                      },
+                      "lengthKm": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "fdate": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "description": "NHD feature date, YYYY-MM-DD"
+                      }
+                    }
+                  }
+                }
+              },
+              "network": {
+                "type": "string",
+                "enum": [
+                  "NHDPlus V2"
+                ]
+              }
+            }
+          }
+        ],
+        "x-op": "reach"
+      },
+      "WaterTraceResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "description": "GeoJSON FeatureCollection. mode=down: one MultiLineString feature (properties comid, mode, flowlines). mode=gauges: one Point per USGS gauge (properties identifier 'USGS-<site>', siteNo, name as USGS publishes it, comid, uri). mode=basin: one Polygon or MultiPolygon (properties comid, mode, vertices, sentVertices). Empty when NLDI has no such reach."
+              },
+              "comid": {
+                "type": "integer"
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "down",
+                  "basin",
+                  "gauges"
+                ]
+              },
+              "distanceKm": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "description": "km navigated; null for mode=basin"
+              },
+              "count": {
+                "type": "integer"
+              }
+            }
+          }
+        ],
+        "x-op": "trace"
       }
     }
   }

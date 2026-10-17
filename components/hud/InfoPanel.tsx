@@ -31,6 +31,8 @@ import { flyTo } from "@/lib/globe/camera";
 import dynamic from "next/dynamic";
 import PowerWaterAside from "./PowerWaterAside";
 import TriAside from "./TriAside";
+import NldiAside from "./NldiAside";
+import { useGroundPick, type ReachAnswer } from "@/lib/terrain/ground";
 
 const ChipViewer = dynamic(() => import("./ChipViewer"), {
   ssr: false,
@@ -95,6 +97,7 @@ export default function InfoPanel() {
   const log = useGlobe((s) => s.log);
   const layers = useGlobe((s) => s.layers);
   const status = useGlobe((s) => s.status);
+  const groundPick = useGroundPick((s) => s.pick);
   // Moving contacts only: aircraft, ships, satellites. Quakes and launch pads
   // are events/places, not contacts.
   const contacts = (["aircraft", "ships", "satellites"] as const).reduce(
@@ -164,7 +167,7 @@ export default function InfoPanel() {
   const details = Object.entries(p.details ?? {}).filter(([, v]) => v != null && v !== "" && v !== false);
   const isLiveLayer =
     !p.simulated &&
-    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "employers", "banks", "spending", "constructs", "field", "flood", "wetlands", "publiclands", "relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "transmission", "pipelines", "plants", "rail", "airports", "dams", "faults", "landslides", "geology", "plss", "parcels", "zoning", "permits", "licences", "envpermits", "historic", "crithab", "contaminants", "wayback", "topo", "impaired", "pfas", "ust"].includes(p.layer);
+    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "employers", "banks", "spending", "constructs", "field", "flood", "wetlands", "publiclands", "relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "transmission", "pipelines", "plants", "rail", "airports", "dams", "faults", "landslides", "geology", "plss", "parcels", "zoning", "permits", "licences", "envpermits", "historic", "crithab", "contaminants", "wayback", "topo", "impaired", "pfas", "ust", "hydro"].includes(p.layer);
   const banner = BANNER[p.layer];
   const iss = p.layer === "satellites" && p.id === "25544";
   const construct = p.layer === "constructs" || p.layer === "field" || p.layer === "alerts";
@@ -175,6 +178,8 @@ export default function InfoPanel() {
   const estimate = p.layer === "turbidity" || p.layer === "realestate" || p.layer === "spending" || p.layer === "field" ? "ESTIMATE" : null;
   const economy = p.layer === "trade" || p.layer === "commerce" || p.layer === "realestate";
   const disclaimer = requiredDisclaimer(p);
+  const hydroPart = groundPick && p.kind === "ground" && p.id === `ground:${groundPick.lat.toFixed(5)},${groundPick.lon.toFixed(5)}` ? groundPick.parts.hydro : undefined;
+  const hydroPick = hydroPart && !hydroPart.loading && !hydroPart.error ? ((hydroPart.data as ReachAnswer | null) ?? { comid: null, reach: null }) : null;
 
   return (
     <aside className="pointer-events-auto w-full" aria-label={`Selected: ${p.name}`}>
@@ -270,6 +275,8 @@ export default function InfoPanel() {
 
         {disclaimer && <p className="border-t border-border/60 px-3 py-2 text-[9px] leading-snug text-muted-foreground">{disclaimer}</p>}
 
+        {hydroPick && <NldiAside key={`nldi:${p.id}`} reach={hydroPick} />}
+        {gauge && lonlat && <NldiAside key={`nldi:${p.id}`} lon={lonlat[0]} lat={lonlat[1]} />}
         {gauge?.primary && (
           <GaugeHistory key={`${gauge.site}:${gauge.primary}`} site={gauge.site} param={gauge.primary} latest={gauge.readings[gauge.primary]?.value} />
         )}
@@ -333,6 +340,7 @@ export default function InfoPanel() {
 
 /** One-line reminders of what a layer's features are and are not. */
 const BANNER: Partial<Record<string, string>> = {
+  hydro: "NHD PICTURE \u00b7 TRACE AND FLOW ON THE NHDPLUS V2 NETWORK \u00b7 MODELLED FLOW, NOT A MEASUREMENT",
   flood: "REGULATORY FLOOD MAP · NOT A FORECAST",
   parcels: "PUBLIC RECORD AS ITS SOURCE PUBLISHES IT · A TAX MAP, NOT A SURVEY",
   wetlands: "HABITAT MAP FROM DATED IMAGERY · MAY HAVE CHANGED SINCE · NOT A JURISDICTIONAL DELINEATION",

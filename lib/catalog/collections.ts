@@ -24,6 +24,7 @@ import { TRI_CAVEAT } from "@/lib/permits/tri";
 import { NPL_CAVEAT } from "@/lib/permits/npl";
 import { FUDS_CAVEAT } from "@/lib/permits/fuds";
 import { UST_CAVEAT } from "@/lib/permits/ust";
+import { FLOW_CAVEAT, HYDRO_CAVEAT } from "@/lib/water/nldi";
 import { DENY_FIELD, EMBED_TEXT } from "./embedFields";
 
 export interface Exclusion {
@@ -74,14 +75,14 @@ export interface Collection {
   /** Sensitive-location and personal-data handling. */
   sensitivity: string;
   /** Curation round it entered. */
-  round: 1 | 2 | 3;
+  round: 1 | 2 | 3 | 4;
 }
 
 /** Which shelf a layer's collections sit on (the /catalog page's grouping). */
 export const SHELVES: Array<{ id: string; title: string; layers: LayerId[] }> = [
   { id: "land", title: "Land and heritage", layers: ["wetlands", "historic", "flood", "publiclands"] },
   { id: "species", title: "Species", layers: ["crithab"] },
-  { id: "water", title: "Water quality", layers: ["impaired", "pfas"] },
+  { id: "water", title: "Water", layers: ["impaired", "pfas", "hydro"] },
   { id: "contaminants", title: "Contaminants", layers: ["contaminants", "ust"] },
   { id: "imagery", title: "Imagery and maps", layers: ["wayback", "topo"] },
   { id: "infrastructure", title: "Infrastructure", layers: ["dams"] },
@@ -90,6 +91,7 @@ export const SHELVES: Array<{ id: string; title: string; layers: LayerId[] }> = 
 const R1 = "2026-10-12";
 const R2 = "2026-10-13";
 const R3 = "2026-10-15";
+const R4 = "2026-10-16";
 
 export const COLLECTIONS: readonly Collection[] = [
   // ------------------------------------------------------------ round 1: land and heritage
@@ -670,6 +672,69 @@ export const COLLECTIONS: readonly Collection[] = [
     ops: ["terrain?op=topo"],
     sensitivity: "Published federal maps; no personal data. Sheet names are place names.",
     round: 2,
+  },
+  // ------------------------------------------------------------ round 4: rivers and where the water goes
+  {
+    id: "nhd-hydro-picture",
+    title: "National Hydrography Dataset streams and water bodies (picture)",
+    layer: "hydro",
+    sources: ["usgs-nhd"],
+    what: "The USGS National Hydrography Dataset as The National Map draws it: streams, rivers, canals and water bodies as transparent line art in USGS's cached tiles, loaded by the browser from basemap.nationalmap.gov at every height. While it is on, the Surface water layer stops drawing Natural Earth's generalised rivers.",
+    recordIs: "A picture of NHD's mapped surface water at the tile's scale (high-resolution NHD at large scales, NHDPlus at small ones, as the service describes). A drawn line is a mapped channel, not a statement that water flows in it today.",
+    coverage: { spatial: "United States; tiles cached to level 23 (drawn to 16 here)", temporal: null, count: null },
+    freshness: { statement: "The service says its data was refreshed in September 2026.", readFrom: "USGSHydroCached MapServer ?f=json copyrightText (\"Data refreshed September, 2026.v1.1\")", recordedOn: R4 },
+    excluded: [
+      { what: "a click answer on the picture itself", why: "pixels carry no attributes; a click asks NLDI and EPA for the NHDPlus V2 reach the point drains to (nhdplus-v21-reach)" },
+      { what: "NHDPlus HR as the click answer", why: "deferred (D-H1): its point query took 51 s and 18.6 s on two of five calls on 2026-10-16 and named a canal at the Boise River" },
+    ],
+    caveats: [HYDRO_CAVEAT],
+    searchable: [],
+    embedText: EMBED_TEXT["nhd-hydro-picture"],
+    ops: ["terrain?op=products"],
+    sensitivity: "A picture of streams and water bodies; no personal data.",
+    round: 4,
+  },
+  {
+    id: "nldi-trace",
+    title: "Where the water goes: NLDI traces on the NHDPlus V2 network",
+    layer: "hydro",
+    sources: ["usgs-nldi", "usgs-water"],
+    what: "Three navigations from the NHDPlus V2 reach a point drains to, through the USGS Network Linked Data Index: the main stem downstream as flowlines (default 100 km), the drainage basin as one polygon (NLDI's simplified basin, at most 2,000 vertices), and the USGS stream gauges NLDI indexes upstream (default 150 km). Offered in the Rivers and streams ground dossier and on every USGS gauge of the Surface water layer; a gauge the Surface water layer already draws is drawn once.",
+    recordIs: "A path, a basin or a list of gauges computed by NLDI on the medium-resolution NHDPlus V2 network for one reach and one distance; the count of gauges depends on the distance asked. A river path, not the HUC-12 watersheds it passes through (fabric's \"Watersheds downstream\").",
+    coverage: { spatial: "Conterminous United States (the NHDPlus V2 network); a point outside it has no reach", temporal: null, count: null },
+    freshness: { statement: "The NHDPlus V2 network is static between releases; NLDI's gauge index follows USGS's site list.", readFrom: "NLDI linked-data root (sources list: comid, nwissite, ...); EPA V2.1 fdate per flowline", recordedOn: R4 },
+    excluded: [
+      { what: "a stored path or basin per place", why: "computed per click from NLDI and held 30 days; not enumerated, so not counted" },
+      { what: "the basin as county shares", why: "a derived number, not a published one (D-H3)" },
+      { what: "a second gauge client", why: "upstream gauges are NLDI's site list; live readings stay with the Surface water layer's USGS gauges" },
+    ],
+    caveats: [HYDRO_CAVEAT, "NLDI's upstream gauge list can include inactive sites; the count depends on the distance asked."],
+    searchable: [],
+    embedText: EMBED_TEXT["nldi-trace"],
+    ops: ["water?op=trace"],
+    sensitivity: "Network paths and public stream-gauge sites only; no personal data.",
+    round: 4,
+  },
+  {
+    id: "nhdplus-v21-reach",
+    title: "The NHDPlus V2.1 reach a point drains to",
+    layer: "hydro",
+    sources: ["usgs-nldi", "epa-nhdplus-v21"],
+    what: "For a clicked point, the NHDPlus V2 catchment containing it (NLDI comid/position) and that reach's attributes from EPA's NHDPlus V2.1 Network Flowline layer: GNIS name, NHD feature type, Strahler stream order, total drainage area, and two modelled mean annual flows (EROM gauge-adjusted QE_MA and runoff-only QA_MA, cubic feet per second).",
+    recordIs: "A flowline of the medium-resolution NHDPlus V2 network: where the point drains to, which near a small stream can be a larger river. Flows are model output, not measurements; -9999 and missing values read 'not published'.",
+    coverage: { spatial: "Conterminous United States and the NHDPlus V2 vector processing units", temporal: null, count: { value: 2724612, of: "flowlines in EPA's NHDPlus V2.1 Network Flowline layer (returnCountOnly)", countedOn: R4 } },
+    freshness: { statement: "Each flowline carries its NHD feature date (Boise River reach 23398863: 2001-03-08); the V2.1 attributes are static.", readFrom: "fdate field, NHDPlus MapServer layer 2", recordedOn: R4 },
+    excluded: [
+      { what: "uppercase field names", why: "the layer answers 400 to them; lowercase names are asked" },
+      { what: "a sentinel as a value", why: "-9999 drainage areas, stream order 0 or -9 and null flows read 'not published', never 0" },
+      { what: "NHDPlus HR attributes", why: "deferred (D-H1): slow and erratic on 2026-10-16" },
+    ],
+    caveats: [HYDRO_CAVEAT, FLOW_CAVEAT],
+    searchable: ["gnis_name", "reachcode"],
+    embedText: EMBED_TEXT["nhdplus-v21-reach"],
+    ops: ["water?op=reach"],
+    sensitivity: "Agency hydrography; waterbody names are place names.",
+    round: 4,
   },
 ];
 

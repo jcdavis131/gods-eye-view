@@ -35,6 +35,18 @@
 //                                       not-in-ucmr5 or unknown. Box at most 0.12
 //                                       degrees, snapped to 0.02. ng/L, never compared
 //                                       with a health limit.
+//   /api/water?op=reach&lon=..&lat=..   The NHDPlus V2 reach a point drains to: USGS NLDI's
+//                                       catchment at the point (comid), then EPA's NHDPlus
+//                                       V2.1 attributes by comid (name, NHD type, stream
+//                                       order, drainage area, modelled mean annual flow).
+//                                       Point snapped to 0.001 degrees; held 30 days. A point
+//                                       NLDI has no catchment for answers comid null, not 404.
+//   /api/water?op=trace&comid=..&mode=down|basin|gauges[&distance=km]
+//                                       One USGS NLDI navigation from that reach: the main
+//                                       stem downstream (default 100 km), the drainage basin
+//                                       (at most 2,000 vertices), or the USGS stream gauges
+//                                       upstream (default 150 km); distance at most 500 km.
+//                                       Held 30 days (the network is static between releases).
 //   /api/water?op=report&lon=..&lat=..  The community water report for a point,
 //                                       built server-side from the ops above
 //                                       (no satellite turbidity: that needs a
@@ -79,6 +91,27 @@ import {
   type PfasState,
 } from "@/lib/water/pfas";
 import { usgsProvenance } from "@/lib/water/provenance";
+import {
+  basinPolygon,
+  BASIN_MAX_VERTICES,
+  EPA_V21,
+  flowlines,
+  FLOW_CAVEAT,
+  HYDRO_CAVEAT,
+  isTraceMode,
+  parseComid,
+  parseV21,
+  positionUrl,
+  snapPoint,
+  traceDistance,
+  traceUrl,
+  upstreamGauges,
+  v21Params,
+  type Reach,
+  type TraceMode,
+} from "@/lib/water/nldi";
+import { polite, UpstreamError, upstreamJson } from "@/lib/server/upstream";
+import { retrying } from "@/lib/server/net";
 import { flowNormals, MAX_SITES } from "@/lib/water/normals";
 import { provenance } from "@/lib/provenance/types";
 import { source } from "@/lib/provenance/sources";
@@ -381,6 +414,117 @@ async function pfasOp(bbox: GridBbox, polygons: boolean): Promise<OpResult> {
   };
 }
 
+const MONTH_MS = 30 * DAY_MS;
+
+/** One NLDI GET through its gate (four a second), retrying a reset or a 5xx once. A 404 is an answer: "nothing here". */
+async function nldiGet(url: string, timeoutMs = 20_000): Promise<unknown | null> {
+  try {
+    return await retrying(() => polite("usgs-nldi", 250, 30_000, () => upstreamJson<unknown>("usgs-nldi", url, { timeoutMs })), 2);
+  } catch (err) {
+    if (err instanceof UpstreamError && err.status === 404) return null;
+    throw err;
+  }
+}
+
+/**
+ * The NHDPlus V2 reach a point drains to: NLDI's catchment at the point (comid), then EPA's
+ * V2.1 attributes by comid. No catchment is an answer (comid null), not an error; EPA failing
+ * leaves the comid with its attributes unknown.
+ */
+async function reachOp(lon: number, lat: number): Promise<OpResult> {
+  const [x, y] = snapPoint(lon, lat);
+  const pos = await cached(`nldi:position:${x},${y}`, MONTH_MS, async () => parseComid(await nldiGet(positionUrl(x, y))));
+  const comid = pos.value;
+  let reach: Reach | null = null;
+  let epaAge = 0;
+  let epaFailed = false;
+  if (comid != null) {
+    try {
+      const r = await cached(`epa-v21:${comid}`, MONTH_MS, async () => {
+        const j = await arcgisRowsCapped<Record<string, unknown>>("epa-nhdplus-v21", EPA_V21, v21Params(comid), { gate: "epa-watersgeo", minIntervalMs: 500, timeoutMs: 15_000, tries: 2 });
+        return parseV21({ features: j.rows.map((attributes) => ({ attributes })) }, comid);
+      });
+      reach = r.value;
+      epaAge = r.age;
+    } catch {
+      epaFailed = true;
+    }
+  }
+  const caveats = [HYDRO_CAVEAT];
+  if (comid == null) caveats.push("NLDI found no NHDPlus V2 catchment at this point (open water, the Great Lakes, or outside the conterminous US): no reach here, not an error.");
+  else {
+    caveats.push("The reach is the one whose NHDPlus V2 catchment contains the point, so it is where the point drains to, which near a small stream can be a larger river.");
+    if (reach) caveats.push(FLOW_CAVEAT);
+    if (epaFailed) caveats.push("EPA's NHDPlus V2.1 service did not answer this time: the reach's name, order, area and flow are unknown, not absent.");
+    else if (!reach) caveats.push(`EPA's NHDPlus V2.1 layer has no row for comid ${comid}: its attributes are not published there.`);
+  }
+  const prov: Provenance[] = [
+    provenance(source("usgs-nldi"), { kind: "published", seriesId: "NLDI comid/position (NHDPlus V2 catchment containing the point)", upstreamUrl: positionUrl(x, y), retrievedAt: retrievedAt(pos.age), notes: [`point ${x},${y}`] }),
+  ];
+  if (reach) prov.push(provenance(source("epa-nhdplus-v21"), { kind: "published", seriesId: `NHDPlus MapServer layer 2 (Network Flowline), comid=${comid}`, upstreamUrl: EPA_V21, retrievedAt: retrievedAt(epaAge) }));
+  return {
+    data: { lon: x, lat: y, comid, reach },
+    meta: { source: "USGS NLDI + EPA NHDPlus V2.1", network: "NHDPlus V2", cacheAge: Math.max(pos.age, epaAge) },
+    ttlS: epaFailed ? 300 : 7 * 86_400,
+    provenance: prov,
+    caveats,
+  };
+}
+
+interface TraceAnswer {
+  features: GeoJSON.Feature[];
+  count: number;
+  /** NLDI answered 404: no such reach. */
+  missing: boolean;
+  /** Basin: whether it was cut further here. */
+  cut: boolean;
+}
+
+/** One NLDI navigation from a reach, as GeoJSON: the main stem downstream, the basin, or the gauges upstream. */
+async function traceOp(comid: number, mode: TraceMode, distanceRaw: string | null): Promise<OpResult> {
+  const km = mode === "basin" ? null : traceDistance(mode, distanceRaw);
+  const url = traceUrl(comid, mode, km ?? 0);
+  const r = await cached(`nldi:trace:${comid}:${mode}:${km ?? "-"}`, MONTH_MS, async (): Promise<TraceAnswer> => {
+    const j = await nldiGet(url, 25_000);
+    if (j == null) return { features: [], count: 0, missing: true, cut: false };
+    if (mode === "down") {
+      const f = flowlines(j);
+      return { features: f.count ? [{ type: "Feature", geometry: f.geometry, properties: { comid, mode, flowlines: f.count } }] : [], count: f.count, missing: false, cut: false };
+    }
+    if (mode === "gauges") {
+      const g = upstreamGauges(j);
+      return {
+        features: g.map((x) => ({ type: "Feature", geometry: { type: "Point", coordinates: [x.lon, x.lat] }, properties: { identifier: x.identifier, siteNo: x.siteNo, name: x.name, comid: x.comid, uri: x.uri } })),
+        count: g.length,
+        missing: false,
+        cut: false,
+      };
+    }
+    const b = basinPolygon(j);
+    if (!b) throw new UpstreamError("usgs-nldi", 502, `usgs-nldi: basin for ${comid} could not be cut to ${BASIN_MAX_VERTICES} vertices`);
+    return { features: [{ type: "Feature", geometry: b.geometry, properties: { comid, mode, vertices: b.vertices, sentVertices: b.sent } }], count: 1, missing: false, cut: b.tolerance != null };
+  });
+  const caveats = [HYDRO_CAVEAT];
+  if (r.value.missing) caveats.push(`NLDI has no reach ${comid}: nothing to trace.`);
+  if (mode === "down") caveats.push(`The NHDPlus V2 main stem downstream for ${km} km (or to the network's end), as NLDI navigates it: a river path, not the watersheds it passes through (those are /api/fabric?op=downstream, by HUC-12).`);
+  if (mode === "gauges") caveats.push(`USGS stream gauges NLDI indexes on the network upstream within ${km} km of channel; the count depends on the distance asked, and a gauge listed here may be inactive.`);
+  if (mode === "basin") caveats.push(`The drainage basin of reach ${comid} as NLDI publishes it (simplified), at most ${BASIN_MAX_VERTICES.toLocaleString("en-US")} vertices${r.value.cut ? "; cut further here, so its edge is approximate" : ""}.`);
+  return {
+    data: { type: "FeatureCollection", features: r.value.features },
+    meta: { source: "USGS NLDI", comid, mode, distanceKm: km, count: r.value.count, cacheAge: r.age },
+    ttlS: 7 * 86_400,
+    provenance: [
+      provenance(source("usgs-nldi"), {
+        kind: "published",
+        seriesId: mode === "basin" ? `NLDI comid/${comid}/basin (simplified)` : `NLDI comid/${comid}/navigation/${mode === "down" ? "DM/flowlines" : "UT/nwissite"}, distance ${km} km`,
+        upstreamUrl: url,
+        retrievedAt: retrievedAt(r.age),
+      }),
+    ],
+    caveats,
+  };
+}
+
 /** JSON envelope, or CSV when asked and the op is tabular. */
 function respond(r: OpResult, format: ResponseFormat = "json", op = "") {
   if (format === "csv") {
@@ -459,6 +603,23 @@ export async function GET(req: NextRequest) {
         if (!b) return bad("bbox=w,s,e,n required, west < east and south < north, e.g. bbox=-75.54,40.12,-75.40,40.26");
         return respond(await pfasOp(b, q.get("polygons") === "1"), format, op);
       }
+      case "reach": {
+        const lon = Number(q.get("lon"));
+        const lat = Number(q.get("lat"));
+        if (!q.get("lon") || !q.get("lat") || !Number.isFinite(lon) || !Number.isFinite(lat) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+          return bad("lon and lat required, e.g. lon=-116.2023&lat=43.6150");
+        }
+        return respond(await reachOp(lon, lat), format, op);
+      }
+      case "trace": {
+        const raw = q.get("comid") ?? "";
+        const mode = q.get("mode");
+        if (!/^\d{1,12}$/.test(raw) || Number(raw) <= 0) return bad("comid=<NHDPlus V2 comid> required, e.g. comid=23398863 (from op=reach)");
+        if (!isTraceMode(mode)) return bad("mode=down | basin | gauges required");
+        const d = q.get("distance");
+        if (d != null && d !== "" && !/^\d{1,4}$/.test(d)) return bad("distance=km, a whole number (1 to 500)");
+        return respond(await traceOp(Number(raw), mode, d), format, op);
+      }
       case "report": {
         const lon = Number(q.get("lon"));
         const lat = Number(q.get("lat"));
@@ -468,7 +629,7 @@ export async function GET(req: NextRequest) {
         return respond(await reportOp(lon, lat, req.nextUrl.origin), format, op);
       }
       default:
-        return bad("unknown op: gauges | wells | nwps | twdb | drought | history | matchup | normals | impaired | pfas | report");
+        return bad("unknown op: gauges | wells | nwps | twdb | drought | history | matchup | normals | impaired | pfas | reach | trace | report");
     }
   } catch (err) {
     return withCors(jsonError(err));

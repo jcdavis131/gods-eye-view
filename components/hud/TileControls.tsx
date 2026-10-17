@@ -14,9 +14,10 @@ import { resolveTopoYear, yearLabel } from "@/lib/terrain/topo";
 import { useTopoHere } from "@/lib/layers/topo";
 
 /** Layers that draw a tiled picture (their own, or the FEMA map under flood zones). */
-export const PICTURE_LAYERS = new Set<LayerId>(["relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "flood", "wetlands", "geology", "crithab", "wayback", "topo"]);
+export const PICTURE_LAYERS = new Set<LayerId>(["relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "flood", "wetlands", "geology", "crithab", "wayback", "topo", "hydro"]);
 
 const DEFAULT_ALPHA: Partial<Record<LayerId, number>> = {
+  hydro: 0.9,
   relief: 0.55,
   slope: 0.6,
   contours: 0.9,

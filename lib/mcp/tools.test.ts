@@ -78,6 +78,9 @@ describe("every tool asks for the exact route URL", () => {
     ["downstream", { lon: -97.74, lat: 30.27 }, "/api/fabric?op=downstream&lon=-97.74&lat=30.27"],
     ["upstream", { lon: -97.74, lat: 30.27 }, "/api/fabric?op=upstream&lon=-97.74&lat=30.27"],
     ["flow_normals", { sites: ["08158000", "USGS-08167000"], date: "09-23" }, "/api/water?op=normals&sites=08158000,USGS-08167000&date=09-23"],
+    ["water_trace", { lon: -116.2023, lat: 43.615 }, "/api/water?op=reach&lon=-116.2023&lat=43.615"],
+    ["water_trace", { comid: 23398863, mode: "gauges", distance: 150 }, "/api/water?op=trace&comid=23398863&mode=gauges&distance=150"],
+    ["water_trace", { comid: 23398863, mode: "basin" }, "/api/water?op=trace&comid=23398863&mode=basin"],
     ["live_events", {}, "/api/live"],
     ["catalog_search", { q: "wetland habitat" }, "/api/catalog?op=search&q=wetland%20habitat"],
     ["catalog_search", { q: "dams", limit: 3 }, "/api/catalog?op=search&q=dams&limit=3"],
@@ -130,6 +133,10 @@ describe("input schemas reject bad input", () => {
     ["companies_near", {}],
     ["companies_near", { fips: "48453", bbox: [-98, 30, -97, 31] }],
     ["banks", { fips: "TX" }],
+    ["water_trace", { lon: -116.2 }],
+    ["water_trace", { comid: 23398863 }],
+    ["water_trace", { lon: -116.2, lat: 43.6, comid: 23398863, mode: "down" }],
+    ["water_trace", { comid: 23398863, mode: "down", distance: 900 }],
   ];
   for (const [name, input] of bad) {
     it(`${name} ${JSON.stringify(input)}`, async () => {

@@ -44,7 +44,7 @@ describe("picture layers", () => {
       expect(LAYER_LABEL_PRIORITY[l.id]).toBeDefined();
     }
     // Historic imagery and topo maps answer a ground click too (capture dates, sheets) but are their own modules.
-    const imagery = ["wayback", "topo"];
+    const imagery = ["wayback", "topo", "hydro"];
     for (const g of GROUND_LAYERS) {
       if (imagery.includes(g)) expect(LAYER_LABEL_PRIORITY[g], g).toBeDefined();
       else expect(TERRAIN_LAYERS.map((l) => l.id)).toContain(g);

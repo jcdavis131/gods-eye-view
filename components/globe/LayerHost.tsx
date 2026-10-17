@@ -21,6 +21,7 @@ import { useNow } from "@/lib/hooks/useNow";
 import { useStrata } from "@/lib/fabric/strataStore";
 import EmergenceBridge from "./EmergenceBridge";
 import TraceOverlay from "./TraceOverlay";
+import NldiOverlay from "./NldiOverlay";
 import UpstreamOverlay from "./UpstreamOverlay";
 import StrataOverlay from "./StrataOverlay";
 
@@ -44,6 +45,7 @@ export default function LayerHost() {
       ))}
       <EmergenceBridge />
       <TraceOverlay />
+      <NldiOverlay />
       <UpstreamOverlay />
       <StrataOverlay />
     </>

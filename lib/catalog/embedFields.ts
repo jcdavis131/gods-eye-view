@@ -46,6 +46,9 @@ export const EMBED_TEXT = {
   "esri-wayback": [],
   "wayback-capture": ["SRC_DATE", "NICE_NAME"],
   "usgs-htmc": ["Map_Name", "Map_Scale", "DateCurrent", "Imprint_Year", "Survey_Year"],
+  "nhd-hydro-picture": [],
+  "nldi-trace": [],
+  "nhdplus-v21-reach": ["ftype"],
 } satisfies Record<string, string[]>;
 
 export type CollectionId = keyof typeof EMBED_TEXT;
@@ -184,6 +187,8 @@ export const FIELD_LABEL: Readonly<Record<string, string>> = {
   DateCurrent: "edition year",
   Imprint_Year: "imprint year",
   Survey_Year: "survey year",
+  // NHDPlus V2.1 reach (click answer): the NHD feature type as its published word
+  ftype: "NHD feature type",
 };
 
 /**
@@ -222,6 +227,9 @@ export const NO_RECORD_VECTORS: Readonly<Record<string, string>> = {
   "esri-wayback": "a tile set per release; no record",
   "wayback-capture": "a click answer on imagery, not a feature on the globe",
   "usgs-htmc": "a click answer listing sheets, not a feature on the globe",
+  "nhd-hydro-picture": "a picture of mapped water; no record",
+  "nldi-trace": "computed per click from NLDI; no stored record",
+  "nhdplus-v21-reach": "a click answer for one reach, not a feature on the globe",
 };
 
 /** Fields that must never be embedded whatever a card says: the deny list, the dossier's "published name", and any *name field not reviewed. */

@@ -15,6 +15,7 @@
 import { bboxParam } from "./webmercator";
 import type { SourceId } from "@/lib/provenance/sources";
 import { HTMC_HOST, TOPO_MAX_ZOOM, topoTiles } from "./topo";
+import { HYDRO_MAX_ZOOM, HYDRO_TILES } from "@/lib/water/nldi";
 
 export const DEP_IMAGE = "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer";
 export const RELIEF_TILES = "https://basemap.nationalmap.gov/arcgis/rest/services/USGSShadedReliefOnly/MapServer/tile/{z}/{y}/{x}";
@@ -159,7 +160,7 @@ export function routeTileUrl(product: RenderProductId, z: number | string, x: nu
 // ---------------------------------------------------------------- direct sources
 
 export interface DirectSource {
-  id: "relief" | "soils" | "firehazard" | "sealevel" | "terrain" | "geology" | "wetlands" | "crithab" | "crithab-noaa" | "wayback" | "topo";
+  id: "relief" | "soils" | "firehazard" | "sealevel" | "terrain" | "geology" | "wetlands" | "crithab" | "crithab-noaa" | "wayback" | "topo" | "hydro";
   title: string;
   source: SourceId;
   /** Host the browser fetches from (CSP img-src / connect-src must allow it). */
@@ -268,6 +269,15 @@ export const DIRECT_SOURCES: DirectSource[] = [
     template: topoTiles(1956).replace("DateCurrent%3D1956", "DateCurrent%3D{year}"),
     maxZoom: TOPO_MAX_ZOOM,
     note: "Dynamic exportImage, no tile cache (CORS reflects the origin); a sheet draws only from about level 11, and a year with no sheet under a tile is a blank PNG. The years and sheets at a point come from /api/terrain?op=topo.",
+  },
+  {
+    id: "hydro",
+    title: "USGS National Hydrography Dataset, cartographic tiles (The National Map, USGSHydroCached)",
+    source: "usgs-nhd",
+    host: "basemap.nationalmap.gov",
+    template: HYDRO_TILES,
+    maxZoom: HYDRO_MAX_ZOOM,
+    note: "Transparent line art cached to level 23 (drawn to 16 here, magnified beyond); a 404 is no tile there. The reach and the traces come from USGS NLDI and EPA NHDPlus V2.1 through /api/water?op=reach and op=trace.",
   },
 ];
 

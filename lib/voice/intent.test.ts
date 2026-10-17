@@ -128,6 +128,16 @@ describe("voice words for contaminated sites", () => {
   });
 });
 
+describe("voice words for rivers and streams", () => {
+  it("hears streams and hydrography before rivers", () => {
+    expect(layerOf("show rivers and streams over boise")).toMatchObject({ layer: "hydro", place: "boise" });
+    expect(layerOf("show streams")).toMatchObject({ layer: "hydro" });
+    expect(layerOf("show hydrography")).toMatchObject({ layer: "hydro" });
+    expect(layerOf("show rivers")).toMatchObject({ layer: "water" });
+    expect(layerOf("show stream gauges")).toMatchObject({ layer: "water" });
+  });
+});
+
 describe("voice words for historic imagery", () => {
   it("hears historic imagery before historic places", () => {
     expect(layerOf("show historic imagery")).toMatchObject({ layer: "wayback" });

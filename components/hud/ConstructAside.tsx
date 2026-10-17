@@ -280,7 +280,7 @@ function TraceSection({ lon, lat, bare = false }: { lon: number; lat: number; ba
   return (
     <div className={bare ? "mt-2" : "border-t border-border px-3 py-2"}>
       <div className="flex items-center justify-between gap-2">
-        <span className="hud-label">Where the water goes</span>
+        <span className="hud-label">Watersheds downstream (HUC-12)</span>
         {mine && t.status !== "idle" ? (
           <button type="button" className="text-[9px] text-muted-foreground hover:text-foreground" onClick={() => t.clear()}>
             clear

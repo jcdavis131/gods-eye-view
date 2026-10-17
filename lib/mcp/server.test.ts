@@ -37,6 +37,7 @@ const EXPECTED_TOOL_NAMES = [
   "downstream",
   "upstream",
   "flow_normals",
+  "water_trace",
   "live_events",
   "catalog_search",
   "place_export",

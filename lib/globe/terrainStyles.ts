@@ -34,6 +34,7 @@ import { FLOOD_MAX_HEIGHT_M } from "@/lib/layers/flood";
 import { WETLANDS_MAX_HEIGHT_M } from "@/lib/layers/wetlands";
 import { parseReleaseId, WAYBACK_ATTRIBUTION, WAYBACK_MAX_ZOOM, waybackTiles } from "@/lib/terrain/wayback";
 import { HTMC_ATTRIBUTION, parseTopoYear, TOPO_MAX_ZOOM, TOPO_MIN_ZOOM, topoTiles } from "@/lib/terrain/topo";
+import { HYDRO_ATTRIBUTION, HYDRO_MAX_ZOOM, HYDRO_TILES } from "@/lib/water/nldi";
 
 /** Stacking among pictures, bottom to top: relief under everything, lines on top. */
 export const TILE_Z = {
@@ -47,6 +48,7 @@ export const TILE_Z = {
   slope: 50,
   sealevel: 60,
   crithab: 65,
+  hydro: 75,
   floodmap: 70,
   contours: 80,
 } as const;
@@ -249,6 +251,24 @@ export const topoStyle = picture("#D6B370", ({ meta }) => {
     },
   ];
 });
+
+/**
+ * USGS NHD streams and water bodies (USGSHydroCached): transparent PNG line art, drawn at every
+ * height over the base pictures and under the contours. The cache answers 404 where it holds no
+ * tile, so it is sparse.
+ */
+export const hydroStyle = picture("#38BDF8", () => [
+  {
+    key: "hydro",
+    kind: "xyz",
+    url: HYDRO_TILES,
+    maximumLevel: HYDRO_MAX_ZOOM,
+    sparse: true,
+    alpha: 0.9,
+    z: TILE_Z.hydro,
+    credit: `Streams: ${HYDRO_ATTRIBUTION}`,
+  },
+]);
 
 /** FEMA's own map of the flood zones, drawn under the clickable zones of the Flood zones layer. */
 export const FLOOD_PICTURE: TileSpec = routeSpec("floodmap", {
