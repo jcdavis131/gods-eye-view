@@ -54,3 +54,13 @@ Proposed derived feature: `npl_active_per_100k`, computed in vector-places from 
 - A point-in-county join from each site's own coordinates. It would place NPL's multi-county, county-or-city and Connecticut sites, and FUDS properties. It needs county outlines, which `counties.json` does not carry.
 - The UST, FUDS and PAD-US exports above.
 - Importing these into vector-places is that repository's work.
+
+## Round 4 candidates (spec only; layers round 4, 2026-10-16)
+
+Raised by the round-4 layers PR for the place-tower lane; nothing here is built by that PR.
+
+| Candidate | Source state | Tower form | Zero vs missing |
+|---|---|---|---|
+| FEMA National Risk Index (`nri-counties`) | FEMA NRI, December 2025 (1.20.0), 3,232 county rows keyed by `STCOFIPS`; Connecticut in planning regions (09110-09190), the TIGER-current regime of `counties.json`, so no crosswalk | Static per-county attributes from one vintage: `RISK_SCORE`, `EAL_VALT`, `SOVI_SCORE`, `RESL_SCORE` and the 18 `*_RISKS` hazard scores. Not a year series; nothing carried across years. | `published-or-null`: a county absent from the 3,232 is null with reason `join:unmatched_county`; "Insufficient Data" (88 counties on the composite) is null with `source:insufficient_data`, never 0. `SOVI_*` is FEMA's (from the Census Community Resilience Estimate), not CDC SVI. |
+| CDC PLACES (`places-county`) | PLACES 2025 release, data year 2023 (2022 for COLON_SCREEN, DENTAL, MAMMOUSE, SLEEP, TEETHLOST), `locationid` = county FIPS, CT in planning regions | Static per-county age-adjusted prevalence for the 40 measures, with each CI in provenance. One vintage; a second release makes a two-point series only if CDC's methods note says the releases are comparable. | `published-or-null`: a county absent for a measure (2,958 of 3,145 for most measures, 2,300 for the social-needs module) is null with `source:not_published`. |
+| National Historic Landmarks per county (`nhl-listed`) | NPS `nrhp_locations` layer 0, `Is_NHL='X' AND STATUS='Listed'`, 1,196 points; `County`/`State` names, no FIPS | `place_nhl_count` from one current snapshot | A `(State, County)` name join failing closed, as T-npl; Connecticut's legacy county names leave its planning regions unmatched (null, not 0). Points carry no listing history for a series. |
