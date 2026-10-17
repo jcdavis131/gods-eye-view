@@ -34,6 +34,9 @@ describe("NAIP years at a point", () => {
     expect(resolveNaipYear([], null)).toEqual({ year: null, present: false });
     expect(parseNaipYear("2009")).toBeNull();
     expect(parseNaipYear("2014")).toBe(2014);
+    // This year at most: no year ahead is flown, so none is registered.
+    expect(parseNaipYear("2026", new Date("2026-10-16T00:00:00Z"))).toBe(2026);
+    expect(parseNaipYear("2027", new Date("2026-10-16T00:00:00Z"))).toBeNull();
   });
 });
 

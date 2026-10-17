@@ -22,11 +22,13 @@
 //        NAIP aerial photograph years at a point (USDA FSA via Microsoft Planetary
 //        Computer's STAC search): each year with its acquisition dates, item ids,
 //        resolution and state. Point snapped to 0.001 degrees, held 30 days.
-//   /api/terrain?op=naipmosaic&year=yyyy[&fresh=1]
+//   /api/terrain?op=naipmosaic&year=yyyy
 //        Registers (or reuses) Planetary Computer's per-year NAIP mosaic and answers
-//        { year, searchid, tiles }. Held 24 hours; a held id Planetary Computer no
+//        { year, searchid, tiles }. Held 24 hours; a held id is checked against
+//        /mosaic/{id}/info at most every 10 minutes, and one Planetary Computer no
 //        longer knows (its 404 "SearchId ... not found") is registered again, once.
-//        fresh=1 registers again now. Tiles load from Planetary Computer directly.
+//        When the check itself fails the held id is served (infoChecked false).
+//        Nothing here forces a register. Tiles load from Planetary Computer directly.
 //   /api/terrain?op=topo&lon=..&lat=..
 //        USGS historical topographic maps (HTMC, 1879-2006) at a point: the
 //        edition years there with their scales, and each sheet's citation,
@@ -388,10 +390,17 @@ async function opNaip(q: URLSearchParams): Promise<Response> {
 
 const NAIPMOSAIC_HELP = "op=naipmosaic needs year=yyyy (2010 or later), e.g. year=2023";
 
+/** How long a /mosaic/{id}/info answer is trusted, and the deadlines that keep the op under 60 s. */
+const NAIP_INFO_TTL_MS = 10 * 60_000;
+const NAIP_REGISTER_DEADLINE_MS = 20_000;
+const NAIP_INFO_DEADLINE_MS = 10_000;
+const NAIP_REREGISTER_DEADLINE_MS = 15_000;
+
 /**
  * The per-year NAIP mosaic: Planetary Computer's searchid for the year's cql2 filter, registered
- * at run time and held 24 hours. A held id is checked (/mosaic/{id}/info) and registered again,
- * once, when Planetary Computer answers that it does not know it; fresh=1 registers again now.
+ * at run time and held 24 hours. A held id is checked (/mosaic/{id}/info, the answer held 10
+ * minutes) and registered again, once, when Planetary Computer answers that it does not know it.
+ * A check that fails any other way serves the held id: a timeout or a 5xx is not "forgotten".
  */
 async function opNaipMosaic(q: URLSearchParams): Promise<Response> {
   const year = parseNaipYear(q.get("year"));
@@ -402,23 +411,38 @@ async function opNaipMosaic(q: URLSearchParams): Promise<Response> {
     if (!id) throw new UpstreamError("planetary-computer", 502, "planetary-computer: register answered no searchid");
     return id;
   };
-  if (q.get("fresh") === "1") cacheDelete(key);
-  let r = await cached(key, DAY, register);
+  let r = await cached(key, DAY, register, { deadlineMs: NAIP_REGISTER_DEADLINE_MS });
   let reregistered = false;
+  let infoChecked = true;
   if (r.hit) {
-    try {
-      await pcJson<unknown>(`${PC_MOSAIC}/${r.value}/info`);
-    } catch (err) {
-      if (!(err instanceof UpstreamError) || !isSearchIdNotFound(err.status, { detail: err.message })) throw err;
+    const infoKey = `naip-mosaic-info:${r.value}`;
+    const known = await cached(
+      infoKey,
+      NAIP_INFO_TTL_MS,
+      async () => {
+        try {
+          await pcJson<unknown>(`${PC_MOSAIC}/${r.value}/info`);
+          return true;
+        } catch (err) {
+          if (err instanceof UpstreamError && isSearchIdNotFound(err.status, { detail: err.message })) return false;
+          throw err;
+        }
+      },
+      { deadlineMs: NAIP_INFO_DEADLINE_MS, coolMs: 60_000 },
+    ).catch(() => null);
+    if (known == null) infoChecked = false;
+    else if (!known.value) {
       cacheDelete(key);
-      r = await cached(key, DAY, register);
+      r = await cached(key, DAY, register, { deadlineMs: NAIP_REREGISTER_DEADLINE_MS });
+      // The new id (often the same one: Planetary Computer derives it from the body) is checked afresh next time.
+      cacheDelete(infoKey);
       reregistered = true;
     }
   }
   return ok(
     { year, searchid: r.value, tiles: naipTiles(r.value), minZoom: 11 },
     {
-      meta: { source: "USDA FSA NAIP via Microsoft Planetary Computer (mosaic register)", attribution: NAIP_ATTRIBUTION, reregistered, cacheAge: r.age },
+      meta: { source: "USDA FSA NAIP via Microsoft Planetary Computer (mosaic register)", attribution: NAIP_ATTRIBUTION, reregistered, infoChecked, cacheAge: r.age },
       ttlS: 3600,
       provenance: [provenance(source("usda-naip-pc"), { kind: "published", seriesId: `mosaic/register: collection = naip and naip:year = "${year}"`, upstreamUrl: `${PC_MOSAIC}/register`, retrievedAt: new Date(Date.now() - r.age).toISOString() })],
       caveats: [NAIP_CAVEAT, "Tiles load from Planetary Computer directly, below level 11 none (it answers 204). The searchid is Planetary Computer's and can change; ask this op again rather than keeping it."],

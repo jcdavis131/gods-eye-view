@@ -2663,7 +2663,7 @@
                 "naipmosaic"
               ]
             },
-            "description": "tile: a rendered PNG tile. point: a class or slope at lon, lat. products: the catalog. wayback: Esri World Imagery Wayback's release index. topo: the USGS historical topographic map editions and sheets at lon, lat. waybackdate: when a Wayback release's pixels were captured at lon, lat. naip: USDA NAIP aerial photograph years at a point (lon, lat; snapped to 0.001 degrees), from Microsoft Planetary Computer's STAC search: years [{ year, items: [{ id, date (acquisition, YYYY-MM-DD), gsd (m), state }] }], oldest first; none outside the conterminous US. naipmosaic: registers (or reuses, 24 h) Planetary Computer's mosaic for one year (year=yyyy, 2010 onward) and answers { year, searchid, tiles (XYZ template on planetarycomputer.microsoft.com), minZoom 11 }; a held id Planetary Computer no longer knows is registered again once, and fresh=1 registers again now. Tiles load from Planetary Computer directly; below level 11 it answers no content."
+            "description": "tile: a rendered PNG tile. point: a class or slope at lon, lat. products: the catalog. wayback: Esri World Imagery Wayback's release index. topo: the USGS historical topographic map editions and sheets at lon, lat. waybackdate: when a Wayback release's pixels were captured at lon, lat. naip: USDA NAIP aerial photograph years at a point (lon, lat; snapped to 0.001 degrees), from Microsoft Planetary Computer's STAC search: years [{ year, items: [{ id, date (acquisition, YYYY-MM-DD), gsd (m), state }] }], oldest first; none outside the conterminous US. naipmosaic: registers (or reuses, 24 h) Planetary Computer's mosaic for one year (year=yyyy, 2010 onward) and answers { year, searchid, tiles (XYZ template on planetarycomputer.microsoft.com), minZoom 11 }; a held id is checked against Planetary Computer at most every 10 minutes and registered again once when it is no longer known; when the check fails the held id is served (meta.infoChecked false). Tiles load from Planetary Computer directly; below level 11 it answers no content."
           },
           {
             "name": "release",
@@ -2743,18 +2743,7 @@
               "type": "integer",
               "minimum": 2010
             },
-            "description": "op=naipmosaic: the NAIP year."
-          },
-          {
-            "name": "fresh",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "1"
-              ]
-            },
-            "description": "op=naipmosaic: register the year's mosaic again now (after a tile answered 404 'SearchId ... not found')."
+            "description": "op=naipmosaic: the NAIP year, 2010 to the current year."
           }
         ],
         "responses": {

@@ -28,10 +28,10 @@ export const NAIP_ATTRIBUTION = "USDA Farm Service Agency, National Agriculture 
 export const NAIP_CAVEAT =
   "Agricultural-season aerial photographs flown state by state, so the years available differ by place. Each year is a mosaic of flights; the date on click is the photo under the cursor. Not every state was flown every year.";
 
-/** A whole year from NAIP_FIRST_YEAR to next year, else null. */
+/** A whole year from NAIP_FIRST_YEAR to this year, else null (no year ahead is flown, so none is registered). */
 export function parseNaipYear(v: unknown, now = new Date()): number | null {
   const n = typeof v === "number" ? v : typeof v === "string" && /^\d{4}$/.test(v.trim()) ? Number(v.trim()) : NaN;
-  return Number.isInteger(n) && n >= NAIP_FIRST_YEAR && n <= now.getUTCFullYear() + 1 ? n : null;
+  return Number.isInteger(n) && n >= NAIP_FIRST_YEAR && n <= now.getUTCFullYear() ? n : null;
 }
 
 /** The STAC search for every NAIP item at a point (100 is more than any place has: 6-11 years, one item each). */

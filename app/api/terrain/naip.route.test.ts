@@ -10,6 +10,7 @@ import reg2023 from "@/lib/terrain/fixtures/pc-register-2023.json";
 import reg2011 from "@/lib/terrain/fixtures/pc-register-2011.json";
 import info2023 from "@/lib/terrain/fixtures/pc-info-2023.json";
 import info404 from "@/lib/terrain/fixtures/pc-info-404.json";
+import { cacheDelete } from "@/lib/server/cache";
 import { GET } from "./route";
 
 const PC = "https://planetarycomputer.microsoft.com/api";
@@ -75,7 +76,15 @@ describe("op=naipmosaic", () => {
     const kept = await get("op=naipmosaic&year=2023");
     expect(calls.map((c) => c.url)).toEqual([`${PC}/data/v1/mosaic/47390dd3950110f09a58e4678f4f6192/info`]);
     expect(kept.body.reregistered).toBe(false);
-    // Forgotten upstream: one 404 "SearchId ... not found", one register, nothing more.
+    expect((kept.body as { infoChecked?: boolean }).infoChecked).toBe(true);
+    // The check is held 10 minutes: asking again inside them calls nothing upstream.
+    calls.length = 0;
+    await get("op=naipmosaic&year=2023");
+    expect(calls).toEqual([]);
+    // Forgotten upstream once the held check lapses (dropped here rather than waiting the 10
+    // minutes; moving the clock would also move the Planetary Computer gate's): one 404
+    // "SearchId ... not found", one register, nothing more.
+    cacheDelete("naip-mosaic-info:47390dd3950110f09a58e4678f4f6192");
     answer = (u) => (u.endsWith("/info") ? json(info404, 404) : u === `${PC}/data/v1/mosaic/register` ? json(reg2023) : null);
     calls.length = 0;
     const again = await get("op=naipmosaic&year=2023");
@@ -85,7 +94,32 @@ describe("op=naipmosaic", () => {
     expect(calls.filter((c) => c.url.endsWith("/info"))).toHaveLength(1);
   });
 
-  it("refuses a year before NAIP's first here without asking", async () => {
+  it("serves the held id when the check fails other than 'not found', and does not ask again at once", async () => {
+    // 2011 is held from the first test of this block.
+    answer = (u) => (u.endsWith("/0bae9ecc67f679c8a96f9b046ca52a95/info") ? json({ detail: "Service Unavailable" }, 503) : null);
+    calls.length = 0;
+    const r = await get("op=naipmosaic&year=2011");
+    expect(r.status).toBe(200);
+    expect(r.body.data.searchid).toBe("0bae9ecc67f679c8a96f9b046ca52a95");
+    expect((r.body as { infoChecked?: boolean }).infoChecked).toBe(false);
+    expect(r.body.reregistered).toBe(false);
+    expect(calls.some((c) => c.url.endsWith("/register"))).toBe(false);
+    calls.length = 0;
+    const again = await get("op=naipmosaic&year=2011");
+    expect(again.status).toBe(200);
+    expect(calls).toEqual([]);
+  });
+
+  it("has no way to force a register: fresh=1 is ignored", async () => {
+    answer = () => null;
+    calls.length = 0;
+    const r = await get("op=naipmosaic&year=2011&fresh=1");
+    expect(r.status).toBe(200);
+    expect(calls.some((c) => c.url.endsWith("/register"))).toBe(false);
+  });
+
+  it("refuses a year before NAIP's first, or after this one, without asking", async () => {
+    expect((await get(`op=naipmosaic&year=${new Date().getUTCFullYear() + 1}`)).status).toBe(400);
     expect((await get("op=naipmosaic&year=2009")).status).toBe(400);
     expect((await get("op=naipmosaic&year=abcd")).status).toBe(400);
     expect(calls).toEqual([]);
