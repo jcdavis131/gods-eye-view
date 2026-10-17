@@ -144,6 +144,19 @@ describe("op=naipmosaic", () => {
     expect(calls).toEqual([]);
   });
 
+  it("goes on unchecked when the year search itself fails: a 503 is not 'no item'", async () => {
+    // 2023 with nothing held for it: its year answer and its id are dropped first.
+    cacheDelete("naip-year-listed:2023");
+    cacheDelete("naip-mosaic:2023");
+    answer = (u) => (u === `${PC}/stac/v1/search` ? json({ detail: "Service Unavailable" }, 503) : u === `${PC}/data/v1/mosaic/register` ? json(reg2023) : null);
+    calls.length = 0;
+    const r = await get("op=naipmosaic&year=2023");
+    expect(r.status).toBe(200);
+    expect((r.body as { yearChecked?: boolean }).yearChecked).toBe(false);
+    expect(r.body.data.searchid).toBe("47390dd3950110f09a58e4678f4f6192");
+    expect(calls.filter((c) => c.url.endsWith("/register"))).toHaveLength(1);
+  });
+
   it("has no way to force a register: fresh=1 is ignored", async () => {
     answer = () => null;
     calls.length = 0;

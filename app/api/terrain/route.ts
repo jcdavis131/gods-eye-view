@@ -407,14 +407,21 @@ const naipReregisteredAt = new Map<number, number>();
  * minutes) and registered again when Planetary Computer answers that it does not know it, at
  * most once a year per NAIP_REREGISTER_COOLDOWN_MS; inside that the held id is served as is.
  * A check that fails any other way serves the held id: a timeout or a 5xx is not "forgotten".
- * Only a year the STAC search lists an item for is registered (asked once, held a day); any
- * other year is a 400, so the year this is written in is refused until NAIP publishes it.
+ * Only a year the STAC search lists an item for is registered (asked once, held a day); a year
+ * it lists none for is a 400, so the year this is written in is refused until NAIP publishes it.
+ * A search that fails is not "none": the op goes on as before (meta.yearChecked false).
  */
 async function opNaipMosaic(q: URLSearchParams): Promise<Response> {
   const year = parseNaipYear(q.get("year"));
   if (year == null) return badRequest(NAIPMOSAIC_HELP);
-  const listed = await cached(`naip-year-listed:${year}`, DAY, async () => naipYearListed(await pcJson<unknown>(PC_STAC_SEARCH, stacYearBody(year)), year), { deadlineMs: NAIP_LISTED_DEADLINE_MS });
-  if (!listed.value) return badRequest(naipUnlistedMessage(year));
+  // Only a definite "no item" is refused; a search that times out or fails is not "unlisted", so the
+  // held id is served (or the year registered) as before, with meta.yearChecked false.
+  const listed = await cached(`naip-year-listed:${year}`, DAY, async () => naipYearListed(await pcJson<unknown>(PC_STAC_SEARCH, stacYearBody(year)), year), {
+    deadlineMs: NAIP_LISTED_DEADLINE_MS,
+    coolMs: 60_000,
+  }).catch(() => null);
+  if (listed && !listed.value) return badRequest(naipUnlistedMessage(year));
+  const yearChecked = listed != null;
   const key = `naip-mosaic:${year}`;
   const register = async () => {
     const id = parseSearchId(await pcJson<unknown>(`${PC_MOSAIC}/register`, registerBody(year)));
@@ -457,7 +464,7 @@ async function opNaipMosaic(q: URLSearchParams): Promise<Response> {
   return ok(
     { year, searchid: r.value, tiles: naipTiles(r.value), minZoom: 11 },
     {
-      meta: { source: "USDA FSA NAIP via Microsoft Planetary Computer (mosaic register)", attribution: NAIP_ATTRIBUTION, reregistered, reregisterCooling, infoChecked, cacheAge: r.age },
+      meta: { source: "USDA FSA NAIP via Microsoft Planetary Computer (mosaic register)", attribution: NAIP_ATTRIBUTION, reregistered, reregisterCooling, infoChecked, yearChecked, cacheAge: r.age },
       ttlS: 3600,
       provenance: [provenance(source("usda-naip-pc"), { kind: "published", seriesId: `mosaic/register: collection = naip and naip:year = "${year}"`, upstreamUrl: `${PC_MOSAIC}/register`, retrievedAt: new Date(Date.now() - r.age).toISOString() })],
       caveats: [NAIP_CAVEAT, "Tiles load from Planetary Computer directly, below level 11 none (it answers 204). The searchid is Planetary Computer's and can change; ask this op again rather than keeping it."],

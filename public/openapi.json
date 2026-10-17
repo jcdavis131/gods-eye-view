@@ -10004,6 +10004,10 @@
               "reregisterCooling": {
                 "type": "boolean",
                 "description": "the held id was unknown to Planetary Computer, but this year was registered again under 10 minutes ago, so the held id is served as is"
+              },
+              "yearChecked": {
+                "type": "boolean",
+                "description": "false when the STAC search for the year's items failed; the year was then served or registered unchecked (only a search that answers no item refuses it)"
               }
             }
           }
