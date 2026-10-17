@@ -61,6 +61,11 @@ describe("the catalogue", () => {
       "svi-tracts",
       "hifld-hospitals",
       "nces-public-schools",
+      "fcc-bdc-counties",
+      "fcc-bdc-hex",
+      "wrc-counties",
+      "wrc-communities",
+      "bia-lar",
     ]);
     const ids = COLLECTIONS.map((c) => c.id);
     expect(new Set(ids).size).toBe(ids.length);
@@ -82,7 +87,7 @@ describe("the catalogue", () => {
   });
 
   it("gives every curated layer at least one card, and shelves every catalogued layer once", () => {
-    for (const l of ["wetlands", "historic", "crithab", "contaminants", "wayback", "topo", "impaired", "pfas", "flood", "publiclands", "dams", "ust", "hydro", "riskindex", "naip", "heritage", "health", "vulnerability", "hospitals", "schools"] as const) expect(collectionsForLayer(l).length, l).toBeGreaterThan(0);
+    for (const l of ["wetlands", "historic", "crithab", "contaminants", "wayback", "topo", "impaired", "pfas", "flood", "publiclands", "dams", "ust", "hydro", "riskindex", "naip", "heritage", "health", "vulnerability", "hospitals", "schools", "broadband", "wildfirerisk", "tribal"] as const) expect(collectionsForLayer(l).length, l).toBeGreaterThan(0);
     const shelved = SHELVES.flatMap((s) => s.layers);
     expect(new Set(shelved).size).toBe(shelved.length);
     for (const l of catalogued()) expect(shelved, l).toContain(l);

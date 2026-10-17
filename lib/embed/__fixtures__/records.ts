@@ -31,6 +31,10 @@ import ustRel from "@/lib/permits/fixtures/ust-3-gulf.json";
 import ustFac from "@/lib/permits/fixtures/ust-2-gulf.json";
 import { buildImpaired } from "@/lib/water/impaired";
 import attainsLines from "@/lib/water/fixtures/attains-1-baltimore.json";
+import { buildWrcPlaces } from "@/lib/hazards/wrc";
+import wrcBoulder from "@/lib/hazards/fixtures/wrc-place-boulder-box.json";
+import { buildTribal, filterTribalParts } from "@/lib/land/tribal";
+import larNational from "@/lib/land/fixtures/bia-lar-national.json";
 import { codedDomains, type ArcgisLayerInfo } from "@/lib/server/arcgis";
 import type { CollectionId } from "@/lib/catalog/embedFields";
 
@@ -73,6 +77,8 @@ export function recordFixtures(mutate: Mutate = keep): Array<{ card: CollectionI
     { card: "fuds-mrs", captured: true, features: buildFudsMrs(rowsOf(fudsMrs, mutate) as never) },
     { card: "ust-releases-county", captured: true, features: ust },
     { card: "attains-impaired", captured: true, features: buildImpaired(rowsOf(attainsLines, mutate), "line") },
+    { card: "wrc-communities", captured: true, features: buildWrcPlaces(rowsOf(wrcBoulder, mutate) as never, 0, "national") },
+    { card: "bia-lar", captured: true, features: buildTribal(filterTribalParts(rowsOf(larNational, mutate)).features) },
     { card: "padus-units", captured: false, features: buildPublicLands(PADUS_TEST_ROWS.map((r) => mutate({ ...r, properties: { ...r.properties } })), new Map()) },
     { card: "fema-nfhl-zones", captured: false, features: buildFloodZones(NFHL_TEST_ROWS.map((r) => mutate({ ...r, properties: { ...r.properties } })) as never) },
   ];

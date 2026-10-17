@@ -140,6 +140,13 @@ describe("voice words for community health", () => {
     expect(layerOf("show trauma centers")).toMatchObject({ layer: "hospitals" });
     expect(layerOf("show public schools near austin")).toMatchObject({ layer: "schools", place: "austin" });
     expect(layerOf("show schools")).toMatchObject({ layer: "schools" });
+    expect(layerOf("show broadband over travis county")).toMatchObject({ layer: "broadband", place: "travis county" });
+    expect(layerOf("show fiber internet")).toMatchObject({ layer: "broadband" });
+    expect(layerOf("show wildfire risk over boulder")).toMatchObject({ layer: "wildfirerisk", place: "boulder" });
+    expect(layerOf("show wildfire hazard")).toMatchObject({ layer: "firehazard" });
+    expect(layerOf("show wildfires")).toMatchObject({ layer: "wildfire" });
+    expect(layerOf("show trust land")).toMatchObject({ layer: "tribal" });
+    expect(layerOf("show reservations over south dakota")).toMatchObject({ layer: "tribal", place: "south dakota" });
   });
 });
 

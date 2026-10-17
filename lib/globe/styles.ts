@@ -26,7 +26,7 @@ import { constructsStyle } from "./constructStyles";
 import { fieldStyle } from "./fieldStyles";
 import { alertsStyle } from "./alertStyles";
 import { firesStyle, hazardsStyle, wildfireStyle } from "./hazardStyles";
-import { floodStyle, heritageStyle, historicStyle, impairedStyle, pfasStyle, publiclandsStyle, wetlandsStyle } from "./landStyles";
+import { floodStyle, heritageStyle, historicStyle, impairedStyle, pfasStyle, publiclandsStyle, tribalStyle, wetlandsStyle } from "./landStyles";
 import { contoursStyle, crithabStyle, firehazardStyle, hydroStyle, landcoverStyle, naipStyle, reliefStyle, sealevelStyle, slopeStyle, soilsStyle, topoStyle, waybackStyle } from "./terrainStyles";
 import {
   airportsStyle,
@@ -45,7 +45,7 @@ import {
 } from "./infraStyles";
 import { parcelsStyle } from "./parcelStyles";
 import { contaminantsStyle, envpermitsStyle, licencesStyle, permitsStyle, schoolsStyle, ustStyle, zoningStyle } from "./civicStyles";
-import { healthStyle, riskindexStyle, vulnerabilityStyle } from "./indexStyles";
+import { broadbandStyle, healthStyle, riskindexStyle, vulnerabilityStyle, wildfireriskStyle } from "./indexStyles";
 
 /** Distinctive major-group colours for the occupations layer: one hue per SOC major group. */
 const OCCUPATION_COLORS: Record<string, string> = {
@@ -505,6 +505,9 @@ export const STYLES: Partial<Record<LayerId, LayerStyle>> = {
   schools: schoolsStyle,
   hospitals: hospitalsStyle,
   vulnerability: vulnerabilityStyle,
+  broadband: broadbandStyle,
+  wildfirerisk: wildfireriskStyle,
+  tribal: tribalStyle,
   sports: sportsStyle,
   constructs: constructsStyle,
   field: fieldStyle,
@@ -588,6 +591,9 @@ export const FOLLOW_RANGE: Record<LayerId, number> = {
   schools: 8_000,
   hospitals: 60_000,
   vulnerability: 200_000,
+  broadband: 200_000,
+  wildfirerisk: 200_000,
+  tribal: 300_000,
   sports: 500_000,
   constructs: 150_000,
   field: 400_000,

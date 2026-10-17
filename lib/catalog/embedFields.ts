@@ -63,6 +63,11 @@ export const EMBED_TEXT = {
   "svi-tracts": ["STATE", "COUNTY"],
   "hifld-hospitals": ["TYPE", "TRAUMA", "HELIPAD", "STATE"],
   "nces-public-schools": ["SCHOOL_LEVEL", "SCHOOL_TYPE_TEXT", "CHARTER_TEXT", "VIRTUAL", "SY_STATUS_TEXT", "ULOCALE", "GSLO", "GSHI", "LSTATE"],
+  "fcc-bdc-counties": ["StateAbbr"],
+  "fcc-bdc-hex": [],
+  "wrc-counties": ["STUSPS"],
+  "wrc-communities": ["STUSPS", "exclude_re"],
+  "bia-lar": ["LARNAME"],
 } satisfies Record<string, string[]>;
 
 export type CollectionId = keyof typeof EMBED_TEXT;
@@ -91,6 +96,9 @@ export const NAME_FIELDS_ALLOWED: ReadonlySet<string> = new Set([
   "SCIENAME",
   "Scientific_Name",
   "cas_chem_name",
+  // BIA LAR land area names: all 335 read (reservations, rancherias, pueblos, communities; none a
+  // person's). Embedded on Cam's call, 2026-10-17; the one *name field that is also a feature's name.
+  "LARNAME",
 ]);
 
 /**
@@ -262,6 +270,12 @@ export const FIELD_LABEL: Readonly<Record<string, string>> = {
   GSLO: "lowest grade",
   GSHI: "highest grade",
   LSTATE: "state",
+  // FCC BDC via Esri, USFS WRC (state abbreviations are place words, shared freely)
+  StateAbbr: "state",
+  STUSPS: "state",
+  exclude_re: "not ranked by USFS because",
+  // BIA LAR. REGION is not embedded: its label is NPS's ("NPS region"), and BIA's regions are not NPS's.
+  LARNAME: "BIA land area",
 };
 
 /**
@@ -286,6 +300,8 @@ export const RECORD_VECTOR_CARDS: ReadonlySet<string> = new Set([
   "nid-dams",
   "hifld-hospitals",
   "nces-public-schools",
+  "wrc-communities",
+  "bia-lar",
 ]);
 
 export const NO_RECORD_VECTORS: Readonly<Record<string, string>> = {
@@ -317,6 +333,9 @@ export const NO_RECORD_VECTORS: Readonly<Record<string, string>> = {
   "places-tract": "deferred with places-county",
   "svi-counties": "joined in the browser onto the shared county outlines, as nri-counties; record vectors deferred to the next round",
   "svi-tracts": "deferred with svi-counties",
+  "fcc-bdc-counties": "joined in the browser onto the shared county outlines, as svi-counties; record vectors deferred to the next round",
+  "fcc-bdc-hex": "hexagon rows carry no text, only counts and an H3 id",
+  "wrc-counties": "joined in the browser onto the shared county outlines, as svi-counties; record vectors deferred to the next round",
 };
 
 /** Fields that must never be embedded whatever a card says: the deny list, the dossier's "published name", and any *name field not reviewed. */

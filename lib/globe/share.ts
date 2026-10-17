@@ -40,6 +40,14 @@
 //                                not the overall ranking, is picked)
 //   &hs=all                      Hospitals draws closed ones too (written only while it
 //                                is on and its 'Closed too' chip is on)
+//   &bb=3                        the measure the Broadband layer draws (1 underserved
+//                                share, 2 fiber share, 3 providers; written only while it
+//                                is on and a measure other than the unserved share is picked)
+//   &wr=2                        the USFS WRC rank family the Wildfire risk ranks layer
+//                                draws (1-3, by the service's aliases; written only while
+//                                it is on and not RISK_NATIONAL_RANK)
+//   &wrs=state                   the same layer ranks within the state (written only while
+//                                it is on and the state rank is picked)
 //   &aoi=1                       the Area panel open on the drawn area (shape=a:…)
 //   &here=29.42410,-98.49360     a "what's here" answer asked at this point (lat,lon,
 //                                5 decimals) once the camera is there
@@ -72,6 +80,13 @@ import { parseReleaseId } from "@/lib/terrain/wayback";
 import { parseTopoYear } from "@/lib/terrain/topo";
 import { parseNaipYear } from "@/lib/terrain/naip";
 import { parseSviTheme } from "@/lib/civic/svi";
+import { parseBroadbandMeasure } from "@/lib/civic/broadband";
+import { parseWrcMeasure } from "@/lib/hazards/wrc";
+
+/** A broadband measure or WRC rank family from a link: 1 to 3 (0, the default, is never written). */
+export function parseMeasureParam(v: string | null | undefined): number | undefined {
+  return v != null && /^[1-3]$/.test(v.trim()) ? Number(v.trim()) : undefined;
+}
 
 /** An SVI theme from a link: 1 to 4 (the overall ranking, 0, is the default and is never written). */
 export function parseSviThemeParam(v: string | null | undefined): number | undefined {
@@ -133,6 +148,12 @@ export interface ShareState {
   sv?: number;
   /** Hospitals: closed ones too. Open only is the default and is never written. */
   hs?: "all";
+  /** Broadband measure, 1-3 (0, the unserved share, is the default and never written). */
+  bb?: number;
+  /** WRC rank family, 1-3 (0, RISK_*, is the default and never written). */
+  wr?: number;
+  /** WRC state ranks. National is the default and is never written. */
+  wrs?: "state";
 }
 
 /** Terrain exaggeration from a link: 1 to 3, else undefined. */
@@ -272,6 +293,11 @@ export function parseShare(search: string): ShareState {
   const sv = parseSviThemeParam(q.get("sv"));
   if (sv != null) out.sv = sv;
   if (q.get("hs") === "all") out.hs = "all";
+  const bb = parseMeasureParam(q.get("bb"));
+  if (bb != null) out.bb = bb;
+  const wr = parseMeasureParam(q.get("wr"));
+  if (wr != null) out.wr = wr;
+  if (q.get("wrs") === "state") out.wrs = "state";
   return out;
 }
 
@@ -309,6 +335,9 @@ export function shareQuery(s: ShareState): string {
   if (s.ny != null) q.set("ny", String(s.ny));
   if (s.sv != null) q.set("sv", String(s.sv));
   if (s.hs) q.set("hs", s.hs);
+  if (s.bb != null) q.set("bb", String(s.bb));
+  if (s.wr != null) q.set("wr", String(s.wr));
+  if (s.wrs) q.set("wrs", s.wrs);
   // The Area panel belongs to a drawn area; without one it has nothing to show.
   if (s.aoi && completeShape(s.shape)?.kind === "area") q.set("aoi", "1");
   if (s.here) q.set("here", `${s.here.lat.toFixed(5)},${s.here.lon.toFixed(5)}`);
@@ -364,6 +393,9 @@ export function currentShare(): ShareState {
     ny: st.layers.naip && prefs.naipYear != null ? prefs.naipYear : undefined,
     sv: st.layers.vulnerability && prefs.sviTheme !== "0" ? parseSviTheme(prefs.sviTheme) : undefined,
     hs: st.layers.hospitals && prefs.hospitalStatus === "all" ? "all" : undefined,
+    bb: st.layers.broadband && parseBroadbandMeasure(prefs.broadbandMeasure) !== 0 ? parseBroadbandMeasure(prefs.broadbandMeasure) : undefined,
+    wr: st.layers.wildfirerisk && parseWrcMeasure(prefs.wrcMeasure) !== 0 ? parseWrcMeasure(prefs.wrcMeasure) : undefined,
+    wrs: st.layers.wildfirerisk && prefs.wrcScope === "state" ? "state" : undefined,
     aoi: useArea.getState().open && areaRing(st.measure.shape) ? true : undefined,
     here: here ? { lat: here.lat, lon: here.lon } : undefined,
   };
@@ -426,7 +458,7 @@ export function startUrlSync(): () => void {
   const unsubPrefs = useSettings.subscribe((s, prev) => {
     const a = s.prefs;
     const b = prev.prefs;
-    if (a.terrain !== b.terrain || a.terrainExaggeration !== b.terrainExaggeration || a.seaLevelFt !== b.seaLevelFt || a.waybackRelease !== b.waybackRelease || a.topoYear !== b.topoYear || a.naipYear !== b.naipYear || a.sviTheme !== b.sviTheme || a.hospitalStatus !== b.hospitalStatus) schedule();
+    if (a.terrain !== b.terrain || a.terrainExaggeration !== b.terrainExaggeration || a.seaLevelFt !== b.seaLevelFt || a.waybackRelease !== b.waybackRelease || a.topoYear !== b.topoYear || a.naipYear !== b.naipYear || a.sviTheme !== b.sviTheme || a.hospitalStatus !== b.hospitalStatus || a.broadbandMeasure !== b.broadbandMeasure || a.wrcMeasure !== b.wrcMeasure || a.wrcScope !== b.wrcScope) schedule();
   });
   const unsubGround = useGroundPick.subscribe((s, prev) => {
     if (s.pick?.lon !== prev.pick?.lon || s.pick?.lat !== prev.pick?.lat) schedule();
@@ -487,7 +519,7 @@ export function applyShare(s: ShareState, opts: { fly?: boolean } = {}): void {
   if (s.market) st.setMarketReportOpen(true);
   if (s.space) st.setSpaceWeatherOpen(true);
   // Terrain and the sea level scenario are display settings: a link that carries them sets them.
-  if (s.terrain != null || s.slr != null || s.wb != null || s.ty != null || s.ny != null || s.sv != null || s.hs != null) {
+  if (s.terrain != null || s.slr != null || s.wb != null || s.ty != null || s.ny != null || s.sv != null || s.hs != null || s.bb != null || s.wr != null || s.wrs != null) {
     const set = useSettings.getState().setPref;
     if (s.terrain != null) {
       set("terrain", true);
@@ -502,6 +534,9 @@ export function applyShare(s: ShareState, opts: { fly?: boolean } = {}): void {
     if (s.ny != null) set("naipYear", s.ny);
     if (s.sv != null) set("sviTheme", String(s.sv));
     if (s.hs) set("hospitalStatus", s.hs);
+    if (s.bb != null) set("broadbandMeasure", String(s.bb));
+    if (s.wr != null) set("wrcMeasure", String(s.wr));
+    if (s.wrs) set("wrcScope", s.wrs);
   }
   // A shared ground answer: asked once the camera has arrived, of the layers now on.
   if (s.ground) {

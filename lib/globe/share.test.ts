@@ -376,3 +376,47 @@ describe("closed hospitals in the share link", () => {
     useGlobe.getState().setLayer("hospitals", false);
   });
 });
+
+describe("broadband and wildfire risk picks in the share link", () => {
+  it("round-trips bb=, wr= and wrs=state and drops anything else", () => {
+    const s: ShareState = { layers: ["broadband", "wildfirerisk"], bb: 3, wr: 2, wrs: "state" };
+    const q = shareQuery(s);
+    expect(q).toContain("bb=3");
+    expect(q).toContain("wr=2");
+    expect(q).toContain("wrs=state");
+    expect(parseShare(q)).toEqual(s);
+    for (const bad of ["?bb=0", "?bb=4", "?bb=x", "?wr=0", "?wr=9"]) {
+      expect(parseShare(bad).bb, bad).toBeUndefined();
+      expect(parseShare(bad).wr, bad).toBeUndefined();
+    }
+    expect(parseShare("?wrs=national").wrs).toBeUndefined();
+  });
+
+  it("is written only while the layer is on and a non-default pick is made", async () => {
+    const { currentShare } = await import("./share");
+    const { useGlobe } = await import("@/lib/store/globe");
+    const { useSettings } = await import("@/lib/store/settings");
+    const set = useSettings.getState().setPref;
+    set("broadbandMeasure", "2");
+    set("wrcMeasure", "1");
+    set("wrcScope", "state");
+    useGlobe.getState().setLayer("broadband", false);
+    useGlobe.getState().setLayer("wildfirerisk", false);
+    expect(currentShare().bb).toBeUndefined();
+    expect(currentShare().wr).toBeUndefined();
+    expect(currentShare().wrs).toBeUndefined();
+    useGlobe.getState().setLayer("broadband", true);
+    useGlobe.getState().setLayer("wildfirerisk", true);
+    expect(currentShare().bb).toBe(2);
+    expect(currentShare().wr).toBe(1);
+    expect(currentShare().wrs).toBe("state");
+    set("broadbandMeasure", "0");
+    set("wrcMeasure", "0");
+    set("wrcScope", "national");
+    expect(currentShare().bb).toBeUndefined();
+    expect(currentShare().wr).toBeUndefined();
+    expect(currentShare().wrs).toBeUndefined();
+    useGlobe.getState().setLayer("broadband", false);
+    useGlobe.getState().setLayer("wildfirerisk", false);
+  });
+});

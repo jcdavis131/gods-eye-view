@@ -97,6 +97,8 @@ export const SEARCHABLE_DETAILS: ReadonlySet<string> = new Set([
   // impaired waters: EPA ATTAINS assessment unit ids (state-assigned codes); the unit's
   // name is a place name but is not searched in this round
   "assessment unit id",
+  // trust land: BIA's land area id (the feature is labelled by BIA's land area name, a place's)
+  "lar id",
   // PFAS in drinking water: EPA's public water system id. Never the system's name (some
   // are apartment complexes, nursing homes or rental parks)
   "pwsid",
