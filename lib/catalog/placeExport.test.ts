@@ -84,6 +84,21 @@ describe("place exports", () => {
     const i = r.places.indexOf("21111");
     expect(r.value[i][r.meta.features.indexOf("ust_open_release_count")]).toBeNull();
     expect(r.nullCells!["21111"].ust_open_release_count).toBe("source:null_in_county_layer");
+    // The layer never publishes a 0 for the status counts, so the nulls are explained, not filled.
+    const rm = r.meta as unknown as { nullCellNote: string; nullPattern: { publishedZerosByFeature: Record<string, number>; openPlusNfaAboveRelease: number; releaseZeroWithNullStatus: string[] } };
+    expect(rm.nullPattern.publishedZerosByFeature).toMatchObject({ ust_open_release_count: 0, ust_nfa_release_count: 0 });
+    expect(rm.nullPattern.openPlusNfaAboveRelease).toBe(0);
+    expect(rm.nullPattern.releaseZeroWithNullStatus).toContain("15005");
+    expect(rm.nullCellNote).toMatch(/most likely means 0/);
+    // Facility tank nulls are not only Puerto Rico's: California and two Georgia counties too.
+    const f = data("ust-facilities-county");
+    const byState = (f.meta.counts as unknown as { nullCellsByState: Record<string, Record<string, number>> }).nullCellsByState;
+    expect(Object.keys(byState.ust_closed_tanks).sort()).toEqual(["CA", "GA", "PR"]);
+    for (const g of ["06037", "13123", "13125"]) expect(f.nullCells![g].ust_closed_tanks).toBe("source:null_in_county_layer");
+  });
+
+  it("every export's served meta.form is PLACE_EXPORT_FORM's", () => {
+    for (const id of PLACE_EXPORTS) expect((placeExport(id)!.data as { meta: { form?: string } }).meta.form, id).toBe(PLACE_EXPORT_FORM[id]);
   });
 
   it("FUDS: property numbers only, no coordinates, owners or names; counts re-derive from the ids", () => {
@@ -105,5 +120,12 @@ describe("place exports", () => {
     for (const ids of Object.values(d.meta.unlocated)) for (const x of ids) expect(x).toMatch(id);
     for (const g of ["09110", "09190"]) expect(d.nullPlaces[g]).toBe("join:unplaced_property_in_state");
     expect(d.meta.counts.strictRule.observedShare).toBeLessThan(1);
+    // placed counts properties put in a county later nulled; counted is what propertyIds holds.
+    const c = d.meta.counts as unknown as { placed: number; counted: number; placedThenNulled: number };
+    expect(c.counted).toBe(Object.values(d.propertyIds).reduce((a, v) => a + v.length, 0));
+    expect(c.placed - c.counted).toBe(c.placedThenNulled);
+    // A county-or-city name is placed by its point: B07MO0988 "ST LOUIS" is in St. Louis city.
+    expect(d.propertyIds["29510"]).toContain("B07MO0988");
+    expect((d.meta as unknown as { zeroRuleStatus: string }).zeroRuleStatus).toMatch(/^pending/);
   });
 });

@@ -31,6 +31,14 @@ export const UST_FACILITY_FIELDS = ["Facility_Count", "NAME", "State", "POPULATI
 export const UST_CAVEAT =
   "EPA's national composite of state tank records as of 2018-2021 (tribal records to October 2025), counted by county: a snapshot, not current status. A release is a reported leak; 'no further action' means the state closed it, not that no contamination remains. Counts depend on how each state reported. Individual sites are not shown because many are private homes.";
 
+/** The release layer's status-count nulls: what they most likely mean (catalogue card and place export). */
+export const UST_RELEASE_NULLS =
+  "Open and no-further-action counts: the layer never publishes a 0 in either field (505 and 225 nulls), so a null there most likely means 0 for many counties; it is kept null, and missingness is not random. Open: all 120 Kentucky counties plus 385 counties in 34 other states, 359 of which have release count = no-further-action count (0 left open). No further action: all 78 of Puerto Rico's plus 147 elsewhere (Kentucky 119, Washington 21, 7 others). Kalawao, HI and 8 other counties publish 0 releases with null status counts. Evidence in meta.nullPattern.";
+
+/** The facility layer's tank-count nulls, by where they are (catalogue card and place export). */
+export const UST_FACILITY_NULLS =
+  "Tank counts: closed and temporarily-out-of-service tanks are null in 118 counties each (all 78 of Puerto Rico's, 38 California counties including Los Angeles, and Georgia's 13123 and 13125), open tanks in 80 (Puerto Rico and the same two Georgia counties). Kept null, never 0 (meta.nullCellNote).";
+
 export function ustParams(which: keyof typeof UST_LAYERS, b: Bbox): Record<string, string> {
   const [w, s, e, n] = b;
   return {
