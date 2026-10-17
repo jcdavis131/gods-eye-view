@@ -78,6 +78,15 @@ describe("op=hospitals", () => {
     expect(body.data.features).toBeUndefined();
   });
 
+  it("the layer's 150 km box at Anchorage (5.6 degrees wide) still gets the full record, not the national set", async () => {
+    answer = (u) => (u.startsWith(H) ? box : null);
+    const { status, body } = await get("op=hospitals&bbox=-152.7,59.85,-147.1,62.55");
+    expect(status).toBe(200);
+    expect(body.national).toBe(false);
+    expect(body.data.features).toBeDefined();
+    expect(new URL(calls[0]).searchParams.get("outFields")).toContain("ADDRESS");
+  });
+
   it("status=all drops the open filter; anything else is refused before asking", async () => {
     answer = (u) => (u.startsWith(H) ? box : null);
     await get("op=hospitals&bbox=-97.8,30.2,-97.65,30.4&status=all");

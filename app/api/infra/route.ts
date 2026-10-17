@@ -16,7 +16,7 @@
 //   /api/infra?op=dams&bbox=…                USACE National Inventory of Dams: hazard potential,
 //                                            condition, height, storage. Box at most 1.5 degrees.
 //   /api/infra?op=hospitals&bbox=…[&status=all] HIFLD hospitals (FEMA RAPT's copy, the last
-//                                            public one). A box over 3 degrees gets every
+//                                            public one). A box over 20 degrees gets every
 //                                            hospital nationally as packed rows (one pull held
 //                                            a day); a smaller box the full record as GeoJSON.
 //                                            Open only unless status=all.
@@ -70,6 +70,7 @@ import {
   HOSPITALS_CAVEAT,
   HOSPITALS_DATA_EDIT,
   HOSPITALS_MAX_PAGES,
+  HOSPITALS_NATIONAL_MIN_DEG,
   HOSPITALS_PAGE,
   HOSPITALS_URL,
   hospitalWhere,
@@ -459,7 +460,7 @@ async function hospitalsNational(status: HospitalStatus) {
 }
 
 async function opHospitals(bbox: Bbox, status: HospitalStatus): Promise<OpResult> {
-  const national = bbox[2] - bbox[0] > HOSPITALS_BOX_MAX_DEG || bbox[3] - bbox[1] > HOSPITALS_BOX_MAX_DEG;
+  const national = bbox[2] - bbox[0] > HOSPITALS_NATIONAL_MIN_DEG || bbox[3] - bbox[1] > HOSPITALS_NATIONAL_MIN_DEG;
   const box: Bbox = national ? bbox : snapBbox(bbox, HOSPITALS_BOX_MAX_DEG, 0.25);
   if (national) {
     const n = await cached(`hosp:national:${status}`, DAY, () => hospitalsNational(status), INFRA_DEADLINE);
@@ -483,7 +484,7 @@ function hospitalsResult(data: unknown, count: number, cut: boolean, age: number
     "Beds and trauma levels are as published; -999 beds and 'NOT AVAILABLE' are shown as not published, never 0. Names and addresses are institutions' as their licensing sources publish them; no telephone, staff or patient field is requested.",
     status === "open" ? "Open hospitals only (STATUS = 'OPEN'); ask status=all for the 374 HIFLD lists as closed." : "Open and closed hospitals, as HIFLD's STATUS says.",
   ];
-  if (national) caveats.push("Every hospital in the United States and territories as packed rows (`columns`, then `rows`: ID, NAME, CITY, STATE, TYPE, STATUS, BEDS, TRAUMA, COUNTYFIPS, lon, lat, values as published); ask a box of 3 degrees or less for the full record as GeoJSON.");
+  if (national) caveats.push("Every hospital in the United States and territories as packed rows (`columns`, then `rows`: ID, NAME, CITY, STATE, TYPE, STATUS, BEDS, TRAUMA, COUNTYFIPS, lon, lat, values as published); ask a box of 20 degrees or less for the full record as GeoJSON (clamped to 6 degrees around its centre).");
   else caveats.push(BOX_CAVEAT);
   if (cut) caveats.push(national ? `FEMA's answer was still cut after ${HOSPITALS_MAX_PAGES} pages: some hospitals are missing from this answer.` : "The record limit was hit; ask a smaller box for every hospital.");
   return {

@@ -3363,7 +3363,7 @@
                 "geology"
               ]
             },
-            "description": "transmission: HIFLD lines. pipelines: EIA pipelines. rail: FRA/BTS rail. airports: FAA public-use. dams: USACE NID. plants: EIA-860M + Wikidata nuclear. faults: USGS Qfaults. landslides: USGS inventory. plss: BLM townships or sections. plss-search: T-R-S lookup. geology: Macrostrat units at lon, lat. hospitals: HIFLD hospitals as FEMA RAPT last copied them (the last public copy; data edited 2026-04-22). A box over 3 degrees answers every hospital nationally as packed rows { columns, rows } (ID, NAME, CITY, STATE, TYPE, STATUS, BEDS, TRAUMA, COUNTYFIPS, lon, lat; one pull held a day); a smaller box (snapped to 0.25, at most 3 degrees) the full record (plus ADDRESS, ZIP, HELIPAD, OWNER, NAICS_DESC, SOURCE, SOURCEDATE, VAL_DATE, WEBSITE). Open only unless status=all. TELEPHONE and TTL_STAFF are never requested. BEDS -999 and 'NOT AVAILABLE' are not published, never 0."
+            "description": "transmission: HIFLD lines. pipelines: EIA pipelines. rail: FRA/BTS rail. airports: FAA public-use. dams: USACE NID. plants: EIA-860M + Wikidata nuclear. faults: USGS Qfaults. landslides: USGS inventory. plss: BLM townships or sections. plss-search: T-R-S lookup. geology: Macrostrat units at lon, lat. hospitals: HIFLD hospitals as FEMA RAPT last copied them (the last public copy; data edited 2026-04-22). A box over 20 degrees answers every hospital nationally as packed rows { columns, rows } (ID, NAME, CITY, STATE, TYPE, STATUS, BEDS, TRAUMA, COUNTYFIPS, lon, lat; one pull held a day); a smaller box (clamped to 6 degrees around its centre, snapped to 0.25) the full record (plus ADDRESS, ZIP, HELIPAD, OWNER, NAICS_DESC, SOURCE, SOURCEDATE, VAL_DATE, WEBSITE). Open only unless status=all. TELEPHONE and TTL_STAFF are never requested. BEDS -999 and 'NOT AVAILABLE' are not published, never 0."
           },
           {
             "name": "bbox",
@@ -10355,11 +10355,11 @@
             "properties": {
               "data": {
                 "type": "object",
-                "description": "A box of 3 degrees or less: a GeoJSON FeatureCollection of hospital points; each feature's properties carry id (hifld-hosp:<ID>), name, kind (type class), details (the click lines) and extra { type, typeClass, status, beds, trauma, short }. A wider box (national): { columns: [ID, NAME, CITY, STATE, TYPE, STATUS, BEDS, TRAUMA, COUNTYFIPS, lon, lat], rows: [[...]] }, values as FEMA publishes them (BEDS -999: not published)."
+                "description": "A box of 20 degrees or less (clamped to 6): a GeoJSON FeatureCollection of hospital points; each feature's properties carry id (hifld-hosp:<ID>), name, kind (type class), details (the click lines) and extra { type, typeClass, status, beds, trauma, short }. A wider box (national): { columns: [ID, NAME, CITY, STATE, TYPE, STATUS, BEDS, TRAUMA, COUNTYFIPS, lon, lat], rows: [[...]] }, values as FEMA publishes them (BEDS -999: not published)."
               },
               "national": {
                 "type": "boolean",
-                "description": "true: every hospital nationally as packed rows (the box was over 3 degrees)"
+                "description": "true: every hospital nationally as packed rows (the box was over 20 degrees)"
               },
               "status": {
                 "type": "string",

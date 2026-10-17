@@ -11,7 +11,7 @@
 //             county FIPS, lon, lat; about 1 MB) that the browser turns into
 //             features with the short record: 8,140 built features would be
 //             near the platform's 4.5 MB response limit
-//   box       below: a box of at most 3 degrees with the full record, held a day
+//   box       below: a box of at most 6 degrees with the full record, held a day
 //
 // Every query names its fields: TELEPHONE, TTL_STAFF, ALT_NAME and every other
 // contact field are never requested. The address is the institution's, as its
@@ -26,8 +26,13 @@ export const HOSPITALS_URL = "https://services.arcgis.com/XG15cJAlne2vxtgt/arcgi
 export const HOSPITALS_PAGE = 2000;
 /** National pages asked at most: 8,514 rows in all on 2026-10-16. */
 export const HOSPITALS_MAX_PAGES = 6;
-/** A box wider or taller than this many degrees is answered with the national set. */
-export const HOSPITALS_BOX_MAX_DEG = 3;
+/**
+ * The largest box answered with the full record, degrees a side (clamped around its centre). The
+ * layer's 150 km box is about 2.7 degrees tall and, at Anchorage's latitude, 5.6 wide.
+ */
+export const HOSPITALS_BOX_MAX_DEG = 6;
+/** A box wider or taller than this is answered with the national set (the layer asks the world box). */
+export const HOSPITALS_NATIONAL_MIN_DEG = 20;
 
 /** The full record (box tier). Never TELEPHONE, TTL_STAFF, ALT_NAME, POPULATION or VAL_METHOD. */
 export const HOSPITAL_FIELDS = ["ID", "NAME", "ADDRESS", "CITY", "STATE", "ZIP", "TYPE", "STATUS", "COUNTYFIPS", "BEDS", "TRAUMA", "HELIPAD", "OWNER", "NAICS_DESC", "SOURCE", "SOURCEDATE", "VAL_DATE", "WEBSITE"] as const;
