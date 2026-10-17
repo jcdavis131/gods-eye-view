@@ -1,13 +1,13 @@
 {
  "kind": "hand-written by the eval agent (Forge), not user queries",
- "version": 2,
- "supersedes": "queries.json (v1, sha256 fb168e7473907790101ba9597dc48e270d371ef272d592d1475d84cc1cc1acf0), which stays as it was",
- "written": "2026-10-17, after reading the per-field value counts of the 16-card corpus (fixtures at origin/master 9a6fc8c plus the run-2 keyless pulls) and after the frozen v1 set was run on that corpus (so the score of v1's n05 'hospitals', 0.4858 top-1, was seen; it is carried here as c18 with a card-level judgement). No v2-only query was embedded or scored before this file was hashed.",
- "changes_from_v1": [
-  "n05 'hospitals' moves to c18: hifld-hospitals now has record vectors, so every hospital record is relevant",
-  "n07 'PFAS in drinking water' is dropped: PFAS can be an ATTAINS impairment cause, so it was not clean noise (critique finding 4)",
-  "adds c19-c21 (collection) and v29-v48 (value) for hifld-hospitals and nces-public-schools",
-  "adds controls n13-n28; with v1's ten remaining controls that is 26"
+ "version": 3,
+ "supersedes": "queries.v2.json (v2, sha256 c439e9f35ba04351363eae2ee1be4e4b536f55e7d89775eda7eff7bfa67e9c45), which stays as it was; v1 queries.json stays as it was too",
+ "written": "2026-10-17, after reading the distinct record texts of the two new cards (all 335 BIA land area names; the 9 WRC community texts) and searching the 16-card corpus for tribal and fire words (one PAD-US unit is designated Native American Land Area). No query was embedded or scored on the 18-card corpus before this file was hashed, v2's included.",
+ "changes_from_v2": [
+  "keeps every v2 query unchanged (95: 21 collection, 48 value, 26 control)",
+  "adds c22-c26 (collection) and v49-v63 (value) for bia-lar and wrc-communities",
+  "adds controls n29-n39, next to the new cards on purpose: tribal and fire subjects with no record loaded; with v2's 26 that is 37",
+  "no v2 control becomes relevant: n03 'wildfire perimeters' stays a control (see disputable)"
  ],
  "disputable": [
   "v32 'level 1 trauma center' counts LEVEL I and LEVEL I PEDIATRIC; LEVEL II-IV and the state codes (CTH, TRF, RTC, ATH) are partial",
@@ -17,12 +17,21 @@
   "v46 'rural schools' counts NCES locale codes 41-43 (Rural: Fringe, Distant, Remote) only, not Town",
   "v48 'schools in New Mexico': the record text says 'state: NM', an abbreviation",
   "n22 'colleges and universities' is a control: the NCES layer is K-12 only",
-  "n28 'emergency shelters' is a control: hospitals are not shelters"
+  "n28 'emergency shelters' is a control: hospitals are not shelters",
+  "n03 'wildfire perimeters' stays a control: WRC community records are modelled risk ranks of Census places, not fire perimeters",
+  "c22-c24 count the one PAD-US unit designated 'Native American Land Area' as relevant, as well as every BIA land area",
+  "v52 'Apache reservations' counts San Carlos (the San Carlos Apache reservation), whose BIA name does not say Apache",
+  "v54 'Seminole reservations in Florida' counts the Seminole Tribe of Florida's six land areas (Big Cypress, Brighton, Hollywood (Dania), Immokalee, Fort Pierce, Tampa); Miccosukee is partial",
+  "v55 'pueblos in New Mexico' counts the 19 New Mexico pueblos by their BIA names (San Juan is Ohkay Owingeh), plus Acoma (Red Lake); Ysleta Del Sur (a Texas pueblo) is partial",
+  "v59 'Paiute reservations' counts only the two land areas whose BIA name says Paiute; the many Paiute colonies and reservations named otherwise (Bishop, Pyramid Lake, Walker River and others) are partial",
+  "v62 counts the WRC records whose exclusion reason starts 'no people'",
+  "n32 'Census tribal statistical areas' is a control: BIA's layer is trust land, and the card says Census areas are not this",
+  "n34 'Indian Health Service clinics' is a control: hospital record text carries no owner, and a clinic is not a hospital"
  ],
  "rubric": {
-  "2": "relevant: the query's intent matches a published value in the record text (or, for a collection-level query, the record is in that collection)",
+  "0": "everything else, including every record when the query names something with no record vectors loaded (controls)",
   "1": "partial: right collection, value not the one asked for",
-  "0": "everything else, including every record when the query names something with no record vectors loaded (controls)"
+  "2": "relevant: the query's intent matches a published value in the record text (or, for a collection-level query, the record is in that collection)"
  },
  "matching": "a rule applies to a record when card equals and, if given, the record text's '<field>: <value>' has value in values (exact) or starting with one of prefixes; a record's grade is the max over matching rules",
  "queries": [
@@ -1379,6 +1388,473 @@
    "id": "n28",
    "kind": "control",
    "q": "emergency shelters",
+   "judge": []
+  },
+  {
+   "id": "c22",
+   "kind": "collection",
+   "q": "Indian reservations",
+   "judge": [
+    {
+     "card": "bia-lar",
+     "grade": 2
+    },
+    {
+     "card": "padus-units",
+     "field": "designation",
+     "grade": 2,
+     "values": [
+      "Native American Land Area"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c23",
+   "kind": "collection",
+   "q": "tribal trust land",
+   "judge": [
+    {
+     "card": "bia-lar",
+     "grade": 2
+    },
+    {
+     "card": "padus-units",
+     "field": "designation",
+     "grade": 2,
+     "values": [
+      "Native American Land Area"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c24",
+   "kind": "collection",
+   "q": "Native American lands",
+   "judge": [
+    {
+     "card": "bia-lar",
+     "grade": 2
+    },
+    {
+     "card": "padus-units",
+     "field": "designation",
+     "grade": 2,
+     "values": [
+      "Native American Land Area"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "c25",
+   "kind": "collection",
+   "q": "wildfire risk to communities",
+   "judge": [
+    {
+     "card": "wrc-communities",
+     "grade": 2
+    }
+   ]
+  },
+  {
+   "id": "c26",
+   "kind": "collection",
+   "q": "towns ranked for wildfire risk",
+   "judge": [
+    {
+     "card": "wrc-communities",
+     "grade": 2
+    }
+   ]
+  },
+  {
+   "id": "v49",
+   "kind": "value",
+   "q": "Navajo Nation",
+   "judge": [
+    {
+     "card": "bia-lar",
+     "grade": 1
+    },
+    {
+     "card": "bia-lar",
+     "field": "BIA land area",
+     "grade": 2,
+     "values": [
+      "Navajo",
+      "Navajo (Alamo)",
+      "Navajo (Ramah)"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "v50",
+   "kind": "value",
+   "q": "Hopi reservation",
+   "judge": [
+    {
+     "card": "bia-lar",
+     "grade": 1
+    },
+    {
+     "card": "bia-lar",
+     "field": "BIA land area",
+     "grade": 2,
+     "values": [
+      "Hopi"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "v51",
+   "kind": "value",
+   "q": "Pine Ridge reservation",
+   "judge": [
+    {
+     "card": "bia-lar",
+     "grade": 1
+    },
+    {
+     "card": "bia-lar",
+     "field": "BIA land area",
+     "grade": 2,
+     "values": [
+      "Pine Ridge"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "v52",
+   "kind": "value",
+   "q": "Apache reservations",
+   "judge": [
+    {
+     "card": "bia-lar",
+     "grade": 1
+    },
+    {
+     "card": "bia-lar",
+     "field": "BIA land area",
+     "grade": 2,
+     "values": [
+      "Fort Apache",
+      "Jicarilla Apache",
+      "Mescalero Apache",
+      "Tonto Apache",
+      "San Carlos"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "v53",
+   "kind": "value",
+   "q": "Potawatomi land",
+   "judge": [
+    {
+     "card": "bia-lar",
+     "grade": 1
+    },
+    {
+     "card": "bia-lar",
+     "field": "BIA land area",
+     "grade": 2,
+     "values": [
+      "Forest County Potawatomi",
+      "Huron Potawatomi",
+      "Pokagon of Potawatomi",
+      "Potawatomi (Kansas)"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "v54",
+   "kind": "value",
+   "q": "Seminole reservations in Florida",
+   "judge": [
+    {
+     "card": "bia-lar",
+     "grade": 1
+    },
+    {
+     "card": "bia-lar",
+     "field": "BIA land area",
+     "grade": 2,
+     "values": [
+      "Big Cypress",
+      "Brighton",
+      "Hollywood (Dania)",
+      "Immokalee",
+      "Fort Pierce",
+      "Tampa"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "v55",
+   "kind": "value",
+   "q": "pueblos in New Mexico",
+   "judge": [
+    {
+     "card": "bia-lar",
+     "grade": 1
+    },
+    {
+     "card": "bia-lar",
+     "field": "BIA land area",
+     "grade": 2,
+     "values": [
+      "Acoma",
+      "Acoma (Red Lake)",
+      "Cochiti",
+      "Isleta",
+      "Jemez",
+      "Laguna",
+      "Nambe",
+      "Picuris",
+      "Pojoaque",
+      "San Felipe",
+      "San Ildefonso",
+      "San Juan",
+      "Sandia",
+      "Santa Ana",
+      "Santa Clara",
+      "Santo Domingo",
+      "Taos",
+      "Tesuque",
+      "Zia",
+      "Zuni"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "v56",
+   "kind": "value",
+   "q": "Ute tribal land",
+   "judge": [
+    {
+     "card": "bia-lar",
+     "grade": 1
+    },
+    {
+     "card": "bia-lar",
+     "field": "BIA land area",
+     "grade": 2,
+     "values": [
+      "Southern Ute",
+      "Ute Mountain Ute",
+      "Uintah and Ouray"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "v57",
+   "kind": "value",
+   "q": "Mohawk territory",
+   "judge": [
+    {
+     "card": "bia-lar",
+     "grade": 1
+    },
+    {
+     "card": "bia-lar",
+     "field": "BIA land area",
+     "grade": 2,
+     "values": [
+      "St. Regis Mohawk"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "v58",
+   "kind": "value",
+   "q": "Choctaw land",
+   "judge": [
+    {
+     "card": "bia-lar",
+     "grade": 1
+    },
+    {
+     "card": "bia-lar",
+     "field": "BIA land area",
+     "grade": 2,
+     "values": [
+      "Choctaw",
+      "Jena of the Choctaw"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "v59",
+   "kind": "value",
+   "q": "Paiute reservations",
+   "judge": [
+    {
+     "card": "bia-lar",
+     "grade": 1
+    },
+    {
+     "card": "bia-lar",
+     "field": "BIA land area",
+     "grade": 2,
+     "values": [
+      "Benton Paiute",
+      "Burns Paiute"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "v60",
+   "kind": "value",
+   "q": "California communities ranked for wildfire risk",
+   "judge": [
+    {
+     "card": "wrc-communities",
+     "grade": 1
+    },
+    {
+     "card": "wrc-communities",
+     "field": "state",
+     "grade": 2,
+     "values": [
+      "CA"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "v61",
+   "kind": "value",
+   "q": "Colorado towns wildfire risk",
+   "judge": [
+    {
+     "card": "wrc-communities",
+     "grade": 1
+    },
+    {
+     "card": "wrc-communities",
+     "field": "state",
+     "grade": 2,
+     "values": [
+      "CO"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "v62",
+   "kind": "value",
+   "q": "places not ranked for wildfire because no one lives there",
+   "judge": [
+    {
+     "card": "wrc-communities",
+     "grade": 1
+    },
+    {
+     "card": "wrc-communities",
+     "field": "not ranked by USFS because",
+     "grade": 2,
+     "prefixes": [
+      "no people"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "v63",
+   "kind": "value",
+   "q": "wildfire risk for New Mexico communities",
+   "judge": [
+    {
+     "card": "wrc-communities",
+     "grade": 1
+    },
+    {
+     "card": "wrc-communities",
+     "field": "state",
+     "grade": 2,
+     "values": [
+      "NM"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "n29",
+   "kind": "control",
+   "q": "tribal casinos",
+   "judge": []
+  },
+  {
+   "id": "n30",
+   "kind": "control",
+   "q": "Alaska Native corporation lands",
+   "judge": []
+  },
+  {
+   "id": "n31",
+   "kind": "control",
+   "q": "Oklahoma tribal jurisdictional areas",
+   "judge": []
+  },
+  {
+   "id": "n32",
+   "kind": "control",
+   "q": "Census tribal statistical areas",
+   "judge": []
+  },
+  {
+   "id": "n33",
+   "kind": "control",
+   "q": "treaty ceded territories",
+   "judge": []
+  },
+  {
+   "id": "n34",
+   "kind": "control",
+   "q": "Indian Health Service clinics",
+   "judge": []
+  },
+  {
+   "id": "n35",
+   "kind": "control",
+   "q": "prescribed burns",
+   "judge": []
+  },
+  {
+   "id": "n36",
+   "kind": "control",
+   "q": "active fire hotspots",
+   "judge": []
+  },
+  {
+   "id": "n37",
+   "kind": "control",
+   "q": "red flag fire weather warnings",
+   "judge": []
+  },
+  {
+   "id": "n38",
+   "kind": "control",
+   "q": "evacuation zones",
+   "judge": []
+  },
+  {
+   "id": "n39",
+   "kind": "control",
+   "q": "smoke plumes",
    "judge": []
   }
  ]

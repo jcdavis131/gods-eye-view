@@ -1159,7 +1159,7 @@ export const COLLECTIONS: readonly Collection[] = [
     excluded: [
       { what: "communities above 150 km camera height", why: "32,033 polygons; the county ranks are shown instead" },
       { what: "a community's rank compared with a county's", why: "USFS ranks each level among its own" },
-      { what: "the Census place name in the record vectors", why: "names are never embedded (the palette matches them letter by letter); the state and USFS's exclude reason are" },
+      { what: "the Census place name in the record vectors", why: "names are never embedded (the palette matches them letter by letter); the state, the RISK and BP national ranks as the layer's own bins (never the number), and USFS's exclude reason are" },
     ],
     caveats: [WRC_CAVEAT],
     searchable: ["GEOID", "NAMELSAD"],
@@ -1188,7 +1188,6 @@ export const COLLECTIONS: readonly Collection[] = [
       { what: "sacred sites or restricted cultural data", why: "not in the source and never fetched from any other" },
       { what: "BIA's detail level (offset 0.001)", why: "held for Cam; only the national 0.01 pull ships" },
       { what: "the agency phone and email in the layer's copyright text", why: "kept in provenance as the agency's published contact; never in a record, searched or embedded" },
-      { what: "REGION in the record vectors", why: "its field label is already NPS's ('NPS region'); embedding it would mislabel BIA's regions" },
     ],
     caveats: [TRIBAL_CAVEAT, TRIBAL_REFERENCE_ONLY],
     searchable: ["LARID", "LARNAME"],

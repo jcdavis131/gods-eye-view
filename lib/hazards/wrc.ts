@@ -242,6 +242,21 @@ export function joinWrcCounties(
   return { features, ranked, notRanked, notInRelease, unmatched };
 }
 
+/** A national rank as its record-text word: the layer's own bin label, or "not ranked by USFS"; never the number. */
+export function wrcRankWords(v: number | null): string {
+  const b = wrcBin(v);
+  return b == null ? NOT_RANKED : `${WRC_BIN_LABELS[b]} percentile`;
+}
+
+/**
+ * The row recordText reads for a community: the state, the RISK and BP national ranks as bins (an
+ * excluded community is "not ranked by USFS", never low), and USFS's exclude reason. Never the name.
+ */
+export function wrcEmbedRow(r: WrcRow): Record<string, string | null> {
+  const nat = (i: number) => wrcRankWords(r.excluded ? null : r.national[i]);
+  return { STUSPS: r.state, RISK_NATIO: nat(0), BP_NATIONA: nat(1), exclude_re: r.excludeReason };
+}
+
 /** WRC community polygons (f=geojson rows), named by their Census name and state; a place that comes back twice is drawn once. */
 export function buildWrcPlaces(rows: ReadonlyArray<{ geometry: GeoJSON.Geometry | null; properties: Record<string, unknown> | null }>, m: WrcMeasure, scope: WrcScope): LayerFeature<Polygon | MultiPolygon>[] {
   const out: LayerFeature<Polygon | MultiPolygon>[] = [];
@@ -254,7 +269,7 @@ export function buildWrcPlaces(rows: ReadonlyArray<{ geometry: GeoJSON.Geometry 
     if (!r || r.geoid.length !== 7 || seen.has(r.geoid)) continue;
     seen.add(r.geoid);
     const name = `${r.name ?? `Place ${r.geoid}`}${r.state ? `, ${r.state}` : ""}`;
-    out.push(wrcFeature(`wrc:place:${r.geoid}`, name, g, r.geoid, r, "place", m, scope, undefined, recordText("wrc-communities", p)));
+    out.push(wrcFeature(`wrc:place:${r.geoid}`, name, g, r.geoid, r, "place", m, scope, undefined, recordText("wrc-communities", wrcEmbedRow(r))));
   }
   return out;
 }

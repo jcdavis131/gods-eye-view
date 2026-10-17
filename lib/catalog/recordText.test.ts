@@ -11,7 +11,9 @@ import dams from "@/lib/infra/fixtures/dams-sanantonio.json";
 import { recordFixtures } from "@/lib/embed/__fixtures__/records";
 import { COLLECTIONS } from "./collections";
 import { allCardTexts, cardText } from "./cardText";
-import { DENY_FIELD, EMBED_TEXT, FIELD_LABEL, NAME_FIELDS_ALLOWED, NO_RECORD_VECTORS, RECORD_VECTOR_CARDS, embeddableField } from "./embedFields";
+import { CARD_FIELD_LABEL, DENY_FIELD, EMBED_TEXT, FIELD_LABEL, NAME_FIELDS_ALLOWED, NO_RECORD_VECTORS, RECORD_VECTOR_CARDS, embeddableField, fieldLabel, type CollectionId } from "./embedFields";
+import { buildWrcPlaces } from "@/lib/hazards/wrc";
+import wrcBoulder from "@/lib/hazards/fixtures/wrc-place-boulder-box.json";
 import { queryText, receivedRecordText, recordText, withEmbedText } from "./recordText";
 
 const MARK = "ZZLEAK";
@@ -62,10 +64,16 @@ describe("record text", () => {
           expect(t, card).not.toContain(f.properties.name);
           continue;
         }
-        // The reviewed exception: the name appears once, as that field's labelled value, and nowhere else.
-        const labelled = `${FIELD_LABEL[field]}: ${f.properties.name}`;
+        // The reviewed exception: the name appears once, as that field's labelled value, and nowhere
+        // else, except as the whole value of another of the card's categorical fields (BIA's land area
+        // "Navajo" is in BIA's "Navajo" region).
+        const labelled = `${fieldLabel(card, field)}: ${f.properties.name}`;
         expect(t, `${card} ${f.properties.id}`).toContain(labelled);
-        expect(t.replace(labelled, ""), `${card} ${f.properties.id}`).not.toContain(f.properties.name);
+        const sameWord = new Set(EMBED_TEXT[card].filter((g) => g !== field).map((g) => `${fieldLabel(card, g)}: ${f.properties.name}`));
+        for (const part of t.replace(labelled, "").split("; ")) {
+          if (sameWord.has(part)) continue;
+          expect(part, `${card} ${f.properties.id}`).not.toContain(f.properties.name);
+        }
       }
     }
     expect(new Set(recordFixtures().map((r) => r.card))).toEqual(RECORD_VECTOR_CARDS);
@@ -83,7 +91,7 @@ describe("record text", () => {
       const all = features.map((f) => receivedRecordText(f.properties) ?? "").join("\n");
       for (const field of EMBED_TEXT[card]) {
         if (notInFixtures[card]?.includes(field)) continue;
-        expect(all, `${card} ${field}`).toContain(`${FIELD_LABEL[field]}: `);
+        expect(all, `${card} ${field}`).toContain(`${fieldLabel(card, field)}: `);
       }
     }
   });
@@ -107,8 +115,23 @@ describe("record text", () => {
     expect(Object.keys(NAMED_BY_EMBEDDED_PLACE_FIELD)).toEqual(["bia-lar"]);
     for (const [card, field] of Object.entries(NAMED_BY_EMBEDDED_PLACE_FIELD)) {
       expect(NAME_FIELDS_ALLOWED.has(field), field).toBe(true);
-      expect(EMBED_TEXT[card as keyof typeof EMBED_TEXT], card).toEqual([field]);
+      const fields: readonly string[] = EMBED_TEXT[card as CollectionId];
+      expect(fields, card).toContain(field);
+      // Every other field of the card is categorical: no second name rides on the exception.
+      for (const g of fields) if (g !== field) expect(/name$/i.test(g) || NAME_FIELDS_ALLOWED.has(g), `${card}: ${g}`).toBe(false);
     }
+  });
+
+  it("says what a BIA land area and a WRC community are in their record text (DESIGN 7.3a)", () => {
+    const lar = recordFixtures().find((r) => r.card === "bia-lar")!.features;
+    const wind = lar.find((f) => f.properties.name === "Wind River");
+    expect(receivedRecordText(wind!.properties)).toBe("BIA land area: Wind River; BIA trust land area, BIA region: Rocky Mountain");
+    const wrc = buildWrcPlaces((wrcBoulder as unknown as { features: never[] }).features, 0, "national");
+    const texts = new Set(wrc.map((f) => receivedRecordText(f.properties)));
+    expect(texts).toContain("state: CO; wildfire risk community, national risk rank: 95 or more percentile; wildfire likelihood (burn probability), national rank: 95 or more percentile");
+    // The excluded community: not ranked, never low, with USFS's reason.
+    expect(texts).toContain("state: CO; wildfire risk community, national risk rank: not ranked by USFS; wildfire likelihood (burn probability), national rank: not ranked by USFS; not ranked by USFS because: no people (pop = 0);");
+    for (const f of wrc) expect(receivedRecordText(f.properties) ?? "", f.properties.id).not.toMatch(/\d+\.\d+%/);
   });
 
   it("is null when no field has a value, and labels each value", () => {
@@ -145,17 +168,35 @@ describe("what the catalogue lets be embedded", () => {
       ["nri-counties", "nri-tracts"],
       ["places-county", "places-tract"],
     ];
+    // A card-scoped label (CARD_FIELD_LABEL) makes the field the card's own: it is grouped by the
+    // label it is actually embedded under, so BIA's REGION is not NPS's.
     const cardsOf = new Map<string, string[]>();
-    for (const [card, fields] of Object.entries(EMBED_TEXT)) for (const f of fields) cardsOf.set(f, [...(cardsOf.get(f) ?? []), card]);
+    for (const [card, fields] of Object.entries(EMBED_TEXT))
+      for (const f of fields) {
+        const k = JSON.stringify([f, fieldLabel(card as CollectionId, f)]);
+        cardsOf.set(k, [...(cardsOf.get(k) ?? []), card]);
+      }
     const shared = [...cardsOf].filter(([, cards]) => cards.length > 1);
     expect(shared.length).toBeGreaterThan(0);
-    for (const [f, cards] of shared) {
-      if (PLACE_LABELS.has(FIELD_LABEL[f])) continue;
+    for (const [k, cards] of shared) {
+      const [f, label] = JSON.parse(k) as [string, string];
+      if (PLACE_LABELS.has(label)) continue;
       expect(
         FAMILIES.some((fam) => cards.every((c) => fam.includes(c))),
-        `${f} ("${FIELD_LABEL[f]}") is embedded by ${cards.join(", ")}`,
+        `${f} ("${label}") is embedded by ${cards.join(", ")}`,
       ).toBe(true);
     }
+    // A card-scoped label differs from every other card's label for the field, and is a real override.
+    for (const [card, labels] of Object.entries(CARD_FIELD_LABEL)) {
+      for (const [f, label] of Object.entries(labels ?? {})) {
+        expect(EMBED_TEXT[card as CollectionId], `${card}: ${f}`).toContain(f);
+        expect(label, `${card}: ${f}`).not.toBe(FIELD_LABEL[f]);
+        for (const [other, fields] of Object.entries(EMBED_TEXT))
+          if (other !== card && (fields as readonly string[]).includes(f)) expect(fieldLabel(other as CollectionId, f), `${other}: ${f}`).not.toBe(label);
+      }
+    }
+    expect(fieldLabel("nps-units", "REGION")).toBe("NPS region");
+    expect(fieldLabel("bia-lar", "REGION")).not.toMatch(/NPS/);
     // The check bites: hospitals embedding FUDS's STATUS would be labelled "FUDS status".
     const withStatus = [...(cardsOf.get("STATUS") ?? []), "hifld-hospitals"];
     expect(PLACE_LABELS.has(FIELD_LABEL.STATUS)).toBe(false);
@@ -166,7 +207,7 @@ describe("what the catalogue lets be embedded", () => {
     for (const c of COLLECTIONS) {
       for (const f of c.embedText) {
         expect(embeddableField(f), `${c.id}: ${f}`).toBe(true);
-        expect(FIELD_LABEL[f], `${c.id}: ${f}`).toBeTruthy();
+        expect(fieldLabel(c.id as CollectionId, f), `${c.id}: ${f}`).toBeTruthy();
         if (/name$/i.test(f)) expect(NAME_FIELDS_ALLOWED.has(f), `${c.id}: ${f}`).toBe(true);
       }
     }

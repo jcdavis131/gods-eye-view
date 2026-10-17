@@ -102,10 +102,11 @@ describe("features", () => {
     expect(x.region).toBe("Great Plains");
   });
 
-  it("embeds the land area's name under BIA's label, and never REGION under NPS's", () => {
+  it("embeds the land area's name and says it is BIA trust land in its BIA region, never REGION under NPS's", () => {
     for (const f of built) {
       const t = receivedRecordText(f.properties);
-      expect(t).toBe(`BIA land area: ${f.properties.name}`);
+      const region = (f.properties.extra as TribalExtra).region;
+      expect(t).toBe(`BIA land area: ${f.properties.name}${region ? `; BIA trust land area, BIA region: ${region}` : ""}`);
       expect(t).not.toMatch(/NPS region/);
     }
   });

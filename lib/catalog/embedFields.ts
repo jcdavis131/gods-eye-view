@@ -66,8 +66,8 @@ export const EMBED_TEXT = {
   "fcc-bdc-counties": ["StateAbbr"],
   "fcc-bdc-hex": [],
   "wrc-counties": ["STUSPS"],
-  "wrc-communities": ["STUSPS", "exclude_re"],
-  "bia-lar": ["LARNAME"],
+  "wrc-communities": ["STUSPS", "RISK_NATIO", "BP_NATIONA", "exclude_re"],
+  "bia-lar": ["LARNAME", "REGION"],
   "fema-declarations": ["incidentType", "declarationType"],
   "usdm-county-dsci": [],
   "noaa-cag-county": [],
@@ -281,12 +281,32 @@ export const FIELD_LABEL: Readonly<Record<string, string>> = {
   StateAbbr: "state",
   STUSPS: "state",
   exclude_re: "not ranked by USFS because",
-  // BIA LAR. REGION is not embedded: its label is NPS's ("NPS region"), and BIA's regions are not NPS's.
+  // USFS WRC community national ranks, embedded as the layer's own bin (WRC_BIN_LABELS: under 40, 40 to
+  // 70, 70 to 90, 90 to 95, 95 or more), or "not ranked by USFS"; never the number. RISK_* is named by
+  // its alias only (the service does not say whether it is wildfirerisk.org's "Risk to Homes"); BP is
+  // burn probability, which wildfirerisk.org calls wildfire likelihood.
+  RISK_NATIO: "wildfire risk community, national risk rank",
+  BP_NATIONA: "wildfire likelihood (burn probability), national rank",
+  // BIA LAR. REGION's shared label is NPS's; bia-lar embeds it under its own card label (CARD_FIELD_LABEL).
   LARNAME: "BIA land area",
   // OpenFEMA declarations (FEMA's published categories, as words; the title and designated area are never embedded)
   incidentType: "incident type",
   declarationType: "declaration type",
 };
+
+/**
+ * Card-scoped labels, for a field another card already embeds under a label that is wrong for this
+ * card (BIA's REGION is not an NPS region). The card's label wins over FIELD_LABEL for that card
+ * only, and must differ from every other card's label for the same field (recordText.test.ts).
+ */
+export const CARD_FIELD_LABEL: Readonly<Partial<Record<CollectionId, Readonly<Record<string, string>>>>> = {
+  "bia-lar": { REGION: "BIA trust land area, BIA region" },
+};
+
+/** The label a card's field is embedded under: the card's own label, else the field's shared one. */
+export function fieldLabel(cardId: CollectionId, field: string): string | undefined {
+  return CARD_FIELD_LABEL[cardId]?.[field] ?? FIELD_LABEL[field];
+}
 
 /**
  * Cards whose builder attaches record text to each feature (properties.extra.embedText), so
