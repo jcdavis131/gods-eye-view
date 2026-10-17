@@ -21,12 +21,15 @@ export const NRI_TRACT_MAX_M = 60_000;
 /** The layers' maxRecordCount (read 2026-10-16). */
 export const NRI_PAGE = 2000;
 /**
- * The largest tract box, degrees a side. Los Angeles is the densest box measured (2026-10-16):
- * 0.6 x 0.4 degrees held 1,913 tracts (2.26 MB answered, 1.34 MB of it FEMA's GeoJSON, almost
- * all attributes: a coarser maxAllowableOffset saved under 12 %), 0.4 x 0.4 held 1,523.
+ * The largest tract box, degrees a side. New York is the densest place measured (2026-10-16):
+ * 0.4 x 0.4 degree boxes over the city held 2,544 to 2,884 tracts, up to 3.44 MB answered (for
+ * example -74.12,40.58,-73.72,40.98), so they take two pages. Los Angeles at 0.4 x 0.4 held 1,523
+ * and at 0.6 x 0.4 held 1,913 (2.26 MB; the GeoJSON is almost all attributes, and a coarser
+ * maxAllowableOffset saved under 12 %). Two pages of 2,000 cover the New York boxes and keep
+ * the answer under Vercel's 4.5 MB response limit.
  */
 export const NRI_TRACT_BOX_DEG = 0.4;
-/** Tract pages asked for one box at most: one 0.4 degree box has never needed a second. */
+/** Tract pages asked for one box at most: dense New York boxes need the second; none measured needed a third. */
 export const NRI_MAX_PAGES = 2;
 
 /** The 18 hazards, in FEMA's field prefixes, with FEMA's names (the field aliases, read 2026-10-16). */
