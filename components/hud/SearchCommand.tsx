@@ -3,9 +3,16 @@
 // id among loaded objects, geocode a place, find a Public Land Survey System
 // township or section by its description ("T12N R3W S33"), or run a cockpit
 // command. The PLSS lookup reads survey numbers only (lib/infra/plss.ts).
+//
+// By meaning (embeddings round 1): a "Collections" group ranks the catalogue
+// cards for the query through /api/catalog?op=search (the server embeds the
+// query; no weights in the browser for it), and, behind ?semantic=1, a "By
+// meaning" group ranks loaded records by their record text (never names or
+// ids) with potion-base-8M loaded on first use. Letter-by-letter matches
+// always come first and are never repeated below.
 
 import { useEffect, useMemo, useState } from "react";
-import { Grid3x3, MapPin, Radar, Terminal } from "lucide-react";
+import { Grid3x3, Library, MapPin, Radar, Sparkles, Terminal } from "lucide-react";
 import {
   Command,
   CommandEmpty,
@@ -24,6 +31,55 @@ import type { LayerFeature } from "@/lib/layers/types";
 import { matchScore } from "@/lib/search/allowlist";
 import { parseTrs, type PlssCandidate } from "@/lib/infra/plss";
 import { openHere } from "@/lib/whatshere/here";
+import { queryText } from "@/lib/catalog/recordText";
+import { potionBrowser } from "@/lib/embed/loadBrowser";
+import { RecordIndex, featureKey, type RecordHit } from "@/lib/embed/recordIndex";
+
+/** A catalogue card ranked by meaning (/api/catalog?op=search). */
+export interface CardSearchHit {
+  id: string;
+  title: string;
+  layer: string;
+  score: number;
+}
+
+export async function catalogSearch(q: string, signal?: AbortSignal, limit = 3): Promise<CardSearchHit[]> {
+  const res = await fetch(`/api/catalog?op=search&q=${encodeURIComponent(q)}&limit=${limit}`, { signal });
+  if (!res.ok) return [];
+  const json = (await res.json()) as { data?: { hits?: CardSearchHit[] } };
+  return json.data?.hits ?? [];
+}
+
+/** The "By meaning" record group is on only with ?semantic=1 until a hand-written eval sets its threshold. */
+export function semanticRecordsOn(): boolean {
+  try {
+    return new URLSearchParams(window.location.search).get("semantic") === "1";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Minimum cosine for a record to be shown by meaning. Chosen by hand, not measured: no record-level
+ * eval exists yet, which is why the group is flagged (semanticRecordsOn).
+ */
+export const RECORD_TAU = 0.6;
+/** Rows shown in the By meaning and Collections groups. */
+const RECORD_ROWS = 8;
+const CARD_ROWS = 3;
+
+let recordIndex: RecordIndex | null = null;
+
+/** Loaded records ranked by meaning for a query, skipping those already matched by letters. Loads the embedder on first use. */
+export async function searchRecordsByMeaning(q: string, exclude: ReadonlySet<string>): Promise<RecordHit[]> {
+  const text = queryText(q);
+  if (!text) return [];
+  const model = await potionBrowser();
+  recordIndex ??= new RecordIndex(model);
+  recordIndex.sync(allFeatures());
+  const v = model.embed(text);
+  return v ? recordIndex.search(v, RECORD_ROWS, RECORD_TAU, exclude) : [];
+}
 
 export interface GeocodeHit {
   name: string;
@@ -76,11 +132,46 @@ export default function SearchCommand() {
   const [q, setQ] = useState("");
   const [placeHits, setPlaceHits] = useState<{ q: string; hits: GeocodeHit[] }>({ q: "", hits: [] });
   const [plssHits, setPlssHits] = useState<{ q: string; hits: PlssCandidate[] }>({ q: "", hits: [] });
+  const [cardHits, setCardHits] = useState<{ q: string; hits: CardSearchHit[] }>({ q: "", hits: [] });
+  const [meaningHits, setMeaningHits] = useState<{ q: string; hits: RecordHit[] }>({ q: "", hits: [] });
 
   const objects = useMemo(() => searchFeatures(q), [q]);
   // Only show geocode results that belong to the current query.
   const places = placeHits.q === q.trim() ? placeHits.hits : [];
   const sections = plssHits.q === q.trim() ? plssHits.hits : [];
+  const cards = cardHits.q === q.trim() ? cardHits.hits : [];
+  const meaning = meaningHits.q === q.trim() ? meaningHits.hits : [];
+
+  useEffect(() => {
+    const term = q.trim();
+    if (term.length < 3) return;
+    const ctrl = new AbortController();
+    const id = setTimeout(() => {
+      catalogSearch(term, ctrl.signal, CARD_ROWS)
+        .then((hits) => setCardHits({ q: term, hits }))
+        .catch(() => {});
+    }, 350);
+    return () => {
+      clearTimeout(id);
+      ctrl.abort();
+    };
+  }, [q]);
+
+  useEffect(() => {
+    const term = q.trim();
+    if (term.length < 3 || !semanticRecordsOn()) return;
+    let live = true;
+    const exclude = new Set(objects.map(featureKey));
+    const id = setTimeout(() => {
+      searchRecordsByMeaning(term, exclude)
+        .then((hits) => live && setMeaningHits({ q: term, hits }))
+        .catch(() => {});
+    }, 350);
+    return () => {
+      live = false;
+      clearTimeout(id);
+    };
+  }, [q, objects]);
 
   useEffect(() => {
     const term = q.trim();
@@ -163,6 +254,70 @@ export default function SearchCommand() {
                   </span>
                 </CommandItem>
               );
+            })}
+          </CommandGroup>
+        )}
+        {meaning.length > 0 && (
+          <CommandGroup heading="By meaning (record text, experimental)">
+            {meaning.map(({ feature: f, score }) => {
+              const p = f.properties;
+              const def = LAYER_BY_ID[p.layer];
+              return (
+                <CommandItem
+                  key={`meaning:${p.layer}:${p.id}`}
+                  value={`meaning:${p.layer}:${p.id}`}
+                  onSelect={() => {
+                    flyToSelection({ layer: p.layer, id: p.id });
+                    close();
+                  }}
+                  className="font-mono text-[11px]"
+                >
+                  <Sparkles className="size-3.5" style={{ color: def?.color }} />
+                  <span className="text-foreground">{p.name}</span>
+                  <span className="ml-auto text-[9px] uppercase tracking-widest text-muted-foreground">
+                    {def?.label} · {score.toFixed(2)}
+                  </span>
+                </CommandItem>
+              );
+            })}
+          </CommandGroup>
+        )}
+        {cards.length > 0 && (
+          <CommandGroup heading="Collections (by meaning of their catalogue card)">
+            {cards.map((c) => {
+              const def = LAYER_BY_ID[c.layer as keyof typeof LAYER_BY_ID];
+              // The card opens its catalogue entry (/catalog#<id>) in a new tab, so the globe keeps
+              // its state; a second row offers to show the collection's layer.
+              return [
+                <CommandItem
+                  key={`card:${c.id}`}
+                  value={`card:${c.id}`}
+                  onSelect={() => {
+                    window.open(`/catalog#${encodeURIComponent(c.id)}`, "_blank", "noopener,noreferrer");
+                    close();
+                  }}
+                  className="font-mono text-[11px]"
+                >
+                  <Library className="size-3.5 text-muted-foreground" />
+                  <span className="truncate">{c.title}</span>
+                  <span className="ml-auto text-[9px] uppercase tracking-widest text-muted-foreground">
+                    catalogue · {c.score.toFixed(2)}
+                  </span>
+                </CommandItem>,
+                def ? (
+                  <CommandItem
+                    key={`card-layer:${c.id}`}
+                    value={`card-layer:${c.id}`}
+                    onSelect={() => {
+                      setLayer(def.id, true);
+                      close();
+                    }}
+                    className="pl-7 font-mono text-[11px] text-muted-foreground"
+                  >
+                    <span className="truncate">show layer: {def.label}</span>
+                  </CommandItem>
+                ) : null,
+              ];
             })}
           </CommandGroup>
         )}

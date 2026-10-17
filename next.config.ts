@@ -28,6 +28,9 @@ const nextConfig: NextConfig = {
   // two in step.
   outputFileTracingIncludes: {
     "/insights/**": ["./node_modules/@resvg/resvg-wasm/index_bg.wasm", "./lib/insights/render/fonts/*.ttf"],
+    // /api/catalog?op=search embeds the query with the pinned potion-base-8M, read from
+    // public/embed by lib/embed/loadNode.ts (the browser fetches the same files). About 8 MB.
+    "/api/catalog": ["./public/embed/**"],
   },
   webpack: (config) => {
     config.resolve = config.resolve ?? {};
@@ -81,6 +84,13 @@ const nextConfig: NextConfig = {
     // not — so a request always gets one of them and never both.
     const embedQuery = [{ type: "query" as const, key: "embed", value: "1" }];
     return [
+      // The embedder's weights (public/embed/<model>-<commit8>/, lib/embed/pins.ts) carry their
+      // pin in the path, and the loader checks each file's sha256, so they never change in place.
+      // public/ defaults to max-age=0; these may be cached for good.
+      {
+        source: "/embed/:path*",
+        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+      },
       {
         source: "/:path*",
         missing: embedQuery,

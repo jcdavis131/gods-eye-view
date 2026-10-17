@@ -9,6 +9,7 @@
 // shown were not reported impaired, which includes waters never assessed.
 
 import type { LayerFeature } from "@/lib/layers/types";
+import { recordText, withEmbedText } from "@/lib/catalog/recordText";
 
 export const ATTAINS = "https://services.arcgis.com/cJ9YHowT8TU7DUyn/arcgis/rest/services/ATTAINS_Assessment/FeatureServer";
 /** Layer 1 lines, layer 2 areas. */
@@ -125,7 +126,18 @@ export function buildImpaired(
           drawn: shape === "line" ? "the assessment unit's line (a stream reach)" : "the assessment unit's area (a lake, estuary or watershed)",
           "what this is": "a state's report to EPA that this water is impaired, for the whole assessment unit and one reporting cycle; not a measurement at this point",
         },
-        extra: x,
+        // Never the unit's or the organisation's name (not searched this round) and never the unit id.
+        extra: withEmbedText(
+          x,
+          recordText("attains-impaired", {
+            state: str(p.state),
+            reportingcycle: str(p.reportingcycle),
+            ircategory: category ? categoryText(category) : null,
+            on303dlist: on303d,
+            hastmdl: tmdl,
+            cyclestatus: str(p.cyclestatus),
+          }),
+        ),
       },
     });
   });

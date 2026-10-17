@@ -49,3 +49,55 @@ describe("/api/catalog", () => {
     expect((await get("layer=nope")).status).toBe(400);
   });
 });
+
+describe("/api/catalog?op=search", () => {
+  it("ranks collections for a query with the embedder named, and makes no request", async () => {
+    const { status, headers, body } = await get("op=search&q=leaking%20fuel%20tanks&limit=3");
+    expect(status).toBe(200);
+    expect(headers.get("cache-control")).toContain("s-maxage=3600");
+    const d = body.data as { hits: Array<{ id: string; score: number; ops: string[]; catalog: string }>; embedder: { id: string; commit: string; licence: string }; matched: boolean };
+    expect(d.matched).toBe(true);
+    expect(d.hits).toHaveLength(3);
+    for (const h of d.hits) {
+      expect(COLLECTIONS.map((c) => c.id)).toContain(h.id);
+      expect(h.catalog).toBe(`/catalog#${h.id}`);
+    }
+    expect(d.embedder).toMatchObject({ id: "potion-base-8M@bf8b0566-int8", licence: "MIT" });
+    expect(d.embedder.commit).toMatch(/^[0-9a-f]{40}$/);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("refuses a query under 2 or over 200 characters without echoing it, and a bad limit", async () => {
+    for (const qs of ["op=search", "op=search&q=a", `op=search&q=${"x".repeat(201)}`, "op=search&q=dams&limit=0", "op=search&q=dams&limit=11"]) {
+      const r = await get(qs);
+      expect(r.status, qs).toBe(400);
+      expect(JSON.stringify(r.body), qs).not.toContain("xxxxxxxxxx");
+    }
+    expect((await get("op=nope")).status).toBe(400);
+  });
+
+  it("answers an empty list, not noise, for a query with no known word", async () => {
+    const r = await get("op=search&q=%F0%9F%A6%96%F0%9F%A6%96");
+    expect(r.status).toBe(200);
+    expect(r.body.data).toMatchObject({ hits: [], matched: false });
+  });
+});
+
+describe("/api/catalog?op=place-export", () => {
+  it("serves the committed NPL county export with its rules, and refuses an unknown collection", async () => {
+    const r = await get("op=place-export&collection=npl-status");
+    expect(r.status).toBe(200);
+    const d = r.body.data as { meta: { zero_vs_missing: string; years: number[]; features: string[]; counts: { serviceCount: number; sitesRead: number } }; places: string[]; value: number[][][]; nullPlaces: Record<string, string> };
+    expect(d.meta.zero_vs_missing).toBe("complete-census");
+    expect(d.meta.counts.sitesRead).toBe(d.meta.counts.serviceCount);
+    expect(d.value).toHaveLength(d.places.length);
+    for (const v of d.value) expect(v).toHaveLength(d.meta.years.length);
+    for (const g of d.places) expect(d.nullPlaces[g]).toBeUndefined();
+    // Lewis and Clark, MT is one county, not "Lewis" + "Clark": a split on "and" once nulled all of Montana.
+    const sites = (r.body.data as { siteIds: Record<string, string[]> }).siteIds;
+    expect(sites["30049"]).toEqual(expect.arrayContaining(["MTD006230346", "MTSFN7578012"]));
+    expect(Object.keys(d.nullPlaces).filter((g) => g.startsWith("30")).every((g) => d.nullPlaces[g] === "join:multi_county")).toBe(true);
+    expect((await get("op=place-export&collection=nope")).status).toBe(400);
+    expect((await get("op=place-export")).status).toBe(400);
+  });
+});

@@ -551,6 +551,27 @@ export const TOOLS: ToolDef[] = [
     handler: (_i, ctx) => relay(ctx, "/api/live"),
   }),
   defineTool({
+    name: "catalog_search",
+    title: "Find the right collection by meaning",
+    description:
+      "The catalogue's collections ranked by meaning for a query: the query is embedded with potion-base-8M (MinishLab, MIT; a static model run on the server) and compared with each card's own description (title, what it holds, what a record is). Collections only; records loaded on the globe are searched in the browser palette. Returns hits [{ id, title, layer, score (cosine), ops, catalog }], embedder { id, model, commit, tableSha256, licence } and matched (false when no word of the query is in the vocabulary). A score says two descriptions read alike, not that the data answer the question. Read a collection with GET /api/catalog?id=<id>. " +
+      ENVELOPE,
+    inputSchema: z.object({
+      q: z.string().min(2).max(200).describe("What you are looking for, in words, e.g. 'wetland habitat' or 'leaking fuel tanks'."),
+      limit: z.number().int().min(1).max(10).optional().describe("How many collections (default 5)."),
+    }),
+    handler: (i, ctx) => relay(ctx, "/api/catalog" + qs({ op: "search", q: i.q, limit: i.limit })),
+  }),
+  defineTool({
+    name: "place_export",
+    title: "A collection counted per county and year",
+    description:
+      "A committed per-county aggregate of a catalogued collection, as a candidate place tower: collection npl-status gives National Priorities List sites per county (5-digit FIPS) and year 2015-2025 (active, listed in the year, deleted in the year, construction complete cumulative), with meta (source query, page sha256s, fetch time, counts, unmatched sites and why), places, value[place][year][feature], nullPlaces (counties a site could be in but was not placed in: null, not 0) and siteIds (the EPA IDs behind each count). A county in neither places nor nullPlaces has 0: the NPL list is complete. " +
+      ENVELOPE,
+    inputSchema: z.object({ collection: z.enum(["npl-status"]).describe("Which aggregate.") }),
+    handler: (i, ctx) => relay(ctx, "/api/catalog" + qs({ op: "place-export", collection: i.collection })),
+  }),
+  defineTool({
     name: "openapi",
     title: "OpenAPI description of the HTTP API",
     description: "The OpenAPI 3 document for this server's /api routes (paths, parameters, response envelopes). Use it to call routes this tool list does not cover.",

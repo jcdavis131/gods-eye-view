@@ -18,6 +18,7 @@
 // present, not a confirmed hazard footprint.
 
 import type { LayerFeature } from "@/lib/layers/types";
+import { recordText, withEmbedText } from "@/lib/catalog/recordText";
 import type { Bbox } from "@/lib/zoning/features";
 import type { ContaminantExtra } from "./contaminants";
 import { epochDate } from "./npl";
@@ -318,7 +319,18 @@ function propertyFeature(r: Row, i: number, shape: "point" | "property", project
       kind: "fuds",
       source: "USACE FUDS",
       details,
-      extra: x,
+      // Never FEATURENAME or the site name, never the property number (matched by letters).
+      extra: withEmbedText(
+        x,
+        recordText("fuds-properties", {
+          STATUS: status ? STATUS_TEXT[status] : str(p.STATUS),
+          ELIGIBILITY: str(p.ELIGIBILITY),
+          COUNTY: str(p.COUNTY),
+          STATE: str(p.STATE)?.toUpperCase(),
+          USACEDISTRICT: str(p.USACEDISTRICT)?.toUpperCase(),
+          FISCALYEAR: fiscalYear(p.FISCALYEAR),
+        }),
+      ),
     },
   };
 }
@@ -380,7 +392,7 @@ export function buildFudsMrs(rows: Row[]): LayerFeature[] {
           "relative priority": str(p.RELATIVEPRIORITY) ?? "not given",
           "what this is": "where munitions may be present, as USACE maps it: not a confirmed hazard footprint",
         },
-        extra: x,
+        extra: withEmbedText(x, recordText("fuds-mrs", { PROJECTSTATUS: str(p.PROJECTSTATUS), DERPPROGRAM: prog ? prog.toUpperCase() : null, RELATIVEPRIORITY: str(p.RELATIVEPRIORITY) })),
       },
     });
   });

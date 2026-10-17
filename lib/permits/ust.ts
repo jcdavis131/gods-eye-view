@@ -17,6 +17,7 @@
 // not trustworthy).
 
 import type { LayerFeature } from "@/lib/layers/types";
+import { recordText, withEmbedText } from "@/lib/catalog/recordText";
 import type { Bbox } from "@/lib/zoning/features";
 
 export const UST_FINDER = "https://services.arcgis.com/cJ9YHowT8TU7DUyn/arcgis/rest/services/UST_Finder_Feature_Layer_2eb/FeatureServer";
@@ -144,7 +145,8 @@ export function buildUst(releases: Row[], facilities: Row[] | null): { features:
           "county population (as EPA's layer gives it)": count(p.POPULATION) ?? undefined,
           "what this is": "county counts of reported leaks and tank facilities from state records as of 2018-2021: a snapshot, not current status; individual sites are not shown",
         },
-        extra: x,
+        // The county and state only; the counts are measured quantities and are not embedded.
+        extra: withEmbedText(x, recordText("ust-releases-county", { County: county, State: state })),
       },
     });
   });

@@ -18,6 +18,7 @@
 // a status list that did not answer is "unknown", never "not listed".
 
 import type { LayerFeature } from "@/lib/layers/types";
+import { recordText, withEmbedText } from "@/lib/catalog/recordText";
 import type { Bbox } from "@/lib/zoning/features";
 import type { ContaminantExtra } from "./contaminants";
 
@@ -359,7 +360,18 @@ export function buildNplBoundaries(rows: Row[], domains: NplDomains | null, look
           "EPA site page": sitePage(p.FEATURE_INFO_URL, p.URL_ALIAS_TXT),
           "what this is": "a Superfund site boundary as an EPA region maps it: a regulatory area, not a contamination footprint",
         },
-        extra: x,
+        // Never SITE_NAME, never the EPA ID (matched by letters).
+        extra: withEmbedText(
+          x,
+          recordText("npl-boundaries", {
+            NPL_STATUS_CODE: code ? decode(domains?.status, code) : null,
+            FEDERAL_FACILITY_DETER_CODE: ff ? decode(domains?.federal, ff) : null,
+            EPA_PROGRAM: cleanLabel(p.EPA_PROGRAM),
+            SITE_FEATURE_TYPE: type,
+            COUNTY: cleanLabel(p.COUNTY),
+            STATE_CODE: cleanLabel(p.STATE_CODE),
+          }),
+        ),
       },
     });
   });

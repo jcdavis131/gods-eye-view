@@ -79,6 +79,9 @@ describe("every tool asks for the exact route URL", () => {
     ["upstream", { lon: -97.74, lat: 30.27 }, "/api/fabric?op=upstream&lon=-97.74&lat=30.27"],
     ["flow_normals", { sites: ["08158000", "USGS-08167000"], date: "09-23" }, "/api/water?op=normals&sites=08158000,USGS-08167000&date=09-23"],
     ["live_events", {}, "/api/live"],
+    ["catalog_search", { q: "wetland habitat" }, "/api/catalog?op=search&q=wetland%20habitat"],
+    ["catalog_search", { q: "dams", limit: 3 }, "/api/catalog?op=search&q=dams&limit=3"],
+    ["place_export", { collection: "npl-status" }, "/api/catalog?op=place-export&collection=npl-status"],
     ["openapi", {}, "/api/openapi"],
   ];
   for (const [name, input, url] of cases) {

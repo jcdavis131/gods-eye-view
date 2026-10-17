@@ -9,6 +9,7 @@
 
 import type { MultiPolygon, Polygon } from "geojson";
 import type { LayerFeature } from "@/lib/layers/types";
+import { recordText, withEmbedText } from "@/lib/catalog/recordText";
 
 type Poly = Polygon | MultiPolygon;
 
@@ -148,7 +149,15 @@ export function buildFloodZones(rows: Array<{ geometry: GeoJSON.Geometry | null;
           "what this is": "FEMA's regulatory flood map (FIRM), not a forecast of any flood",
           "fema map service": "https://msc.fema.gov/portal/home",
         },
-        extra,
+        extra: withEmbedText(
+          extra,
+          recordText("fema-nfhl-zones", {
+            FLD_ZONE: zone === "unknown" ? undefined : `${zone} (${floodZoneMeaning(zone, subtype)})`,
+            ZONE_SUBTY: subtype,
+            SFHA_TF: sfha == null ? undefined : sfha ? "yes" : "no",
+            STUDY_TYP: extra.studyType,
+          }),
+        ),
       },
     });
   });
@@ -378,7 +387,7 @@ export function buildWetlands(
           "usfws caveat": NWI_CAVEAT,
           "nwi code guide": "https://www.fws.gov/program/national-wetlands-inventory/classification-codes",
         },
-        extra: x,
+        extra: withEmbedText(x, recordText("nwi-wetlands", { WETLAND_TYPE: x.type, SYSTEM_NAME: x.system, CLASS_NAME: x.cls, WATER_REGIME_NAME: x.regime })),
       },
     });
   });
@@ -478,7 +487,10 @@ export function buildHistoric(
           "what this is": "a property listed on the National Register of Historic Places, as NPS's public spatial data shows it",
           "not shown": "archaeological sites whose locations are restricted under NHPA section 304 / ARPA; absence here is not absence on the ground",
         },
-        extra: x,
+        extra: withEmbedText(
+          x,
+          recordText("nrhp-listed", { ResType: resType, Is_NHL: x.nhl ? "yes" : undefined, CertDate: x.listed, City: str(p.City), County: str(p.County), State: str(p.State) }),
+        ),
       },
     });
   });
@@ -871,7 +883,19 @@ export function buildPublicLands(
                   ? "an easement: the owner keeps the land and the holder has the rights the easement grants; public access as PAD-US codes it"
                   : undefined,
         },
-        extra: x,
+        extra: withEmbedText(
+          x,
+          recordText("padus-units", {
+            Category: label("Category", category),
+            Own_Type: label("Own_Type", p.Own_Type),
+            Mang_Type: label("Mang_Type", p.Mang_Type),
+            Des_Tp: designation,
+            State_Nm: label("State_Nm", p.State_Nm),
+            Pub_Access: x.access === "unknown" ? undefined : label("Pub_Access", accessCode),
+            GAP_Sts: label("GAP_Sts", p.GAP_Sts),
+            IUCN_Cat: label("IUCN_Cat", p.IUCN_Cat),
+          }),
+        ),
       },
     });
   });
