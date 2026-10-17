@@ -23,7 +23,7 @@ import { NMFS_CAVEAT, RANGES_CAVEAT } from "@/lib/land/features";
 import { TRI_CAVEAT } from "@/lib/permits/tri";
 import { NPL_CAVEAT } from "@/lib/permits/npl";
 import { FUDS_CAVEAT } from "@/lib/permits/fuds";
-import { UST_CAVEAT } from "@/lib/permits/ust";
+import { UST_CAVEAT, UST_FACILITY_NULLS, UST_RELEASE_NULLS } from "@/lib/permits/ust";
 import { DENY_FIELD, EMBED_TEXT } from "./embedFields";
 
 export interface Exclusion {
@@ -510,7 +510,7 @@ export const COLLECTIONS: readonly Collection[] = [
       { what: "an 'unknown status' count by subtraction", why: "13,179 releases nationally have an unknown status, yet some counties sum exactly; the arithmetic is not trustworthy, so nothing is derived" },
       { what: "a per-capita rate", why: "not computed; the layer's population is shown as given" },
     ],
-    caveats: [UST_CAVEAT],
+    caveats: [UST_CAVEAT, UST_RELEASE_NULLS],
     searchable: ["County"],
     embedText: EMBED_TEXT["ust-releases-county"],
     ops: ["permits?op=ust", "catalog?op=place-export"],
@@ -530,7 +530,7 @@ export const COLLECTIONS: readonly Collection[] = [
       { what: "a FIPS join", why: "the layers have no FIPS code; the name join leaves a non-matching or non-unique county unjoined and says so (all 57 counties joined in the Gulf Coast test box, 2026-10-15)" },
       { what: "facility names and addresses", why: "never requested; county counts only" },
     ],
-    caveats: [UST_CAVEAT],
+    caveats: [UST_CAVEAT, UST_FACILITY_NULLS],
     searchable: [],
     embedText: EMBED_TEXT["ust-facilities-county"],
     ops: ["permits?op=ust", "catalog?op=place-export"],
