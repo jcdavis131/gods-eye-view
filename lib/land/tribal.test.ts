@@ -73,13 +73,16 @@ describe("the small-part rule", () => {
     expect(literal.droppedParts).toBe(3009);
     const names = literal.hiddenAreas.map((h) => h.LARNAME);
     for (const n of ["Narragansett", "Mashpee Wampanoag", "Poarch Creek", "Chitimacha", "Ysleta Del Sur"]) expect(names).toContain(n);
-    expect(smallPartsCaveat(literal.droppedParts, 82, false)).toMatch(/82 land areas entirely under that size are not drawn and are listed by name/);
+    expect(literal.keptSmallLargest).toBe(0);
+    expect(smallPartsCaveat(literal.droppedParts, literal.keptSmallLargest, 82, false)).toMatch(/82 land areas entirely under that size are not drawn and are listed by name/);
   });
 
   it("says the count in the caveat, from the answer", () => {
-    const c = smallPartsCaveat(kept.droppedParts, 0);
-    expect(c).toContain(`${kept.droppedParts.toLocaleString("en-US")} polygon parts under 0.7 km2`);
-    expect(c).toMatch(/each named land area is drawn at least once/);
+    const c = smallPartsCaveat(kept.droppedParts, kept.keptSmallLargest, 0);
+    expect(c).toContain("2,927 polygon parts under 0.7 km2 (about the size of a 160-acre allotment) are dropped and not drawn");
+    expect(c).toContain("82 parts under 0.7 km2 are drawn, because each is its land area's only or largest part, so no land area disappears");
+    // The line never claims that no small part is drawn while 82 are.
+    expect(c).not.toMatch(/no part the size of one allotment is drawn|no part under 0\.7 km2 is drawn/);
     expect(c).toMatch(/Nothing here is joined to parcels, names or addresses/);
   });
 });

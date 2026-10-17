@@ -282,7 +282,7 @@ function TribalLegend() {
         </li>
         <li className="flex items-center gap-1 text-[9px] text-muted-foreground">Census statistical areas are on the Field layer (tribal land), drawn unfilled</li>
       </ul>
-      <div>Reference only, never jurisdiction. Parts under 0.7 km2 are not drawn; every land area keeps its largest part. BIA&apos;s layer has no Oklahoma land, so a blank area does not mean no tribal land.</div>
+      <div>Reference only, never jurisdiction. Parts under 0.7 km2 are dropped, except each land area&apos;s largest part, which is drawn even when smaller so no land area disappears. BIA&apos;s layer has no Oklahoma land, so a blank area does not mean no tribal land.</div>
     </>
   );
 }

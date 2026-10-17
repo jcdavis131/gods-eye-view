@@ -52,8 +52,9 @@
 //                                          area held in trust or restricted fee (335 on
 //                                          2026-10-17) in one national answer, simplified
 //                                          to 0.01 degrees, held a day. Parts under 0.7 km2
-//                                          (allotment-sized) are dropped, each land area's
-//                                          largest part kept; the count is in the caveat.
+//                                          (allotment-sized) are dropped, except each land
+//                                          area's largest part, which is drawn whatever its
+//                                          size; both counts are in the caveat.
 //                                          No bbox and no detail level (held for Cam).
 //
 // FEMA resets a fair share of connections, so every ArcGIS call retries (see
@@ -767,7 +768,7 @@ async function opTribal(): Promise<OpResult> {
     return { features: buildTribal(kept.features), droppedParts: kept.droppedParts, keptSmallLargest: kept.keptSmallLargest, hiddenAreas: kept.hiddenAreas, upstream: fc.features.length, cut: truncated(fc) };
   });
   const v = r.value;
-  const caveats = [TRIBAL_CAVEAT, smallPartsCaveat(v.droppedParts, v.hiddenAreas.length), "CLASSIFICATION is shown as BIA codes it: the service publishes no meaning for the code. GISACRES is GIS acreage, not surveyed acreage."];
+  const caveats = [TRIBAL_CAVEAT, smallPartsCaveat(v.droppedParts, v.keptSmallLargest, v.hiddenAreas.length), "CLASSIFICATION is shown as BIA codes it: the service publishes no meaning for the code. GISACRES is GIS acreage, not surveyed acreage."];
   if (v.cut) caveats.push("BIA's answer was cut at its record limit: some land areas are missing from this answer.");
   return {
     data: { type: "FeatureCollection", features: v.features },

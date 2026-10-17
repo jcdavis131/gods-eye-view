@@ -16,7 +16,9 @@
 // name or owner, but drawn beside a parcel layer such a part is one step from
 // an individual's holding, so parts under TRIBAL_MIN_PART_KM2 are dropped from
 // the response and the caveat says how many. Each feature's largest part is
-// always kept (TRIBAL_KEEP_LARGEST_PART): 82 land areas (California
+// always kept, even under 0.7 km2 (TRIBAL_KEEP_LARGEST_PART; Cam kept this
+// reading on 2026-10-17), and the caveat counts those small parts that are
+// drawn (meta.keptSmallLargest, 82 on the fixture): 82 land areas (California
 // rancherias, Narragansett, Mashpee Wampanoag, Poarch Creek, Chitimacha and
 // others) are entirely under 0.7 km2, and dropping them would make a blank
 // area read as no tribal land, the failure the caveat exists to deny. With the
@@ -40,9 +42,9 @@ export const BIA_LAR_PAGE = "https://www.bia.gov/bia/ots/dltr";
 export const TRIBAL_FIELDS = ["LARID", "LARNAME", "CLASSIFICATION", "GISACRES", "REGION"] as const;
 /** The national pull's simplification, degrees. */
 export const TRIBAL_OFFSET = 0.01;
-/** Parts smaller than this are not drawn (Cam, 2026-10-17). */
+/** Parts smaller than this are dropped, except a land area's largest part (Cam, 2026-10-17). */
 export const TRIBAL_MIN_PART_KM2 = 0.7;
-/** Keep each land area's largest part whatever its size, so no named land area disappears (a departure from the literal rule; see the header). */
+/** Keep each land area's largest part whatever its size, so no named land area disappears (Cam kept this reading, 2026-10-17; see the header). */
 export const TRIBAL_KEEP_LARGEST_PART = true;
 
 export const TRIBAL_REFERENCE_ONLY =
@@ -55,13 +57,19 @@ export const TRIBAL_SOURCE_LABEL = "BIA AIAN Land Area Representation";
 /** One colour for all BIA land areas (lightly filled, solid outline); fabric draws Census tribal areas unfilled, so the two never look alike. */
 export const TRIBAL_COLOR = "#B45309";
 
-/** The caveat line for the parts the small-part rule dropped, from the counts of this answer. */
-export function smallPartsCaveat(droppedParts: number, hidden: number, keepLargest: boolean = TRIBAL_KEEP_LARGEST_PART): string {
-  const parts = `${droppedParts.toLocaleString("en-US")} polygon part${droppedParts === 1 ? "" : "s"} under ${TRIBAL_MIN_PART_KM2} km2 (about the size of a 160-acre allotment) ${droppedParts === 1 ? "is" : "are"} not drawn`;
-  const whole = keepLargest
-    ? "every land area keeps its largest part, so each named land area is drawn at least once"
+/**
+ * The caveat line for the small-part rule, from the counts of this answer: the parts dropped
+ * (droppedParts), the small parts still drawn because each is its land area's only or largest
+ * part (keptSmallLargest), and, with the flag off, the land areas left with nothing drawn.
+ */
+export function smallPartsCaveat(droppedParts: number, keptSmallLargest: number, hidden: number, keepLargest: boolean = TRIBAL_KEEP_LARGEST_PART): string {
+  const dropped = `${droppedParts.toLocaleString("en-US")} polygon part${droppedParts === 1 ? "" : "s"} under ${TRIBAL_MIN_PART_KM2} km2 (about the size of a 160-acre allotment) ${droppedParts === 1 ? "is" : "are"} dropped and not drawn`;
+  const rest = keepLargest
+    ? keptSmallLargest
+      ? `${keptSmallLargest.toLocaleString("en-US")} part${keptSmallLargest === 1 ? "" : "s"} under ${TRIBAL_MIN_PART_KM2} km2 ${keptSmallLargest === 1 ? "is" : "are"} drawn, because each is its land area's only or largest part, so no land area disappears`
+      : `no part under ${TRIBAL_MIN_PART_KM2} km2 is drawn, and every land area keeps a part, so no land area disappears`
     : `${hidden} land area${hidden === 1 ? "" : "s"} entirely under that size ${hidden === 1 ? "is" : "are"} not drawn and ${hidden === 1 ? "is" : "are"} listed by name in meta.hiddenAreas`;
-  return `${parts}, so that no part the size of one allotment is drawn beside parcels; ${whole}. Nothing here is joined to parcels, names or addresses.`;
+  return `${dropped}; ${rest}. Nothing here is joined to parcels, names or addresses.`;
 }
 
 type Ring = Position[];

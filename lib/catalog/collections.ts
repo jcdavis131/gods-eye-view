@@ -1178,7 +1178,7 @@ export const COLLECTIONS: readonly Collection[] = [
     freshness: { statement: "No edit date published; BIA's copyright text says the dataset is continuously being updated. Recounted 2026-10-17.", readFrom: "FeatureServer layer 0 ?f=json (no editingInfo); copyrightText", recordedOn: R6 },
     excluded: [
       { what: "Census AIANNH tribal areas", why: "already on fabric (kind=tribal, 'Tribal land'), a different thing: a Census tabulation geography" },
-      { what: "polygon parts under 0.7 km2", why: "allotment-sized parts held for individual Indians, never drawn beside parcels (Cam, 2026-10-17); each land area's largest part is kept so no named land area disappears; the count dropped is in the route's caveat" },
+      { what: "polygon parts under 0.7 km2", why: "allotment-sized parts held for individual Indians, dropped so they are not drawn beside parcels (Cam, 2026-10-17); each land area's largest part is kept and drawn even when it is under 0.7 km2 (82 such parts on the 2026-10-17 count), so no land area disappears; both counts are in the route's caveat" },
       { what: "allotment-level or parcel data, owners, names or addresses from any source", why: "none fetched, none drawn, nothing joined to the parcels layer" },
       { what: "sacred sites or restricted cultural data", why: "not in the source and never fetched from any other" },
       { what: "BIA's detail level (offset 0.001)", why: "held for Cam; only the national 0.01 pull ships" },
@@ -1190,7 +1190,7 @@ export const COLLECTIONS: readonly Collection[] = [
     embedText: EMBED_TEXT["bia-lar"],
     ops: ["land?op=tribal"],
     sensitivity:
-      "Exterior extents of tribal trust and restricted-fee land as BIA publishes them; allotment-sized parts under 0.7 km2 are not drawn; no allotment, parcel, owner or sacred-site data. LARNAME is a land area's name (all 335 read: reservations, rancherias, pueblos, communities; none a person's) and is embedded on Cam's call (2026-10-17).",
+      "Exterior extents of tribal trust and restricted-fee land as BIA publishes them; allotment-sized parts under 0.7 km2 are dropped, except each land area's largest part, which is drawn even when smaller (82 on the 2026-10-17 count) so no land area disappears; no allotment, parcel, owner or sacred-site data. LARNAME is a land area's name (all 335 read: reservations, rancherias, pueblos, communities; none a person's) and is embedded on Cam's call (2026-10-17).",
     round: 6,
   },
 ];

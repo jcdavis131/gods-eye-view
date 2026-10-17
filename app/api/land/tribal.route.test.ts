@@ -44,7 +44,9 @@ describe("op=tribal", () => {
     expect(body.keptSmallLargest).toBe(82);
     expect(body.hiddenAreas).toEqual([]);
     const c = body.caveats.join(" ");
-    expect(c).toContain("2,927 polygon parts under 0.7 km2");
+    expect(c).toContain("2,927 polygon parts under 0.7 km2 (about the size of a 160-acre allotment) are dropped and not drawn");
+    expect(c).toContain("82 parts under 0.7 km2 are drawn, because each is its land area's only or largest part, so no land area disappears");
+    expect(c).toMatch(/Nothing here is joined to parcels, names or addresses/);
     expect(c).toMatch(/no Eastern Oklahoma region rows/);
     expect(c).toMatch(/as BIA codes it/);
     expect(body.provenance[0].source.id).toBe("bia-lar");
