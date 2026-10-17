@@ -38,6 +38,8 @@
 //   &sv=2                        the CDC/ATSDR SVI theme the Social vulnerability layer
 //                                draws (1-4; written only while it is on and a theme,
 //                                not the overall ranking, is picked)
+//   &hs=all                      Hospitals draws closed ones too (written only while it
+//                                is on and its 'Closed too' chip is on)
 //   &aoi=1                       the Area panel open on the drawn area (shape=a:…)
 //   &here=29.42410,-98.49360     a "what's here" answer asked at this point (lat,lon,
 //                                5 decimals) once the camera is there
@@ -129,6 +131,8 @@ export interface ShareState {
   ny?: number;
   /** CDC/ATSDR SVI theme, 1-4 (0, the overall ranking, is the default and never written). */
   sv?: number;
+  /** Hospitals: closed ones too. Open only is the default and is never written. */
+  hs?: "all";
 }
 
 /** Terrain exaggeration from a link: 1 to 3, else undefined. */
@@ -267,6 +271,7 @@ export function parseShare(search: string): ShareState {
   if (ny != null) out.ny = ny;
   const sv = parseSviThemeParam(q.get("sv"));
   if (sv != null) out.sv = sv;
+  if (q.get("hs") === "all") out.hs = "all";
   return out;
 }
 
@@ -303,6 +308,7 @@ export function shareQuery(s: ShareState): string {
   if (s.ty != null) q.set("ty", String(s.ty));
   if (s.ny != null) q.set("ny", String(s.ny));
   if (s.sv != null) q.set("sv", String(s.sv));
+  if (s.hs) q.set("hs", s.hs);
   // The Area panel belongs to a drawn area; without one it has nothing to show.
   if (s.aoi && completeShape(s.shape)?.kind === "area") q.set("aoi", "1");
   if (s.here) q.set("here", `${s.here.lat.toFixed(5)},${s.here.lon.toFixed(5)}`);
@@ -357,6 +363,7 @@ export function currentShare(): ShareState {
     ty: st.layers.topo && prefs.topoYear != null ? prefs.topoYear : undefined,
     ny: st.layers.naip && prefs.naipYear != null ? prefs.naipYear : undefined,
     sv: st.layers.vulnerability && prefs.sviTheme !== "0" ? parseSviTheme(prefs.sviTheme) : undefined,
+    hs: st.layers.hospitals && prefs.hospitalStatus === "all" ? "all" : undefined,
     aoi: useArea.getState().open && areaRing(st.measure.shape) ? true : undefined,
     here: here ? { lat: here.lat, lon: here.lon } : undefined,
   };
@@ -419,7 +426,7 @@ export function startUrlSync(): () => void {
   const unsubPrefs = useSettings.subscribe((s, prev) => {
     const a = s.prefs;
     const b = prev.prefs;
-    if (a.terrain !== b.terrain || a.terrainExaggeration !== b.terrainExaggeration || a.seaLevelFt !== b.seaLevelFt || a.waybackRelease !== b.waybackRelease || a.topoYear !== b.topoYear || a.naipYear !== b.naipYear || a.sviTheme !== b.sviTheme) schedule();
+    if (a.terrain !== b.terrain || a.terrainExaggeration !== b.terrainExaggeration || a.seaLevelFt !== b.seaLevelFt || a.waybackRelease !== b.waybackRelease || a.topoYear !== b.topoYear || a.naipYear !== b.naipYear || a.sviTheme !== b.sviTheme || a.hospitalStatus !== b.hospitalStatus) schedule();
   });
   const unsubGround = useGroundPick.subscribe((s, prev) => {
     if (s.pick?.lon !== prev.pick?.lon || s.pick?.lat !== prev.pick?.lat) schedule();
@@ -480,7 +487,7 @@ export function applyShare(s: ShareState, opts: { fly?: boolean } = {}): void {
   if (s.market) st.setMarketReportOpen(true);
   if (s.space) st.setSpaceWeatherOpen(true);
   // Terrain and the sea level scenario are display settings: a link that carries them sets them.
-  if (s.terrain != null || s.slr != null || s.wb != null || s.ty != null || s.ny != null || s.sv != null) {
+  if (s.terrain != null || s.slr != null || s.wb != null || s.ty != null || s.ny != null || s.sv != null || s.hs != null) {
     const set = useSettings.getState().setPref;
     if (s.terrain != null) {
       set("terrain", true);
@@ -494,6 +501,7 @@ export function applyShare(s: ShareState, opts: { fly?: boolean } = {}): void {
     // A year NAIP did not fly at the view is kept as asked; the layer says so.
     if (s.ny != null) set("naipYear", s.ny);
     if (s.sv != null) set("sviTheme", String(s.sv));
+    if (s.hs) set("hospitalStatus", s.hs);
   }
   // A shared ground answer: asked once the camera has arrived, of the layers now on.
   if (s.ground) {

@@ -143,6 +143,7 @@ export const LAYER_LABEL_PRIORITY: Record<string, number> = {
   ust: 20,
   riskindex: 19,
   health: 18,
+  hospitals: 22,
   vulnerability: 18,
   permits: 25,
   licences: 21,

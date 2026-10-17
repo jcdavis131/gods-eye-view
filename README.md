@@ -116,6 +116,7 @@ Twelve more layers, two panels and a search. Same rules: keyless, each value as 
 | **Rail network** | Below 120 km: main lines, branches, yards and sidings, Amtrak and commuter service, STRACNET, track counts and the owning railroads' reporting marks, with FRA's codes decoded from the service's own domains. Out-of-service and abandoned lines are dashed; track physically removed and rail-trails are left out. | FRA / BTS NTAD North American Rail Network |
 | **Airports (public use)** | Below 2,500 km: FAA public-use airports, heliports and seaplane bases (`PRIVATEUSE = 0` only) with the FAA location id, ICAO code, field elevation and whether an instrument approach is published. Not for navigation. | FAA Aeronautical Information Services, ADDS Airports |
 | **Dams (NID)** | Below 300 km: the USACE National Inventory of Dams with **hazard potential** (the damage a failure would cause downstream, not the dam's condition and not how likely it is to fail), the condition assessment and its date where the regulator published one, height, storage, purposes and year completed. A dam with no hazard class is "not rated by source", drawn in violet. | USACE National Inventory of Dams (public service) |
+| **Hospitals (HIFLD)** | Every **open hospital** in the United States from orbit, coloured by HIFLD's type and sized by published beds; below 300 km the full record: address, beds, trauma level, helipad, owner type, NAICS industry, and the state licensing source with its date. A 'Closed too' chip draws HIFLD's 374 closed hospitals grey. HIFLD Open's own service is gone; this is FEMA's copy (data edited April 2026), each row as its licensing source published it, which can be years old. Not a list of emergency departments; -999 beds reads 'not published'. No telephone or staff field is requested. | [HIFLD](https://services.arcgis.com/XG15cJAlne2vxtgt/arcgis/rest/services/Hospitals_RAPT/FeatureServer/6) via FEMA RAPT through `/api/infra?op=hospitals` (1 day server cache; one national pull) |
 | **Quaternary faults** | Below 400 km: faults with movement in about the last 1.6 million years, coloured by the age of the most recent deformation in USGS's own legend classes (historic < 150 years … undifferentiated Quaternary < 1.6 million years; unspecified and Class B in violet), dashed where the trace is inferred, with slip rate and sense and the USGS fault report. Not a forecast. | USGS Quaternary Fault and Fold Database |
 | **Landslides (USGS)** | Below 60 km: mapped landslides with type, date or date range, fatalities, USGS's confidence number (higher is more confident; the rules differ by inventory, so no label is invented for it), the source inventory and its link. Coverage is where someone mapped: none shown is not none there. | USGS, Landslide Inventories across the United States v3 (doi:10.5066/P14AJF8I) |
 | **Geology (Macrostrat)** | A picture: Macrostrat's geologic map worldwide, coloured by age, switching map scale with zoom. A click on the ground gives the unit there with its lithology, age and the map it comes from, plus the units coarser maps give. | Macrostrat (CC BY 4.0) and the maps it compiles |
@@ -354,6 +355,9 @@ curl "https://eye.jcamd.com/api/civic?op=svi&level=tract&bbox=-97.8,30.2,-97.6,3
 curl "https://eye.jcamd.com/api/civic?op=svi&level=place&fips=48453"
 curl "https://eye.jcamd.com/api/hazards?op=nri&fips=48453"
 
+# HIFLD hospitals: the full record in a box, or every open hospital nationally (short record)
+curl "https://eye.jcamd.com/api/infra?op=hospitals&bbox=-97.8,30.2,-97.65,30.4"
+curl "https://eye.jcamd.com/api/infra?op=hospitals&bbox=-180,-90,180,90"
 
 # One site: 365 days of daily means, or instantaneous values in a window
 curl "https://eye.jcamd.com/api/water?op=history&site=USGS-08180800&param=00060"
@@ -577,6 +581,7 @@ Pinokio users: add this folder (or the repo URL) in Pinokio and press **Install*
 | Rail network | [FRA / BTS NTAD](https://www.arcgis.com/home/item.html?id=e143f436d4774402aa8cca1e663b1d24) | 24 h | Below 120 km. Reporting marks shown, never searched. |
 | Airports (public use) | [FAA ADDS](https://www.arcgis.com/home/item.html?id=e747ab91a11045e8b3f8a3efd093d3b5) | 24 h | Below 2,500 km. Public use only; not for navigation. |
 | Dams (NID) | [USACE National Inventory of Dams](https://nid.sec.usace.army.mil/) | 24 h | Below 300 km. Hazard potential is consequence, not condition; no owner names. |
+| Hospitals (HIFLD) | [HIFLD hospitals, FEMA RAPT copy](https://services.arcgis.com/XG15cJAlne2vxtgt/arcgis/rest/services/Hospitals_RAPT/FeatureServer/6) (U.S. Government data) | 1 day | The last public copy (HIFLD Open's service is gone); each row as its licensing source published it. |
 | Quaternary faults | [USGS Qfaults](https://www.usgs.gov/programs/earthquake-hazards/faults) | 24 h (7 day server cache) | Below 400 km. USGS's age classes; not a forecast. |
 | Landslides | [USGS inventory v3](https://doi.org/10.5066/P14AJF8I) | 24 h (7 day server cache) | Below 60 km. Mapped where someone looked. |
 | Geology | [Macrostrat](https://macrostrat.org/) tiles + map units API (CC BY 4.0) | static | Worldwide picture; the unit on click. |

@@ -2,7 +2,8 @@
 // Controls under a data layer's row (not a picture's opacity, which is
 // TileControls): the National Risk Index hazard picker and its legend, the
 // "Landmarks only" chip on Historic places, the CDC PLACES measure picker, and
-// the CDC/ATSDR SVI theme picker with its fixed-break legend.
+// the CDC/ATSDR SVI theme picker with its fixed-break legend, and the
+// "Closed too" chip on Hospitals.
 
 import type { LayerId } from "@/lib/layers/types";
 import { useSettings } from "@/lib/store/settings";
@@ -11,7 +12,7 @@ import { isPlacesMeasure, PLACES_BIN_COLORS, PLACES_DEFAULT_MEASURE, PLACES_MEAS
 import { parseSviTheme, SVI_BIN_COLORS, SVI_BIN_LABELS, SVI_NO_RANK_EDGE, SVI_THEMES } from "@/lib/civic/svi";
 
 /** Layers with controls here. */
-export const OPTION_LAYERS = new Set<LayerId>(["riskindex", "historic", "health", "vulnerability"]);
+export const OPTION_LAYERS = new Set<LayerId>(["riskindex", "historic", "health", "vulnerability", "hospitals"]);
 
 function RiskPicker() {
   const pick = parseNriPick(useSettings((s) => s.prefs.nriHazard));
@@ -158,7 +159,25 @@ function SviThemePicker() {
   );
 }
 
+function ClosedHospitalsChip() {
+  const all = useSettings((s) => s.prefs.hospitalStatus) === "all";
+  const setPref = useSettings((s) => s.setPref);
+  return (
+    <>
+      <button
+        type="button"
+        aria-pressed={all}
+        onClick={() => setPref("hospitalStatus", all ? "open" : "all")}
+        className={`border px-2 py-0.5 text-[10px] uppercase tracking-widest ${all ? "border-primary/60 bg-primary/10 text-primary" : "border-border text-foreground/80 hover:bg-accent"}`}
+      >
+        Closed too
+      </button>
+      <div>HIFLD lists 374 hospitals as closed; they are drawn grey when this is on. Dot size is published beds; a hospital with no bed count published takes the base size.</div>
+    </>
+  );
+}
+
 export default function LayerOptions({ id }: { id: LayerId }) {
   if (!OPTION_LAYERS.has(id)) return null;
-  return <div className="mt-1.5 space-y-1 pl-4 text-[10px] text-muted-foreground md:text-[9px]">{id === "riskindex" && <RiskPicker />}{id === "historic" && <LandmarksChip />}{id === "health" && <MeasurePicker />}{id === "vulnerability" && <SviThemePicker />}</div>;
+  return <div className="mt-1.5 space-y-1 pl-4 text-[10px] text-muted-foreground md:text-[9px]">{id === "riskindex" && <RiskPicker />}{id === "historic" && <LandmarksChip />}{id === "health" && <MeasurePicker />}{id === "vulnerability" && <SviThemePicker />}{id === "hospitals" && <ClosedHospitalsChip />}</div>;
 }

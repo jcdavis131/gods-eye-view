@@ -13,6 +13,7 @@ import type { LayerFeature } from "@/lib/layers/types";
 import { polyOutlines, UNRATED } from "./hazardStyles";
 import type { FaultExtra, RailExtra, TransmissionExtra } from "@/lib/infra/features";
 import type { FuelFamily, PlantExtra } from "@/lib/infra/plants";
+import type { HospitalExtra } from "@/lib/infra/hospitals";
 import { isLoadedBox } from "@/lib/layers/infra";
 import { MACROSTRAT_TILES } from "@/lib/terrain/products";
 import type { AirExtra } from "@/lib/air/airnow";
@@ -148,6 +149,50 @@ export const damsStyle: LayerStyle = {
   labelMax: 25,
   labelWhen: notBox,
   scaleByDistance: [2e4, 1, 4e5, 0.55],
+  lines: (f) => (isLoadedBox(f) ? boxOutline(f) : null),
+};
+
+// ---------------------------------------------------------------- hospitals (HIFLD)
+
+export const HOSPITAL_COLOR: Record<string, string> = {
+  general: "#EF4444",
+  "critical-access": "#F97316",
+  children: "#EC4899",
+  psychiatric: "#A855F7",
+  "long-term": "#14B8A6",
+  rehabilitation: "#22C55E",
+  military: "#64748B",
+  women: "#F472B6",
+  special: "#EAB308",
+  chronic: "#0EA5E9",
+  other: "#94A3B8",
+  // NOT AVAILABLE: grey, "type not published", never a type.
+  unknown: "#9CA3AF",
+};
+
+function hospitalColor(f: LayerFeature): string {
+  if (isLoadedBox(f)) return LOADED_BOX;
+  const x = f.properties.extra as HospitalExtra | undefined;
+  // A closed hospital (shown only with status=all) is drawn in grey whatever its type.
+  if (x?.status && x.status !== "OPEN") return "#6B7280";
+  return HOSPITAL_COLOR[f.properties.kind ?? "unknown"] ?? HOSPITAL_COLOR.other;
+}
+
+/** Sized by published beds; -999 ("not published") takes the base size, no size claim. */
+export function hospitalSize(f: LayerFeature): number {
+  const beds = (f.properties.extra as HospitalExtra | undefined)?.beds;
+  return beds == null ? 6 : Math.min(14, 6 + Math.sqrt(beds) / 4);
+}
+
+export const hospitalsStyle: LayerStyle = {
+  color: "#EF4444",
+  icon: () => null,
+  pointSize: hospitalSize,
+  colorFor: hospitalColor,
+  label: (f) => f.properties.name,
+  labelMax: 25,
+  labelWhen: notBox,
+  scaleByDistance: [5e4, 1, 4e6, 0.5],
   lines: (f) => (isLoadedBox(f) ? boxOutline(f) : null),
 };
 

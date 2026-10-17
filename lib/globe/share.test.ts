@@ -351,3 +351,28 @@ describe("the SVI theme in the share link", () => {
     useGlobe.getState().setLayer("vulnerability", false);
   });
 });
+
+describe("closed hospitals in the share link", () => {
+  it("round-trips hs=all and drops anything else", () => {
+    const s: ShareState = { layers: ["hospitals"], hs: "all" };
+    const q = shareQuery(s);
+    expect(q).toContain("hs=all");
+    expect(parseShare(q)).toEqual(s);
+    expect(parseShare("?hs=open").hs).toBeUndefined();
+    expect(parseShare("?hs=1").hs).toBeUndefined();
+  });
+
+  it("is written only while Hospitals is on and its chip is on", async () => {
+    const { currentShare } = await import("./share");
+    const { useGlobe } = await import("@/lib/store/globe");
+    const { useSettings } = await import("@/lib/store/settings");
+    useSettings.getState().setPref("hospitalStatus", "all");
+    useGlobe.getState().setLayer("hospitals", false);
+    expect(currentShare().hs).toBeUndefined();
+    useGlobe.getState().setLayer("hospitals", true);
+    expect(currentShare().hs).toBe("all");
+    useSettings.getState().setPref("hospitalStatus", "open");
+    expect(currentShare().hs).toBeUndefined();
+    useGlobe.getState().setLayer("hospitals", false);
+  });
+});

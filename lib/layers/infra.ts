@@ -9,6 +9,8 @@
 //   rail          FRA/BTS North American Rail Network
 //   airports      FAA public-use airports, heliports and seaplane bases
 //   dams          USACE National Inventory of Dams
+//   hospitals     HIFLD hospitals (FEMA RAPT's copy): every one nationally from
+//                 orbit with a short record, the full record below 300 km
 //   plants        EIA-860M power plants (bundled monthly snapshot) and Wikidata
 //                 nuclear plants outside the US
 //   faults        USGS Quaternary faults
@@ -55,6 +57,8 @@ interface BoxLayerOptions {
   estimate?: string;
   /** Draw the loaded box (not for world-box tiers). */
   loadedBox?: boolean;
+  /** Query parameters from the layer's options (a status toggle); refetched when they change (LayerHost OPTION_KEYS). */
+  optionParams?: (options: Record<string, unknown>) => string | null;
 }
 
 function km(m: number): string {
@@ -143,7 +147,8 @@ function boxLayer(o: BoxLayerOptions): LayerDefinition {
         const g = tierGrid(t);
         bbox = bboxAround(Math.round(ctx.view.lat / g) * g, Math.round(ctx.view.lon / g) * g, t.radiusM);
       }
-      const env = await proxy<FeatureCollection>(`/api/infra?op=${o.op}&bbox=${bbox.map((x) => x.toFixed(3)).join(",")}${t.params ? `&${t.params}` : ""}`, ctx);
+      const extra = o.optionParams?.(ctx.options);
+      const env = await proxy<FeatureCollection>(`/api/infra?op=${o.op}&bbox=${bbox.map((x) => x.toFixed(3)).join(",")}${t.params ? `&${t.params}` : ""}${extra ? `&${extra}` : ""}`, ctx);
       const meta = env as unknown as Record<string, unknown>;
       const features = memo.stable(env.data.features as unknown as LayerFeature[]);
       const loaded = Array.isArray(meta.bbox) && meta.bbox.length === 4 ? (meta.bbox as [number, number, number, number]) : bbox;
@@ -319,6 +324,32 @@ export const plantsLayer = boxLayer({
   },
 });
 
+export const HOSPITAL_TIERS: BoxTier[] = [
+  { maxHeight: 300_000, radiusM: 150_000 },
+  { maxHeight: Number.POSITIVE_INFINITY, radiusM: 0, world: true },
+];
+
+export const hospitalsLayer = boxLayer({
+  id: "hospitals",
+  label: "Hospitals (HIFLD)",
+  description:
+    "Hospitals from HIFLD as FEMA last copied it (the last public copy; data edited April 2026): every open hospital in the United States from orbit, coloured by HIFLD's type and sized by published beds, trauma centres ringed; below 300 km the full record: address, beds, trauma level, helipad, owner type, NAICS industry, and the licensing source with its date. Closed hospitals on a toggle. Each record is as its state licensing source published it, which can be years old; not a list of emergency departments.",
+  color: "#EF4444",
+  attribution: "Homeland Infrastructure Foundation-Level Data (DHS GMO, ORNL), via FEMA RAPT",
+  source: "HIFLD hospitals (FEMA RAPT)",
+  op: "hospitals",
+  tiers: HOSPITAL_TIERS,
+  updateIntervalMs: 24 * 60 * 60_000,
+  loadedBox: true,
+  optionParams: (opts) => (opts.hospitalStatus === "all" ? "status=all" : null),
+  summarize: (fs, env) => {
+    const c = countBy(fs, (f) => f.properties.kind);
+    const trauma = fs.filter((f) => (f.properties.extra as { trauma?: string | null } | undefined)?.trauma).length;
+    const scope = env.national ? "nationally (short record; descend below 300 km for the full one)" : "inside the dashed box";
+    return `${fs.length.toLocaleString("en-US")} ${env.status === "all" ? "open and closed" : "open"} hospitals ${scope} · ${c.get("general") ?? 0} general acute care, ${c.get("critical-access") ?? 0} critical access, ${trauma} with a published trauma level · HIFLD via FEMA, data edited ${String(env.dataLastEdited ?? "")}`;
+  },
+});
+
 export const FAULT_TIERS: BoxTier[] = [
   { maxHeight: 150_000, radiusM: 40_000 },
   { maxHeight: 400_000, radiusM: 80_000 },
@@ -392,6 +423,7 @@ export const INFRA_LAYERS: LayerDefinition[] = [
   railLayer,
   airportsLayer,
   damsLayer,
+  hospitalsLayer,
   faultsLayer,
   landslidesLayer,
   plssLayer,

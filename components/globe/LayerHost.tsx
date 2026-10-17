@@ -38,6 +38,7 @@ const OPTION_KEYS: Partial<Record<LayerDefinition["id"], Array<keyof Prefs>>> = 
   naip: ["naipYear"],
   health: ["placesMeasure"],
   vulnerability: ["sviTheme"],
+  hospitals: ["hospitalStatus"],
 };
 
 export default function LayerHost() {

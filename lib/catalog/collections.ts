@@ -30,6 +30,7 @@ import { NAIP_CAVEAT } from "@/lib/terrain/naip";
 import { ABPP_CAVEAT, ABPP_STUDY_DEFINITION, NHA_CAVEAT, UNITS_CAVEAT, WHS_CAVEAT } from "@/lib/land/heritage";
 import { PLACES_CAVEAT } from "@/lib/civic/places";
 import { SVI_CAVEAT, SVI_VINTAGE_NOTE } from "@/lib/civic/svi";
+import { HOSPITALS_CAVEAT } from "@/lib/infra/hospitals";
 import { DENY_FIELD, EMBED_TEXT } from "./embedFields";
 
 export interface Exclusion {
@@ -90,7 +91,7 @@ export const SHELVES: Array<{ id: string; title: string; layers: LayerId[] }> = 
   { id: "water", title: "Water", layers: ["impaired", "pfas", "hydro"] },
   { id: "contaminants", title: "Contaminants", layers: ["contaminants", "ust"] },
   { id: "hazards", title: "Hazards and risk", layers: ["riskindex"] },
-  { id: "health", title: "Health", layers: ["health", "vulnerability"] },
+  { id: "health", title: "Health", layers: ["health", "vulnerability", "hospitals"] },
   { id: "imagery", title: "Imagery and maps", layers: ["wayback", "topo", "naip"] },
   { id: "infrastructure", title: "Infrastructure", layers: ["dams"] },
 ];
@@ -995,6 +996,29 @@ export const COLLECTIONS: readonly Collection[] = [
     embedText: EMBED_TEXT["svi-tracts"],
     ops: ["civic?op=svi"],
     sensitivity: "Published tract percentile ranks; CDC does not rank tracts with no population or unreliable estimates.",
+    round: 5,
+  },
+  // ------------------------------------------------------------ round 5: hospitals
+  {
+    id: "hifld-hospitals",
+    title: "Hospitals (HIFLD, FEMA's copy)",
+    layer: "hospitals",
+    sources: ["hifld-hospitals"],
+    what: "Every hospital in HIFLD's hospital layer as FEMA's Resilience Analysis and Planning Tool last copied it: open hospitals nationally from orbit with a short record (name, type, status, beds, trauma level, city, state, county FIPS), and below 300 km the full record: address, beds, trauma level, helipad, owner type, NAICS industry, the state licensing source with its date, and the date HIFLD checked the location against imagery.",
+    recordIs: "A licensed hospital as its state licensing source published it on the date shown, which can be years old. Not a list of emergency departments, and not a measure of capacity today.",
+    coverage: { spatial: "United States and territories; national dots from orbit, the full record in a box of at most 3 degrees below 300 km", temporal: "per-row SOURCEDATE 2012-06-05 to 2025-07-03", count: { value: 8514, of: "hospitals in Hospitals_RAPT layer 6 (returnCountOnly); 8,140 STATUS='OPEN', 374 CLOSED; 481 with BEDS = -999 (439 of them open)", countedOn: R5 } },
+    freshness: { statement: "FEMA last edited the layer's data on 2026-04-22. HIFLD Open's own hospital service no longer exists, so this copy is not refreshed from it; each row carries the date its source published it.", readFrom: "FeatureServer layer 6 editingInfo.dataLastEditDate; SOURCEDATE min and max (outStatistics, 2026-10-17)", recordedOn: R5 },
+    excluded: [
+      { what: "TELEPHONE, TTL_STAFF, ALT_NAME and VAL_METHOD", why: "never requested: a contact field, a staff count and bookkeeping" },
+      { what: "CMS Hospital General Information (star ratings)", why: "no shared key, no coordinates and no CORS (re-probed 2026-10-16); an exact address match is deferred (D5-8)" },
+      { what: "closed hospitals, by default", why: "374 rows are CLOSED; a 'Closed too' chip draws them grey" },
+    ],
+    caveats: [HOSPITALS_CAVEAT],
+    searchable: ["ID"],
+    embedText: EMBED_TEXT["hifld-hospitals"],
+    ops: ["infra?op=hospitals"],
+    sensitivity:
+      "Institutions as their licensing agency published them; no staff, patient or contact data. A hospital is labelled by its published name, an institution's (as a public dam keeps its name), so the palette's letter match finds it by name; NAME as a field is on the deny list and is never embedded. Whether institution names may be searched is flagged for review; the fallback labels by HIFLD id. ADDRESS, WEBSITE and SOURCE are shown on click and never searched or embedded; OWNER (a category: non-profit, proprietary, government) is shown on click only, because the deny list matches the field name.",
     round: 5,
   },
 ];

@@ -3354,6 +3354,7 @@
                 "rail",
                 "airports",
                 "dams",
+                "hospitals",
                 "plants",
                 "faults",
                 "landslides",
@@ -3362,7 +3363,7 @@
                 "geology"
               ]
             },
-            "description": "transmission: HIFLD lines. pipelines: EIA pipelines. rail: FRA/BTS rail. airports: FAA public-use. dams: USACE NID. plants: EIA-860M + Wikidata nuclear. faults: USGS Qfaults. landslides: USGS inventory. plss: BLM townships or sections. plss-search: T-R-S lookup. geology: Macrostrat units at lon, lat."
+            "description": "transmission: HIFLD lines. pipelines: EIA pipelines. rail: FRA/BTS rail. airports: FAA public-use. dams: USACE NID. plants: EIA-860M + Wikidata nuclear. faults: USGS Qfaults. landslides: USGS inventory. plss: BLM townships or sections. plss-search: T-R-S lookup. geology: Macrostrat units at lon, lat. hospitals: HIFLD hospitals as FEMA RAPT last copied them (the last public copy; data edited 2026-04-22). A box over 3 degrees answers every hospital nationally with a short record (ID, NAME, CITY, STATE, TYPE, STATUS, BEDS, TRAUMA, COUNTYFIPS; one pull held a day); a smaller box (snapped to 0.25, at most 3 degrees) the full record (plus ADDRESS, ZIP, HELIPAD, OWNER, NAICS_DESC, SOURCE, SOURCEDATE, VAL_DATE, WEBSITE). Open only unless status=all. TELEPHONE and TTL_STAFF are never requested. BEDS -999 and 'NOT AVAILABLE' are not published, never 0."
           },
           {
             "name": "bbox",
@@ -3421,6 +3422,19 @@
               "maximum": 90
             },
             "description": "op=geology: latitude of the point."
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "open",
+                "all"
+              ],
+              "default": "open"
+            },
+            "description": "op=hospitals: open hospitals only (STATUS = 'OPEN', default) or all, closed ones too."
           }
         ],
         "responses": {
@@ -3470,6 +3484,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/InfraGeologyResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/InfraHospitalsResponse"
                     }
                   ]
                 }
@@ -10322,6 +10339,71 @@
           "RPL_THEME3",
           "RPL_THEME4",
           "F_TOTAL"
+        ]
+      },
+      "InfraHospitalsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "description": "A GeoJSON FeatureCollection of hospital points; each feature's properties carry id (hifld-hosp:<ID>), name, kind (type class), details (the click lines) and extra { type, typeClass, status, beds, trauma, short }."
+              },
+              "national": {
+                "type": "boolean",
+                "description": "true: every hospital nationally with the short record (the box was over 3 degrees)"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "all"
+                ]
+              },
+              "bbox": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/Bbox"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "count": {
+                "type": "integer"
+              },
+              "truncated": {
+                "type": "boolean"
+              },
+              "dataLastEdited": {
+                "type": "string",
+                "description": "FEMA's dataLastEditDate for the layer"
+              }
+            }
+          }
+        ],
+        "x-op": "hospitals",
+        "x-feature-properties": [
+          "HIFLD id",
+          "type",
+          "status",
+          "beds",
+          "trauma",
+          "county",
+          "place",
+          "address",
+          "helipad",
+          "owner type",
+          "NAICS industry",
+          "source",
+          "location checked against imagery",
+          "website",
+          "full record"
         ]
       }
     }
