@@ -27,6 +27,7 @@ import { bboxAround } from "@/lib/globe/geo";
 import type { FetchContext, FetchResult, LayerDefinition, LayerFeature, LayerId, LoadedBoxExtra, ViewState } from "./types";
 import { proxy } from "./aircraft";
 import { FeatureMemo } from "./featureMemo";
+import { buildHospitals, unpackNational, type PackedRow } from "@/lib/infra/hospitals";
 
 export interface BoxTier {
   /** Used at or below this camera height (metres). */
@@ -59,6 +60,8 @@ interface BoxLayerOptions {
   loadedBox?: boolean;
   /** Query parameters from the layer's options (a status toggle); refetched when they change (LayerHost OPTION_KEYS). */
   optionParams?: (options: Record<string, unknown>) => string | null;
+  /** The answer's features, when the route sends something other than a FeatureCollection for a tier (packed rows). */
+  decode?: (data: unknown) => LayerFeature[];
 }
 
 function km(m: number): string {
@@ -150,7 +153,7 @@ function boxLayer(o: BoxLayerOptions): LayerDefinition {
       const extra = o.optionParams?.(ctx.options);
       const env = await proxy<FeatureCollection>(`/api/infra?op=${o.op}&bbox=${bbox.map((x) => x.toFixed(3)).join(",")}${t.params ? `&${t.params}` : ""}${extra ? `&${extra}` : ""}`, ctx);
       const meta = env as unknown as Record<string, unknown>;
-      const features = memo.stable(env.data.features as unknown as LayerFeature[]);
+      const features = memo.stable(o.decode ? o.decode(env.data) : (env.data.features as unknown as LayerFeature[]));
       const loaded = Array.isArray(meta.bbox) && meta.bbox.length === 4 ? (meta.bbox as [number, number, number, number]) : bbox;
       const floorMw = t.params?.startsWith("min=") ? Number(t.params.slice(4)) : undefined;
       // A part whose service did not answer (pipelines' counts: null) is missing, not absent.
@@ -342,6 +345,11 @@ export const hospitalsLayer = boxLayer({
   updateIntervalMs: 24 * 60 * 60_000,
   loadedBox: true,
   optionParams: (opts) => (opts.hospitalStatus === "all" ? "status=all" : null),
+  // From orbit the route sends packed rows (8,140 built features would near the 4.5 MB response limit).
+  decode: (data) => {
+    const d = data as { rows?: PackedRow[]; features?: LayerFeature[] };
+    return Array.isArray(d.rows) ? buildHospitals(unpackNational(d.rows), true) : (d.features ?? []);
+  },
   summarize: (fs, env) => {
     const c = countBy(fs, (f) => f.properties.kind);
     const trauma = fs.filter((f) => (f.properties.extra as { trauma?: string | null } | undefined)?.trauma).length;

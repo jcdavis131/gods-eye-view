@@ -17,8 +17,8 @@
 //                                            condition, height, storage. Box at most 1.5 degrees.
 //   /api/infra?op=hospitals&bbox=…[&status=all] HIFLD hospitals (FEMA RAPT's copy, the last
 //                                            public one). A box over 3 degrees gets every
-//                                            hospital nationally with a short record (one pull
-//                                            held a day); a smaller box the full record.
+//                                            hospital nationally as packed rows (one pull held
+//                                            a day); a smaller box the full record as GeoJSON.
 //                                            Open only unless status=all.
 //   /api/infra?op=plants&bbox=…&min=MW       EIA-860M plants (bundled monthly snapshot) and
 //                                            Wikidata nuclear plants outside the US. Any box;
@@ -73,6 +73,8 @@ import {
   HOSPITALS_PAGE,
   HOSPITALS_URL,
   hospitalWhere,
+  NATIONAL_COLUMNS,
+  packNational,
   type HospitalStatus,
 } from "@/lib/infra/hospitals";
 
@@ -453,42 +455,48 @@ async function hospitalsNational(status: HospitalStatus) {
     cut = truncated(f);
     if (!cut) break;
   }
-  return { features: buildHospitals(rows as Row[], true), truncated: cut };
+  return { rows: packNational(rows as Row[]), truncated: cut };
 }
 
 async function opHospitals(bbox: Bbox, status: HospitalStatus): Promise<OpResult> {
   const national = bbox[2] - bbox[0] > HOSPITALS_BOX_MAX_DEG || bbox[3] - bbox[1] > HOSPITALS_BOX_MAX_DEG;
   const box: Bbox = national ? bbox : snapBbox(bbox, HOSPITALS_BOX_MAX_DEG, 0.25);
-  const r = national
-    ? await cached(`hosp:national:${status}`, DAY, () => hospitalsNational(status), INFRA_DEADLINE)
-    : await cached(
-        `hosp:${status}:${box.join(",")}`,
-        DAY,
-        async () => {
-          const f = await boxQuery(box, { name: "hifld-hospitals", url: HOSPITALS_URL, gate: HOSPITALS_GATE.gate, where: hospitalWhere(status), outFields: HOSPITAL_FIELDS.join(","), orderBy: "FID" });
-          return { features: buildHospitals(f.features as Row[]), truncated: truncated(f) };
-        },
-        INFRA_DEADLINE,
-      );
+  if (national) {
+    const n = await cached(`hosp:national:${status}`, DAY, () => hospitalsNational(status), INFRA_DEADLINE);
+    return hospitalsResult({ columns: [...NATIONAL_COLUMNS], rows: n.value.rows }, n.value.rows.length, n.value.truncated, n.age, true, bbox, status);
+  }
+  const r = await cached(
+    `hosp:${status}:${box.join(",")}`,
+    DAY,
+    async () => {
+      const f = await boxQuery(box, { name: "hifld-hospitals", url: HOSPITALS_URL, gate: HOSPITALS_GATE.gate, where: hospitalWhere(status), outFields: HOSPITAL_FIELDS.join(","), orderBy: "FID" });
+      return { features: buildHospitals(f.features as Row[]), truncated: truncated(f) };
+    },
+    INFRA_DEADLINE,
+  );
+  return hospitalsResult(fc(r.value.features), r.value.features.length, r.value.truncated, r.age, false, box, status);
+}
+
+function hospitalsResult(data: unknown, count: number, cut: boolean, age: number, national: boolean, box: Bbox, status: HospitalStatus): OpResult {
   const caveats = [
     HOSPITALS_CAVEAT,
     "Beds and trauma levels are as published; -999 beds and 'NOT AVAILABLE' are shown as not published, never 0. Names and addresses are institutions' as their licensing sources publish them; no telephone, staff or patient field is requested.",
     status === "open" ? "Open hospitals only (STATUS = 'OPEN'); ask status=all for the 374 HIFLD lists as closed." : "Open and closed hospitals, as HIFLD's STATUS says.",
   ];
-  if (national) caveats.push("Every hospital in the United States and territories with a short record (id, name, type, status, beds, trauma, city, state, county FIPS); ask a box of 3 degrees or less for the full record.");
+  if (national) caveats.push("Every hospital in the United States and territories as packed rows (`columns`, then `rows`: ID, NAME, CITY, STATE, TYPE, STATUS, BEDS, TRAUMA, COUNTYFIPS, lon, lat, values as published); ask a box of 3 degrees or less for the full record as GeoJSON.");
   else caveats.push(BOX_CAVEAT);
-  if (r.value.truncated) caveats.push(national ? `FEMA's answer was still cut after ${HOSPITALS_MAX_PAGES} pages: some hospitals are missing from this answer.` : "The record limit was hit; ask a smaller box for every hospital.");
+  if (cut) caveats.push(national ? `FEMA's answer was still cut after ${HOSPITALS_MAX_PAGES} pages: some hospitals are missing from this answer.` : "The record limit was hit; ask a smaller box for every hospital.");
   return {
-    data: fc(r.value.features),
-    meta: { source: "HIFLD Hospitals (FEMA RAPT copy)", bbox: national ? null : box, national, status, count: r.value.features.length, truncated: r.value.truncated, dataLastEdited: HOSPITALS_DATA_EDIT, cacheAge: r.age },
+    data,
+    meta: { source: "HIFLD Hospitals (FEMA RAPT copy)", bbox: national ? null : box, national, status, count, truncated: cut, dataLastEdited: HOSPITALS_DATA_EDIT, cacheAge: age },
     ttlS: 6 * 3600,
     provenance: [
       provenance(source("hifld-hospitals"), {
         kind: "published",
-        seriesId: `Hospitals_RAPT FeatureServer layer 6, ${hospitalWhere(status)}${national ? ", national, short record" : ""}`,
+        seriesId: `Hospitals_RAPT FeatureServer layer 6, ${hospitalWhere(status)}${national ? ", national, packed rows" : ""}`,
         upstreamUrl: HOSPITALS_URL,
         period: `data last edited ${HOSPITALS_DATA_EDIT}`,
-        retrievedAt: fetchedAt(r.age),
+        retrievedAt: fetchedAt(age),
         revision: "FEMA's copy of HIFLD's hospital layer; each row carries its own SOURCEDATE",
         notes: national ? ["national"] : [`bbox ${box.join(",")}`],
       }),

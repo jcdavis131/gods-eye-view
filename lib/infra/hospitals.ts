@@ -7,7 +7,10 @@
 //
 //   national  above 300 km: every hospital of the asked status in one pull
 //             (8,140 open on 2026-10-16, five pages of 2,000), held a day, sent
-//             with a short record (id, name, type, beds, trauma, city, state)
+//             as packed rows (id, name, city, state, type, status, beds, trauma,
+//             county FIPS, lon, lat; about 1 MB) that the browser turns into
+//             features with the short record: 8,140 built features would be
+//             near the platform's 4.5 MB response limit
 //   box       below: a box of at most 3 degrees with the full record, held a day
 //
 // Every query names its fields: TELEPHONE, TTL_STAFF, ALT_NAME and every other
@@ -30,6 +33,31 @@ export const HOSPITALS_BOX_MAX_DEG = 3;
 export const HOSPITAL_FIELDS = ["ID", "NAME", "ADDRESS", "CITY", "STATE", "ZIP", "TYPE", "STATUS", "COUNTYFIPS", "BEDS", "TRAUMA", "HELIPAD", "OWNER", "NAICS_DESC", "SOURCE", "SOURCEDATE", "VAL_DATE", "WEBSITE"] as const;
 /** The short record (national tier): what the dot's colour, size and label need. */
 export const HOSPITAL_NATIONAL_FIELDS = ["ID", "NAME", "CITY", "STATE", "TYPE", "STATUS", "BEDS", "TRAUMA", "COUNTYFIPS"] as const;
+
+/** The packed national row: HOSPITAL_NATIONAL_FIELDS, then lon and lat. */
+export const NATIONAL_COLUMNS = [...HOSPITAL_NATIONAL_FIELDS, "lon", "lat"] as const;
+export type PackedRow = Array<string | number | null>;
+
+/** f=geojson rows -> packed rows, values as FEMA sent them (points only). */
+export function packNational(rows: ReadonlyArray<{ geometry: GeoJSON.Geometry | null; properties: Record<string, unknown> | null }>): PackedRow[] {
+  const out: PackedRow[] = [];
+  for (const r of rows) {
+    if (!r.geometry || r.geometry.type !== "Point") continue;
+    const p = r.properties ?? {};
+    const [lon, lat] = r.geometry.coordinates;
+    out.push([...HOSPITAL_NATIONAL_FIELDS.map((f) => (typeof p[f] === "string" || typeof p[f] === "number" ? (p[f] as string | number) : null)), lon, lat]);
+  }
+  return out;
+}
+
+/** Packed rows back to f=geojson-shaped rows, for buildHospitals(rows, true). */
+export function unpackNational(rows: readonly PackedRow[]): Array<{ geometry: GeoJSON.Point; properties: Record<string, unknown> }> {
+  const n = HOSPITAL_NATIONAL_FIELDS.length;
+  return rows.map((r) => ({
+    geometry: { type: "Point", coordinates: [Number(r[n]), Number(r[n + 1])] },
+    properties: Object.fromEntries(HOSPITAL_NATIONAL_FIELDS.map((f, i) => [f, r[i]])),
+  }));
+}
 
 export type HospitalStatus = "open" | "all";
 export function hospitalWhere(status: HospitalStatus): string {

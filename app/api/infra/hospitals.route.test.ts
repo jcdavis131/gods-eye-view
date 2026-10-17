@@ -2,8 +2,8 @@
 // (lib/infra/fixtures, unmodified): a box gets the full record with named fields and no
 // telephone; a wide box gets the national short record, paged on FEMA's
 // exceededTransferLimit (Rhode Island's open hospitals in pages of 10 stand in for the
-// national pages of 2,000, which the route asks by resultOffset); status=all drops the
-// open filter. No network.
+// national pages of 2,000, which the route asks by resultOffset) sent as packed rows;
+// status=all drops the open filter. No network.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import box from "@/lib/infra/fixtures/hosp-box-austin.json";
@@ -34,7 +34,7 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-type Body = { data: { features: Array<{ properties: { id: string; details: Record<string, string> } }> }; national: boolean; status: string; count: number; truncated: boolean; caveats: string[]; provenance: Array<{ source: { id: string } }> };
+type Body = { data: { features?: Array<{ properties: { id: string; details: Record<string, string> } }>; columns?: string[]; rows?: unknown[][] }; national: boolean; status: string; count: number; truncated: boolean; caveats: string[]; provenance: Array<{ source: { id: string } }> };
 async function get(qs: string) {
   const res = await GET(new NextRequest(`http://localhost/api/infra?${qs}`));
   return { status: res.status, body: (await res.json()) as Body };
@@ -52,7 +52,7 @@ describe("op=hospitals", () => {
     expect(p.get("outFields")).not.toMatch(/TELEPHONE|TTL_STAFF/);
     expect(body.national).toBe(false);
     expect(body.count).toBe(17);
-    expect(body.data.features[0].properties.details.address).toBeDefined();
+    expect(body.data.features![0].properties.details.address).toBeDefined();
     expect(body.provenance[0].source.id).toBe("hifld-hospitals");
     expect(body.caveats.join(" ")).toContain("last public copy");
   });
@@ -72,7 +72,10 @@ describe("op=hospitals", () => {
     expect(body.national).toBe(true);
     expect(body.count).toBe(21);
     expect(body.truncated).toBe(false);
-    expect(body.data.features[0].properties.details["full record"]).toMatch(/^descend below 300 km/);
+    // Packed rows, not features: 8,140 built features would near the response limit.
+    expect(body.data.columns).toEqual(["ID", "NAME", "CITY", "STATE", "TYPE", "STATUS", "BEDS", "TRAUMA", "COUNTYFIPS", "lon", "lat"]);
+    expect(body.data.rows![0].slice(0, 9)).toEqual(["0001402906", "BUTLER HOSPITAL", "PROVIDENCE", "RI", "PSYCHIATRIC", "OPEN", 143, "NOT AVAILABLE", "44007"]);
+    expect(body.data.features).toBeUndefined();
   });
 
   it("status=all drops the open filter; anything else is refused before asking", async () => {

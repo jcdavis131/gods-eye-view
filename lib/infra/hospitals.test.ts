@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import box from "./fixtures/hosp-box-austin.json";
 import notPublished from "./fixtures/hosp-beds-notpublished.json";
 import ri0 from "./fixtures/hosp-national-ri-p0.json";
-import { bedsOf, buildHospitals, HOSPITAL_FIELDS, HOSPITAL_NATIONAL_FIELDS, hospitalWhere, type HospitalExtra } from "./hospitals";
+import { bedsOf, buildHospitals, HOSPITAL_FIELDS, HOSPITAL_NATIONAL_FIELDS, hospitalWhere, packNational, unpackNational, type HospitalExtra } from "./hospitals";
 import { hospitalSize } from "@/lib/globe/infraStyles";
 import { receivedRecordText } from "@/lib/catalog/recordText";
 
@@ -72,5 +72,17 @@ describe("hospital features", () => {
     expect(f[0].properties.details!["full record"]).toMatch(/^descend below 300 km/);
     expect(f[0].properties.details!.address).toBeUndefined();
     expect(receivedRecordText(f[0].properties)).toBeNull();
+  });
+});
+
+describe("the national packed rows", () => {
+  it("round-trip to the same short-record features, values as FEMA sent them", () => {
+    const rows = (ri0 as unknown as Fc).features;
+    const packed = packNational(rows);
+    expect(packed).toHaveLength(10);
+    expect(packed[0]).toEqual(["0001402906", "BUTLER HOSPITAL", "PROVIDENCE", "RI", "PSYCHIATRIC", "OPEN", 143, "NOT AVAILABLE", "44007", ...(rows[0].geometry as GeoJSON.Point).coordinates.slice(0, 2)]);
+    expect(buildHospitals(unpackNational(packed), true)).toEqual(buildHospitals(rows, true));
+    // Under a third of the built features' size.
+    expect(JSON.stringify(packed).length * 3).toBeLessThan(JSON.stringify(buildHospitals(rows, true)).length);
   });
 });
