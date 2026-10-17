@@ -2,7 +2,9 @@
 // (-116.2023, 43.6150), unmodified: position, main stem downstream (distance 50 km), USGS
 // gauges upstream (500 km), the basin NLDI sends by default (simplified) and with
 // simplified=false, EPA's attributes by comid, and two real EPA rows that carry the
-// -9999 / null sentinels (comid 800008213 and 800003624).
+// -9999 / null sentinels (comid 800008213 and 800003624). The Missouri basin above Pierre, SD
+// (comid 19250187, simplified, 210 rings of which 209 holes, 19,524 vertices) was captured
+// 2026-10-16 unmodified: before rings could be left out it answered 502 ("could not be cut").
 import { describe, expect, it } from "vitest";
 import position from "./fixtures/nldi-position-boise.json";
 import ocean from "./fixtures/nldi-position-ocean.json";
@@ -10,6 +12,7 @@ import dm from "./fixtures/nldi-dm-boise.json";
 import ut from "./fixtures/nldi-ut-gauges-boise.json";
 import basin from "./fixtures/nldi-basin-boise.json";
 import basinFull from "./fixtures/nldi-basin-boise-full.json";
+import basinMissouri from "./fixtures/nldi-basin-missouri-19250187.json";
 import epa from "./fixtures/epa-v21-boise.json";
 import sentinel from "./fixtures/epa-v21-sentinel.json";
 import noflow from "./fixtures/epa-v21-noflow.json";
@@ -136,5 +139,27 @@ describe("NLDI traces", () => {
     expect(approxAreaKm2(full)).toBeGreaterThan(6500);
     expect(approxAreaKm2(full)).toBeLessThan(7700);
     expect(basinPolygon({ features: [] })).toBeNull();
+    expect(cut.droppedRings).toBe(0);
+  });
+
+  it("cuts a basin with hundreds of holes to the cap by leaving out the small ones, keeping the outline", () => {
+    const sentGeom = (basinMissouri as { features: Array<{ geometry: GeoJSON.MultiPolygon }> }).features[0].geometry;
+    expect(sentGeom.type).toBe("MultiPolygon");
+    expect(sentGeom.coordinates.reduce((n, p) => n + p.length, 0)).toBe(210);
+    const cut = basinPolygon(basinMissouri)!;
+    expect(cut).not.toBeNull();
+    expect(cut.sent).toBe(19524);
+    expect(cut.vertices).toBeLessThanOrEqual(2000);
+    expect(cut.droppedRings).toBeGreaterThan(100);
+    expect(cut.droppedUnderKm2).toBeGreaterThan(0);
+    // Leaving holes out adds their area back: within 1 % of the basin as sent.
+    expect(Math.abs(approxAreaKm2(cut.geometry) - approxAreaKm2(sentGeom)) / approxAreaKm2(sentGeom)).toBeLessThan(0.01);
+    // The largest outer ring is always kept: the cut covers the same extent.
+    const xs = (g: GeoJSON.Polygon | GeoJSON.MultiPolygon) => (g.type === "Polygon" ? [g.coordinates] : g.coordinates).flatMap((p) => p[0].map((c) => c[0]));
+    expect(Math.min(...xs(cut.geometry))).toBeCloseTo(Math.min(...xs(sentGeom)), 1);
+    expect(Math.max(...xs(cut.geometry))).toBeCloseTo(Math.max(...xs(sentGeom)), 1);
+    // A tighter cap still answers (a coarser outline), never null.
+    const tight = basinPolygon(basinMissouri, 300)!;
+    expect(tight.vertices).toBeLessThanOrEqual(300);
   });
 });

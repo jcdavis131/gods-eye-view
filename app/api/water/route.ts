@@ -433,7 +433,7 @@ async function nldiGet(url: string, timeoutMs = 20_000): Promise<unknown | null>
  */
 async function reachOp(lon: number, lat: number): Promise<OpResult> {
   const [x, y] = snapPoint(lon, lat);
-  const pos = await cached(`nldi:position:${x},${y}`, MONTH_MS, async () => parseComid(await nldiGet(positionUrl(x, y))));
+  const pos = await cached(`nldi:position:${x},${y}`, MONTH_MS, async () => parseComid(await nldiGet(positionUrl(x, y))), { deadlineMs: REACH_POSITION_DEADLINE_MS });
   const comid = pos.value;
   let reach: Reach | null = null;
   let epaAge = 0;
@@ -443,7 +443,7 @@ async function reachOp(lon: number, lat: number): Promise<OpResult> {
       const r = await cached(`epa-v21:${comid}`, MONTH_MS, async () => {
         const j = await arcgisRowsCapped<Record<string, unknown>>("epa-nhdplus-v21", EPA_V21, v21Params(comid), { gate: "epa-watersgeo", minIntervalMs: 500, timeoutMs: 15_000, tries: 2 });
         return parseV21({ features: j.rows.map((attributes) => ({ attributes })) }, comid);
-      });
+      }, { deadlineMs: REACH_EPA_DEADLINE_MS });
       reach = r.value;
       epaAge = r.age;
     } catch {
@@ -478,7 +478,15 @@ interface TraceAnswer {
   missing: boolean;
   /** Basin: whether it was cut further here. */
   cut: boolean;
+  /** Basin: holes and islands left out to fit the cap, and the area under which they were. */
+  droppedRings?: number;
+  droppedUnderKm2?: number;
 }
+
+/** No op here may outlast the function's 60 s: each answers or fails inside these. */
+const TRACE_DEADLINE_MS = 40_000;
+const REACH_POSITION_DEADLINE_MS = 20_000;
+const REACH_EPA_DEADLINE_MS = 20_000;
 
 /** One NLDI navigation from a reach, as GeoJSON: the main stem downstream, the basin, or the gauges upstream. */
 async function traceOp(comid: number, mode: TraceMode, distanceRaw: string | null): Promise<OpResult> {
@@ -501,14 +509,22 @@ async function traceOp(comid: number, mode: TraceMode, distanceRaw: string | nul
       };
     }
     const b = basinPolygon(j);
-    if (!b) throw new UpstreamError("usgs-nldi", 502, `usgs-nldi: basin for ${comid} could not be cut to ${BASIN_MAX_VERTICES} vertices`);
-    return { features: [{ type: "Feature", geometry: b.geometry, properties: { comid, mode, vertices: b.vertices, sentVertices: b.sent } }], count: 1, missing: false, cut: b.tolerance != null };
-  });
+    if (!b) throw new UpstreamError("usgs-nldi", 502, `usgs-nldi: basin for ${comid} came back with no polygon`);
+    return {
+      features: [{ type: "Feature", geometry: b.geometry, properties: { comid, mode, vertices: b.vertices, sentVertices: b.sent, droppedRings: b.droppedRings, droppedUnderKm2: b.droppedUnderKm2 } }],
+      count: 1,
+      missing: false,
+      cut: b.tolerance != null,
+      droppedRings: b.droppedRings,
+      droppedUnderKm2: b.droppedUnderKm2,
+    };
+  }, { deadlineMs: TRACE_DEADLINE_MS });
   const caveats = [HYDRO_CAVEAT];
   if (r.value.missing) caveats.push(`NLDI has no reach ${comid}: nothing to trace.`);
   if (mode === "down") caveats.push(`The NHDPlus V2 main stem downstream for ${km} km (or to the network's end), as NLDI navigates it: a river path, not the watersheds it passes through (those are /api/fabric?op=downstream, by HUC-12).`);
   if (mode === "gauges") caveats.push(`USGS stream gauges NLDI indexes on the network upstream within ${km} km of channel; the count depends on the distance asked, and a gauge listed here may be inactive.`);
   if (mode === "basin") caveats.push(`The drainage basin of reach ${comid} as NLDI publishes it (simplified), at most ${BASIN_MAX_VERTICES.toLocaleString("en-US")} vertices${r.value.cut ? "; cut further here, so its edge is approximate" : ""}.`);
+  if (mode === "basin" && r.value.droppedRings) caveats.push(`${r.value.droppedRings.toLocaleString("en-US")} of NLDI's rings were left out to fit: holes (areas inside the basin that do not drain to it) and islands smaller than about ${r.value.droppedUnderKm2!.toLocaleString("en-US")} km², so the outline covers some ground that does not drain here.`);
   return {
     data: { type: "FeatureCollection", features: r.value.features },
     meta: { source: "USGS NLDI", comid, mode, distanceKm: km, count: r.value.count, cacheAge: r.age },

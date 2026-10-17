@@ -280,12 +280,17 @@ function dp(line: Ring, tol: number): Ring {
   return line.filter((_, k) => keep[k]);
 }
 
-/** A closed ring simplified, kept closed and at least a triangle (else returned unchanged). */
-function simplifyRing(ring: Ring, tol: number): Ring {
+/**
+ * A closed ring simplified and kept closed, or null when it collapses below a triangle (the whole
+ * ring is within the tolerance of one edge: a sliver). Never the ring unchanged at full size: that
+ * made a larger tolerance give back more vertices, not fewer, and a basin with a few hundred
+ * small holes could never be cut to the cap.
+ */
+function simplifyRing(ring: Ring, tol: number): Ring | null {
   if (ring.length <= 4) return ring;
   const open = ring.slice(0, -1);
   const out = dp(open, tol);
-  if (out.length < 3) return ring;
+  if (out.length < 3) return null;
   out.push(out[0]);
   return out;
 }
@@ -298,41 +303,78 @@ export function vertexCount(g: GeoJSON.Polygon | GeoJSON.MultiPolygon): number {
   return polysOf(g).reduce((n, p) => n + p.reduce((m, r) => m + r.length, 0), 0);
 }
 
-/** Planar shoelace area in square degrees scaled by cos(latitude), for comparing a ring with its simplification. */
+const KM_PER_DEG = 111.32;
+
+/** One ring's planar shoelace area in square degrees scaled by cos(latitude), as km², unsigned. */
+export function ringAreaKm2(ring: Ring): number {
+  let a = 0;
+  let lat = 0;
+  for (let k = 0; k < ring.length - 1; k++) {
+    a += ring[k][0] * ring[k + 1][1] - ring[k + 1][0] * ring[k][1];
+    lat += ring[k][1];
+  }
+  const c = Math.cos(((lat / Math.max(1, ring.length - 1)) * Math.PI) / 180);
+  return (Math.abs(a) / 2) * KM_PER_DEG * KM_PER_DEG * c;
+}
+
+/** Planar area (outer rings less their holes), for comparing a polygon with its simplification. */
 export function approxAreaKm2(g: GeoJSON.Polygon | GeoJSON.MultiPolygon): number {
   let total = 0;
-  for (const poly of polysOf(g)) {
-    poly.forEach((ring, i) => {
-      let a = 0;
-      let lat = 0;
-      for (let k = 0; k < ring.length - 1; k++) {
-        a += ring[k][0] * ring[k + 1][1] - ring[k + 1][0] * ring[k][1];
-        lat += ring[k][1];
-      }
-      const kmPerDeg = 111.32;
-      const c = Math.cos(((lat / Math.max(1, ring.length - 1)) * Math.PI) / 180);
-      const km2 = (Math.abs(a) / 2) * kmPerDeg * kmPerDeg * c;
-      total += i === 0 ? km2 : -km2;
-    });
-  }
+  for (const poly of polysOf(g)) poly.forEach((ring, i) => (total += i === 0 ? ringAreaKm2(ring) : -ringAreaKm2(ring)));
   return total;
 }
 
+export interface BasinCut {
+  geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon;
+  vertices: number;
+  /** Vertices as NLDI sent them. */
+  sent: number;
+  /** Douglas-Peucker tolerance used, degrees; null when NLDI's polygon was sent as is. */
+  tolerance: number | null;
+  /** Rings left out: holes (non-contributing areas) and islands under `droppedUnderKm2`, or that collapsed. */
+  droppedRings: number;
+  /** The area under which a hole or an island was left out, km² (0 when none was). */
+  droppedUnderKm2: number;
+}
+
 /**
- * NLDI basin -> its polygon with at most `max` vertices: as NLDI sent it when it already fits,
- * otherwise Douglas-Peucker at a tolerance doubled from 0.0005 degrees until it fits.
+ * NLDI basin -> its polygon with at most `max` vertices: as NLDI sent it when it already fits.
+ * Otherwise Douglas-Peucker at a tolerance doubled from 0.0005 degrees until it fits, and at each
+ * tolerance the holes and the islands smaller than (10 x tolerance)² are left out, as is any ring
+ * that collapses below a triangle. The largest outer ring is always kept, so a polygon always
+ * comes back: the Mississippi at Memphis is sent with 632 rings, 627 of them holes, and no
+ * tolerance alone gets 632 rings under 2,000 vertices.
  */
-export function basinPolygon(j: unknown, max = BASIN_MAX_VERTICES): { geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon; vertices: number; sent: number; tolerance: number | null } | null {
+export function basinPolygon(j: unknown, max = BASIN_MAX_VERTICES): BasinCut | null {
   const g = (j as { features?: Array<{ geometry?: GeoJSON.Geometry | null }> } | null)?.features?.[0]?.geometry;
   if (!g || (g.type !== "Polygon" && g.type !== "MultiPolygon")) return null;
+  const src = polysOf(g).filter((p) => p.length && p[0].length >= 4);
+  if (!src.length) return null;
   const sent = vertexCount(g);
-  if (sent <= max) return { geometry: g, vertices: sent, sent, tolerance: null };
+  if (sent <= max) return { geometry: g, vertices: sent, sent, tolerance: null, droppedRings: 0, droppedUnderKm2: 0 };
+  let main = 0;
+  src.forEach((p, i) => {
+    if (ringAreaKm2(p[0]) > ringAreaKm2(src[main][0])) main = i;
+  });
+  const rings = src.reduce((n, p) => n + p.length, 0);
   let tol = 0.0005;
-  for (let i = 0; i < 16; i++) {
-    const polys = polysOf(g).map((p) => p.map((r) => simplifyRing(r, tol)));
-    const out: GeoJSON.Polygon | GeoJSON.MultiPolygon = g.type === "Polygon" ? { type: "Polygon", coordinates: polys[0] } : { type: "MultiPolygon", coordinates: polys };
+  for (let i = 0; i < 24; i++) {
+    const floorKm2 = (10 * tol * KM_PER_DEG) ** 2;
+    const polys: Ring[][] = [];
+    src.forEach((p, pi) => {
+      const isMain = pi === main;
+      if (!isMain && ringAreaKm2(p[0]) < floorKm2) return;
+      const outer = simplifyRing(p[0], tol) ?? (isMain ? p[0] : null);
+      if (!outer) return;
+      const holes = p.slice(1).filter((h) => ringAreaKm2(h) >= floorKm2).map((h) => simplifyRing(h, tol)).filter((h): h is Ring => h != null);
+      polys.push([outer, ...holes]);
+    });
+    const out: GeoJSON.Polygon | GeoJSON.MultiPolygon = polys.length === 1 ? { type: "Polygon", coordinates: polys[0] } : { type: "MultiPolygon", coordinates: polys };
     const n = vertexCount(out);
-    if (n <= max) return { geometry: out, vertices: n, sent, tolerance: tol };
+    if (n <= max) {
+      const dropped = rings - polys.reduce((k, p) => k + p.length, 0);
+      return { geometry: out, vertices: n, sent, tolerance: tol, droppedRings: dropped, droppedUnderKm2: dropped ? Number(floorKm2.toPrecision(2)) : 0 };
+    }
     tol *= 2;
   }
   return null;
