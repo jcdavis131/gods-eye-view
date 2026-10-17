@@ -482,7 +482,7 @@ function hospitalsResult(data: unknown, count: number, cut: boolean, age: number
   const caveats = [
     HOSPITALS_CAVEAT,
     "Beds and trauma levels are as published; -999 beds and 'NOT AVAILABLE' are shown as not published, never 0. Names and addresses are institutions' as their licensing sources publish them; no telephone, staff or patient field is requested.",
-    status === "open" ? "Open hospitals only (STATUS = 'OPEN'); ask status=all for the 374 HIFLD lists as closed." : "Open and closed hospitals, as HIFLD's STATUS says.",
+    status === "open" ? "Open hospitals only (STATUS = 'OPEN'); ask status=all for the hospitals HIFLD lists as closed too." : "Open and closed hospitals, as HIFLD's STATUS says.",
   ];
   if (national) caveats.push("Every hospital in the United States and territories as packed rows (`columns`, then `rows`: ID, NAME, CITY, STATE, TYPE, STATUS, BEDS, TRAUMA, COUNTYFIPS, lon, lat, values as published); ask a box of 20 degrees or less for the full record as GeoJSON (clamped to 6 degrees around its centre).");
   else caveats.push(BOX_CAVEAT);

@@ -55,6 +55,9 @@ describe("op=hospitals", () => {
     expect(body.data.features![0].properties.details.address).toBeDefined();
     expect(body.provenance[0].source.id).toBe("hifld-hospitals");
     expect(body.caveats.join(" ")).toContain("last public copy");
+    // An open-only answer holds no closed rows to count, so its caveat carries no closed count.
+    expect(body.caveats.join(" ")).toContain("ask status=all for the hospitals HIFLD lists as closed too");
+    expect(body.caveats.join(" ")).not.toMatch(/374/);
   });
 
   it("a wide box: every hospital nationally with the short record, paged until FEMA says the answer is whole", async () => {
