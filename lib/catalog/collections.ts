@@ -1168,7 +1168,7 @@ export const COLLECTIONS: readonly Collection[] = [
     title: "Trust land: BIA American Indian and Alaska Native Land Area Representation",
     layer: "tribal",
     sources: ["bia-lar"],
-    what: "BIA's Land Area Representation: the outer extent of land held in trust or restricted fee for federally recognized tribes and individual Indians, compiled from BIA land title records, as one national answer of 335 land areas (reservations, rancherias, pueblos and communities), each with its BIA region, classification code as BIA codes it, and GIS acres. Parts under 0.7 km2 are not drawn; each land area keeps its largest part.",
+    what: "BIA's Land Area Representation: the outer extent of land held in trust or restricted fee for federally recognized tribes and individual Indians, compiled from BIA land title records, as one national answer of 335 land areas (reservations, rancherias, pueblos and communities), each with its BIA region, classification code as BIA codes it, and GIS acres. Parts under 0.7 km2 are dropped, except each land area's largest part, which is drawn even when smaller so no land area disappears.",
     recordIs: "A land area as BIA names it, held in trust, restricted fee or mixed ownership. For illustrative and reference purposes only: not legal, survey or jurisdictional. Not a Census tribal statistical area (those are on the Field layer).",
     coverage: {
       spatial: "11 of BIA's 12 regions; no Eastern Oklahoma region rows and no land in Oklahoma; Alaska has one land area (Annette Island); not every tribe's land is in the layer, so a blank area does not mean no tribal land",
