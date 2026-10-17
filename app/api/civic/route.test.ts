@@ -11,6 +11,7 @@ import sviCounties from "@/lib/civic/fixtures/svi-county-ct-tx.json";
 import sviTracts from "@/lib/civic/fixtures/svi-tract-austin.json";
 import sviTravis from "@/lib/civic/fixtures/svi-place-48453.json";
 import sviNone from "@/lib/civic/fixtures/svi-place-none.json";
+import ncesAustin from "@/lib/civic/fixtures/nces-box-austin.json";
 
 vi.mock("@/lib/server/cache", () => ({
   cached: async <T,>(_k: string, _ttl: number, produce: () => Promise<T>) => ({ value: await produce(), age: 0, hit: false }),
@@ -149,6 +150,32 @@ describe("op=svi", () => {
     for (const qs of ["op=svi&level=state", "op=svi&level=tract", "op=svi&level=tract&bbox=-97,30,-98,31", "op=svi&level=place&fips=4845", "op=svi&level=place&fips=48453'--"]) {
       expect((await getSvi(qs)).status, qs).toBe(400);
     }
+    expect(calls).toEqual([]);
+  });
+});
+
+// op=schools with NCES's MapServer replaced by the Austin box captured 2026-10-17, unmodified.
+const NCES = "https://nces.ed.gov/opengis/rest/services/K12_School_Locations/EDGE_ADMINDATA_PUBLICSCH_2425/MapServer/1/query?";
+describe("op=schools", () => {
+  it("asks a snapped civic box with named fields, no race or sex cell, and sends built points", async () => {
+    answer = (u) => (u.startsWith(NCES) ? json(ncesAustin) : null);
+    const res = await GET(new NextRequest("http://localhost/api/civic?op=schools&bbox=-97.76,30.25,-97.72,30.29"));
+    const body = (await res.json()) as { data: { features: Array<{ properties: { id: string; layer: string } }> }; bbox: number[]; count: number; hidden: number; caveats: string[]; provenance: Array<{ source: { id: string } }> };
+    expect(res.status).toBe(200);
+    expect(calls).toHaveLength(1);
+    const p = new URL(calls[0]).searchParams;
+    expect(p.get("outFields")).not.toMatch(/(^|,)(AM|AS|BL|HI|HP|TR|WH)|ALM|ALF|PHONE|TOTMENROL|TOTFENROL/);
+    expect(JSON.parse(p.get("geometry")!)).toEqual({ xmin: -97.8, ymin: 30.25, xmax: -97.7, ymax: 30.3 });
+    expect(body.bbox).toEqual([-97.8, 30.25, -97.7, 30.3]);
+    expect(body.count).toBe(11);
+    expect(body.hidden).toBe(0);
+    expect(body.data.features[0].properties.layer).toBe("schools");
+    expect(body.provenance[0].source.id).toBe("nces-edge-public");
+    expect(body.caveats.join(" ")).toContain("no race, sex or grade-level enrollment cell");
+  });
+
+  it("refuses a missing or inverted box before asking NCES", async () => {
+    for (const qs of ["op=schools", "op=schools&bbox=-97,30,-98,31"]) expect((await getSvi(qs)).status, qs).toBe(400);
     expect(calls).toEqual([]);
   });
 });

@@ -44,7 +44,7 @@ import {
   transmissionStyle,
 } from "./infraStyles";
 import { parcelsStyle } from "./parcelStyles";
-import { contaminantsStyle, envpermitsStyle, licencesStyle, permitsStyle, ustStyle, zoningStyle } from "./civicStyles";
+import { contaminantsStyle, envpermitsStyle, licencesStyle, permitsStyle, schoolsStyle, ustStyle, zoningStyle } from "./civicStyles";
 import { healthStyle, riskindexStyle, vulnerabilityStyle } from "./indexStyles";
 
 /** Distinctive major-group colours for the occupations layer: one hue per SOC major group. */
@@ -502,6 +502,7 @@ export const STYLES: Partial<Record<LayerId, LayerStyle>> = {
   ust: ustStyle,
   riskindex: riskindexStyle,
   health: healthStyle,
+  schools: schoolsStyle,
   hospitals: hospitalsStyle,
   vulnerability: vulnerabilityStyle,
   sports: sportsStyle,
@@ -584,6 +585,7 @@ export const FOLLOW_RANGE: Record<LayerId, number> = {
   ust: 120_000,
   riskindex: 200_000,
   health: 200_000,
+  schools: 8_000,
   hospitals: 60_000,
   vulnerability: 200_000,
   sports: 500_000,

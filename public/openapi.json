@@ -3949,8 +3949,8 @@
     },
     "/api/civic": {
       "get": {
-        "summary": "Community indicators by county and tract: health estimates (CDC PLACES) and social vulnerability (CDC/ATSDR SVI)",
-        "description": "op=health: CDC PLACES, 2025 release (data year 2023; 2022 for five measures), model-based estimates for 40 measures. level=county&measure=: every county's age-adjusted prevalence for one measure from one whole-measure pull (held a week), with national quintile `breaks`; join by `fips` onto county outlines (Connecticut in planning regions). level=tract&measure=&counties=: crude prevalence for every published tract of at most 6 counties, asked by countyfips (never within_box). level=place&fips=: every measure for one county, age-adjusted. A county or tract with no row is not published, never 0. Estimates, not counts of diagnosed people; not for ranking small differences. op=svi: CDC/ATSDR Social Vulnerability Index 2022 (ACS 2018-2022). level=county: every county's overall percentile (RPL_THEMES) and four theme percentiles (Socioeconomic Status, Household Characteristics, Racial and Ethnic Minority Status, Housing Type and Transportation) and F_TOTAL, attributes only, as compact rows { fips, name, state, rpl: [overall, theme1..theme4], flags } (held a week); join by `fips` onto county outlines (Connecticut in planning regions). level=tract&bbox=: SVI's own tract polygons (GeoJSON, simplified to 0.0005 degrees) in a box of at most 0.4 degrees snapped to 0.05, at most two pages of 2,000. level=place&fips=: one county (5 digits) or tract (11 digits) with the 16 estimates (EP_) and margins (MP_); 404 when CDC has no row. CDC's -999 ('not ranked': 778 tracts, 0 counties on 2026-10-16) is sent as null, never 0. A percentile among US counties (or tracts), 0 least to 1 most vulnerable; not FEMA's NRI social vulnerability (/api/hazards?op=nri, from the Census Community Resilience Estimate), and the two are never merged.",
+        "summary": "Community indicators by county and tract (CDC PLACES health estimates, CDC/ATSDR SVI) and public schools (NCES)",
+        "description": "op=health: CDC PLACES, 2025 release (data year 2023; 2022 for five measures), model-based estimates for 40 measures. level=county&measure=: every county's age-adjusted prevalence for one measure from one whole-measure pull (held a week), with national quintile `breaks`; join by `fips` onto county outlines (Connecticut in planning regions). level=tract&measure=&counties=: crude prevalence for every published tract of at most 6 counties, asked by countyfips (never within_box). level=place&fips=: every measure for one county, age-adjusted. A county or tract with no row is not published, never 0. Estimates, not counts of diagnosed people; not for ranking small differences. op=svi: CDC/ATSDR Social Vulnerability Index 2022 (ACS 2018-2022). level=county: every county's overall percentile (RPL_THEMES) and four theme percentiles (Socioeconomic Status, Household Characteristics, Racial and Ethnic Minority Status, Housing Type and Transportation) and F_TOTAL, attributes only, as compact rows { fips, name, state, rpl: [overall, theme1..theme4], flags } (held a week); join by `fips` onto county outlines (Connecticut in planning regions). level=tract&bbox=: SVI's own tract polygons (GeoJSON, simplified to 0.0005 degrees) in a box of at most 0.4 degrees snapped to 0.05, at most two pages of 2,000. level=place&fips=: one county (5 digits) or tract (11 digits) with the 16 estimates (EP_) and margins (MP_); 404 when CDC has no row. CDC's -999 ('not ranked': 778 tracts, 0 counties on 2026-10-16) is sent as null, never 0. A percentile among US counties (or tracts), 0 least to 1 most vulnerable; not FEMA's NRI social vulnerability (/api/hazards?op=nri, from the Census Community Resilience Estimate), and the two are never merged. op=schools&bbox=: NCES EDGE public schools, school year 2024-25 (EDGE_ADMINDATA_PUBLICSCH_2425), as a GeoJSON FeatureCollection of points in a box of at most 0.2 degrees (snapped to 0.05), at most two pages of 2,000, held a day: directory fields, enrollment (TOTAL), free or reduced-price lunch (TOTFRL), FTE and STUTERATIO as NCES publishes them; no race, sex or grade-level enrollment cell is requested. A negative is a CCD reporting code (-1 not reported, -2 not applicable), never 0. Inactive and Future schools are left out and counted in `hidden`.",
         "tags": [
           "civic"
         ],
@@ -3963,10 +3963,11 @@
               "type": "string",
               "enum": [
                 "health",
-                "svi"
+                "svi",
+                "schools"
               ]
             },
-            "description": "health: CDC PLACES. svi: CDC/ATSDR Social Vulnerability Index 2022."
+            "description": "health: CDC PLACES. svi: CDC/ATSDR Social Vulnerability Index 2022. schools: NCES public schools 2024-25."
           },
           {
             "name": "level",
@@ -4056,7 +4057,7 @@
             "schema": {
               "$ref": "#/components/schemas/Bbox"
             },
-            "description": "op=svi&level=tract: `w,s,e,n`, at most 0.4 degrees a side around the box's centre, snapped outward to 0.05."
+            "description": "op=svi&level=tract: `w,s,e,n`, at most 0.4 degrees a side around the box's centre, snapped outward to 0.05. op=schools: at most 0.2 degrees, snapped to 0.05."
           }
         ],
         "responses": {
@@ -4079,6 +4080,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/CivicSviResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CivicSchoolsResponse"
                     }
                   ]
                 }
@@ -10404,6 +10408,55 @@
           "location checked against imagery",
           "website",
           "full record"
+        ]
+      },
+      "CivicSchoolsResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "description": "A GeoJSON FeatureCollection of school points; each feature's properties carry id (nces:<NCESSCH>), name (SCH_NAME), kind (elementary, middle, high or other), details (the click lines) and extra { level, levelClass, charter, virtual, status, embedText }."
+              },
+              "bbox": {
+                "$ref": "#/components/schemas/Bbox"
+              },
+              "count": {
+                "type": "integer"
+              },
+              "hidden": {
+                "type": "integer",
+                "description": "Inactive and Future schools in the box, not sent"
+              },
+              "truncated": {
+                "type": "boolean"
+              }
+            }
+          }
+        ],
+        "x-op": "schools",
+        "x-feature-properties": [
+          "NCES school id",
+          "district",
+          "grades",
+          "level",
+          "type",
+          "charter",
+          "virtual",
+          "status",
+          "locale",
+          "enrollment",
+          "free or reduced-price lunch",
+          "students per FTE teacher",
+          "FTE teachers",
+          "address",
+          "county",
+          "NCES page",
+          "what the point is"
         ]
       }
     }

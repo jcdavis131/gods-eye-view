@@ -60,6 +60,7 @@ describe("the catalogue", () => {
       "svi-counties",
       "svi-tracts",
       "hifld-hospitals",
+      "nces-public-schools",
     ]);
     const ids = COLLECTIONS.map((c) => c.id);
     expect(new Set(ids).size).toBe(ids.length);

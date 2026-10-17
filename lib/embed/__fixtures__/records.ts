@@ -9,6 +9,8 @@ import { buildDams } from "@/lib/infra/features";
 import dams from "@/lib/infra/fixtures/dams-sanantonio.json";
 import { buildHospitals } from "@/lib/infra/hospitals";
 import hospitals from "@/lib/infra/fixtures/hosp-box-austin.json";
+import { buildSchools } from "@/lib/civic/schools";
+import schools from "@/lib/civic/fixtures/nces-box-austin.json";
 import { buildFloodZones, buildHistoric, buildPublicLands, buildWetlands } from "@/lib/land/features";
 import nwiWetlands from "@/lib/land/fixtures/nwi-wetlands-mitchell.json";
 import nrhpPoints from "@/lib/land/fixtures/nrhp-points-dc.json";
@@ -59,6 +61,7 @@ export function recordFixtures(mutate: Mutate = keep): Array<{ card: CollectionI
   return [
     { card: "nid-dams", captured: true, features: buildDams(rowsOf(dams, mutate) as never) },
     { card: "hifld-hospitals", captured: true, features: buildHospitals(rowsOf(hospitals, mutate) as never) },
+    { card: "nces-public-schools", captured: true, features: buildSchools(rowsOf(schools, mutate) as never).features },
     { card: "nwi-wetlands", captured: true, features: buildWetlands(rowsOf(nwiWetlands, mutate), []) },
     { card: "nrhp-listed", captured: true, features: buildHistoric(rowsOf(nrhpPoints, mutate), "point") },
     { card: "emef-sems", captured: true, features: buildContaminants("sems", rowsOf(emef0, mutate)) },

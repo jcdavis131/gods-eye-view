@@ -171,7 +171,7 @@ export default function InfoPanel() {
   const details = Object.entries(p.details ?? {}).filter(([, v]) => v != null && v !== "" && v !== false);
   const isLiveLayer =
     !p.simulated &&
-    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "employers", "banks", "spending", "constructs", "field", "flood", "wetlands", "publiclands", "relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "transmission", "pipelines", "plants", "rail", "airports", "dams", "faults", "landslides", "geology", "plss", "parcels", "zoning", "permits", "licences", "envpermits", "historic", "crithab", "contaminants", "wayback", "topo", "impaired", "pfas", "ust", "hydro", "riskindex", "naip", "heritage", "health", "vulnerability", "hospitals"].includes(p.layer);
+    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "employers", "banks", "spending", "constructs", "field", "flood", "wetlands", "publiclands", "relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "transmission", "pipelines", "plants", "rail", "airports", "dams", "faults", "landslides", "geology", "plss", "parcels", "zoning", "permits", "licences", "envpermits", "historic", "crithab", "contaminants", "wayback", "topo", "impaired", "pfas", "ust", "hydro", "riskindex", "naip", "heritage", "health", "vulnerability", "hospitals", "schools"].includes(p.layer);
   const banner = BANNER[p.layer];
   const iss = p.layer === "satellites" && p.id === "25544";
   const construct = p.layer === "constructs" || p.layer === "field" || p.layer === "alerts";
@@ -360,6 +360,7 @@ const BANNER: Partial<Record<string, string>> = {
   pipelines: "GENERALIZED ROUTE · NOT FOR LOCATING A LINE (CALL 811 BEFORE YOU DIG)",
   plants: "EIA-860M PRELIMINARY MONTHLY INVENTORY (US) · WIKIDATA NUCLEAR PLANTS (ELSEWHERE)",
   airports: "PUBLIC-USE FACILITY · NOT FOR NAVIGATION",
+  schools: "NCES 2024-25 \u00b7 AS STATES REPORTED IT \u00b7 A VIRTUAL SCHOOL'S POINT IS ITS OFFICE \u00b7 NO RACE, SEX OR GRADE COUNTS ARE READ",
   hospitals: "HIFLD VIA FEMA \u00b7 AS EACH STATE LICENSING SOURCE PUBLISHED IT, ON THE DATE SHOWN \u00b7 NOT A LIST OF EMERGENCY DEPARTMENTS",
   dams: "HAZARD POTENTIAL IS THE CONSEQUENCE OF A FAILURE · NOT THE DAM'S CONDITION",
   faults: "QUATERNARY FAULT · NOT AN EARTHQUAKE FORECAST",

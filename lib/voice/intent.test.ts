@@ -138,6 +138,8 @@ describe("voice words for community health", () => {
     expect(layerOf("show svi")).toMatchObject({ layer: "vulnerability" });
     expect(layerOf("show hospitals near austin")).toMatchObject({ layer: "hospitals", place: "austin" });
     expect(layerOf("show trauma centers")).toMatchObject({ layer: "hospitals" });
+    expect(layerOf("show public schools near austin")).toMatchObject({ layer: "schools", place: "austin" });
+    expect(layerOf("show schools")).toMatchObject({ layer: "schools" });
   });
 });
 

@@ -62,6 +62,7 @@ export const EMBED_TEXT = {
   "svi-counties": ["COUNTY", "STATE"],
   "svi-tracts": ["STATE", "COUNTY"],
   "hifld-hospitals": ["TYPE", "TRAUMA", "HELIPAD", "STATE"],
+  "nces-public-schools": ["SCHOOL_LEVEL", "SCHOOL_TYPE_TEXT", "CHARTER_TEXT", "VIRTUAL", "SY_STATUS_TEXT", "ULOCALE", "GSLO", "GSHI", "LSTATE"],
 } satisfies Record<string, string[]>;
 
 export type CollectionId = keyof typeof EMBED_TEXT;
@@ -246,6 +247,16 @@ export const FIELD_LABEL: Readonly<Record<string, string>> = {
   TYPE: "hospital type",
   TRAUMA: "trauma center level",
   HELIPAD: "helipad",
+  // NCES public schools (CCD's published categories; names, the street and the counts are not embedded)
+  SCHOOL_LEVEL: "school level",
+  SCHOOL_TYPE_TEXT: "school type",
+  CHARTER_TEXT: "charter school",
+  VIRTUAL: "virtual school status",
+  SY_STATUS_TEXT: "school status",
+  ULOCALE: "locale",
+  GSLO: "lowest grade",
+  GSHI: "highest grade",
+  LSTATE: "state",
 };
 
 /**
@@ -269,6 +280,7 @@ export const RECORD_VECTOR_CARDS: ReadonlySet<string> = new Set([
   "padus-units",
   "nid-dams",
   "hifld-hospitals",
+  "nces-public-schools",
 ]);
 
 export const NO_RECORD_VECTORS: Readonly<Record<string, string>> = {

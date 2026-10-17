@@ -24,6 +24,12 @@
 //        most two pages, held a week per box.
 //   /api/civic?op=svi&level=place&fips=48453 (or an 11-digit tract)
 //        One county or tract with the 16 estimates and margins; 404 when CDC has no row.
+//   /api/civic?op=schools&bbox=w,s,e,n
+//        NCES EDGE public schools, school year 2024-25, in a box of at most 0.2 degrees
+//        (the civic box; snapped to 0.05), held a day. Directory fields, enrollment, free
+//        and reduced-price lunch, FTE and the student-teacher ratio as NCES publishes them;
+//        no race, sex or grade-level enrollment cell is requested. Inactive and Future
+//        schools are left out (counted). A negative is a CCD reporting code, never 0.
 //
 // All through the civic gate (one request a second to data.cdc.gov, one every 500 ms
 // to an ArcGIS organisation; a 429 or 503 closes it for ten minutes). A county or
@@ -38,6 +44,8 @@ import { provenance } from "@/lib/provenance/types";
 import { source } from "@/lib/provenance/sources";
 import { civicJson, runRows } from "@/lib/civic/request";
 import { parseBbox as gridBbox, type Bbox } from "@/lib/civic/bbox";
+import { buildSchools, NCES_MAX_PAGES, NCES_PAGE, NCES_SCHOOLS, SCHOOL_FIELDS, SCHOOLS_ATTRIBUTION, SCHOOLS_CAVEAT } from "@/lib/civic/schools";
+import type { LayerFeature } from "@/lib/layers/types";
 import {
   SVI_ATTRIBUTION,
   SVI_BREAKS,
@@ -264,6 +272,77 @@ async function sviPlaceOp(fips: string) {
   );
 }
 
+// ---------------------------------------------------------------- schools (NCES EDGE 2024-25)
+
+const DAY_MS = 24 * 3600_000;
+const SCHOOLS_HELP = "op=schools needs bbox=w,s,e,n (at most 0.2 degrees a side around its centre), e.g. bbox=-97.8,30.2,-97.7,30.3";
+
+async function schools(b: Bbox) {
+  const r = await cached(
+    `schools:${b.join(",")}`,
+    DAY_MS,
+    async () => {
+      const [w, s, e, n] = b;
+      const rows: Array<{ geometry: GeoJSON.Geometry | null; properties: Record<string, unknown> | null }> = [];
+      let cut = false;
+      for (let page = 0; page < NCES_MAX_PAGES; page++) {
+        const res = await runRows(
+          "nces-edge-public",
+          {
+            kind: "arcgis",
+            layer: NCES_SCHOOLS,
+            params: {
+              where: "1=1",
+              geometry: JSON.stringify({ xmin: w, ymin: s, xmax: e, ymax: n }),
+              geometryType: "esriGeometryEnvelope",
+              inSR: "4326",
+              spatialRel: "esriSpatialRelIntersects",
+              outSR: "4326",
+              outFields: SCHOOL_FIELDS.join(","),
+              returnGeometry: "true",
+              orderByFields: "NCESSCH",
+              resultRecordCount: String(NCES_PAGE),
+              resultOffset: String(page * NCES_PAGE),
+            },
+          },
+          25_000,
+        );
+        rows.push(...res.features);
+        cut = res.truncated;
+        if (!cut) break;
+      }
+      const built = buildSchools(rows);
+      return { features: built.features as LayerFeature[], hidden: built.hidden, cut };
+    },
+    { deadlineMs: 45_000 },
+  );
+  const caveats = [
+    SCHOOLS_CAVEAT,
+    "Directory and membership fields only: no race, sex or grade-level enrollment cell is requested. A negative value is one of CCD's reporting codes (-1 not reported, -2 not applicable, and others), shown as such, never as 0. The free or reduced-price lunch share is TOTFRL over TOTAL, two published counts.",
+    "Schools NCES marks Inactive or Future are left out (`hidden`). School and district names and addresses are public institutions' as NCES publishes them.",
+    "Only the returned `bbox` was loaded; outside it nothing is loaded, which is not the same as no school being there.",
+  ];
+  if (r.value.cut) caveats.push(`NCES's answer for this box was still cut at ${NCES_MAX_PAGES * NCES_PAGE} schools: ask a smaller box for every school.`);
+  return ok(
+    { type: "FeatureCollection", features: r.value.features },
+    {
+      meta: { source: SCHOOLS_ATTRIBUTION, bbox: b, count: r.value.features.length, hidden: r.value.hidden, truncated: r.value.cut, cacheAge: r.age },
+      ttlS: 6 * 3600,
+      provenance: [
+        provenance(source("nces-edge-public"), {
+          kind: "published",
+          seriesId: "EDGE_ADMINDATA_PUBLICSCH_2425 MapServer layer 1 (Public School Administrative Data 2024-25)",
+          upstreamUrl: NCES_SCHOOLS,
+          period: "school year 2024-25",
+          retrievedAt: at(r.age),
+          notes: [`bbox ${b.join(",")}`],
+        }),
+      ],
+      caveats,
+    },
+  );
+}
+
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams;
   const op = q.get("op") ?? "";
@@ -299,8 +378,12 @@ export async function GET(req: NextRequest) {
         }
         return badRequest(SVI_HELP);
       }
+      case "schools": {
+        const b = gridBbox(q.get("bbox"), 0.2, 0.05);
+        return b ? await schools(b) : badRequest(SCHOOLS_HELP);
+      }
       default:
-        return badRequest("unknown op: health | svi");
+        return badRequest("unknown op: health | svi | schools");
     }
   } catch (err) {
     return withCors(jsonError(err));

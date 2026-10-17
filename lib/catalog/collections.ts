@@ -31,6 +31,7 @@ import { ABPP_CAVEAT, ABPP_STUDY_DEFINITION, NHA_CAVEAT, UNITS_CAVEAT, WHS_CAVEA
 import { PLACES_CAVEAT } from "@/lib/civic/places";
 import { SVI_CAVEAT, SVI_VINTAGE_NOTE } from "@/lib/civic/svi";
 import { HOSPITALS_CAVEAT } from "@/lib/infra/hospitals";
+import { SCHOOLS_CAVEAT } from "@/lib/civic/schools";
 import { DENY_FIELD, EMBED_TEXT } from "./embedFields";
 
 export interface Exclusion {
@@ -92,6 +93,7 @@ export const SHELVES: Array<{ id: string; title: string; layers: LayerId[] }> = 
   { id: "contaminants", title: "Contaminants", layers: ["contaminants", "ust"] },
   { id: "hazards", title: "Hazards and risk", layers: ["riskindex"] },
   { id: "health", title: "Health", layers: ["health", "vulnerability", "hospitals"] },
+  { id: "education", title: "Education", layers: ["schools"] },
   { id: "imagery", title: "Imagery and maps", layers: ["wayback", "topo", "naip"] },
   { id: "infrastructure", title: "Infrastructure", layers: ["dams"] },
 ];
@@ -1019,6 +1021,31 @@ export const COLLECTIONS: readonly Collection[] = [
     ops: ["infra?op=hospitals"],
     sensitivity:
       "Institutions as their licensing agency published them; no staff, patient or contact data. A hospital is labelled by its published name, an institution's (as a public dam keeps its name), so the palette's letter match finds it by name; NAME as a field is on the deny list and is never embedded. Whether institution names may be searched is flagged for review; the fallback labels by HIFLD id. ADDRESS, WEBSITE and SOURCE are shown on click and never searched or embedded; OWNER (a category: non-profit, proprietary, government) is shown on click only, because the deny list matches the field name.",
+    round: 5,
+  },
+  // ------------------------------------------------------------ round 5: public schools
+  {
+    id: "nces-public-schools",
+    title: "Public schools (NCES EDGE, school year 2024-25)",
+    layer: "schools",
+    sources: ["nces-edge-public"],
+    what: "Every public school in NCES's 2024-25 administrative data (the Common Core of Data directory and membership), as points below 25 km inside the civic box: name, district, grades, level, school type, charter and virtual status, locale, enrollment, free or reduced-price lunch, FTE teachers and the student-teacher ratio as NCES publishes them, with a link to NCES's own page for the school.",
+    recordIs: "A public school as its state reported it to NCES for 2024-25; enrollment is the October count. A full virtual school's point is its administrative address, not where students are. A negative value is one of CCD's reporting codes, never 0.",
+    coverage: { spatial: "United States, as NCES lists public schools; points below 25 km, in a box of at most 0.2 degrees", temporal: "school year 2024-25", count: { value: 101110, of: "schools in EDGE_ADMINDATA_PUBLICSCH_2425 layer 1 (returnCountOnly); 1,865 report a negative TOTAL; 501 Inactive and 372 Future are not drawn", countedOn: R5 } },
+    freshness: { statement: "The service publishes no edit date (a MapServer); its name and layer say school year 2024-25.", readFrom: "EDGE_ADMINDATA_PUBLICSCH_2425 MapServer layer 1 ?f=json (no editingInfo); layer name", recordedOn: R5 },
+    excluded: [
+      { what: "race and ethnicity, sex and grade-level enrollment cells (AM..WH, *ALM/*ALF, PK..AE, TOTMENROL, TOTFENROL)", why: "never requested: at a small school a cell can identify a child" },
+      { what: "PHONE and LSTREET2", why: "never requested" },
+      { what: "private schools", why: "a different NCES survey (EDGE private schools); deferred (D5-9)" },
+      { what: "school district outlines", why: "fabric already draws school districts (kind=school)" },
+      { what: "Inactive and Future schools", why: "not operating in 2024-25; counted in the layer note, not drawn" },
+    ],
+    caveats: [SCHOOLS_CAVEAT],
+    searchable: ["NCESSCH", "SCH_NAME"],
+    embedText: EMBED_TEXT["nces-public-schools"],
+    ops: ["civic?op=schools"],
+    sensitivity:
+      "Public institutions' directory data as NCES publishes it; school-level race and sex counts are deliberately not read. SCH_NAME and LEA_NAME end in NAME and are never embedded; SCH_NAME is searchable (a public school's name is an institution's, flagged for review; the fallback is NCESSCH only). LSTREET1 is shown on click and never searched or embedded. Free or reduced-price lunch is shown as NCES publishes it, with no added suppression threshold for very small schools (flagged for review).",
     round: 5,
   },
 ];
