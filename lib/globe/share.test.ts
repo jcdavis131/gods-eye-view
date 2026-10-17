@@ -273,6 +273,32 @@ describe("the Wayback release in the share link", () => {
   });
 });
 
+describe("the NAIP year in the share link", () => {
+  it("round-trips ny= as a NAIP year and drops anything else", () => {
+    const s: ShareState = { layers: ["naip"], ny: 2014 };
+    const q = shareQuery(s);
+    expect(q).toContain("ny=2014");
+    expect(parseShare(q)).toEqual(s);
+    expect(parseShare("?ny=2009").ny).toBeUndefined();
+    expect(parseShare("?ny=20.14").ny).toBeUndefined();
+    expect(parseShare("?ny=").ny).toBeUndefined();
+  });
+
+  it("is written only while Aerial photos by year is on and a year is picked", async () => {
+    const { currentShare } = await import("./share");
+    const { useGlobe } = await import("@/lib/store/globe");
+    const { useSettings } = await import("@/lib/store/settings");
+    useSettings.getState().setPref("naipYear", 2014);
+    useGlobe.getState().setLayer("naip", false);
+    expect(currentShare().ny).toBeUndefined();
+    useGlobe.getState().setLayer("naip", true);
+    expect(currentShare().ny).toBe(2014);
+    useSettings.getState().setPref("naipYear", null);
+    expect(currentShare().ny).toBeUndefined();
+    useGlobe.getState().setLayer("naip", false);
+  });
+});
+
 describe("the topo edition in the share link", () => {
   it("round-trips ty= as a year inside the collection and drops anything else", () => {
     const s: ShareState = { layers: ["topo"], ty: 1895 };

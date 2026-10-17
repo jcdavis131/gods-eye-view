@@ -15,6 +15,7 @@ import meta2026 from "@/lib/terrain/fixtures/wayback-meta-2026r09-4-sf.json";
 
 vi.mock("@/lib/server/cache", () => ({
   cached: async <T,>(_k: string, _ttl: number, produce: () => Promise<T>) => ({ value: await produce(), age: 0, hit: false }),
+  cacheDelete: () => {},
 }));
 
 import { GET } from "./route";

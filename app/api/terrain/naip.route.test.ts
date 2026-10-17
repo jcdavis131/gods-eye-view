@@ -1,0 +1,93 @@
+// /api/terrain?op=naip and op=naipmosaic with Planetary Computer's answers captured
+// 2026-10-16 (lib/terrain/fixtures/pc-*, unmodified): the STAC search at Des Moines (8 years),
+// the 2023 and 2011 mosaic registrations, the 2023 mosaic's info, and Planetary Computer's 404
+// for an id it does not hold. The route's own in-memory cache is real here, so a held id is
+// checked and registered again exactly once. No network.
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { NextRequest } from "next/server";
+import stac from "@/lib/terrain/fixtures/pc-stac-desmoines.json";
+import reg2023 from "@/lib/terrain/fixtures/pc-register-2023.json";
+import reg2011 from "@/lib/terrain/fixtures/pc-register-2011.json";
+import info2023 from "@/lib/terrain/fixtures/pc-info-2023.json";
+import info404 from "@/lib/terrain/fixtures/pc-info-404.json";
+import { GET } from "./route";
+
+const PC = "https://planetarycomputer.microsoft.com/api";
+const calls: Array<{ url: string; method: string; body: unknown }> = [];
+let answer: (url: string, body: unknown) => Response | null = () => null;
+const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "content-type": "application/json" } });
+
+beforeEach(() => {
+  calls.length = 0;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string, init?: RequestInit) => {
+      const body = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
+      calls.push({ url: String(url), method: init?.method ?? "GET", body });
+      const r = answer(String(url), body);
+      if (!r) throw new Error(`unexpected ${url}`);
+      return r;
+    }),
+  );
+});
+afterEach(() => vi.unstubAllGlobals());
+
+async function get(qs: string) {
+  const res = await GET(new NextRequest(`http://localhost/api/terrain?${qs}`));
+  return { status: res.status, body: (await res.json()) as { data: Record<string, unknown>; reregistered?: boolean; caveats: string[] } };
+}
+
+describe("op=naip", () => {
+  it("asks one STAC search at the snapped point and answers the 8 Des Moines years, oldest first", async () => {
+    answer = (u) => (u === `${PC}/stac/v1/search` ? json(stac) : null);
+    const { status, body } = await get("op=naip&lon=-93.62004&lat=41.59003");
+    expect(status).toBe(200);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].method).toBe("POST");
+    expect(calls[0].body).toEqual({ collections: ["naip"], intersects: { type: "Point", coordinates: [-93.62, 41.59] }, limit: 100 });
+    const years = body.data.years as Array<{ year: number; items: Array<{ id: string; date: string; gsd: number; state: string }> }>;
+    expect(years.map((y) => y.year)).toEqual([2011, 2013, 2014, 2015, 2017, 2019, 2021, 2023]);
+    expect(years[7].items[0]).toEqual({ id: "ia_m_4109328_nw_15_030_20230902_20240104", date: "2023-09-02", gsd: 0.3, state: "IA" });
+  });
+
+  it("refuses a missing point without asking", async () => {
+    expect((await get("op=naip&lon=-93.6")).status).toBe(400);
+    expect(calls).toEqual([]);
+  });
+});
+
+describe("op=naipmosaic", () => {
+  it("registers the year's cql2 filter (naip:year as a string) and answers the tile template", async () => {
+    answer = (u) => (u === `${PC}/data/v1/mosaic/register` ? json(reg2011) : null);
+    const { status, body } = await get("op=naipmosaic&year=2011");
+    expect(status).toBe(200);
+    expect(calls[0].body).toEqual({ "filter-lang": "cql2-json", filter: { op: "and", args: [{ op: "=", args: [{ property: "collection" }, "naip"] }, { op: "=", args: [{ property: "naip:year" }, "2011"] }] } });
+    expect(body.data.searchid).toBe("0bae9ecc67f679c8a96f9b046ca52a95");
+    expect(body.data.tiles).toBe(`${PC}/data/v1/mosaic/0bae9ecc67f679c8a96f9b046ca52a95/tiles/WebMercatorQuad/{z}/{x}/{y}@1x?collection=naip&assets=image&asset_bidx=image%7C1%2C2%2C3&format=png`);
+  });
+
+  it("checks a held id and registers again exactly once when Planetary Computer no longer knows it", async () => {
+    answer = (u) => (u === `${PC}/data/v1/mosaic/register` ? json(reg2023) : null);
+    await get("op=naipmosaic&year=2023");
+    // Held now: the next ask checks it. A known id is kept without registering.
+    answer = (u) => (u.endsWith("/47390dd3950110f09a58e4678f4f6192/info") ? json(info2023) : null);
+    calls.length = 0;
+    const kept = await get("op=naipmosaic&year=2023");
+    expect(calls.map((c) => c.url)).toEqual([`${PC}/data/v1/mosaic/47390dd3950110f09a58e4678f4f6192/info`]);
+    expect(kept.body.reregistered).toBe(false);
+    // Forgotten upstream: one 404 "SearchId ... not found", one register, nothing more.
+    answer = (u) => (u.endsWith("/info") ? json(info404, 404) : u === `${PC}/data/v1/mosaic/register` ? json(reg2023) : null);
+    calls.length = 0;
+    const again = await get("op=naipmosaic&year=2023");
+    expect(again.status).toBe(200);
+    expect(again.body.reregistered).toBe(true);
+    expect(calls.filter((c) => c.url.endsWith("/register"))).toHaveLength(1);
+    expect(calls.filter((c) => c.url.endsWith("/info"))).toHaveLength(1);
+  });
+
+  it("refuses a year before NAIP's first here without asking", async () => {
+    expect((await get("op=naipmosaic&year=2009")).status).toBe(400);
+    expect((await get("op=naipmosaic&year=abcd")).status).toBe(400);
+    expect(calls).toEqual([]);
+  });
+});

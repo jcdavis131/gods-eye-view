@@ -42,6 +42,7 @@ import { TERRAIN_LAYERS } from "./terrain";
 import { waybackLayer } from "./wayback";
 import { topoLayer } from "./topo";
 import { hydroLayer } from "./hydro";
+import { naipLayer } from "./naip";
 import { INFRA_LAYERS } from "./infra";
 import { airqualityLayer } from "./airquality";
 import { AIRNOW_ENABLED } from "@/lib/air/airnow";
@@ -103,6 +104,7 @@ export const LAYERS: LayerDefinition[] = [
   waybackLayer,
   topoLayer,
   hydroLayer,
+  naipLayer,
   ...INFRA_LAYERS,
   // Off until the operator decides on AirNow's data-user form (lib/air/airnow.ts).
   ...(AIRNOW_ENABLED ? [airqualityLayer] : []),

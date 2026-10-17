@@ -2636,10 +2636,12 @@
                 "products",
                 "wayback",
                 "topo",
-                "waybackdate"
+                "waybackdate",
+                "naip",
+                "naipmosaic"
               ]
             },
-            "description": "tile: a rendered PNG tile. point: a class or slope at lon, lat. products: the catalog. wayback: Esri World Imagery Wayback's release index. topo: the USGS historical topographic map editions and sheets at lon, lat. waybackdate: when a Wayback release's pixels were captured at lon, lat."
+            "description": "tile: a rendered PNG tile. point: a class or slope at lon, lat. products: the catalog. wayback: Esri World Imagery Wayback's release index. topo: the USGS historical topographic map editions and sheets at lon, lat. waybackdate: when a Wayback release's pixels were captured at lon, lat. naip: USDA NAIP aerial photograph years at a point (lon, lat; snapped to 0.001 degrees), from Microsoft Planetary Computer's STAC search: years [{ year, items: [{ id, date (acquisition, YYYY-MM-DD), gsd (m), state }] }], oldest first; none outside the conterminous US. naipmosaic: registers (or reuses, 24 h) Planetary Computer's mosaic for one year (year=yyyy, 2010 onward) and answers { year, searchid, tiles (XYZ template on planetarycomputer.microsoft.com), minZoom 11 }; a held id Planetary Computer no longer knows is registered again once, and fresh=1 registers again now. Tiles load from Planetary Computer directly; below level 11 it answers no content."
           },
           {
             "name": "release",
@@ -2700,7 +2702,7 @@
               "minimum": -180,
               "maximum": 180
             },
-            "description": "op=point, op=topo, op=waybackdate: longitude."
+            "description": "op=point, op=topo, op=waybackdate, op=naip: longitude"
           },
           {
             "name": "lat",
@@ -2710,7 +2712,27 @@
               "minimum": -90,
               "maximum": 90
             },
-            "description": "op=point, op=topo, op=waybackdate: latitude."
+            "description": "op=point, op=topo, op=waybackdate, op=naip: latitude"
+          },
+          {
+            "name": "year",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 2010
+            },
+            "description": "op=naipmosaic: the NAIP year."
+          },
+          {
+            "name": "fresh",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            },
+            "description": "op=naipmosaic: register the year's mosaic again now (after a tile answered 404 'SearchId ... not found')."
           }
         ],
         "responses": {
@@ -2747,6 +2769,12 @@
                     },
                     {
                       "$ref": "#/components/schemas/TerrainWaybackdateResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TerrainNaipResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TerrainNaipmosaicResponse"
                     }
                   ]
                 }
@@ -9725,6 +9753,106 @@
           }
         ],
         "x-op": "nri"
+      },
+      "TerrainNaipResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "lon": {
+                    "type": "number"
+                  },
+                  "lat": {
+                    "type": "number"
+                  },
+                  "years": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "year": {
+                          "type": "integer"
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "date": {
+                                "type": "string",
+                                "format": "date"
+                              },
+                              "gsd": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "state": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "attribution": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "x-op": "naip"
+      },
+      "TerrainNaipmosaicResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "year": {
+                    "type": "integer"
+                  },
+                  "searchid": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{32}$"
+                  },
+                  "tiles": {
+                    "type": "string"
+                  },
+                  "minZoom": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "reregistered": {
+                "type": "boolean",
+                "description": "the held id was unknown to Planetary Computer and was registered again"
+              }
+            }
+          }
+        ],
+        "x-op": "naipmosaic"
       }
     }
   }

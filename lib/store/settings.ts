@@ -140,6 +140,8 @@ export interface Prefs {
   nriHazard: string;
   /** Historic places: National Historic Landmarks only (the "Landmarks only" chip). */
   nhlOnly: boolean;
+  /** USDA NAIP year the Aerial photos by year layer draws; null = the newest at the view centre. */
+  naipYear: number | null;
   /** The viewer's opacity for each picture layer (0..1); absent = the layer's default. */
   tileAlpha: Partial<Record<LayerId, number>>;
   /** CelesTrak GP groups to load. "active" is ~10k objects and opt-in. */
@@ -170,6 +172,7 @@ export const DEFAULT_PREFS: Prefs = {
   topoYear: null,
   nriHazard: "composite",
   nhlOnly: false,
+  naipYear: null,
   tileAlpha: {},
   satelliteGroups: ["stations", "visual", "gps-ops", "military", "weather"],
   observer: null,

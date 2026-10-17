@@ -35,10 +35,12 @@ import { WETLANDS_MAX_HEIGHT_M } from "@/lib/layers/wetlands";
 import { parseReleaseId, WAYBACK_ATTRIBUTION, WAYBACK_MAX_ZOOM, waybackTiles } from "@/lib/terrain/wayback";
 import { HTMC_ATTRIBUTION, parseTopoYear, TOPO_MAX_ZOOM, TOPO_MIN_ZOOM, topoTiles } from "@/lib/terrain/topo";
 import { HYDRO_ATTRIBUTION, HYDRO_MAX_ZOOM, HYDRO_TILES } from "@/lib/water/nldi";
+import { NAIP_ATTRIBUTION, NAIP_MAX_ZOOM, NAIP_MIN_ZOOM, parseNaipYear, PC_MOSAIC } from "@/lib/terrain/naip";
 
 /** Stacking among pictures, bottom to top: relief under everything, lines on top. */
 export const TILE_Z = {
   wayback: 5,
+  naip: 6,
   topo: 7,
   relief: 10,
   landcover: 20,
@@ -269,6 +271,30 @@ export const hydroStyle = picture("#38BDF8", () => [
     credit: `Streams: ${HYDRO_ATTRIBUTION}`,
   },
 ]);
+
+/**
+ * USDA NAIP aerial photographs for the year the layer's fetch resolved (meta.naipYear), from the
+ * Planetary Computer mosaic the route registered (meta.naipTiles), over Wayback and under the
+ * topo maps. Levels below 11 are drawn empty without asking (Planetary Computer answers no
+ * content there). A template from anywhere but Planetary Computer's mosaic path is refused.
+ */
+export const naipStyle = picture("#A3E635", ({ meta }) => {
+  const year = parseNaipYear(meta?.naipYear);
+  const url = typeof meta?.naipTiles === "string" ? meta.naipTiles : "";
+  if (year == null || !url.startsWith(`${PC_MOSAIC}/`) || !url.includes("/tiles/WebMercatorQuad/{z}/{x}/{y}")) return null;
+  return [
+    {
+      key: `naip:${year}:${url}`,
+      kind: "xyz",
+      url,
+      maximumLevel: NAIP_MAX_ZOOM,
+      floorLevel: NAIP_MIN_ZOOM,
+      alpha: 1,
+      z: TILE_Z.naip,
+      credit: `Aerial photographs ${year}: ${NAIP_ATTRIBUTION}`,
+    },
+  ];
+});
 
 /** FEMA's own map of the flood zones, drawn under the clickable zones of the Flood zones layer. */
 export const FLOOD_PICTURE: TileSpec = routeSpec("floodmap", {

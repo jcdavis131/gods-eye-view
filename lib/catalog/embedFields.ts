@@ -52,6 +52,7 @@ export const EMBED_TEXT = {
   "nri-counties": ["COUNTY", "STATEABBRV", "RISK_RATNG", "EAL_RATNG", "SOVI_RATNG", "RESL_RATNG", "AVLN_RISKR", "CFLD_RISKR", "CWAV_RISKR", "DRGT_RISKR", "ERQK_RISKR", "HAIL_RISKR", "HWAV_RISKR", "HRCN_RISKR", "ISTM_RISKR", "IFLD_RISKR", "LNDS_RISKR", "LTNG_RISKR", "SWND_RISKR", "TRND_RISKR", "TSUN_RISKR", "VLCN_RISKR", "WFIR_RISKR", "WNTW_RISKR"],
   "nri-tracts": ["STATEABBRV", "RISK_RATNG", "EAL_RATNG", "SOVI_RATNG", "RESL_RATNG", "AVLN_RISKR", "CFLD_RISKR", "CWAV_RISKR", "DRGT_RISKR", "ERQK_RISKR", "HAIL_RISKR", "HWAV_RISKR", "HRCN_RISKR", "ISTM_RISKR", "IFLD_RISKR", "LNDS_RISKR", "LTNG_RISKR", "SWND_RISKR", "TRND_RISKR", "TSUN_RISKR", "VLCN_RISKR", "WFIR_RISKR", "WNTW_RISKR"],
   "nhl-listed": ["ResType", "Is_NHL", "CertDate", "City", "County", "State"],
+  "naip-years": ["naip:year", "naip:state", "datetime"],
 } satisfies Record<string, string[]>;
 
 export type CollectionId = keyof typeof EMBED_TEXT;
@@ -195,6 +196,10 @@ export const FIELD_LABEL: Readonly<Record<string, string>> = {
   // FEMA National Risk Index (COUNTY and STATE-like fields reuse the labels above)
   STATEABBRV: "state",
   RISK_RATNG: "composite risk rating",
+  // NAIP STAC items (click answer)
+  "naip:year": "NAIP year",
+  "naip:state": "state",
+  datetime: "photographed on",
   EAL_RATNG: "expected annual loss rating",
   SOVI_RATNG: "social vulnerability rating (as published in the NRI)",
   RESL_RATNG: "community resilience rating",
@@ -260,6 +265,7 @@ export const NO_RECORD_VECTORS: Readonly<Record<string, string>> = {
   "nri-counties": "joined in the browser onto the shared county outlines; record vectors deferred to the next round",
   "nri-tracts": "deferred with nri-counties",
   "nhl-listed": "the same features as nrhp-listed, which carry its record text",
+  "naip-years": "a picture and a click answer listing flight dates, not a feature on the globe",
 };
 
 /** Fields that must never be embedded whatever a card says: the deny list, the dossier's "published name", and any *name field not reviewed. */

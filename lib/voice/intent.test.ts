@@ -128,6 +128,14 @@ describe("voice words for contaminated sites", () => {
   });
 });
 
+describe("voice words for NAIP aerial photos", () => {
+  it("hears aerial photos before historic imagery", () => {
+    expect(layerOf("show aerial photos over des moines")).toMatchObject({ layer: "naip", place: "des moines" });
+    expect(layerOf("show naip")).toMatchObject({ layer: "naip" });
+    expect(layerOf("show historic imagery")).toMatchObject({ layer: "wayback" });
+  });
+});
+
 describe("voice words for the National Risk Index", () => {
   it("hears risk index before hazards", () => {
     expect(layerOf("show the national risk index over texas")).toMatchObject({ layer: "riskindex", place: "texas" });

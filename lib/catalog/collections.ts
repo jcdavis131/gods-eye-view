@@ -26,6 +26,7 @@ import { FUDS_CAVEAT } from "@/lib/permits/fuds";
 import { UST_CAVEAT } from "@/lib/permits/ust";
 import { FLOW_CAVEAT, HYDRO_CAVEAT } from "@/lib/water/nldi";
 import { NRI_CAVEATS, NRI_SOVI_NOTE, NRI_TERMS } from "@/lib/hazards/nri";
+import { NAIP_CAVEAT } from "@/lib/terrain/naip";
 import { DENY_FIELD, EMBED_TEXT } from "./embedFields";
 
 export interface Exclusion {
@@ -86,7 +87,7 @@ export const SHELVES: Array<{ id: string; title: string; layers: LayerId[] }> = 
   { id: "water", title: "Water", layers: ["impaired", "pfas", "hydro"] },
   { id: "contaminants", title: "Contaminants", layers: ["contaminants", "ust"] },
   { id: "hazards", title: "Hazards and risk", layers: ["riskindex"] },
-  { id: "imagery", title: "Imagery and maps", layers: ["wayback", "topo"] },
+  { id: "imagery", title: "Imagery and maps", layers: ["wayback", "topo", "naip"] },
   { id: "infrastructure", title: "Infrastructure", layers: ["dams"] },
 ];
 
@@ -799,6 +800,28 @@ export const COLLECTIONS: readonly Collection[] = [
     embedText: EMBED_TEXT["nhl-listed"],
     ops: ["land?op=historic"],
     sensitivity: "Agency-published, non-restricted listings only; restricted-address records are filtered out; property names (RESNAME) can be a person's and are never searched or embedded.",
+    round: 4,
+  },
+  // ------------------------------------------------------------ round 4: imagery
+  {
+    id: "naip-years",
+    title: "USDA NAIP aerial photographs by year, 2010 onward",
+    layer: "naip",
+    sources: ["usda-naip-pc"],
+    what: "The National Agriculture Imagery Program's leaf-on aerial photographs (0.3 to 1 m), one year at a time, from Microsoft Planetary Computer: the years flown at the view centre from its STAC search, and each year's mosaic registered at run time (never a hard-coded id), loaded by the browser from Planetary Computer. A click gives the flight date, resolution, state and item id of the quarter-quad under the cursor.",
+    recordIs: "A STAC item: one quarter-quad photograph of one NAIP year, with its acquisition date. A year's mosaic joins many flights; the date on click is the photograph under the cursor, not the whole view.",
+    coverage: { spatial: "Conterminous United States; tiles from level 11 (about 20 km or closer)", temporal: "2010 onward; 6 to 11 years per place (Des Moines 8, San Francisco 6, DC 11, Austin 6 in the imagery lane's probes; Des Moines re-probed 2026-10-16: 2011-2023)", count: null },
+    freshness: { statement: "The newest item at Des Moines is 2023 (ia_m_4109328_nw_15_030_20230902_20240104); NAIP flies each state every two to three years.", readFrom: "STAC search at -93.62, 41.59 (datetime and naip:year of the newest item)", recordedOn: R4 },
+    excluded: [
+      { what: "years before 2010 and state historic aerials (Texas, North Carolina)", why: "no keyless national source before 2010; the state services are phase 2 (D-I1, D-I2)" },
+      { what: "tile proxying or caching here", why: "tiles load from Planetary Computer in the browser; Vercel never carries the image bytes" },
+      { what: "a per-place count", why: "the years differ by place; counted per point, not nationally" },
+    ],
+    caveats: [NAIP_CAVEAT],
+    searchable: ["id"],
+    embedText: EMBED_TEXT["naip-years"],
+    ops: ["terrain?op=naip", "terrain?op=naipmosaic"],
+    sensitivity: "Public aerial imagery at 0.3-1 m; no personal data is read or stored.",
     round: 4,
   },
 ];

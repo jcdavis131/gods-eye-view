@@ -12,11 +12,14 @@ import { SLR_DEFAULT_FT, SLR_FEET, isSlrFeet } from "@/lib/terrain/products";
 import { releasesByYear, resolveRelease, type WaybackRelease } from "@/lib/terrain/wayback";
 import { resolveTopoYear, yearLabel } from "@/lib/terrain/topo";
 import { useTopoHere } from "@/lib/layers/topo";
+import { useNaipHere } from "@/lib/layers/naip";
+import { resolveNaipYear } from "@/lib/terrain/naip";
 
 /** Layers that draw a tiled picture (their own, or the FEMA map under flood zones). */
-export const PICTURE_LAYERS = new Set<LayerId>(["relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "flood", "wetlands", "geology", "crithab", "wayback", "topo", "hydro"]);
+export const PICTURE_LAYERS = new Set<LayerId>(["relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "flood", "wetlands", "geology", "crithab", "wayback", "topo", "hydro", "naip"]);
 
 const DEFAULT_ALPHA: Partial<Record<LayerId, number>> = {
+  naip: 1,
   hydro: 0.9,
   relief: 0.55,
   slope: 0.6,
@@ -145,6 +148,40 @@ function TopoPicker() {
   );
 }
 
+/** The year picker under Aerial photos by year: only the years NAIP flew at the view centre. */
+function NaipPicker() {
+  const wanted = useSettings((s) => s.prefs.naipYear);
+  const setPref = useSettings((s) => s.setPref);
+  const here = useNaipHere((s) => s.here);
+  if (!here) return <div>Descend below 150 km for the NAIP years at the view centre; the photographs draw from about 20 km.</div>;
+  if (!here.years.length) return <div>No NAIP photograph at the view centre (NAIP covers the conterminous United States).</div>;
+  const { year, present } = resolveNaipYear(here.years, wanted);
+  return (
+    <>
+      <label className="flex items-center gap-2">
+        <span className="w-14 shrink-0 uppercase tracking-widest">Year</span>
+        <select
+          value={wanted != null && present ? String(wanted) : ""}
+          onChange={(e) => setPref("naipYear", e.target.value ? Number(e.target.value) : null)}
+          className="min-w-0 flex-1 border border-border bg-transparent px-1 py-0.5 text-foreground"
+          aria-label="NAIP year (only years flown at the view centre)"
+        >
+          <option value="" className="bg-background">
+            Newest here ({here.years[here.years.length - 1].year})
+          </option>
+          {[...here.years].reverse().map((y) => (
+            <option key={y.year} value={y.year} className="bg-background">
+              {y.year} (flown {y.items.map((i) => i.date).join(", ")})
+            </option>
+          ))}
+        </select>
+      </label>
+      {!present && year != null && <div>No {year} NAIP photograph at the view centre; the {year} mosaic draws only where {year} was flown.</div>}
+      <div>Flown state by state in the growing season, so the years differ by place. Tiles take 1 to 3 s. Click the ground for the flight date.</div>
+    </>
+  );
+}
+
 export default function TileControls({ id }: { id: LayerId }) {
   const alpha = useSettings((s) => s.prefs.tileAlpha?.[id]);
   const ft = useSettings((s) => s.prefs.seaLevelFt);
@@ -195,6 +232,8 @@ export default function TileControls({ id }: { id: LayerId }) {
       {id === "soils" && <div>Map units outlined with their symbols; click the ground for the soil.</div>}
       {id === "wayback" && <WaybackPicker />}
       {id === "topo" && <TopoPicker />}
+      {id === "naip" && <NaipPicker />}
+      {id === "hydro" && <div>USGS NHD streams and water bodies; click the ground for the reach it drains to and trace it downstream, its basin or the gauges upstream.</div>}
       {id === "crithab" && <div>FWS&apos;s map of final and proposed designations, with NOAA Fisheries&apos; marine and anadromous species; click the ground for the species and whether it is proposed. Not where a species lives.</div>}
       {id === "wetlands" && (
         <>

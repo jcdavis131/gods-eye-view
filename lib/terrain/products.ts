@@ -16,6 +16,7 @@ import { bboxParam } from "./webmercator";
 import type { SourceId } from "@/lib/provenance/sources";
 import { HTMC_HOST, TOPO_MAX_ZOOM, topoTiles } from "./topo";
 import { HYDRO_MAX_ZOOM, HYDRO_TILES } from "@/lib/water/nldi";
+import { NAIP_MAX_ZOOM, PC_HOST, PC_MOSAIC } from "./naip";
 
 export const DEP_IMAGE = "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer";
 export const RELIEF_TILES = "https://basemap.nationalmap.gov/arcgis/rest/services/USGSShadedReliefOnly/MapServer/tile/{z}/{y}/{x}";
@@ -160,7 +161,7 @@ export function routeTileUrl(product: RenderProductId, z: number | string, x: nu
 // ---------------------------------------------------------------- direct sources
 
 export interface DirectSource {
-  id: "relief" | "soils" | "firehazard" | "sealevel" | "terrain" | "geology" | "wetlands" | "crithab" | "crithab-noaa" | "wayback" | "topo" | "hydro";
+  id: "relief" | "soils" | "firehazard" | "sealevel" | "terrain" | "geology" | "wetlands" | "crithab" | "crithab-noaa" | "wayback" | "topo" | "hydro" | "naip";
   title: string;
   source: SourceId;
   /** Host the browser fetches from (CSP img-src / connect-src must allow it). */
@@ -278,6 +279,15 @@ export const DIRECT_SOURCES: DirectSource[] = [
     template: HYDRO_TILES,
     maxZoom: HYDRO_MAX_ZOOM,
     note: "Transparent line art cached to level 23 (drawn to 16 here, magnified beyond); a 404 is no tile there. The reach and the traces come from USGS NLDI and EPA NHDPlus V2.1 through /api/water?op=reach and op=trace.",
+  },
+  {
+    id: "naip",
+    title: "USDA NAIP aerial photographs by year, 2010 onward (Microsoft Planetary Computer, one registered mosaic per year)",
+    source: "usda-naip-pc",
+    host: PC_HOST,
+    template: `${PC_MOSAIC}/{searchid}/tiles/WebMercatorQuad/{z}/{x}/{y}@1x?collection=naip&assets=image&asset_bidx=image%7C1%2C2%2C3&format=png`,
+    maxZoom: NAIP_MAX_ZOOM,
+    note: "The browser loads tiles from Planetary Computer directly (CORS *); the year's searchid comes from /api/terrain?op=naipmosaic, the years at a point from op=naip. Levels below 11 answer no content; tiles take 1-3 s. Never proxied here.",
   },
 ];
 
