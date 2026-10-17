@@ -117,7 +117,7 @@
           "meta"
         ],
         "summary": "The catalogue: every curated collection eye draws or reads, with what a record is, its sources and licences, coverage, freshness, what is excluded and why, caveats and the ops that serve it",
-        "description": "Static (bundled with the app, no upstream call). Each collection names its layer, its sources (expanded from the source registry: name, publisher, url, licence), what one record means and does not mean, spatial and temporal coverage with a dated count where one was taken, freshness as the upstream states it with the field it was read from and the date it was read, exclusions with the reason for each, caveats, the fields that may be searched and the fields safe to embed (never an address, contact or a name that can be a person's), and its ops as `route?op=x`. Listed for people at /catalog. `uncatalogued` names the layers with no entry yet. op=search ranks the collections by meaning: the query (2-200 characters) is embedded with potion-base-8M and compared with each card's own description (cosine, 4 decimals); collections only, records are searched by meaning in the browser palette. op=place-export&collection=npl-status returns a committed per-county aggregate (NPL sites per county and year, 2015-2025) with its provenance, zero-vs-missing rule and unmatched sites.",
+        "description": "Static (bundled with the app, no upstream call). Each collection names its layer, its sources (expanded from the source registry: name, publisher, url, licence), what one record means and does not mean, spatial and temporal coverage with a dated count where one was taken, freshness as the upstream states it with the field it was read from and the date it was read, exclusions with the reason for each, caveats, the fields that may be searched and the fields safe to embed (never an address, contact or a name that can be a person's), and its ops as `route?op=x`. Listed for people at /catalog. `uncatalogued` names the layers with no entry yet. op=search ranks the collections by meaning: the query (2-200 characters) is embedded with potion-base-8M and compared with each card's own description (cosine, 4 decimals); collections only, records are searched by meaning in the browser palette. op=place-export returns a committed per-county aggregate with its provenance (query, page sha256s, fetch time), zero-vs-missing and null rules and join checks: npl-status (NPL sites per county and year, 2015-2025, form series), ust-releases-county and ust-facilities-county (EPA UST Finder county counts of releases and of facilities and tanks, 2018-2021 state records, form static) and fuds-properties (USACE FUDS properties per county, FY2024 inventory, form static).",
         "operationId": "catalog",
         "x-provenance": {
           "op=search": {
@@ -128,7 +128,10 @@
             "cardVectors": "lib/catalog/data/card-vectors.json (scripts/embed-catalog.mts)"
           },
           "op=place-export": {
-            "npl-status": "lib/catalog/data/npl-county.json (scripts/export-npl-county.mjs); source EPA Superfund NPL Sites with Status Information FeatureServer/0"
+            "npl-status": "lib/catalog/data/npl-county.json (scripts/export-npl-county.mjs); source EPA Superfund NPL Sites with Status Information FeatureServer/0",
+            "ust-releases-county": "lib/catalog/data/ust-releases-county.json (scripts/export-ust-county.mjs); source EPA UST Finder FeatureServer/3 Releases_by_County",
+            "ust-facilities-county": "lib/catalog/data/ust-facilities-county.json (scripts/export-ust-county.mjs); source EPA UST Finder FeatureServer/2 Facilities_by_County",
+            "fuds-properties": "lib/catalog/data/fuds-county.json (scripts/export-fuds-county.mjs); source USACE FUDS FeatureServer/1 property points, joined with TIGERweb Generalized_ACS2023 Counties 500K"
           }
         },
         "parameters": [
@@ -188,7 +191,10 @@
             "schema": {
               "type": "string",
               "enum": [
-                "npl-status"
+                "npl-status",
+                "ust-releases-county",
+                "ust-facilities-county",
+                "fuds-properties"
               ]
             },
             "description": "op=place-export: which aggregate."
@@ -196,7 +202,7 @@
         ],
         "responses": {
           "200": {
-            "description": "The envelope; `data.collections` (or `data.collection` with id=). op=search: `data.hits` [{ id, title, layer, score, ops, catalog }], `data.embedder` { id, model, commit, tableSha256, licence } and `data.matched` (false when no word of the query is in the model's vocabulary; hits is then empty). op=place-export: `data` { meta, places, value[place][year][feature], nullPlaces, siteIds }.",
+            "description": "The envelope; `data.collections` (or `data.collection` with id=). op=search: `data.hits` [{ id, title, layer, score, ops, catalog }], `data.embedder` { id, model, commit, tableSha256, licence } and `data.matched` (false when no word of the query is in the model's vocabulary; hits is then empty). op=place-export: `data` { meta, places, value, nullPlaces, ... }: meta.form series gives value[place][year][feature] over meta.years (npl-status, with siteIds); meta.form static gives value[place][feature] for one snapshot (meta.asOf, meta.years null), with nullCells (UST: a field the layer leaves null) and sourceIds (UST OBJECTIDs) or propertyIds (FUDS).",
             "headers": {
               "Cache-Control": {
                 "$ref": "#/components/headers/CacheControl"

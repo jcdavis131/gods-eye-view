@@ -98,6 +98,18 @@ describe("/api/catalog?op=place-export", () => {
     expect(sites["30049"]).toEqual(expect.arrayContaining(["MTD006230346", "MTSFN7578012"]));
     expect(Object.keys(d.nullPlaces).filter((g) => g.startsWith("30")).every((g) => d.nullPlaces[g] === "join:multi_county")).toBe(true);
     expect((await get("op=place-export&collection=nope")).status).toBe(400);
+    expect((await get("op=place-export&collection=attains-impaired")).status).toBe(400);
     expect((await get("op=place-export")).status).toBe(400);
+  });
+
+  it("serves the static UST and FUDS exports with their caveats", async () => {
+    for (const id of ["ust-releases-county", "ust-facilities-county", "fuds-properties"]) {
+      const r = await get(`op=place-export&collection=${id}`);
+      expect(r.status, id).toBe(200);
+      const d = r.body.data as { meta: { collection: string; form: string; years: null }; places: string[]; value: unknown[][] };
+      expect(d.meta).toMatchObject({ collection: id, form: "static", years: null });
+      expect(d.value).toHaveLength(d.places.length);
+      expect((r.body as { caveats?: string[] }).caveats?.length ?? 0).toBeGreaterThan(0);
+    }
   });
 });
