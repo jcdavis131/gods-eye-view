@@ -1,20 +1,26 @@
 // The records-by-meaning eval as a regression guard on RECORD_TAU (the palette's "By meaning"
 // threshold). It reads three files beside it:
 //
-//   records-queries.json  hand-written queries and judgements (v2: 69 real queries, 26 controls),
-//                         written by the eval agent before any v2 query was scored, labelled
-//                         "not user queries". Its sha256 is pinned below, so editing it after
-//                         seeing scores fails the test.
-//   records-corpus.json   record text only ({card, embedText, source, retrievedAt, n}): 3,178
-//                         real records from the 16 record-vector cards, the captured fixtures
-//                         plus the 2026-10-17 keyless pulls, as 780 distinct rows with a count.
-//                         No names, ids or vectors: recordText never emits a name.
+//   records-queries.json  hand-written queries and judgements (v3: 89 real queries, 37 controls;
+//                         every v2 query unchanged plus queries and controls for bia-lar and
+//                         wrc-communities), written by the eval agent before any v3 query was
+//                         scored, labelled "not user queries". Its sha256 is pinned below, so
+//                         editing it after seeing scores fails the test.
+//   records-corpus.json   record text only ({card, embedText, source, retrievedAt, n}): 4,067
+//                         real records from the 18 record-vector cards, the captured fixtures
+//                         plus the 2026-10-17 keyless pulls, as 1,124 distinct rows with a count.
+//                         No ids or vectors, and no person's name. One reviewed name field is
+//                         embedded: bia-lar's LARNAME (BIA land area names, never a person's;
+//                         Cam's call, 2026-10-17), so its record text is the land area's name.
 //   records-results.json  the per-query output of the run these numbers come from.
 //
 // This is a regression guard, not the evidence for lifting ?semantic=1: the same agent wrote the
 // queries and chose tau on them, so tau passes by construction. Lifting the flag waits on a blind
 // query set judged against the bars in the eval's DESIGN (P >= 0.65, R@8 >= 0.45, empty <= 0.30,
-// zero control rows). Cost: the pinned weights plus 3,178 record embeds, about 0.1 s and 150 MB.
+// zero control rows). Cost: the pinned weights plus 4,067 record embeds, about 0.15 s and 150 MB.
+//
+// When a card joins RECORD_VECTOR_CARDS, the coverage test fails and its message says what to do
+// (NEW_CARD_STEPS). The eval's scripts and DESIGN are in the writeups folder named there.
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
@@ -27,7 +33,17 @@ import { RECORD_VECTOR_CARDS } from "@/lib/catalog/embedFields";
 import type { LayerFeature } from "@/lib/layers/types";
 
 const DIR = path.join(process.cwd(), "lib/embed/__eval__");
-const QUERIES_SHA256 = "c439e9f35ba04351363eae2ee1be4e4b536f55e7d89775eda7eff7bfa67e9c45";
+const QUERIES_SHA256 = "28159658766af83f766c9c5ddcd7b6de4202350caea7cbb3c50016e568792a8f";
+const RECORDS = 4067;
+/** What to do when the corpus and RECORD_VECTOR_CARDS disagree (printed by the coverage test). */
+const NEW_CARD_STEPS = [
+  "The records eval must be re-run for the new card set (writeups/eye-embeddings-2026-10-16/records-eval, DESIGN.md, latest \"Run N\"):",
+  "1. Pull real records for each missing card with the latest pull-records-runN.mts: its captured fixtures (recordFixtures()) plus keyless live boxes through the route's own builder. Save text only.",
+  "2. Append them to records-corpus.json as {card, embedText, source, retrievedAt, n} rows (drop the rows of any extra card), and update RECORDS.",
+  "3. Write queries.v(N+1).json: every earlier query unchanged, plus collection and value queries and controls for the new card. Write the judgements before scoring, sha256 it, make it read-only, copy it byte for byte to records-queries.json and update QUERIES_SHA256.",
+  "4. Re-run the sweep at every tau (run-records-eval-runN.mts). If RECORD_TAU still has no control row and passes the DESIGN 7.2 bars, re-pin MEASURED and records-results.json; if not, report the numbers and change RECORD_TAU only to the lowest step that passes.",
+  "5. Append \"Run N+1\" to DESIGN.md.",
+].join("\n");
 /** RECORD_ROWS in the palette. */
 const K = 8;
 
@@ -63,13 +79,13 @@ function grade(q: Query, r: Row): number {
   return g;
 }
 
-// Measured 2026-10-17 on the files above (DESIGN "Run 2 (16 cards)"). P is precision over the
-// queries that showed anything, R is recall@8 (relevant shown / min(8, relevant)) over all 69 real
+// Measured 2026-10-17 on the files above (DESIGN "Run 3 (18 cards)"). P is precision over the
+// queries that showed anything, R is recall@8 (relevant shown / min(8, relevant)) over all 89 real
 // queries, empty is the share of real queries that showed nothing. A deliberate change to tau, the
 // weights or the record text updates this table.
 const MEASURED: Record<string, { P: number; R: number; empty: number }> = {
-  "0.4": { P: 0.73, R: 0.627, empty: 0.145 },
-  "0.6": { P: 0.83, R: 0.223, empty: 0.638 },
+  "0.4": { P: 0.693, R: 0.607, empty: 0.191 },
+  "0.6": { P: 0.863, R: 0.223, empty: 0.652 },
 };
 const TOL = 0.02;
 
@@ -94,10 +110,13 @@ describe("records by meaning (hand-written eval, labelled as such)", () => {
     expect(createHash("sha256").update(rawQ).digest("hex")).toBe(QUERIES_SHA256);
   });
 
-  it("the corpus is every record-vector card, 3,178 records", () => {
-    expect(new Set(corpus.map((r) => r.card))).toEqual(RECORD_VECTOR_CARDS);
-    expect(rows.length).toBe(3178);
-    expect(index.size).toBe(3178);
+  it("the corpus is every record-vector card, 4,067 records", () => {
+    const inCorpus = new Set(corpus.map((r) => r.card));
+    const missing = [...RECORD_VECTOR_CARDS].filter((c) => !inCorpus.has(c)).sort();
+    const extra = [...inCorpus].filter((c) => !RECORD_VECTOR_CARDS.has(c)).sort();
+    expect({ missing, extra }, `records-corpus.json and RECORD_VECTOR_CARDS disagree (missing from the corpus: ${missing.join(", ") || "none"}; in the corpus but no longer record-vector cards: ${extra.join(", ") || "none"}).\n${NEW_CARD_STEPS}`).toEqual({ missing: [], extra: [] });
+    expect(rows.length).toBe(RECORDS);
+    expect(index.size).toBe(RECORDS);
   });
 
   it("every real query has a relevant record loaded, and no control has one", () => {
@@ -108,9 +127,17 @@ describe("records by meaning (hand-written eval, labelled as such)", () => {
     }
   });
 
+  // Run 3 (18 cards) found no tau step that passes: at 0.4, 6 of the 37 controls show a row (5 land
+  // on bia-lar, "wind turbines" on "Wind River" among them; v2's own control set leaks that one too),
+  // and the first step with none, 0.55, fails recall and empty. This test fails until that decision
+  // is made (DESIGN "Run 3 (18 cards)"); it is not relaxed here.
   it("controls (nothing relevant loaded) show no record at RECORD_TAU", () => {
-    const leaks = queries.filter((q) => q.kind === "control").filter((q) => run(q, RECORD_TAU).shown > 0).map((q) => q.q);
-    expect(leaks).toEqual([]);
+    const leaks = queries
+      .filter((q) => q.kind === "control")
+      .map((q) => ({ q, hits: index.search(model.embed(queryText(q.q)!), K, RECORD_TAU) }))
+      .filter((x) => x.hits.length > 0)
+      .map(({ q, hits }) => `${q.id} "${q.q}" -> ${rowOf.get(featureKey(hits[0].feature))!.card} ${hits[0].score.toFixed(3)} (${hits.length} row${hits.length === 1 ? "" : "s"})`);
+    expect(leaks, `controls showing a row at RECORD_TAU ${RECORD_TAU}`).toEqual([]);
   });
 
   it("real queries: precision, recall@8 and empty match the measured run at RECORD_TAU", () => {

@@ -9,5 +9,10 @@
  * highest control top-1 there is 0.362 ("pharmacies", landing on a hospital). The eval's queries
  * were written by the same agent that chose this value, so it is an in-sample number and the
  * group stays behind ?semantic=1 until a blind query set passes.
+ *
+ * Run 3 (18 cards, 4,067 records, after bia-lar and wrc-communities joined): no step passes. At
+ * 0.4, 6 of 37 controls show a row (0.429 to 0.506; "wind turbines" lands on BIA's "Wind River");
+ * the first step with none, 0.55, has R@8 0.358 and empty 0.528, under the bars. Left at 0.4
+ * pending that decision (the eval's DESIGN, "Run 3 (18 cards)").
  */
 export const RECORD_TAU = 0.4;
