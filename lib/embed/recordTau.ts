@@ -14,5 +14,11 @@
  * 0.4, 6 of 37 controls show a row (0.429 to 0.506; "wind turbines" lands on BIA's "Wind River");
  * the first step with none, 0.55, has R@8 0.358 and empty 0.528, under the bars. Left at 0.4
  * pending that decision (the eval's DESIGN, "Run 3 (18 cards)").
+ *
+ * Run 4 (DESIGN 7.3a: both cards' record text says what the record is): still no step passes.
+ * "wind turbines" drops to 0.288, but at 0.4 6 of 37 controls still show a row ("wildfire
+ * perimeters" now lands on a WRC community at 0.495; four tribal controls on BIA land areas,
+ * 0.428 to 0.506), and the first step with none, 0.55, has R@8 0.379 and empty 0.517. Left at 0.4
+ * (DESIGN "Run 4 (7.3a)").
  */
 export const RECORD_TAU = 0.4;

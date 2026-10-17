@@ -8,10 +8,12 @@
 //                         editing it after seeing scores fails the test.
 //   records-corpus.json   record text only ({card, embedText, source, retrievedAt, n}): 4,067
 //                         real records from the 18 record-vector cards, the captured fixtures
-//                         plus the 2026-10-17 keyless pulls, as 1,124 distinct rows with a count.
-//                         No ids or vectors, and no person's name. One reviewed name field is
-//                         embedded: bia-lar's LARNAME (BIA land area names, never a person's;
-//                         Cam's call, 2026-10-17), so its record text is the land area's name.
+//                         plus the 2026-10-17 keyless pulls, as 1,145 rows with a count (one row
+//                         per card, text, source and retrieval time; 1,132 distinct card and text
+//                         pairs). No ids or vectors, and no person's name. One reviewed name field
+//                         is embedded: bia-lar's LARNAME (BIA land area names, never a person's;
+//                         Cam's call, 2026-10-17), beside its BIA region under a card-scoped
+//                         label (DESIGN 7.3a, run 4).
 //   records-results.json  the per-query output of the run these numbers come from.
 //
 // This is a regression guard, not the evidence for lifting ?semantic=1: the same agent wrote the
@@ -79,13 +81,14 @@ function grade(q: Query, r: Row): number {
   return g;
 }
 
-// Measured 2026-10-17 on the files above (DESIGN "Run 3 (18 cards)"). P is precision over the
+// Measured 2026-10-17 on the files above (DESIGN "Run 4 (7.3a)": run 3's corpus with the bia-lar
+// and wrc-communities record text rebuilt from the same rows). P is precision over the
 // queries that showed anything, R is recall@8 (relevant shown / min(8, relevant)) over all 89 real
 // queries, empty is the share of real queries that showed nothing. A deliberate change to tau, the
 // weights or the record text updates this table.
 const MEASURED: Record<string, { P: number; R: number; empty: number }> = {
-  "0.4": { P: 0.693, R: 0.607, empty: 0.191 },
-  "0.6": { P: 0.863, R: 0.223, empty: 0.652 },
+  "0.4": { P: 0.758, R: 0.647, empty: 0.157 },
+  "0.6": { P: 0.863, R: 0.222, empty: 0.652 },
 };
 const TOL = 0.02;
 
@@ -106,7 +109,7 @@ describe("records by meaning (hand-written eval, labelled as such)", () => {
     return { shown: hits.length, rel, recall: nRel ? rel / Math.min(K, nRel) : 0 };
   };
 
-  it("the query set is the pre-registered v2 one", () => {
+  it("the query set is the pre-registered v3 one", () => {
     expect(createHash("sha256").update(rawQ).digest("hex")).toBe(QUERIES_SHA256);
   });
 
@@ -127,10 +130,11 @@ describe("records by meaning (hand-written eval, labelled as such)", () => {
     }
   });
 
-  // Run 3 (18 cards) found no tau step that passes: at 0.4, 6 of the 37 controls show a row (5 land
-  // on bia-lar, "wind turbines" on "Wind River" among them; v2's own control set leaks that one too),
-  // and the first step with none, 0.55, fails recall and empty. This test fails until that decision
-  // is made (DESIGN "Run 3 (18 cards)"); it is not relaxed here.
+  // Run 3 (18 cards) found no tau step that passes. Run 4 (DESIGN 7.3a: category words in the
+  // bia-lar and wrc-communities record text) still finds none: at 0.4, 6 of the 37 controls show a
+  // row ("wildfire perimeters" on a WRC community, four tribal controls on BIA land areas, "evacuation
+  // zones" on an NFHL zone), and the first step with none, 0.55, fails recall and empty. This test
+  // fails until that is decided (DESIGN "Run 4 (7.3a)"); it is not relaxed here.
   it("controls (nothing relevant loaded) show no record at RECORD_TAU", () => {
     const leaks = queries
       .filter((q) => q.kind === "control")

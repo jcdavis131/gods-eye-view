@@ -25,6 +25,7 @@ import {
   WRC_VALUE_FIELDS,
   wrcBin,
   wrcDetails,
+  wrcRankWords,
   wrcRow,
   type WrcExtra,
   type WrcRow,
@@ -115,7 +116,29 @@ describe("communities", () => {
     expect(l.properties.kind).toBe("not-ranked");
     expect(x.noRank).toBe("not ranked by USFS: no people (pop = 0)");
     expect(l.properties.details?.["not ranked because"]).toBe("no people (pop = 0);");
-    expect(receivedRecordText(l.properties)).toBe("state: CO; not ranked by USFS because: no people (pop = 0);");
+    expect(receivedRecordText(l.properties)).toBe(
+      "state: CO; wildfire risk community, national risk rank: not ranked by USFS; wildfire likelihood (burn probability), national rank: not ranked by USFS; not ranked by USFS because: no people (pop = 0);",
+    );
+  });
+
+  it("embeds the RISK and BP national ranks as the layer's bins, whatever measure and scope draw it", () => {
+    const b = built.find((f) => f.properties.name === "Boulder city, CO")!;
+    const text = "state: CO; wildfire risk community, national risk rank: 95 or more percentile; wildfire likelihood (burn probability), national rank: 95 or more percentile";
+    expect(receivedRecordText(b.properties)).toBe(text);
+    const other = buildWrcPlaces((places as unknown as { features: never[] }).features, 2, "state");
+    expect(other.map((f) => receivedRecordText(f.properties))).toEqual(built.map((f) => receivedRecordText(f.properties)));
+    expect([null, 0, 39.9, 40, 69.99, 70, 90, 94.9, 95, 100].map(wrcRankWords)).toEqual([
+      "not ranked by USFS",
+      "under 40 percentile",
+      "under 40 percentile",
+      "40 to 70 percentile",
+      "40 to 70 percentile",
+      "70 to 90 percentile",
+      "90 to 95 percentile",
+      "90 to 95 percentile",
+      "95 or more percentile",
+      "95 or more percentile",
+    ]);
   });
 
   it("embeds the state and the exclude reason, never the community's name", () => {

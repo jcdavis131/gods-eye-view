@@ -19,7 +19,7 @@
 
 import type { EmbedInput } from "@/lib/embed/types";
 import type { BaseProps } from "@/lib/layers/types";
-import { EMBED_TEXT, FIELD_LABEL, embeddableField, type CollectionId } from "./embedFields";
+import { EMBED_TEXT, embeddableField, fieldLabel, type CollectionId } from "./embedFields";
 
 const MAX_VALUE_CHARS = 160;
 
@@ -43,7 +43,7 @@ export function recordText(cardId: CollectionId, row: Readonly<Record<string, un
   const parts: string[] = [];
   for (const f of fields) {
     if (!embeddableField(f)) throw new Error(`${cardId}: field ${f} may not be embedded`);
-    const label = FIELD_LABEL[f];
+    const label = fieldLabel(cardId, f);
     if (!label) throw new Error(`${cardId}: no label for ${f}`);
     const v = value(row[f]);
     if (v != null) parts.push(`${label}: ${v}`);
