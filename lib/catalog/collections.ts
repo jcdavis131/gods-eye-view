@@ -1207,7 +1207,7 @@ export const COLLECTIONS: readonly Collection[] = [
     what: "Every federal disaster declaration naming a county, as FEMA's OpenFEMA API publishes it: the disaster number, declaration type (major disaster DR, emergency EM, fire management FM), declaration and incident dates, incident type, title, the programs declared (IH, IA, PA, HM) and the designated area, counted per year by type for the county's hazard history; the list opens under a county click of the National Risk Index, Social vulnerability or Wildfire risk ranks layers.",
     recordIs: "A federal decision that a disaster or emergency affected the county enough for federal help: a record of declarations, not a measure of damage or of how often hazards happen. Tribal and statewide designations name no county and are not attached to one.",
     coverage: {
-      spatial: "The 50 states, DC and territories as FEMA codes them; Connecticut in its eight legacy counties, so its planning regions have none; Alaska as FEMA files its Regional Educational Attendance Areas under census-area codes",
+      spatial: "The 50 states, DC and territories as FEMA codes them; Connecticut in its eight legacy counties, so its planning regions have none; Alaska as FEMA files its Regional Educational Attendance Areas under census-area codes; Oglala Lakota, SD and Kusilvak, AK are read under their current and their pre-2015 codes (113 and 270), where FEMA still files most of their rows, each disaster once",
       temporal: "declarations since 1953",
       count: { value: 70567, of: "rows in DisasterDeclarationsSummaries v2 ($inlinecount and the dataset's recordCount); 1,612 with county code 000 (tribal and statewide); 11 under Alaska's retired code 261 (Valdez-Cordova)", countedOn: R7 },
     },

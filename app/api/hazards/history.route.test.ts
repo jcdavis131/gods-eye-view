@@ -5,6 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import femaTravis from "@/lib/hazards/fixtures/fema-48453.json";
+import femaOglala from "@/lib/hazards/fixtures/fema-46102-46113.json";
 import dsciTravis from "@/lib/hazards/fixtures/usdm-dsci-48453.json";
 import dsciCt from "@/lib/hazards/fixtures/usdm-dsci-09110.json";
 import catTravis from "@/lib/hazards/fixtures/usdm-cat-48453.json";
@@ -63,6 +64,20 @@ describe("op=history", () => {
     expect(body.data.landslide).toMatchObject({ prop_susc: 0.361441295 });
     expect(body.provenance.map((p) => p.source.id)).toEqual(expect.arrayContaining(["fema-openfema", "usdm", "noaa-cag", "noaa-spc", "usgs-landslide-susc"]));
     expect(JSON.stringify(body).length).toBeLessThan(4_500_000);
+  });
+
+  it("Oglala Lakota: one FEMA call asks for 102 and Shannon's old 113, and the 16 declarations are not a 0", async () => {
+    // USDM and CAG answer empty / 404 here; this test is about FEMA's filter and its rows.
+    answer = (u) => (u.startsWith(FEMA_DDS) ? femaOglala : u.startsWith(USDM_API) ? [] : u.startsWith(CAG_BASE) ? 404 : null);
+    const { status, body } = await get("op=history&fips=46102");
+    expect(status).toBe(200);
+    const fema = calls.filter((c) => c.startsWith(FEMA_DDS));
+    expect(fema).toHaveLength(1);
+    expect(decodeURIComponent(fema[0])).toContain("fipsStateCode eq '46' and (fipsCountyCode eq '102' or fipsCountyCode eq '113')");
+    expect((body.data.declarations as unknown[]).length).toBe(16);
+    const dr = body.data.series!.find((s) => s.id === "fema:dr:46102")!;
+    expect(dr.points.length).toBeGreaterThan(0);
+    expect(body.caveats.join(" ")).toMatch(/old code 113/);
   });
 
   it("a Connecticut planning region asks USDM only and says why the rest are missing", async () => {

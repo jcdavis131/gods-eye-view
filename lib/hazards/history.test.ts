@@ -6,6 +6,8 @@ import femaCt from "./fixtures/fema-ct.json";
 import femaAk from "./fixtures/fema-ak.json";
 import femaAk261 from "./fixtures/fema-ak-261.json";
 import femaLa from "./fixtures/fema-06037.json";
+import femaOglala from "./fixtures/fema-46102-46113.json";
+import femaKusilvak from "./fixtures/fema-02158-02270.json";
 import dsciTravis from "./fixtures/usdm-dsci-48453.json";
 import dsciCtRegion from "./fixtures/usdm-dsci-09110.json";
 import dsciCtLegacy from "./fixtures/usdm-dsci-09001.json";
@@ -28,6 +30,7 @@ import {
   femaPrograms,
   femaUrl,
   FEMA_FIELDS,
+  FEMA_RENAMES,
   HISTORY_ZERO_FILL,
   landslideLine,
   parseCag,
@@ -145,6 +148,35 @@ describe("FEMA", () => {
     expect(a.meta.unmatched).toEqual(["02261"]);
     expect(a.caveats.join(" ")).toMatch(/under its old code 261/);
     expect(a.caveats.join(" ")).toMatch(/Regional Educational Attendance Areas/);
+  });
+
+  it("Oglala Lakota and Kusilvak: FEMA's rows under the old codes are read, each disaster once, never a literal 0", () => {
+    expect(FEMA_RENAMES.map((r) => [r.fips, r.oldFips])).toEqual([
+      ["46102", "46113"],
+      ["02158", "02270"],
+    ]);
+    for (const r of FEMA_RENAMES) expect(r.citation).toMatch(/county-changes\.2010\.html$/);
+    expect(decodeURIComponent(femaUrl("46102"))).toContain("fipsStateCode eq '46' and (fipsCountyCode eq '102' or fipsCountyCode eq '113')");
+    expect(decodeURIComponent(femaUrl("02158"))).toContain("fipsStateCode eq '02' and (fipsCountyCode eq '158' or fipsCountyCode eq '270')");
+    expect(decodeURIComponent(femaUrl("48453"))).toContain("fipsStateCode eq '48' and fipsCountyCode eq '453'&");
+    // fema-46102-46113.json is that query's answer (2026-10-17): 16 rows, all under 113.
+    const o = assembleHistory(travis({ fips: "46102", name: "Oglala Lakota County", stusab: "SD", fema: ok(parseFema(femaOglala)) }));
+    expect(o.data.declarationRows).toBe(16);
+    expect(o.meta.unmatched).toEqual([]);
+    const total = (id: string) => sum(o.data.series.find((s) => s.id === id)!.points);
+    expect([total("fema:dr:46102"), total("fema:em:46102"), total("fema:fm:46102")]).toEqual([12, 3, 1]);
+    expect(o.data.declarations.map((d) => d.disasterNumber)).toContain(4689);
+    expect(o.caveats.join(" ")).toMatch(/old code 113/);
+    expect(o.provenance.find((p) => p.source.id === "fema-openfema")!.seriesId).toContain("(fipsCountyCode eq '102' or fipsCountyCode eq '113')");
+    // fema-02158-02270.json: 12 rows under 270 and 2 under 158; DR-4533 is under both, so its two 270 rows drop.
+    const k = attachFema(parseFema(femaKusilvak).rows, "02158");
+    expect(k.rows).toHaveLength(12);
+    expect(k.rows.filter((r) => r.disasterNumber === 4533)).toHaveLength(1);
+    expect(k.rows.map((r) => r.disasterNumber)).toContain(4893);
+    expect(k.unmatched).toEqual([]);
+    // The old code alone never attaches to any other county.
+    expect(attachFema(parseFema(femaOglala).rows, "46113").rows).toHaveLength(16);
+    expect(attachFema(parseFema(femaOglala).rows, "46007").unmatched).toEqual(["46113"]);
   });
 
   it("programs are FEMA's own flags as two-letter codes", () => {
