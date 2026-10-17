@@ -6,7 +6,7 @@
 import type { LayerId } from "@/lib/layers/types";
 import { useSettings } from "@/lib/store/settings";
 import { NRI_CLASSES, NRI_COLORS, NRI_HAZARDS, NRI_HAZARD_CODES, NRI_NO_RATING_EDGE, parseNriPick } from "@/lib/hazards/nri";
-import { isPlacesMeasure, PLACES_BIN_COLORS, PLACES_DEFAULT_MEASURE, PLACES_MEASURES, SOCIAL_NEEDS, type PlacesMeasure } from "@/lib/civic/places";
+import { isPlacesMeasure, PLACES_BIN_COLORS, PLACES_DEFAULT_MEASURE, PLACES_MEASURES, SOCIAL_NEEDS, UNRANKED_BIN, type PlacesMeasure } from "@/lib/civic/places";
 
 /** Layers with controls here. */
 export const OPTION_LAYERS = new Set<LayerId>(["riskindex", "historic", "health"]);
@@ -105,6 +105,10 @@ function MeasurePicker() {
             quintile {i + 1}
           </li>
         ))}
+        <li className="flex items-center gap-1 text-[9px] text-muted-foreground">
+          <span className="inline-block size-2 shrink-0 border border-black/40" style={{ background: PLACES_BIN_COLORS[UNRANKED_BIN] }} aria-hidden />
+          published, not ranked: fewer than five values (drawn as quintile 3)
+        </li>
         <li className="flex items-center gap-1 text-[9px] text-muted-foreground">
           <span className="inline-block size-2 shrink-0 border border-dashed" style={{ borderColor: NRI_NO_RATING_EDGE }} aria-hidden />
           not published
