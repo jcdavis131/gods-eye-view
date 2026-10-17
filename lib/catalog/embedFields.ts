@@ -53,6 +53,10 @@ export const EMBED_TEXT = {
   "nri-tracts": ["STATEABBRV", "RISK_RATNG", "EAL_RATNG", "SOVI_RATNG", "RESL_RATNG", "AVLN_RISKR", "CFLD_RISKR", "CWAV_RISKR", "DRGT_RISKR", "ERQK_RISKR", "HAIL_RISKR", "HWAV_RISKR", "HRCN_RISKR", "ISTM_RISKR", "IFLD_RISKR", "LNDS_RISKR", "LTNG_RISKR", "SWND_RISKR", "TRND_RISKR", "TSUN_RISKR", "VLCN_RISKR", "WFIR_RISKR", "WNTW_RISKR"],
   "nhl-listed": ["ResType", "Is_NHL", "CertDate", "City", "County", "State"],
   "naip-years": ["naip:year", "naip:state", "datetime"],
+  "nps-units": ["UNIT_TYPE", "STATE", "REGION"],
+  "nps-nha": [],
+  "abpp-battlefields": ["WAR", "STATE", "BOUNDARY"],
+  "nps-whs": [],
 } satisfies Record<string, string[]>;
 
 export type CollectionId = keyof typeof EMBED_TEXT;
@@ -198,6 +202,11 @@ export const FIELD_LABEL: Readonly<Record<string, string>> = {
   RISK_RATNG: "composite risk rating",
   // NAIP STAC items (click answer)
   "naip:year": "NAIP year",
+  // national heritage (NPS)
+  UNIT_TYPE: "NPS unit type",
+  REGION: "NPS region",
+  WAR: "war",
+  BOUNDARY: "battlefield survey area",
   "naip:state": "state",
   datetime: "photographed on",
   EAL_RATNG: "expected annual loss rating",
@@ -266,6 +275,10 @@ export const NO_RECORD_VECTORS: Readonly<Record<string, string>> = {
   "nri-tracts": "deferred with nri-counties",
   "nhl-listed": "the same features as nrhp-listed, which carry its record text",
   "naip-years": "a picture and a click answer listing flight dates, not a feature on the globe",
+  "nps-units": "record vectors deferred to the next round (the builder attaches none yet)",
+  "nps-nha": "the only text is NPS's free-text description, which is not embedded (D-HE2)",
+  "abpp-battlefields": "record vectors deferred with nps-units",
+  "nps-whs": "names and links only; nothing embeddable",
 };
 
 /** Fields that must never be embedded whatever a card says: the deny list, the dossier's "published name", and any *name field not reviewed. */

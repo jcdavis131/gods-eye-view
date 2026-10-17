@@ -27,6 +27,7 @@ import { UST_CAVEAT } from "@/lib/permits/ust";
 import { FLOW_CAVEAT, HYDRO_CAVEAT } from "@/lib/water/nldi";
 import { NRI_CAVEATS, NRI_SOVI_NOTE, NRI_TERMS } from "@/lib/hazards/nri";
 import { NAIP_CAVEAT } from "@/lib/terrain/naip";
+import { ABPP_CAVEAT, ABPP_STUDY_DEFINITION, NHA_CAVEAT, UNITS_CAVEAT, WHS_CAVEAT } from "@/lib/land/heritage";
 import { DENY_FIELD, EMBED_TEXT } from "./embedFields";
 
 export interface Exclusion {
@@ -82,7 +83,7 @@ export interface Collection {
 
 /** Which shelf a layer's collections sit on (the /catalog page's grouping). */
 export const SHELVES: Array<{ id: string; title: string; layers: LayerId[] }> = [
-  { id: "land", title: "Land and heritage", layers: ["wetlands", "historic", "flood", "publiclands"] },
+  { id: "land", title: "Land and heritage", layers: ["wetlands", "historic", "flood", "publiclands", "heritage"] },
   { id: "species", title: "Species", layers: ["crithab"] },
   { id: "water", title: "Water", layers: ["impaired", "pfas", "hydro"] },
   { id: "contaminants", title: "Contaminants", layers: ["contaminants", "ust"] },
@@ -822,6 +823,89 @@ export const COLLECTIONS: readonly Collection[] = [
     embedText: EMBED_TEXT["naip-years"],
     ops: ["terrain?op=naip", "terrain?op=naipmosaic"],
     sensitivity: "Public aerial imagery at 0.3-1 m; no personal data is read or stored.",
+    round: 4,
+  },
+  // ------------------------------------------------------------ round 4: national heritage
+  {
+    id: "nps-units",
+    title: "National Park System units, authorised boundaries",
+    layer: "heritage",
+    sources: ["nps-lrd-boundaries"],
+    what: "Every National Park System unit as NPS's Land Resources Division publishes it: the authorised boundary (layer 2) below 250 km, and the unit's centroid (layer 0) from farther away, with the unit code, name, type (national park, monument, historic site, battlefield, ...), state, NPS region and the date the boundary was last edited.",
+    recordIs: "A park unit's designation and its authorised outline. Not all land inside is federally owned: ownership and access are Public lands (PAD-US).",
+    coverage: { spatial: "United States and territories; boundaries in a box of at most 2 degrees below 250 km, centroids nationally", temporal: null, count: { value: 437, of: "unit boundaries (layer 2); 437 centroids (layer 0)", countedOn: R4 } },
+    freshness: { statement: "NPS last edited the boundary layer on 2026-10-16.", readFrom: "FeatureServer layer 2 editingInfo.lastEditDate; DATE_EDIT per unit", recordedOn: R4 },
+    excluded: [
+      { what: "tract-level land status (layer 1)", why: "ownership is PAD-US's (Public lands); this layer is designation" },
+      { what: "the Creator, Editor and metadata fields", why: "bookkeeping, and an editor field can hold a person's name" },
+      { what: "fetching nps.gov", why: "the unit page is an outbound link only; nps.gov reset TLS from the build box" },
+    ],
+    caveats: [UNITS_CAVEAT],
+    searchable: ["UNIT_CODE", "UNIT_NAME"],
+    embedText: EMBED_TEXT["nps-units"],
+    ops: ["land?op=heritage"],
+    sensitivity: "Agency boundaries of park units; no ownership or personal data.",
+    round: 4,
+  },
+  {
+    id: "nps-nha",
+    title: "National Heritage Areas",
+    layer: "heritage",
+    sources: ["nps-nha"],
+    what: "The 62 National Heritage Areas Congress has designated, as NPS's Heritage Partnerships Program maps them, each with NPS's paragraph about the area and a link to the area's own site; one national answer, simplified to 0.01 degrees.",
+    recordIs: "A partnership region designated by Congress: not federal land and not a park unit. NPS's description is shown as NPS serves it.",
+    coverage: { spatial: "United States; one national answer", temporal: null, count: { value: 62, of: "heritage area polygons (WASO_NHA_Map2026 layer 0)", countedOn: R4 } },
+    freshness: { statement: "The service says its geometry was last updated April 2025 and its metadata December 2025; last edited 2026-01-07.", readFrom: "FeatureServer layer 0 description and editingInfo.lastEditDate", recordedOn: R4 },
+    excluded: [
+      { what: "embedding the descriptions", why: "they are free text, which the record-text rules keep out; a reviewed exception for these 62 agency paragraphs is Cam's call (D-HE2)" },
+      { what: "EDIT_BY, ORIGINATOR and the survey bookkeeping fields", why: "never requested; an editor field can hold a person's name" },
+      { what: "the older WASO_BND_NHA layer", why: "12 features, superseded by the 2026 map" },
+    ],
+    caveats: [NHA_CAVEAT],
+    searchable: ["UNIT"],
+    embedText: EMBED_TEXT["nps-nha"],
+    ops: ["land?op=heritage"],
+    sensitivity: "Agency-published partnership regions; descriptions are NPS text.",
+    round: 4,
+  },
+  {
+    id: "abpp-battlefields",
+    title: "Battlefields of the Civil War, Revolutionary War and War of 1812 (ABPP survey areas)",
+    layer: "heritage",
+    sources: ["nps-abpp"],
+    what: "The American Battlefield Protection Program's survey boundaries for the principal battlefields of three wars: study areas outlined and core areas filled, coloured by war, with ABPP's site code, battle name, state and acres; below 1,500 km, in a box of at most 8 degrees.",
+    recordIs: "A survey area: where ABPP's survey placed a battle's tactical context (study area) or where most of the fighting occurred inside it (core area). Not a property line and not a National Register listing.",
+    coverage: { spatial: "United States, where ABPP surveyed", temporal: null, count: { value: 342, of: "Civil War study areas (layer 0); core areas 332; Revolutionary War 159 and 146; War of 1812 80 and 70", countedOn: R4 } },
+    freshness: { statement: "ABPP last edited the service on 2025-09-09; the Civil War survey update was last revised in 2014.", readFrom: "FeatureServer editingInfo.lastEditDate; item description", recordedOn: R4 },
+    excluded: [
+      { what: "Potential National Register boundaries and the Civil War resurvey layers (2-4, 7, 10)", why: "a third tier reads as 'listed'; the Register itself is Historic places" },
+      { what: "owner or person fields", why: "none exist in the source" },
+    ],
+    caveats: [ABPP_CAVEAT, ABPP_STUDY_DEFINITION],
+    searchable: ["SITE"],
+    embedText: EMBED_TEXT["abpp-battlefields"],
+    ops: ["land?op=heritage"],
+    sensitivity: "Survey areas only; no owner or person fields exist in the source.",
+    round: 4,
+  },
+  {
+    id: "nps-whs",
+    title: "World Heritage Sites with an NPS boundary",
+    layer: "heritage",
+    sources: ["nps-whs"],
+    what: "The World Heritage Sites NPS publishes boundaries for (35 rows), one site per inscription: the nine Frank Lloyd Wright buildings of inscription 1496rev are one site with their components listed. The UNESCO page and the site's own page are linked as the service gives them.",
+    recordIs: "An inscription on UNESCO's World Heritage List, at the boundary NPS publishes. A row with no name reads 'unnamed in source', never filled in; a row with no geometry is not drawn.",
+    coverage: { spatial: "United States; one national answer", temporal: null, count: { value: 35, of: "rows in World_Heritage_Sites layer 0 (27 inscriptions after grouping; one row has no name and no geometry, so 26 are drawn)", countedOn: R4 } },
+    freshness: { statement: "NPS last edited the service on 2024-12-10.", readFrom: "FeatureServer layer 0 editingInfo.lastEditDate", recordedOn: R4 },
+    excluded: [
+      { what: "SiteOwner", why: "organisations, but owners all the same: never requested, shown or searched" },
+      { what: "inscriptions without an NPS-published boundary", why: "not in this service; absence here is not absence from the List" },
+    ],
+    caveats: [WHS_CAVEAT],
+    searchable: ["WHS_Ref"],
+    embedText: EMBED_TEXT["nps-whs"],
+    ops: ["land?op=heritage"],
+    sensitivity: "Inscribed sites; SiteOwner values are organisations and are not shown or searched.",
     round: 4,
   },
 ];

@@ -38,6 +38,9 @@ export const SEARCHABLE_DETAILS: ReadonlySet<string> = new Set([
   "league",
   // hazards, land, water, economy
   "fire id",
+  // national heritage: NPS unit codes and World Heritage inscription numbers
+  "unit code",
+  "whs ref",
   "cowardin code",
   "zone",
   "port code",

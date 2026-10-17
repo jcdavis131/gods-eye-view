@@ -25,6 +25,12 @@ import rangesPecos from "@/lib/land/fixtures/ranges-3-pecos.json";
 import rangesAustin from "@/lib/land/fixtures/ranges-3-austin.json";
 import rangesSeattle from "@/lib/land/fixtures/ranges-3-seattle.json";
 import nhlBoundaries from "@/lib/land/fixtures/nhl-bnd-cambridge.json";
+import abpp0 from "@/lib/land/fixtures/abpp-0-gettysburg.json";
+import abpp1 from "@/lib/land/fixtures/abpp-1-gettysburg.json";
+import abpp5 from "@/lib/land/fixtures/abpp-5-gettysburg.json";
+import abpp6 from "@/lib/land/fixtures/abpp-6-gettysburg.json";
+import abpp8 from "@/lib/land/fixtures/abpp-8-gettysburg.json";
+import whsAll from "@/lib/land/fixtures/nps-whs-all.json";
 import nhlPoints from "@/lib/land/fixtures/nhl-pt-cambridge.json";
 import nhlCountExcl from "@/lib/land/fixtures/nhl-bnd-cambridge-count-excl.json";
 import nhlCountNoExcl from "@/lib/land/fixtures/nhl-bnd-cambridge-count-noexcl.json";
@@ -357,5 +363,44 @@ describe("op=crithab, species ranges", () => {
     expect(status).toBe(200);
     expect((body.data as unknown as { ranges: unknown }).ranges).toBeNull();
     expect(body.caveats?.join(" ")).toMatch(/species range layer did not answer this time \(ranges: null\)/);
+  });
+});
+
+// NPS answers captured 2026-10-16, unmodified (lib/land/fixtures/abpp-*-gettysburg.json, nps-whs-all.json).
+describe("op=heritage", () => {
+  const ABPP = "/ABPP_Battlefield_Boundaries/FeatureServer/";
+  const byLayer: Record<string, unknown> = { 0: abpp0, 1: abpp1, 5: abpp5, 6: abpp6, 8: abpp8 };
+
+  it("asks six ABPP layers in the snapped box, named fields only, and reads a layer that fails as unknown", async () => {
+    answer = (u) => {
+      const m = u.match(/ABPP_Battlefield_Boundaries\/FeatureServer\/(\d+)\/query/);
+      if (!m) return null;
+      return m[1] === "9" ? new Response("upstream down", { status: 400 }) : json(byLayer[m[1]]);
+    };
+    const { status, body } = await get("op=heritage&kind=battlefields&bbox=-77.5,39.5,-77.0,40.0");
+    expect(status).toBe(200);
+    const asked = calls.filter((u) => u.includes(ABPP)).map((u) => u.match(/FeatureServer\/(\d+)\//)![1]).sort();
+    expect(asked).toEqual(["0", "1", "5", "6", "8", "9"]);
+    for (const u of calls) expect(param(u, "outFields")).toBe("SITE,NAME,WAR,STATE,BOUNDARY,Acres");
+    const b = body as unknown as { bbox: number[]; coverage: Array<{ id: string; state: string; count: number | null }>; data: { features: unknown[] } };
+    expect(b.bbox).toEqual([-77.5, 39.5, -77, 40]);
+    expect(b.data.features).toHaveLength(3);
+    expect(b.coverage.find((c) => c.id === "abpp-9")).toMatchObject({ state: "error", count: null });
+    expect(b.coverage.find((c) => c.id === "abpp-5")).toMatchObject({ state: "covered", count: 0 });
+    expect(body.caveats?.join(" ")).toMatch(/unknown, not none/);
+  });
+
+  it("answers the World Heritage Sites nationally, never asking for SiteOwner", async () => {
+    answer = (u) => (u.includes("/World_Heritage_Sites/FeatureServer/0/query") ? json(whsAll) : null);
+    const { status, body } = await get("op=heritage&kind=whs");
+    expect(status).toBe(200);
+    expect(param(calls[0], "outFields")).toBe("RESNAME,UNIT,WHS_Ref,WHS_Link,WebLink");
+    expect((body as unknown as { count: number }).count).toBe(26);
+  });
+
+  it("refuses an unknown kind, and battlefields without a box, without asking", async () => {
+    expect((await get("op=heritage&kind=trails")).status).toBe(400);
+    expect((await get("op=heritage&kind=battlefields")).status).toBe(400);
+    expect(calls).toEqual([]);
   });
 });

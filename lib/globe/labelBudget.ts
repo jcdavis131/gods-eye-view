@@ -133,6 +133,7 @@ export const LAYER_LABEL_PRIORITY: Record<string, number> = {
   wetlands: 30,
   publiclands: 30,
   historic: 29,
+  heritage: 22,
   impaired: 28,
   pfas: 28,
   parcels: 10,

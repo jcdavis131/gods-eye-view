@@ -2501,10 +2501,11 @@
                 "historic",
                 "crithab",
                 "publiclands",
-                "elevation"
+                "elevation",
+                "heritage"
               ]
             },
-            "description": "flood: FEMA NFHL zones. wetlands: USFWS NWI polygons with imagery years. historic (nhl=1 for National Historic Landmarks only): NPS National Register listings (public, non-restricted). crithab: USFWS critical habitat (final and proposed) at lon, lat. publiclands: USGS PAD-US 4.1 units with owners and access. elevation: USGS 3DEP EPQS at lon, lat."
+            "description": "flood: FEMA NFHL zones. wetlands: USFWS NWI polygons with imagery years. historic (nhl=1 for National Historic Landmarks only): NPS National Register listings (public, non-restricted). crithab: USFWS critical habitat (final and proposed) at lon, lat. publiclands: USGS PAD-US 4.1 units with owners and access. elevation: USGS 3DEP EPQS at lon, lat. heritage: national heritage from four NPS services, one kind per call (kind=units | nha | battlefields | whs). units with bbox (at most 2 degrees, snapped to 0.25): NPS's authorised park unit boundaries, simplified to a thousandth of the box; units without bbox: every unit's centroid (437). nha: the 62 National Heritage Areas with NPS's description (shown as served, never embedded) and site link. battlefields with bbox (at most 8 degrees, snapped to 0.5): ABPP study areas and core areas of the Civil War, Revolutionary War and War of 1812 (PotNR and resurvey layers are left out), with `coverage` per layer. whs: World Heritage Sites with an NPS boundary, one feature per inscription. Designations, not ownership (PAD-US is /api/land?op=publiclands); battlefields are survey areas, mostly private land; no owner field is requested."
           },
           {
             "name": "bbox",
@@ -2512,7 +2513,7 @@
             "schema": {
               "$ref": "#/components/schemas/Bbox"
             },
-            "description": "`w,s,e,n` degrees. Required for op=flood, wetlands (clamped to 0.08°), historic (clamped to 0.12°), publiclands (clamped to 2°). The snapped box comes back in `bbox`."
+            "description": "`w,s,e,n` degrees. Required for op=flood, wetlands (clamped to 0.08°), historic (clamped to 0.12°), publiclands (clamped to 2°). The snapped box comes back in `bbox`. op=heritage: kind=units (optional; boundaries in the box, else centroids) and kind=battlefields (required)."
           },
           {
             "name": "polygons",
@@ -2555,6 +2556,20 @@
               ]
             },
             "description": "op=historic: National Historic Landmarks only (NPS's Is_NHL = 'X'), ANDed onto the listed-only and restricted-address exclusions, never replacing them."
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "units",
+                "nha",
+                "battlefields",
+                "whs"
+              ]
+            },
+            "description": "op=heritage: which collection."
           }
         ],
         "responses": {
@@ -2589,6 +2604,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/LandElevationResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/LandHeritageResponse"
                     }
                   ]
                 }
@@ -9853,6 +9871,71 @@
           }
         ],
         "x-op": "naipmosaic"
+      },
+      "LandHeritageResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "description": "GeoJSON FeatureCollection. properties: id (nps-unit:pt|bnd:<UNIT_CODE>, nps-nha:<UNIT>, abpp:<layer>:<SITE>, whs:<inscription>), layer 'heritage', name (the unit, area, battle or inscription as NPS names it), kind (unit | nha | battlefield-study | battlefield-core | whs), details (unit type and code, state, NPS region, boundary edit date, nps.gov link; NHA description and site; ABPP site, war, survey area, acres; WHS inscription, components, UNESCO and site pages), extra { kind, group, boundary, shape }."
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "units",
+                  "nha",
+                  "battlefields",
+                  "whs"
+                ]
+              },
+              "shape": {
+                "type": "string",
+                "enum": [
+                  "point",
+                  "polygon"
+                ]
+              },
+              "count": {
+                "type": "integer"
+              },
+              "coverage": {
+                "type": "array",
+                "description": "kind=battlefields: per ABPP layer, covered | partial | error (count null: unknown, not none).",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "covered",
+                        "partial",
+                        "error"
+                      ]
+                    },
+                    "count": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "heritage"
       }
     }
   }

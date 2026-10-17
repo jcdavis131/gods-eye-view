@@ -128,6 +128,17 @@ describe("voice words for contaminated sites", () => {
   });
 });
 
+describe("voice words for national heritage", () => {
+  it("hears parks, battlefields and world heritage", () => {
+    expect(layerOf("show battlefields over virginia")).toMatchObject({ layer: "heritage", place: "virginia" });
+    expect(layerOf("show national parks")).toMatchObject({ layer: "heritage" });
+    expect(layerOf("show unesco sites")).toMatchObject({ layer: "heritage" });
+    // "show world ..." is the home view, before any layer word.
+    expect(parseIntent("show world heritage sites")?.command).toBe("home_view");
+    expect(layerOf("show parks")).toMatchObject({ layer: "publiclands" });
+  });
+});
+
 describe("voice words for NAIP aerial photos", () => {
   it("hears aerial photos before historic imagery", () => {
     expect(layerOf("show aerial photos over des moines")).toMatchObject({ layer: "naip", place: "des moines" });

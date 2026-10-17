@@ -26,7 +26,7 @@ import { constructsStyle } from "./constructStyles";
 import { fieldStyle } from "./fieldStyles";
 import { alertsStyle } from "./alertStyles";
 import { firesStyle, hazardsStyle, wildfireStyle } from "./hazardStyles";
-import { floodStyle, historicStyle, impairedStyle, pfasStyle, publiclandsStyle, wetlandsStyle } from "./landStyles";
+import { floodStyle, heritageStyle, historicStyle, impairedStyle, pfasStyle, publiclandsStyle, wetlandsStyle } from "./landStyles";
 import { contoursStyle, crithabStyle, firehazardStyle, hydroStyle, landcoverStyle, naipStyle, reliefStyle, sealevelStyle, slopeStyle, soilsStyle, topoStyle, waybackStyle } from "./terrainStyles";
 import {
   airportsStyle,
@@ -465,6 +465,7 @@ export const STYLES: Partial<Record<LayerId, LayerStyle>> = {
   wetlands: wetlandsStyle,
   publiclands: publiclandsStyle,
   historic: historicStyle,
+  heritage: heritageStyle,
   impaired: impairedStyle,
   pfas: pfasStyle,
   crithab: crithabStyle,
@@ -542,6 +543,7 @@ export const FOLLOW_RANGE: Record<LayerId, number> = {
   wetlands: 3_000,
   publiclands: 40_000,
   historic: 2_000,
+  heritage: 150_000,
   impaired: 3_000,
   pfas: 4_000,
   crithab: 20_000,

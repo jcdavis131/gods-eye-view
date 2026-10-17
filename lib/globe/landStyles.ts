@@ -9,6 +9,7 @@ import type { LayerStyle } from "./renderer";
 import type { LayerFeature } from "@/lib/layers/types";
 import type { Access, FloodZoneExtra, HistoricExtra, PublicLandExtra, WetlandExtra } from "@/lib/land/features";
 import type { ImpairedExtra } from "@/lib/water/impaired";
+import type { HeritageExtra } from "@/lib/land/heritage";
 import { pfasBin, type PfasExtra } from "@/lib/water/pfas";
 import { polyFills, polyOutlines, UNRATED } from "./hazardStyles";
 import { FLOOD_PICTURE, WETLANDS_PICTURE } from "./terrainStyles";
@@ -258,4 +259,38 @@ export const pfasStyle: LayerStyle = {
     const dashed = x?.state === "not-in-ucmr5" || x?.state === "unknown" || x?.modelled === true;
     return polyOutlines(f, pfasColor(f), 0.9, x?.state === "not-in-ucmr5" ? 1 : 2, dashed);
   },
+};
+
+// ---------------------------------------------------------------- national heritage (NPS)
+
+/** Park units green, heritage areas violet (dashed: a partnership region), World Heritage gold; battlefields by war, core areas filled. */
+const HERITAGE_WAR: Record<string, string> = { "Civil War": "#64748B", "Revolutionary War": "#B45309", "War of 1812": "#1D4ED8" };
+
+function heritageColor(f: LayerFeature): string {
+  const x = f.properties.extra as HeritageExtra | undefined;
+  if (x?.kind === "battlefield") return HERITAGE_WAR[x.group ?? ""] ?? "#64748B";
+  if (x?.kind === "nha") return "#A855F7";
+  if (x?.kind === "whs") return "#EAB308";
+  return "#65A30D";
+}
+
+export const heritageStyle: LayerStyle = {
+  color: "#65A30D",
+  icon: () => null,
+  colorFor: heritageColor,
+  pointSize: () => 7,
+  label: (f) => f.properties.name,
+  labelMax: 25,
+  polygons: (f) => {
+    const x = f.properties.extra as HeritageExtra | undefined;
+    if (f.geometry.type === "Point" || !x) return null;
+    if (x.kind === "battlefield") return x.boundary === "core" ? polyFills(f, heritageColor(f), 0.35) : null;
+    return polyFills(f, heritageColor(f), x.kind === "unit" ? 0.12 : 0.06);
+  },
+  lines: (f) => {
+    const x = f.properties.extra as HeritageExtra | undefined;
+    if (f.geometry.type === "Point" || !x) return null;
+    return polyOutlines(f, heritageColor(f), 0.85, x.kind === "whs" ? 2 : 1.4, x.kind === "nha" || (x.kind === "battlefield" && x.boundary === "study"));
+  },
+  scaleByDistance: [2e4, 1.0, 3e6, 0.6],
 };
