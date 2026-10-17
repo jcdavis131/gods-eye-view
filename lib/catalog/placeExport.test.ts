@@ -126,6 +126,6 @@ describe("place exports", () => {
     expect(c.placed - c.counted).toBe(c.placedThenNulled);
     // A county-or-city name is placed by its point: B07MO0988 "ST LOUIS" is in St. Louis city.
     expect(d.propertyIds["29510"]).toContain("B07MO0988");
-    expect((d.meta as unknown as { zeroRuleStatus: string }).zeroRuleStatus).toMatch(/^pending/);
+    expect((d.meta as unknown as { zeroRuleStatus: string }).zeroRuleStatus).toMatch(/^approved/);
   });
 });
