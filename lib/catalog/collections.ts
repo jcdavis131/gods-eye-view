@@ -32,6 +32,9 @@ import { PLACES_CAVEAT } from "@/lib/civic/places";
 import { SVI_CAVEAT, SVI_VINTAGE_NOTE } from "@/lib/civic/svi";
 import { HOSPITALS_CAVEAT } from "@/lib/infra/hospitals";
 import { SCHOOLS_CAVEAT } from "@/lib/civic/schools";
+import { BDC_VINTAGE_NOTE, BROADBAND_CAVEAT } from "@/lib/civic/broadband";
+import { WRC_ALIAS_NOTE, WRC_CAVEAT } from "@/lib/hazards/wrc";
+import { TRIBAL_CAVEAT, TRIBAL_REFERENCE_ONLY } from "@/lib/land/tribal";
 import { DENY_FIELD, EMBED_TEXT } from "./embedFields";
 
 export interface Exclusion {
@@ -82,20 +85,20 @@ export interface Collection {
   /** Sensitive-location and personal-data handling. */
   sensitivity: string;
   /** Curation round it entered. */
-  round: 1 | 2 | 3 | 4 | 5;
+  round: 1 | 2 | 3 | 4 | 5 | 6;
 }
 
 /** Which shelf a layer's collections sit on (the /catalog page's grouping). */
 export const SHELVES: Array<{ id: string; title: string; layers: LayerId[] }> = [
-  { id: "land", title: "Land and heritage", layers: ["wetlands", "historic", "flood", "publiclands", "heritage"] },
+  { id: "land", title: "Land and heritage", layers: ["wetlands", "historic", "flood", "publiclands", "heritage", "tribal"] },
   { id: "species", title: "Species", layers: ["crithab"] },
   { id: "water", title: "Water", layers: ["impaired", "pfas", "hydro"] },
   { id: "contaminants", title: "Contaminants", layers: ["contaminants", "ust"] },
-  { id: "hazards", title: "Hazards and risk", layers: ["riskindex"] },
+  { id: "hazards", title: "Hazards and risk", layers: ["riskindex", "wildfirerisk"] },
   { id: "health", title: "Health", layers: ["health", "vulnerability", "hospitals"] },
   { id: "education", title: "Education", layers: ["schools"] },
   { id: "imagery", title: "Imagery and maps", layers: ["wayback", "topo", "naip"] },
-  { id: "infrastructure", title: "Infrastructure", layers: ["dams"] },
+  { id: "infrastructure", title: "Infrastructure", layers: ["dams", "broadband"] },
 ];
 
 const R1 = "2026-10-12";
@@ -103,6 +106,7 @@ const R2 = "2026-10-13";
 const R3 = "2026-10-15";
 const R4 = "2026-10-16";
 const R5 = "2026-10-16";
+const R6 = "2026-10-17";
 
 export const COLLECTIONS: readonly Collection[] = [
   // ------------------------------------------------------------ round 1: land and heritage
@@ -1050,6 +1054,144 @@ export const COLLECTIONS: readonly Collection[] = [
     sensitivity:
       "Public institutions' directory data as NCES publishes it; school-level race and sex counts are deliberately not read. SCH_NAME and LEA_NAME end in NAME and are never embedded; SCH_NAME is searchable (a public school's name is an institution's, flagged for review; the fallback is NCESSCH only). LSTREET1 is shown on click and never searched or embedded. Free or reduced-price lunch is shown as NCES publishes it, with no added suppression threshold for very small schools (flagged for review).",
     round: 5,
+  },
+  // ------------------------------------------------------------ round 6: broadband, wildfire risk ranks, trust land
+  {
+    id: "fcc-bdc-counties",
+    title: "Broadband availability by county (FCC Broadband Data Collection, December 2025, via Esri)",
+    layer: "broadband",
+    sources: ["fcc-bdc-esri"],
+    what: "The FCC's Broadband Data Collection for December 2025 as Esri summarizes it, for every county: Broadband Serviceable Locations in total and by the FCC's served, underserved and unserved tiers, served by fiber, cable and licensed fixed wireless, the number of providers, and the unserved count 12 months earlier, from one national pull joined by FIPS onto the county outlines the globe already draws; a click adds every technology column.",
+    recordIs: "A county's count of locations where providers report fixed broadband available, by speed tier and technology. Available is not subscribed, and a provider's claim is not a measured speed. A share on the map is a ratio of two published counts.",
+    coverage: {
+      spatial: "United States and territories as BDC publishes them, by county; Connecticut only in its eight legacy counties, so its nine planning regions are not shown at county level; drawn below 2,500 km",
+      temporal: "BDC December 2025 filing",
+      count: { value: 3234, of: "county rows in FCC_Broadband_Data_Collection_December_2024_View layer 1 (returnCountOnly); 0 with TotalBSLs = 0", countedOn: R6 },
+    },
+    freshness: {
+      statement: `County data last edited 2026-06-10; item modified 2026-06-29. ${BDC_VINTAGE_NOTE}`,
+      readFrom: "FeatureServer layer 1 editingInfo.dataLastEditDate; ArcGIS item e1343efcefc344709057260ee57290a0 title, modified and licenseInfo",
+      recordedOn: R6,
+    },
+    excluded: [
+      { what: "the provider-offering related tables (per-ISP rows)", why: "availability by tier and technology answers the question; per-provider offerings are not needed for it" },
+      { what: "BDC's own county polygons", why: "the globe has one county outline source (TIGERweb, via /api/economy?op=areas); counties are joined by FIPS" },
+      { what: "census block and block group layers", why: "BDC's H3 hexagons are drawn below 60 km instead (fcc-bdc-hex)" },
+      { what: "Connecticut's planning regions at county level", why: "not published in that geography: BDC still uses the eight legacy counties, and no crosswalk is invented" },
+      { what: "the 6- and 12-month-previous columns as a series", why: "they are Esri's columns on one vintage; a series waits for the FCC's own files (D6-1)" },
+    ],
+    caveats: [BROADBAND_CAVEAT, BDC_VINTAGE_NOTE],
+    searchable: ["GEOID"],
+    embedText: EMBED_TEXT["fcc-bdc-counties"],
+    ops: ["civic?op=broadband"],
+    sensitivity: "Location counts per county as the FCC aggregates them; no address-level or subscriber data. Esri's summary layer is under the Esri Master License Agreement; the figures are the FCC's, credited to both.",
+    round: 6,
+  },
+  {
+    id: "fcc-bdc-hex",
+    title: "Broadband availability by H3 hexagon (FCC BDC, December 2025, via Esri)",
+    layer: "broadband",
+    sources: ["fcc-bdc-esri"],
+    what: "The same counts for BDC's own H3 resolution-8 hexagons (about 0.7 km2 each), below 60 km in a box of at most 0.3 degrees, one page of 2,000.",
+    recordIs: "An H3 hexagon's count of locations by tier and technology as the FCC publishes it, by its H3 id. No names, no addresses.",
+    coverage: {
+      spatial: "United States and territories, by H3 resolution-8 hexagon; drawn below 60 km",
+      temporal: "BDC December 2025 filing",
+      count: { value: 3835270, of: "hexagons in layer 5 (H3 Resolution 8, returnCountOnly); 0 with TotalBSLs = 0; 911,479 with exactly one location (critique re-probe)", countedOn: R6 },
+    },
+    freshness: { statement: "Hexagon data last edited 2026-08-26; same item and vintage as fcc-bdc-counties.", readFrom: "FeatureServer layer 5 editingInfo.dataLastEditDate", recordedOn: R6 },
+    excluded: [
+      { what: "hexagons above 60 km camera height", why: "3.8 million polygons; the county figures are shown instead" },
+      { what: "a suppression of small hexagons", why: "Cam's call (2026-10-17): ship hexagon counts as published, including one-location hexagons; the FCC publishes availability per location on its own map" },
+    ],
+    caveats: [BROADBAND_CAVEAT],
+    searchable: ["GEOID"],
+    embedText: EMBED_TEXT["fcc-bdc-hex"],
+    ops: ["civic?op=broadband"],
+    sensitivity:
+      "Location counts per H3 hexagon (about 0.7 km2); no address or subscriber data. A quarter of hexagons hold a single location, so a hexagon can describe one home's availability as the FCC publishes it; shipped as published on Cam's call (2026-10-17).",
+    round: 6,
+  },
+  {
+    id: "wrc-counties",
+    title: "Wildfire risk to communities, county ranks (USDA Forest Service, 2nd edition, 2024)",
+    layer: "wildfirerisk",
+    sources: ["usfs-wrc"],
+    what: "USDA Forest Service Wildfire Risk to Communities for every county: national and state percentile ranks for four measures named by the service's own aliases (RISK_NATIONAL_RANK, BP_NATIONAL_RANK for burn probability, WHP_NATIONAL_RANK for wildfire hazard potential, EA_HURISK_NATIONAL_RANK), the shares of buildings and housing units in direct and indirect exposure, and building and housing-unit counts, from one national pull joined by FIPS onto the county outlines.",
+    recordIs: "A county's modelled percentile rank among all US counties (or the state's), as USFS publishes it. Relative, not a forecast, and not a local assessment.",
+    coverage: {
+      spatial: "The 50 states and DC by county (Connecticut in planning regions 09110-09190); no territories; drawn below 2,500 km",
+      temporal: "WRC 2nd edition (2024): LANDFIRE 2020 fuels, burn probability as of end-2020, intensity as of end-2022; 2023 TIGER boundaries",
+      count: { value: 3144, of: "county rows in WRC_County_Summary_Data (returnCountOnly); 1 (District of Columbia, 11001) with every rank blank", countedOn: R6 },
+    },
+    freshness: { statement: "Layer data last edited 2025-06-05; county item modified 2026-01-16; boundaries made May 2025 from the 2023 TIGER/Line files. May 2025 is the boundaries' date, not the model's.", readFrom: "FeatureServer layer 0 editingInfo.dataLastEditDate; ArcGIS item; field `vintage`", recordedOn: R6 },
+    excluded: [
+      { what: "risk-to-potential-structures, burn probability and hazard rasters as values", why: "the services publish no scale for their pixel values; the Wildfire hazard layer draws WHP as a picture (D5-2)" },
+      { what: "WRC's own county polygons", why: "the globe has one county outline source; counties are joined by FIPS" },
+      { what: "territories", why: "not in WRC" },
+      { what: "a plain-English name for RISK_* or EA_HURISK_*", why: "the service does not say which is wildfirerisk.org's 'Risk to Homes'; the aliases are shown" },
+    ],
+    caveats: [WRC_CAVEAT, WRC_ALIAS_NOTE],
+    searchable: ["GEOID"],
+    embedText: EMBED_TEXT["wrc-counties"],
+    ops: ["hazards?op=wrc"],
+    sensitivity: "Published modelled ranks per county; no building-level or person data. CC0 1.0.",
+    round: 6,
+  },
+  {
+    id: "wrc-communities",
+    title: "Wildfire risk to communities, community ranks (USDA Forest Service, 2nd edition, 2024)",
+    layer: "wildfirerisk",
+    sources: ["usfs-wrc"],
+    what: "The same ranks for every community (Census place) on WRC's own place polygons, below 150 km in a box of at most 1 degree, at most 1,000 a box; communities USFS excludes are drawn unfilled with USFS's reason.",
+    recordIs: "A Census place's modelled percentile rank among all US communities (or the state's), by its 7-digit GEOID. A community USFS excludes (no people, no buildings, or DC as a state) has no rank: not ranked, never low.",
+    coverage: {
+      spatial: "The 50 states and DC by Census place; drawn below 150 km",
+      temporal: "WRC 2nd edition (2024); 2023 TIGER boundaries",
+      count: { value: 32033, of: "place rows in WRC_Community_Summary_Data (returnCountOnly); 484 with exclude = 1", countedOn: R6 },
+    },
+    freshness: { statement: "As wrc-counties: layer data last edited 2025-06-05.", readFrom: "FeatureServer layer 0 editingInfo.dataLastEditDate", recordedOn: R6 },
+    excluded: [
+      { what: "communities above 150 km camera height", why: "32,033 polygons; the county ranks are shown instead" },
+      { what: "a community's rank compared with a county's", why: "USFS ranks each level among its own" },
+      { what: "the Census place name in the record vectors", why: "names are never embedded (the palette matches them letter by letter); the state and USFS's exclude reason are" },
+    ],
+    caveats: [WRC_CAVEAT],
+    searchable: ["GEOID", "NAMELSAD"],
+    embedText: EMBED_TEXT["wrc-communities"],
+    ops: ["hazards?op=wrc"],
+    sensitivity: "Published modelled ranks per Census place; no building-level or person data. CC0 1.0.",
+    round: 6,
+  },
+  {
+    id: "bia-lar",
+    title: "Trust land: BIA American Indian and Alaska Native Land Area Representation",
+    layer: "tribal",
+    sources: ["bia-lar"],
+    what: "BIA's Land Area Representation: the outer extent of land held in trust or restricted fee for federally recognized tribes and individual Indians, compiled from BIA land title records, as one national answer of 335 land areas (reservations, rancherias, pueblos and communities), each with its BIA region, classification code as BIA codes it, and GIS acres. Parts under 0.7 km2 are dropped, except each land area's largest part, which is drawn even when smaller so no land area disappears.",
+    recordIs: "A land area as BIA names it, held in trust, restricted fee or mixed ownership. For illustrative and reference purposes only: not legal, survey or jurisdictional. Not a Census tribal statistical area (those are on the Field layer).",
+    coverage: {
+      spatial: "11 of BIA's 12 regions; no Eastern Oklahoma region rows and no land in Oklahoma; Alaska has one land area (Annette Island); not every tribe's land is in the layer, so a blank area does not mean no tribal land",
+      temporal: "current as BIA publishes it; no edit date is published",
+      count: { value: 335, of: "land areas in BIA_AIAN_National_LAR layer 0 (returnCountOnly); CLASSIFICATION '1' 333, '3' 2; 4,279 polygon parts at offset 0.01, 3,009 under 0.7 km2", countedOn: R6 },
+    },
+    freshness: { statement: "No edit date published; BIA's copyright text says the dataset is continuously being updated. Recounted 2026-10-17.", readFrom: "FeatureServer layer 0 ?f=json (no editingInfo); copyrightText", recordedOn: R6 },
+    excluded: [
+      { what: "Census AIANNH tribal areas", why: "already on fabric (kind=tribal, 'Tribal land'), a different thing: a Census tabulation geography" },
+      { what: "polygon parts under 0.7 km2", why: "allotment-sized parts held for individual Indians, dropped so they are not drawn beside parcels (Cam, 2026-10-17); each land area's largest part is kept and drawn even when it is under 0.7 km2 (82 such parts on the 2026-10-17 count), so no land area disappears; both counts are in the route's caveat" },
+      { what: "allotment-level or parcel data, owners, names or addresses from any source", why: "none fetched, none drawn, nothing joined to the parcels layer" },
+      { what: "sacred sites or restricted cultural data", why: "not in the source and never fetched from any other" },
+      { what: "BIA's detail level (offset 0.001)", why: "held for Cam; only the national 0.01 pull ships" },
+      { what: "the agency phone and email in the layer's copyright text", why: "kept in provenance as the agency's published contact; never in a record, searched or embedded" },
+      { what: "REGION in the record vectors", why: "its field label is already NPS's ('NPS region'); embedding it would mislabel BIA's regions" },
+    ],
+    caveats: [TRIBAL_CAVEAT, TRIBAL_REFERENCE_ONLY],
+    searchable: ["LARID", "LARNAME"],
+    embedText: EMBED_TEXT["bia-lar"],
+    ops: ["land?op=tribal"],
+    sensitivity:
+      "Exterior extents of tribal trust and restricted-fee land as BIA publishes them; allotment-sized parts under 0.7 km2 are dropped, except each land area's largest part, which is drawn even when smaller (82 on the 2026-10-17 count) so no land area disappears; no allotment, parcel, owner or sacred-site data. LARNAME is a land area's name (all 335 read: reservations, rancherias, pueblos, communities; none a person's) and is embedded on Cam's call (2026-10-17).",
+    round: 6,
   },
 ];
 

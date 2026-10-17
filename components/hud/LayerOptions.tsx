@@ -3,16 +3,20 @@
 // TileControls): the National Risk Index hazard picker and its legend, the
 // "Landmarks only" chip on Historic places, the CDC PLACES measure picker, and
 // the CDC/ATSDR SVI theme picker with its fixed-break legend, and the
-// "Closed too" chip on Hospitals.
+// "Closed too" chip on Hospitals, the broadband measure picker, the wildfire
+// risk rank picker, and the Trust land (BIA) legend.
 
 import type { LayerId } from "@/lib/layers/types";
 import { useSettings } from "@/lib/store/settings";
 import { NRI_CLASSES, NRI_COLORS, NRI_HAZARDS, NRI_HAZARD_CODES, NRI_NO_RATING_EDGE, parseNriPick } from "@/lib/hazards/nri";
 import { isPlacesMeasure, PLACES_BIN_COLORS, PLACES_DEFAULT_MEASURE, PLACES_MEASURES, SOCIAL_NEEDS, UNRANKED_BIN, type PlacesMeasure } from "@/lib/civic/places";
 import { parseSviTheme, SVI_BIN_COLORS, SVI_BIN_LABELS, SVI_NO_RANK_EDGE, SVI_THEMES } from "@/lib/civic/svi";
+import { BROADBAND_BIN_COLORS, BROADBAND_MEASURES, BROADBAND_NO_DATA_EDGE, binLabelsFor, parseBroadbandMeasure } from "@/lib/civic/broadband";
+import { parseWrcMeasure, parseWrcScope, WRC_BIN_COLORS, WRC_BIN_LABELS, WRC_NO_RANK_EDGE, WRC_RANKS } from "@/lib/hazards/wrc";
+import { TRIBAL_COLOR } from "@/lib/land/tribal";
 
 /** Layers with controls here. */
-export const OPTION_LAYERS = new Set<LayerId>(["riskindex", "historic", "health", "vulnerability", "hospitals"]);
+export const OPTION_LAYERS = new Set<LayerId>(["riskindex", "historic", "health", "vulnerability", "hospitals", "broadband", "wildfirerisk", "tribal"]);
 
 function RiskPicker() {
   const pick = parseNriPick(useSettings((s) => s.prefs.nriHazard));
@@ -177,7 +181,113 @@ function ClosedHospitalsChip() {
   );
 }
 
+function BroadbandPicker() {
+  const m = parseBroadbandMeasure(useSettings((s) => s.prefs.broadbandMeasure));
+  const setPref = useSettings((s) => s.setPref);
+  return (
+    <>
+      <label className="flex items-center gap-2">
+        <span className="w-14 shrink-0 uppercase tracking-widest">Measure</span>
+        <select
+          value={String(m)}
+          onChange={(e) => setPref("broadbandMeasure", e.target.value)}
+          className="min-w-0 flex-1 border border-border bg-transparent px-1 py-0.5 text-foreground"
+          aria-label="FCC broadband: measure drawn"
+        >
+          {BROADBAND_MEASURES.map((x, i) => (
+            <option key={x.id} value={String(i)} className="bg-background">
+              {x.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <ul className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
+        {BROADBAND_BIN_COLORS.map((c, i) => (
+          <li key={c} className="flex items-center gap-1 text-[9px] text-muted-foreground">
+            <span className="inline-block size-2 shrink-0 border border-black/40" style={{ background: c }} aria-hidden />
+            {binLabelsFor(m)[i]}
+          </li>
+        ))}
+        <li className="flex items-center gap-1 text-[9px] text-muted-foreground">
+          <span className="inline-block size-2 shrink-0 border border-dashed" style={{ borderColor: BROADBAND_NO_DATA_EDGE }} aria-hidden />
+          not published in this geography (Connecticut&apos;s planning regions) or no BDC row
+        </li>
+      </ul>
+      <div>FCC BDC December 2025, summarized by Esri (Esri Master License Agreement). Shares of Broadband Serviceable Locations; available as providers report it, not subscribed. Below 60 km, BDC&apos;s own H3 hexagons.</div>
+    </>
+  );
+}
+
+function WrcPicker() {
+  const m = parseWrcMeasure(useSettings((s) => s.prefs.wrcMeasure));
+  const scope = parseWrcScope(useSettings((s) => s.prefs.wrcScope));
+  const setPref = useSettings((s) => s.setPref);
+  return (
+    <>
+      <label className="flex items-center gap-2">
+        <span className="w-14 shrink-0 uppercase tracking-widest">Rank</span>
+        <select
+          value={String(m)}
+          onChange={(e) => setPref("wrcMeasure", e.target.value)}
+          className="min-w-0 flex-1 border border-border bg-transparent px-1 py-0.5 text-foreground"
+          aria-label="USFS Wildfire Risk to Communities: rank family (service aliases)"
+        >
+          {WRC_RANKS.map((k, i) => (
+            <option key={k.national} value={String(i)} className="bg-background">
+              {scope === "state" ? k.stateAlias : k.alias}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="flex items-center gap-2">
+        <span className="w-14 shrink-0 uppercase tracking-widest">Among</span>
+        <select
+          value={scope}
+          onChange={(e) => setPref("wrcScope", e.target.value === "state" ? "state" : "national")}
+          className="min-w-0 flex-1 border border-border bg-transparent px-1 py-0.5 text-foreground"
+          aria-label="Rank among all US places or within the state"
+        >
+          <option value="national" className="bg-background">
+            the nation
+          </option>
+          <option value="state" className="bg-background">
+            the state
+          </option>
+        </select>
+      </label>
+      <ul className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
+        {WRC_BIN_COLORS.map((c, i) => (
+          <li key={c} className="flex items-center gap-1 text-[9px] text-muted-foreground">
+            <span className="inline-block size-2 shrink-0 border border-black/40" style={{ background: c }} aria-hidden />
+            {WRC_BIN_LABELS[i]}
+          </li>
+        ))}
+        <li className="flex items-center gap-1 text-[9px] text-muted-foreground">
+          <span className="inline-block size-2 shrink-0 border border-dashed" style={{ borderColor: WRC_NO_RANK_EDGE }} aria-hidden />
+          not ranked by USFS (never low)
+        </li>
+      </ul>
+      <div>Percentile ranks as USFS publishes them, named by the service&apos;s own aliases. Relative and modelled: not a forecast, not a local assessment. The Wildfire hazard layer draws WHP itself.</div>
+    </>
+  );
+}
+
+function TribalLegend() {
+  return (
+    <>
+      <ul className="flex flex-wrap gap-x-2 gap-y-0.5">
+        <li className="flex items-center gap-1 text-[9px] text-muted-foreground">
+          <span className="inline-block size-2 shrink-0 border" style={{ background: `${TRIBAL_COLOR}44`, borderColor: TRIBAL_COLOR }} aria-hidden />
+          BIA land area: trust, restricted fee or mixed ownership
+        </li>
+        <li className="flex items-center gap-1 text-[9px] text-muted-foreground">Census statistical areas are on the Field layer (tribal land), drawn unfilled</li>
+      </ul>
+      <div>Reference only, never jurisdiction. Parts under 0.7 km2 are dropped, except each land area&apos;s largest part, which is drawn even when smaller so no land area disappears. BIA&apos;s layer has no Oklahoma land, so a blank area does not mean no tribal land.</div>
+    </>
+  );
+}
+
 export default function LayerOptions({ id }: { id: LayerId }) {
   if (!OPTION_LAYERS.has(id)) return null;
-  return <div className="mt-1.5 space-y-1 pl-4 text-[10px] text-muted-foreground md:text-[9px]">{id === "riskindex" && <RiskPicker />}{id === "historic" && <LandmarksChip />}{id === "health" && <MeasurePicker />}{id === "vulnerability" && <SviThemePicker />}{id === "hospitals" && <ClosedHospitalsChip />}</div>;
+  return <div className="mt-1.5 space-y-1 pl-4 text-[10px] text-muted-foreground md:text-[9px]">{id === "riskindex" && <RiskPicker />}{id === "historic" && <LandmarksChip />}{id === "health" && <MeasurePicker />}{id === "vulnerability" && <SviThemePicker />}{id === "hospitals" && <ClosedHospitalsChip />}{id === "broadband" && <BroadbandPicker />}{id === "wildfirerisk" && <WrcPicker />}{id === "tribal" && <TribalLegend />}</div>;
 }

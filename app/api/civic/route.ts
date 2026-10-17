@@ -1,7 +1,7 @@
-// Civic API: community indicators for counties and tracts, and public schools.
-// CORS open, edge-cached, with the shared envelope (lib/server/respond.ts).
-// Round 4 added health, round 5 svi and schools; later rounds add broadband,
-// ejscreen and housing here.
+// Civic API: community indicators for counties and tracts, public schools, and
+// fixed broadband availability. CORS open, edge-cached, with the shared envelope
+// (lib/server/respond.ts). Round 4 added health, round 5 svi and schools, round 6
+// broadband; later rounds add ejscreen and housing here.
 //
 //   /api/civic?op=health&level=county&measure=DIABETES
 //        CDC PLACES (2025 release): every county's age-adjusted prevalence for one
@@ -30,6 +30,20 @@
 //        and reduced-price lunch, FTE and the student-teacher ratio as NCES publishes them;
 //        no race, sex or grade-level enrollment cell is requested. Inactive and Future
 //        schools are left out (counted). A negative is a CCD reporting code, never 0.
+//   /api/civic?op=broadband&level=county
+//        FCC Broadband Data Collection, December 2025, as Esri summarizes it (Esri Master
+//        License Agreement): every county's location counts (total, served, underserved,
+//        unserved, served by fiber, cable and licensed fixed wireless, providers, unserved
+//        12 months earlier), attributes only (two pages of 2,000), as compact arrays, held
+//        a week. Connecticut is published in its eight legacy counties, which no current
+//        outline carries: counted in meta.unmatched, never crosswalked.
+//   /api/civic?op=broadband&level=hex&bbox=w,s,e,n
+//        BDC's own H3 resolution-8 hexagons in a box of at most 0.3 degrees (snapped to
+//        0.05), one page of 2,000, held a week per box.
+//   /api/civic?op=broadband&level=place&fips=48453
+//        One county with every technology column and the 6- and 12-month-previous counts
+//        as published, plus the shares as named ratios of two counts; 404 when BDC has no
+//        row (Connecticut's planning regions among them).
 //
 // All through the civic gate (one request a second to data.cdc.gov, one every 500 ms
 // to an ArcGIS organisation; a 429 or 503 closes it for ten minutes). A county or
@@ -42,7 +56,29 @@ import { badRequest, notFound, ok, options, withCors } from "@/lib/server/respon
 import { preferIpv4 } from "@/lib/server/net";
 import { provenance } from "@/lib/provenance/types";
 import { source } from "@/lib/provenance/sources";
-import { civicJson, runRows } from "@/lib/civic/request";
+import { civicJson, gateOf, runRows } from "@/lib/civic/request";
+import { arcgisRowsCapped } from "@/lib/server/arcgis";
+import {
+  BDC_ATTRIBUTION,
+  BDC_COUNTY_LAYER,
+  BDC_COUNTY_PAGES,
+  BDC_FIELDS,
+  BDC_HEX_LAYER,
+  BDC_LICENCE,
+  BDC_PAGE,
+  BDC_PLACE_FIELDS,
+  BDC_ROW_COLUMNS,
+  BDC_VINTAGE_NOTE,
+  BROADBAND_CAVEAT,
+  BROADBAND_HEX_BOX_DEG,
+  CT_LEGACY,
+  PROVIDER_BREAKS,
+  SHARE_BREAKS,
+  bdcPlace,
+  bdcRow,
+  packBdcRow,
+  type BdcRow,
+} from "@/lib/civic/broadband";
 import { parseBbox as gridBbox, type Bbox } from "@/lib/civic/bbox";
 import { buildSchools, NCES_MAX_PAGES, NCES_PAGE, NCES_SCHOOLS, SCHOOL_FIELDS, SCHOOLS_ATTRIBUTION, SCHOOLS_CAVEAT } from "@/lib/civic/schools";
 import type { LayerFeature } from "@/lib/layers/types";
@@ -343,6 +379,132 @@ async function schools(b: Bbox) {
   );
 }
 
+// ---------------------------------------------------------------- broadband (FCC BDC, December 2025, via Esri)
+
+const BROADBAND_HELP = "op=broadband needs level=county, level=hex&bbox=w,s,e,n (at most 0.3 degrees a side), or level=place&fips=<5-digit county FIPS>";
+const BROADBAND_CAVEATS = [BROADBAND_CAVEAT, BDC_VINTAGE_NOTE];
+
+const bdcProv = (layer: string, seriesId: string, age: number, notes?: string[]) =>
+  provenance(source("fcc-bdc-esri"), { kind: "published", seriesId, upstreamUrl: layer, period: "BDC December 2025 filing", retrievedAt: at(age), notes: [BDC_LICENCE, ...(notes ?? [])] });
+
+/** Attribute rows (f=json) through the ArcGIS organisation's gate (one request every 500 ms). */
+function bdcAttributes(layer: string, params: Record<string, string>, timeoutMs = 25_000) {
+  const { gate, minIntervalMs } = gateOf(layer);
+  return arcgisRowsCapped<Record<string, unknown>>("fcc-bdc-esri", layer, { returnGeometry: "false", ...params }, { gate, minIntervalMs, timeoutMs, tries: 2 });
+}
+
+async function broadbandCounty() {
+  const r = await cached(
+    "broadband:county",
+    WEEK_MS,
+    async () => {
+      const rows: BdcRow[] = [];
+      let cut = false;
+      for (let page = 0; page < BDC_COUNTY_PAGES; page++) {
+        const j = await bdcAttributes(BDC_COUNTY_LAYER, { where: "1=1", outFields: BDC_FIELDS.join(","), orderByFields: "GEOID", resultRecordCount: String(BDC_PAGE), resultOffset: String(page * BDC_PAGE) });
+        for (const a of j.rows) {
+          const row = bdcRow(a);
+          if (row) rows.push(row);
+        }
+        cut = j.exceeded;
+        if (!cut) break;
+      }
+      return { rows, cut };
+    },
+    { deadlineMs: 45_000 },
+  );
+  const ctLegacy = r.value.rows.filter((x) => CT_LEGACY.test(x.geoid)).map((x) => x.geoid);
+  const caveats = [
+    ...BROADBAND_CAVEATS,
+    "Counties come as attribute rows only, one array per county in the order of `columns`: join them by `geoid` onto your own county outlines. A county with no row is not in this release, never 0. A share is a ratio of two published counts (e.g. unserved / total); a county with no locations has no share.",
+  ];
+  if (ctLegacy.length) caveats.push(`Connecticut is published in its ${ctLegacy.length} legacy counties (${ctLegacy.join(", ")}), which current Census outlines no longer carry (planning regions 09110-09190): they are listed in meta.unmatched and are not crosswalked.`);
+  if (r.value.cut) caveats.push(`The answer was still cut at ${BDC_COUNTY_PAGES * BDC_PAGE} counties: some counties are missing from this answer, not unserved.`);
+  return ok(
+    { level: "county", columns: [...BDC_ROW_COLUMNS], rows: r.value.rows.map(packBdcRow) },
+    {
+      meta: { source: BDC_ATTRIBUTION, count: r.value.rows.length, unmatched: ctLegacy, shareBreaks: [...SHARE_BREAKS], providerBreaks: [...PROVIDER_BREAKS], capped: r.value.cut, cacheAge: r.age },
+      ttlS: 86_400,
+      provenance: [bdcProv(BDC_COUNTY_LAYER, "FCC_Broadband_Data_Collection_December_2024_View FeatureServer layer 1 (Counties), attributes", r.age)],
+      caveats,
+    },
+  );
+}
+
+async function broadbandHex(b: Bbox) {
+  const r = await cached(
+    `broadband:hex:${b.join(",")}`,
+    WEEK_MS,
+    async () => {
+      const [w, s, e, n] = b;
+      const res = await runRows(
+        "fcc-bdc-esri",
+        {
+          kind: "arcgis",
+          layer: BDC_HEX_LAYER,
+          params: {
+            where: "1=1",
+            geometry: JSON.stringify({ xmin: w, ymin: s, xmax: e, ymax: n }),
+            geometryType: "esriGeometryEnvelope",
+            inSR: "4326",
+            spatialRel: "esriSpatialRelIntersects",
+            outSR: "4326",
+            outFields: BDC_FIELDS.join(","),
+            returnGeometry: "true",
+            geometryPrecision: "5",
+            resultRecordCount: String(BDC_PAGE),
+          },
+        },
+        25_000,
+      );
+      return { features: res.features.map((f) => ({ type: "Feature" as const, geometry: f.geometry, properties: f.properties ?? {} })), cut: res.truncated };
+    },
+    { deadlineMs: 30_000 },
+  );
+  const caveats = [
+    ...BROADBAND_CAVEATS,
+    "BDC's own H3 resolution-8 hexagons (about 0.7 km2 each), counts as published. About a quarter of hexagons hold a single location, so a hexagon can describe one home's availability as the FCC publishes it; no address or subscriber is in the data.",
+  ];
+  if (r.value.cut) caveats.push(`The answer for this box was cut at ${BDC_PAGE} hexagons: ask a smaller box for every hexagon.`);
+  return ok(
+    { type: "FeatureCollection", features: r.value.features },
+    {
+      meta: { source: BDC_ATTRIBUTION, level: "hex", bbox: b, count: r.value.features.length, capped: r.value.cut, shareBreaks: [...SHARE_BREAKS], providerBreaks: [...PROVIDER_BREAKS], cacheAge: r.age },
+      ttlS: 86_400,
+      provenance: [bdcProv(BDC_HEX_LAYER, "FCC_Broadband_Data_Collection_December_2024_View FeatureServer layer 5 (H3 Resolution 8)", r.age, [`bbox ${b.join(",")}`])],
+      caveats,
+    },
+  );
+}
+
+async function broadbandPlace(fips: string) {
+  const r = await cached(
+    `broadband:place:${fips}`,
+    WEEK_MS,
+    async () => {
+      const j = await bdcAttributes(BDC_COUNTY_LAYER, { where: `GEOID='${fips}'`, outFields: BDC_PLACE_FIELDS.join(",") }, 20_000);
+      return { place: j.rows.map((a) => bdcPlace(a)).find((p) => p != null) ?? null };
+    },
+    { deadlineMs: 25_000 },
+  );
+  if (!r.value.place) {
+    const ct = /^091[1-9]0$/.test(fips) ? " (Connecticut is published in its legacy counties, 09001-09015)" : "";
+    return notFound(`not in this release: the FCC BDC county layer (December 2025, via Esri) has no row for FIPS ${fips}${ct}`);
+  }
+  return ok(
+    { level: "county", fips, ...r.value.place },
+    {
+      meta: { source: BDC_ATTRIBUTION, cacheAge: r.age },
+      ttlS: 86_400,
+      provenance: [bdcProv(BDC_COUNTY_LAYER, `FCC_Broadband_Data_Collection_December_2024_View FeatureServer layer 1, GEOID='${fips}'`, r.age)],
+      caveats: [
+        ...BROADBAND_CAVEATS,
+        "Counts are Broadband Serviceable Locations as published. Each share is the named count divided by TotalBSLs (formula given), a ratio of two published counts; null where there are no locations. Previous counts are Esri's 6- and 12-month-previous columns as published, not a series.",
+      ],
+    },
+  );
+}
+
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams;
   const op = q.get("op") ?? "";
@@ -382,8 +544,21 @@ export async function GET(req: NextRequest) {
         const b = gridBbox(q.get("bbox"), 0.2, 0.05);
         return b ? await schools(b) : badRequest(SCHOOLS_HELP);
       }
+      case "broadband": {
+        const level = q.get("level") ?? "county";
+        if (level === "county") return await broadbandCounty();
+        if (level === "hex") {
+          const b = gridBbox(q.get("bbox"), BROADBAND_HEX_BOX_DEG, 0.05);
+          return b ? await broadbandHex(b) : badRequest(BROADBAND_HELP);
+        }
+        if (level === "place") {
+          const fips = q.get("fips") ?? "";
+          return /^\d{5}$/.test(fips) ? await broadbandPlace(fips) : badRequest(BROADBAND_HELP);
+        }
+        return badRequest(BROADBAND_HELP);
+      }
       default:
-        return badRequest("unknown op: health | svi | schools");
+        return badRequest("unknown op: health | svi | schools | broadband");
     }
   } catch (err) {
     return withCors(jsonError(err));

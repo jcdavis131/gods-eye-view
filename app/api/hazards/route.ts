@@ -31,6 +31,20 @@
 //                                         the same named fields, no geometry; 404 "not in the
 //                                         index" when FEMA has no row. For a click answer and
 //                                         the MCP social_vulnerability pairing. Held a week.
+//   /api/hazards?op=wrc&level=county      USDA Forest Service Wildfire Risk to Communities
+//                                         (2nd edition, 2024; CC0): every county's national
+//                                         and state ranks (risk, burn probability, hazard
+//                                         potential, exposure-adjusted risk to homes, by the
+//                                         service's aliases), exposure shares and building
+//                                         counts, attributes only, two pages of 2,000, held a
+//                                         week. Percent strings parsed to 0-100; blank is null.
+//   /api/hazards?op=wrc&level=place&bbox=w,s,e,n
+//                                         WRC's community (Census place) polygons in a box of
+//                                         at most 1 degree (snapped to 0.05), at most 1,000,
+//                                         rank strings as published, held a week per box.
+//   /api/hazards?op=wrc&level=fips&fips=08013 (or a 7-digit place GEOID)
+//                                         One county or community, attributes only; 404 "not
+//                                         in this release" when WRC has no row.
 //
 // FIRMS confidence stays on each instrument's own scale: VIIRS low / nominal /
 // high, MODIS 0–100 %. Nothing here merges or rescales them.
@@ -79,6 +93,26 @@ import type { LayerFeature } from "@/lib/layers/types";
 import { arcgisQuery, arcgisRowsCapped, envelope, truncated } from "@/lib/server/arcgis";
 import { parseBbox as gridBbox, type Bbox as GridBbox } from "@/lib/civic/bbox";
 import { snapBbox as countyBox } from "@/lib/economy/assemble";
+import {
+  packWrcRow,
+  WRC_ALIAS_NOTE,
+  WRC_ATTRIBUTION,
+  WRC_BREAKS,
+  WRC_CAVEAT,
+  WRC_COUNTY_FIELDS,
+  WRC_COUNTY_LAYER,
+  WRC_COUNTY_PAGES,
+  WRC_EXPOSURE,
+  WRC_FIPS_COUNTY_FIELDS,
+  WRC_PAGE,
+  WRC_PLACE_BOX_DEG,
+  WRC_PLACE_CAP,
+  WRC_PLACE_FIELDS,
+  WRC_PLACE_LAYER,
+  WRC_RANKS,
+  wrcRow,
+  type WrcRow,
+} from "@/lib/hazards/wrc";
 import { NRI_CAVEATS, NRI_CITATION, NRI_COUNTIES, NRI_COUNTY_FIELDS, NRI_MAX_PAGES, NRI_PAGE, NRI_SOVI_NOTE, NRI_TERMS, NRI_TRACT_BOX_DEG, NRI_TRACT_FIELDS, NRI_TRACTS } from "@/lib/hazards/nri";
 
 export const maxDuration = 60;
@@ -432,6 +466,124 @@ async function opNriFips(fips: string): Promise<OpResult | null> {
   };
 }
 
+// ---------------------------------------------------------------- wrc (USFS Wildfire Risk to Communities, ranks)
+
+const WRC_GATE = { gate: "usfs-wrc", minIntervalMs: 500, timeoutMs: 25_000, tries: 2 };
+const WRC_HELP = "op=wrc needs level=county, level=place&bbox=w,s,e,n (at most 1 degree a side), or level=fips&fips=<5-digit county or 7-digit place GEOID>";
+const WRC_CAVEATS = [WRC_CAVEAT, WRC_ALIAS_NOTE];
+
+const wrcProv = (layer: string, seriesId: string, age: number, notes?: string[]) =>
+  provenance(source("usfs-wrc"), { kind: "published", seriesId, upstreamUrl: layer, period: "WRC 2nd edition (2024); boundaries May 2025 (TIGER 2023)", retrievedAt: fetchedAt(age), notes });
+
+/** Every county's ranks, attributes only, as compact rows; the browser joins them by FIPS. */
+async function opWrcCounty(): Promise<OpResult> {
+  const r = await cached(
+    "wrc:county",
+    WEEK_MS,
+    async () => {
+      const rows: WrcRow[] = [];
+      let cut = false;
+      for (let page = 0; page < WRC_COUNTY_PAGES; page++) {
+        const j = await arcgisRowsCapped<Record<string, unknown>>(
+          "usfs-wrc",
+          WRC_COUNTY_LAYER,
+          { where: "1=1", outFields: WRC_COUNTY_FIELDS.join(","), returnGeometry: "false", orderByFields: "GEOID", resultRecordCount: String(WRC_PAGE), resultOffset: String(page * WRC_PAGE) },
+          WRC_GATE,
+        );
+        for (const a of j.rows) {
+          const row = wrcRow(a);
+          if (row) rows.push(row);
+        }
+        cut = j.exceeded;
+        if (!cut) break;
+      }
+      return { rows, cut };
+    },
+    { deadlineMs: 45_000 },
+  );
+  const notRanked = r.value.rows.filter((x) => x.national[0] == null).map((x) => x.geoid);
+  const caveats = [
+    ...WRC_CAVEATS,
+    "Counties come as attribute rows only: join them by `geoid` onto your own county outlines (Connecticut in planning regions 09110-09190, as WRC publishes it). Ranks are percent strings in the source ('97.20%'); here they are numbers 0-100, and the published strings are in `raw`. A blank rank is null, not 0.",
+  ];
+  if (notRanked.length) caveats.push(`Not ranked by USFS: ${notRanked.join(", ")} (every rank blank in the source; DC is ranked only as a state).`);
+  if (r.value.cut) caveats.push(`The answer was still cut at ${WRC_COUNTY_PAGES * WRC_PAGE} counties: some counties are missing from this answer, not unranked.`);
+  return {
+    data: { level: "county", measures: WRC_RANKS.map((k) => k.alias), rows: r.value.rows.map(packWrcRow) },
+    meta: { source: WRC_ATTRIBUTION, level: "county", count: r.value.rows.length, notRanked: notRanked.length, breaks: [...WRC_BREAKS], capped: r.value.cut, cacheAge: r.age },
+    ttlS: 86_400,
+    provenance: [wrcProv(WRC_COUNTY_LAYER, "county_boundaries_conus_ak_hi FeatureServer layer 0 (WRC_County_Summary_Data), attributes", r.age)],
+    caveats,
+  };
+}
+
+/** WRC's own community polygons in a box, at most WRC_PLACE_CAP. */
+async function opWrcPlace(b: GridBbox): Promise<OpResult> {
+  const off = Math.max(0.001, Math.min(0.005, (b[2] - b[0]) / 1000));
+  const r = await cached(
+    `wrc:place:${b.join(",")}`,
+    WEEK_MS,
+    async () => {
+      const fc = await arcgisQuery(
+        "usfs-wrc",
+        WRC_PLACE_LAYER,
+        { where: "1=1", ...envelope(b), outFields: WRC_PLACE_FIELDS.join(","), returnGeometry: "true", outSR: "4326", maxAllowableOffset: String(off), geometryPrecision: "5", orderByFields: "GEOID", resultRecordCount: String(WRC_PLACE_CAP) },
+        WRC_GATE,
+      );
+      return { features: fc.features.map((f) => ({ type: "Feature" as const, geometry: f.geometry, properties: f.properties as Record<string, unknown> })), cut: truncated(fc) || fc.features.length >= WRC_PLACE_CAP };
+    },
+    { deadlineMs: 30_000 },
+  );
+  const excluded = r.value.features.filter((f) => f.properties.exclude === 1).length;
+  const caveats = [
+    ...WRC_CAVEATS,
+    `WRC's own community (Census place) polygons, simplified to ${off} degrees, with the rank strings as published. A community USFS excludes (exclude = 1, reason in exclude_re: no people, no buildings, or DC as a state) has blank ranks: not ranked, never low.`,
+  ];
+  if (r.value.cut) caveats.push(`The answer for this box was cut at ${WRC_PLACE_CAP} communities: ask a smaller box for every community.`);
+  return {
+    data: { type: "FeatureCollection", features: r.value.features },
+    meta: { source: WRC_ATTRIBUTION, level: "place", bbox: b, count: r.value.features.length, excluded, capped: r.value.cut, breaks: [...WRC_BREAKS], cacheAge: r.age },
+    ttlS: 86_400,
+    provenance: [wrcProv(WRC_PLACE_LAYER, `place_boundaries_conus_ak_hi FeatureServer layer 0 (WRC_Community_Summary_Data), polygons simplified to ${off} degrees`, r.age, [`bbox ${b.join(",")}`])],
+    caveats,
+  };
+}
+
+/** One county (5 digits) or community (7 digits) by GEOID, attributes only; null when WRC has no row. */
+async function opWrcFips(fips: string): Promise<OpResult | null> {
+  const county = fips.length === 5;
+  const layer = county ? WRC_COUNTY_LAYER : WRC_PLACE_LAYER;
+  const r = await cached(
+    `wrc:fips:${fips}`,
+    WEEK_MS,
+    async () => {
+      const j = await arcgisRowsCapped<Record<string, unknown>>("usfs-wrc", layer, { where: `GEOID='${fips}'`, outFields: (county ? WRC_FIPS_COUNTY_FIELDS : WRC_PLACE_FIELDS).join(","), returnGeometry: "false" }, WRC_GATE);
+      return { row: j.rows.map((a) => wrcRow(a)).find((x) => x != null) ?? null };
+    },
+    { deadlineMs: 30_000 },
+  );
+  const row = r.value.row;
+  if (!row) return null;
+  return {
+    data: {
+      level: county ? "county" : "place",
+      fips,
+      name: row.name,
+      state: row.state,
+      ranks: WRC_RANKS.map((k, i) => ({ measure: k.alias, national: row.national[i], state: row.stateRank[i], publishedNational: row.raw[k.national] ?? null, publishedState: row.raw[k.state] ?? null })),
+      exposure: WRC_EXPOSURE.map((e, i) => ({ measure: e.alias, percent: row.exposure[i], published: row.raw[e.field] ?? null })),
+      buildings: row.buildings,
+      housingUnits: row.housingUnits,
+      excluded: row.excluded,
+      excludeReason: row.excludeReason,
+    },
+    meta: { source: WRC_ATTRIBUTION, level: county ? "county" : "place", cacheAge: r.age },
+    ttlS: 86_400,
+    provenance: [wrcProv(layer, `${county ? "county" : "place"}_boundaries_conus_ak_hi FeatureServer layer 0, GEOID='${fips}', attributes`, r.age)],
+    caveats: [...WRC_CAVEATS, "Ranks are numbers 0-100 parsed from the published percent strings (kept beside them); a blank rank is null, not ranked, never 0."],
+  };
+}
+
 function respond(r: OpResult) {
   return ok(r.data, { meta: r.meta, provenance: r.provenance, caveats: r.caveats, ttlS: r.ttlS });
 }
@@ -467,8 +619,23 @@ export async function GET(req: NextRequest) {
         if (!b) return badRequest("bbox=w,s,e,n required, west < east and south < north, e.g. bbox=-99,29,-98,30");
         return respond(await opNri(b, level));
       }
+      case "wrc": {
+        const level = q.get("level") ?? "county";
+        if (level === "county") return respond(await opWrcCounty());
+        if (level === "place") {
+          const b = gridBbox(q.get("bbox"), WRC_PLACE_BOX_DEG, 0.05);
+          return b ? respond(await opWrcPlace(b)) : badRequest(WRC_HELP);
+        }
+        if (level === "fips") {
+          const fips = q.get("fips") ?? "";
+          if (!/^(\d{5}|\d{7})$/.test(fips)) return badRequest(WRC_HELP);
+          const r = await opWrcFips(fips);
+          return r ? respond(r) : notFound(`not in this release: USFS Wildfire Risk to Communities has no ${fips.length === 5 ? "county" : "community"} row for GEOID ${fips} (it covers the states and DC)`);
+        }
+        return badRequest(WRC_HELP);
+      }
       default:
-        return badRequest(`unknown op: wildfire | fires | alerts | nri (FIRMS files: ${FIRMS_FILES.map((f) => f.id).join(", ")})`);
+        return badRequest(`unknown op: wildfire | fires | alerts | nri | wrc (FIRMS files: ${FIRMS_FILES.map((f) => f.id).join(", ")})`);
     }
   } catch (err) {
     return withCors(jsonError(err));

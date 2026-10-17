@@ -27,6 +27,13 @@ const markRow = <R extends { properties: Record<string, unknown> }>(r: R): R => 
   return { ...r, properties: p };
 };
 
+/**
+ * Cards whose feature is named by a field that is embedded, and the field. Names are never embedded
+ * (recordText.ts) with one reviewed exception: BIA land area names (LARNAME), all 335 read and none a
+ * person's, embedded on Cam's call (2026-10-17). The field must be on NAME_FIELDS_ALLOWED.
+ */
+const NAMED_BY_EMBEDDED_PLACE_FIELD: Record<string, string> = { "bia-lar": "LARNAME" };
+
 describe("record text", () => {
   it("never carries a marked name, owner, address, contact, free-text or id field into a record vector", () => {
     let checked = 0;
@@ -47,9 +54,18 @@ describe("record text", () => {
       expect(RECORD_VECTOR_CARDS.has(card), card).toBe(true);
       const texts = features.map((f) => receivedRecordText(f.properties));
       expect(texts.some((t) => t != null), card).toBe(true);
+      const field = NAMED_BY_EMBEDDED_PLACE_FIELD[card];
       for (const f of features) {
         const t = receivedRecordText(f.properties);
-        if (t && f.properties.name.length > 4) expect(t, card).not.toContain(f.properties.name);
+        if (!t || f.properties.name.length <= 4) continue;
+        if (!field) {
+          expect(t, card).not.toContain(f.properties.name);
+          continue;
+        }
+        // The reviewed exception: the name appears once, as that field's labelled value, and nowhere else.
+        const labelled = `${FIELD_LABEL[field]}: ${f.properties.name}`;
+        expect(t, `${card} ${f.properties.id}`).toContain(labelled);
+        expect(t.replace(labelled, ""), `${card} ${f.properties.id}`).not.toContain(f.properties.name);
       }
     }
     expect(new Set(recordFixtures().map((r) => r.card))).toEqual(RECORD_VECTOR_CARDS);
@@ -85,6 +101,14 @@ describe("record text", () => {
     const padus = recordFixtures().find((r) => r.card === "padus-units")!.features[0];
     expect(padus.properties.details?.["published name"]).toBe("Smith Family Farm");
     expect(receivedRecordText(padus.properties)).not.toMatch(/smith/i);
+  });
+
+  it("allows the feature-name exception only for the reviewed card and field", () => {
+    expect(Object.keys(NAMED_BY_EMBEDDED_PLACE_FIELD)).toEqual(["bia-lar"]);
+    for (const [card, field] of Object.entries(NAMED_BY_EMBEDDED_PLACE_FIELD)) {
+      expect(NAME_FIELDS_ALLOWED.has(field), field).toBe(true);
+      expect(EMBED_TEXT[card as keyof typeof EMBED_TEXT], card).toEqual([field]);
+    }
   });
 
   it("is null when no field has a value, and labels each value", () => {

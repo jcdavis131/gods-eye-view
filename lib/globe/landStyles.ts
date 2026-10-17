@@ -10,6 +10,7 @@ import type { LayerFeature } from "@/lib/layers/types";
 import type { Access, FloodZoneExtra, HistoricExtra, PublicLandExtra, WetlandExtra } from "@/lib/land/features";
 import type { ImpairedExtra } from "@/lib/water/impaired";
 import type { HeritageExtra } from "@/lib/land/heritage";
+import { TRIBAL_COLOR } from "@/lib/land/tribal";
 import { pfasBin, type PfasExtra } from "@/lib/water/pfas";
 import { polyFills, polyOutlines, UNRATED } from "./hazardStyles";
 import { FLOOD_PICTURE, WETLANDS_PICTURE } from "./terrainStyles";
@@ -292,5 +293,18 @@ export const heritageStyle: LayerStyle = {
     if (f.geometry.type === "Point" || !x) return null;
     return polyOutlines(f, heritageColor(f), 0.85, x.kind === "whs" ? 2 : 1.4, x.kind === "nha" || (x.kind === "battlefield" && x.boundary === "study"));
   },
+  scaleByDistance: [2e4, 1.0, 3e6, 0.6],
+};
+
+// ---------------------------------------------------------------- trust land (BIA LAR)
+
+export const tribalStyle: LayerStyle = {
+  color: TRIBAL_COLOR,
+  icon: () => null,
+  colorFor: () => TRIBAL_COLOR,
+  label: (f) => f.properties.name,
+  labelMax: 30,
+  polygons: (f) => (f.geometry.type === "Point" ? null : polyFills(f, TRIBAL_COLOR, 0.18)),
+  lines: (f) => (f.geometry.type === "Point" ? null : polyOutlines(f, TRIBAL_COLOR, 0.9, 1.6)),
   scaleByDistance: [2e4, 1.0, 3e6, 0.6],
 };

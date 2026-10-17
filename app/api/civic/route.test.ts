@@ -85,7 +85,7 @@ describe("op=health", () => {
 
   it("refuses an unknown measure, a seventh county or a bad FIPS without asking", async () => {
     answer = () => json([]);
-    for (const qs of ["op=health&measure=HAPPINESS", "op=health&level=tract&measure=DIABETES&counties=1,2", "op=health&level=tract&measure=DIABETES&counties=01001,01003,01005,01007,01009,01011,01013", "op=health&level=place&fips=4845", "op=broadband"]) {
+    for (const qs of ["op=health&measure=HAPPINESS", "op=health&level=tract&measure=DIABETES&counties=1,2", "op=health&level=tract&measure=DIABETES&counties=01001,01003,01005,01007,01009,01011,01013", "op=health&level=place&fips=4845", "op=housing"]) {
       expect((await get(qs)).status, qs).toBe(400);
     }
     expect(calls).toEqual([]);

@@ -48,6 +48,14 @@
 //                                          largest PADUS_WIDE_MAX units, coarser.
 //   /api/land?op=elevation&lon=..&lat=..   USGS 3DEP ground elevation (EPQS) with the
 //                                          source DEM resolution.
+//   /api/land?op=tribal                    BIA's AIAN Land Area Representation: every land
+//                                          area held in trust or restricted fee (335 on
+//                                          2026-10-17) in one national answer, simplified
+//                                          to 0.01 degrees, held a day. Parts under 0.7 km2
+//                                          (allotment-sized) are dropped, except each land
+//                                          area's largest part, which is drawn whatever its
+//                                          size; both counts are in the caveat.
+//                                          No bbox and no detail level (held for Cam).
 //
 // FEMA resets a fair share of connections, so every ArcGIS call retries (see
 // lib/server/arcgis.ts). These maps change on the scale of months, so each
@@ -62,6 +70,18 @@ import { preferIpv4, retrying } from "@/lib/server/net";
 import { provenance, type Provenance } from "@/lib/provenance/types";
 import { source } from "@/lib/provenance/sources";
 import { numParam, parseBbox, type Bbox } from "@/lib/civic/bbox";
+import {
+  BIA_LAR_LAYER,
+  buildTribal,
+  filterTribalParts,
+  smallPartsCaveat,
+  TRIBAL_ATTRIBUTION,
+  TRIBAL_CAVEAT,
+  TRIBAL_FIELDS,
+  TRIBAL_KEEP_LARGEST_PART,
+  TRIBAL_MIN_PART_KM2,
+  TRIBAL_OFFSET,
+} from "@/lib/land/tribal";
 import {
   ABPP_CAVEAT,
   ABPP_FIELDS,
@@ -730,6 +750,52 @@ async function opHeritage(kind: HeritageKind, bbox: Bbox | null): Promise<OpResu
   };
 }
 
+const BIA_GATE = { gate: "bia-lar", minIntervalMs: 500, timeoutMs: 25_000, tries: 2 };
+
+/**
+ * BIA's Land Area Representation, one national answer (335 land areas, about 580 kB at offset
+ * 0.01), with the small-part rule applied before anything leaves the server (lib/land/tribal.ts).
+ */
+async function opTribal(): Promise<OpResult> {
+  const r = await cached("tribal:national", DAY, async () => {
+    const fc = await arcgisQuery(
+      "bia-lar",
+      BIA_LAR_LAYER,
+      { where: "1=1", outFields: TRIBAL_FIELDS.join(","), returnGeometry: "true", outSR: "4326", maxAllowableOffset: String(TRIBAL_OFFSET), geometryPrecision: "4", resultRecordCount: "2000" },
+      BIA_GATE,
+    );
+    const kept = filterTribalParts(fc.features);
+    return { features: buildTribal(kept.features), droppedParts: kept.droppedParts, keptSmallLargest: kept.keptSmallLargest, hiddenAreas: kept.hiddenAreas, upstream: fc.features.length, cut: truncated(fc) };
+  });
+  const v = r.value;
+  const caveats = [TRIBAL_CAVEAT, smallPartsCaveat(v.droppedParts, v.keptSmallLargest, v.hiddenAreas.length), "CLASSIFICATION is shown as BIA codes it: the service publishes no meaning for the code. GISACRES is GIS acreage, not surveyed acreage."];
+  if (v.cut) caveats.push("BIA's answer was cut at its record limit: some land areas are missing from this answer.");
+  return {
+    data: { type: "FeatureCollection", features: v.features },
+    meta: {
+      source: TRIBAL_ATTRIBUTION,
+      count: v.features.length,
+      upstream: v.upstream,
+      minPartKm2: TRIBAL_MIN_PART_KM2,
+      keepLargestPart: TRIBAL_KEEP_LARGEST_PART,
+      droppedParts: v.droppedParts,
+      keptSmallLargest: v.keptSmallLargest,
+      hiddenAreas: v.hiddenAreas,
+      cacheAge: r.age,
+    },
+    ttlS: 86_400,
+    provenance: [
+      provenance(source("bia-lar"), {
+        kind: "published",
+        seriesId: `BIA_AIAN_National_LAR FeatureServer layer 0, simplified to ${TRIBAL_OFFSET} degrees; parts under ${TRIBAL_MIN_PART_KM2} km2 dropped (${v.droppedParts}), each land area's largest part kept`,
+        upstreamUrl: BIA_LAR_LAYER,
+        retrievedAt: fetchedAt(r.age),
+      }),
+    ],
+    caveats,
+  };
+}
+
 function respond(r: OpResult) {
   return ok(r.data, { meta: r.meta, provenance: r.provenance, caveats: r.caveats, ttlS: r.ttlS });
 }
@@ -781,8 +847,10 @@ export async function GET(req: NextRequest) {
         if (lon == null || lat == null || Math.abs(lat) > 90 || Math.abs(lon) > 180) return badRequest("lon and lat required, e.g. lon=-98.47&lat=29.465");
         return respond(await opElevation(lon, lat));
       }
+      case "tribal":
+        return respond(await opTribal());
       default:
-        return badRequest("unknown op: flood | wetlands | historic | heritage | crithab | publiclands | elevation");
+        return badRequest("unknown op: flood | wetlands | historic | heritage | crithab | publiclands | elevation | tribal");
     }
   } catch (err) {
     return withCors(jsonError(err));

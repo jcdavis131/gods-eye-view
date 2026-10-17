@@ -85,6 +85,7 @@ describe("every tool asks for the exact route URL", () => {
     ["water_trace", { comid: 23398863, mode: "basin" }, "/api/water?op=trace&comid=23398863&mode=basin"],
     ["risk_index", { bbox: [-99, 29, -98, 30] }, "/api/hazards?op=nri&bbox=-99,29,-98,30"],
     ["risk_index", { bbox: [-98.55, 29.4, -98.45, 29.5], level: "tract" }, "/api/hazards?op=nri&bbox=-98.55,29.4,-98.45,29.5&level=tract"],
+    ["broadband_availability", { fips: "48453" }, "/api/civic?op=broadband&level=place&fips=48453"],
     ["live_events", {}, "/api/live"],
     ["catalog_search", { q: "wetland habitat" }, "/api/catalog?op=search&q=wetland%20habitat"],
     ["catalog_search", { q: "dams", limit: 3 }, "/api/catalog?op=search&q=dams&limit=3"],
@@ -152,6 +153,8 @@ describe("input schemas reject bad input", () => {
   const bad: [string, unknown][] = [
     ["social_vulnerability", { fips: "4845" }],
     ["social_vulnerability", { fips: "484530013" }],
+    ["broadband_availability", { fips: "4845" }],
+    ["broadband_availability", { fips: "48453001308" }],
     ["water_report", { lon: 200, lat: 0 }],
     ["water_report", { lon: -98 }],
     ["areas", { bbox: [1, 2, 3] }],

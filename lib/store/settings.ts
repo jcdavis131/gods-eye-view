@@ -146,6 +146,12 @@ export interface Prefs {
   placesMeasure: string;
   /** Social vulnerability: the CDC SVI ranking drawn, "0" overall or "1"-"4" a theme. */
   sviTheme: string;
+  /** Broadband: the measure drawn, "0" unserved share, "1" underserved share, "2" fiber share, "3" providers. */
+  broadbandMeasure: string;
+  /** Wildfire risk ranks: the WRC rank family drawn, "0" RISK, "1" BP, "2" WHP, "3" EA_HURISK. */
+  wrcMeasure: string;
+  /** Wildfire risk ranks: national or state rank. */
+  wrcScope: "national" | "state";
   /** Hospitals: "open" (default) or "all" (closed ones too). */
   hospitalStatus: "open" | "all";
   /** The viewer's opacity for each picture layer (0..1); absent = the layer's default. */
@@ -181,6 +187,9 @@ export const DEFAULT_PREFS: Prefs = {
   naipYear: null,
   placesMeasure: "DIABETES",
   sviTheme: "0",
+  broadbandMeasure: "0",
+  wrcMeasure: "0",
+  wrcScope: "national",
   hospitalStatus: "open",
   tileAlpha: {},
   satelliteGroups: ["stations", "visual", "gps-ops", "military", "weather"],

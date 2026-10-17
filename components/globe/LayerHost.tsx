@@ -38,6 +38,8 @@ const OPTION_KEYS: Partial<Record<LayerDefinition["id"], Array<keyof Prefs>>> = 
   naip: ["naipYear"],
   health: ["placesMeasure"],
   vulnerability: ["sviTheme"],
+  broadband: ["broadbandMeasure"],
+  wildfirerisk: ["wrcMeasure", "wrcScope"],
   hospitals: ["hospitalStatus"],
 };
 
