@@ -1,9 +1,19 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { LAYER_IDS } from "@/lib/layers/types";
 import { AIRNOW_ENABLED } from "@/lib/air/airnow";
 import { INFRA_GROUP_TITLE, PRESETS, PRESET_GROUPS, presetShare, presetTarget, type Preset } from "./presets";
 
 describe("Explore presets", () => {
+  // The whole layer registry is a cold dynamic import (every layer module and its
+  // styles). Under a full parallel suite on a loaded box it alone ran past the
+  // 5 s per-test default. Load it once here, with a setup budget, so the tests
+  // below time only what they check.
+  let layers: typeof import("@/lib/layers");
+  let infra: typeof import("@/lib/layers/infra");
+  beforeAll(async () => {
+    [layers, infra] = await Promise.all([import("@/lib/layers"), import("@/lib/layers/infra")]);
+  }, 60_000);
+
   it("have unique ids and real layers, and every one sits in a gallery group", () => {
     expect(new Set(PRESETS.map((p) => p.id)).size).toBe(PRESETS.length);
     const layers = new Set<string>(LAYER_IDS);
@@ -56,9 +66,9 @@ describe("Explore presets", () => {
     }
   });
 
-  it("put each infrastructure preset below the height its first layer draws at", async () => {
-    const { LAYER_BY_ID } = await import("@/lib/layers");
-    const { tierFor, TRANSMISSION_TIERS, PIPELINE_TIERS, PLANT_TIERS, RAIL_TIERS, PLSS_TIERS, FAULT_TIERS, LANDSLIDE_TIERS, DAM_TIERS, AIRPORT_TIERS } = await import("@/lib/layers/infra");
+  it("put each infrastructure preset below the height its first layer draws at", () => {
+    const { LAYER_BY_ID } = layers;
+    const { tierFor, TRANSMISSION_TIERS, PIPELINE_TIERS, PLANT_TIERS, RAIL_TIERS, PLSS_TIERS, FAULT_TIERS, LANDSLIDE_TIERS, DAM_TIERS, AIRPORT_TIERS } = infra;
     const tiers: Record<string, Parameters<typeof tierFor>[0]> = {
       transmission: TRANSMISSION_TIERS,
       pipelines: PIPELINE_TIERS,
