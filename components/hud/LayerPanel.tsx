@@ -78,7 +78,7 @@ function LayerRow({
               </span>
             )}
           </span>
-          {on && <span className="shrink-0 tabular-nums">{st?.loading ? <span className="blink text-signal">SYNC</span> : timeAgo(st?.fetchedAt)}</span>}
+          {on && <span className="shrink-0 tabular-nums">{st?.loading ? <span className="skeleton h-3 w-12" aria-label="Syncing" /> : timeAgo(st?.fetchedAt)}</span>}
         </div>
       )}
       {on && l.id === "field" && <FieldControls />}
@@ -270,7 +270,7 @@ function Tiles({
               ) : st?.error ? (
                 <span className="text-alert">ERR</span>
               ) : st?.loading ? (
-                <span className="blink text-primary">•••</span>
+                <span className="skeleton h-3 w-10" aria-label="Loading" />
               ) : st?.picture ? (
                 "MAP"
               ) : (
