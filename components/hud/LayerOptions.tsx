@@ -1,15 +1,18 @@
 "use client";
 // Controls under a data layer's row (not a picture's opacity, which is
-// TileControls): the National Risk Index hazard picker and its legend, and
-// the "Landmarks only" chip on Historic places.
+// TileControls): the National Risk Index hazard picker and its legend, the
+// "Landmarks only" chip on Historic places, the CDC PLACES measure picker, and
+// the CDC/ATSDR SVI theme picker with its fixed-break legend, and the
+// "Closed too" chip on Hospitals.
 
 import type { LayerId } from "@/lib/layers/types";
 import { useSettings } from "@/lib/store/settings";
 import { NRI_CLASSES, NRI_COLORS, NRI_HAZARDS, NRI_HAZARD_CODES, NRI_NO_RATING_EDGE, parseNriPick } from "@/lib/hazards/nri";
 import { isPlacesMeasure, PLACES_BIN_COLORS, PLACES_DEFAULT_MEASURE, PLACES_MEASURES, SOCIAL_NEEDS, UNRANKED_BIN, type PlacesMeasure } from "@/lib/civic/places";
+import { parseSviTheme, SVI_BIN_COLORS, SVI_BIN_LABELS, SVI_NO_RANK_EDGE, SVI_THEMES } from "@/lib/civic/svi";
 
 /** Layers with controls here. */
-export const OPTION_LAYERS = new Set<LayerId>(["riskindex", "historic", "health"]);
+export const OPTION_LAYERS = new Set<LayerId>(["riskindex", "historic", "health", "vulnerability", "hospitals"]);
 
 function RiskPicker() {
   const pick = parseNriPick(useSettings((s) => s.prefs.nriHazard));
@@ -119,7 +122,62 @@ function MeasurePicker() {
   );
 }
 
+function SviThemePicker() {
+  const theme = parseSviTheme(useSettings((s) => s.prefs.sviTheme));
+  const setPref = useSettings((s) => s.setPref);
+  return (
+    <>
+      <label className="flex items-center gap-2">
+        <span className="w-14 shrink-0 uppercase tracking-widest">Theme</span>
+        <select
+          value={String(theme)}
+          onChange={(e) => setPref("sviTheme", e.target.value)}
+          className="min-w-0 flex-1 border border-border bg-transparent px-1 py-0.5 text-foreground"
+          aria-label="CDC/ATSDR SVI: overall or one theme"
+        >
+          {SVI_THEMES.map((t, i) => (
+            <option key={t.field} value={String(i)} className="bg-background">
+              {t.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <ul className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
+        {SVI_BIN_COLORS.map((c, i) => (
+          <li key={c} className="flex items-center gap-1 text-[9px] text-muted-foreground">
+            <span className="inline-block size-2 shrink-0 border border-black/40" style={{ background: c }} aria-hidden />
+            {SVI_BIN_LABELS[i]}
+          </li>
+        ))}
+        <li className="flex items-center gap-1 text-[9px] text-muted-foreground">
+          <span className="inline-block size-2 shrink-0 border border-dashed" style={{ borderColor: SVI_NO_RANK_EDGE }} aria-hidden />
+          not ranked by CDC or not in this release (never least)
+        </li>
+      </ul>
+      <div>CDC/ATSDR SVI: percentile among US counties (or tracts), 0 least to 1 most vulnerable. Not FEMA&apos;s NRI social vulnerability; a click shows both, side by side.</div>
+    </>
+  );
+}
+
+function ClosedHospitalsChip() {
+  const all = useSettings((s) => s.prefs.hospitalStatus) === "all";
+  const setPref = useSettings((s) => s.setPref);
+  return (
+    <>
+      <button
+        type="button"
+        aria-pressed={all}
+        onClick={() => setPref("hospitalStatus", all ? "open" : "all")}
+        className={`border px-2 py-0.5 text-[10px] uppercase tracking-widest ${all ? "border-primary/60 bg-primary/10 text-primary" : "border-border text-foreground/80 hover:bg-accent"}`}
+      >
+        Closed too
+      </button>
+      <div>HIFLD lists 374 hospitals as closed; they are drawn grey when this is on. Dot size is published beds; a hospital with no bed count published takes the base size.</div>
+    </>
+  );
+}
+
 export default function LayerOptions({ id }: { id: LayerId }) {
   if (!OPTION_LAYERS.has(id)) return null;
-  return <div className="mt-1.5 space-y-1 pl-4 text-[10px] text-muted-foreground md:text-[9px]">{id === "riskindex" && <RiskPicker />}{id === "historic" && <LandmarksChip />}{id === "health" && <MeasurePicker />}</div>;
+  return <div className="mt-1.5 space-y-1 pl-4 text-[10px] text-muted-foreground md:text-[9px]">{id === "riskindex" && <RiskPicker />}{id === "historic" && <LandmarksChip />}{id === "health" && <MeasurePicker />}{id === "vulnerability" && <SviThemePicker />}{id === "hospitals" && <ClosedHospitalsChip />}</div>;
 }

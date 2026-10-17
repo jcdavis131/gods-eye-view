@@ -59,7 +59,7 @@ describe("public/openapi.json", () => {
     ["/api/events", "app/api/events/route.ts", "conflict"],
     ["/api/zoning", "app/api/zoning/route.ts", "point"],
     ["/api/permits", "app/api/permits/route.ts", "building"],
-    ["/api/civic", "app/api/civic/route.ts", "health"],
+    ["/api/civic", "app/api/civic/route.ts", "svi"],
   ])("documents exactly the ops %s dispatches", (route, file, one) => {
     expect(new Set(opsDocumented(route))).toEqual(new Set(opsInRoute(file)));
     expect(opsDocumented(route)).toContain(one);

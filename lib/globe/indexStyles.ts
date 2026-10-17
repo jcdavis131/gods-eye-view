@@ -1,5 +1,6 @@
-// County and tract index choropleths (round 4): FEMA's National Risk Index
-// in its five rating classes, and CDC PLACES in quintile bins. A feature with no class ("Not Applicable",
+// County and tract index choropleths (rounds 4 and 5): FEMA's National Risk Index
+// in its five rating classes, CDC PLACES in quintile bins, and CDC/ATSDR SVI on
+// fixed percentile breaks. A feature with no class ("Not Applicable",
 // "Insufficient Data", "No Rating", "Data Unavailable", not in the index)
 // gets no fill and a dashed grey edge, so it never reads as low.
 
@@ -9,6 +10,7 @@ import { polyFills, polyOutlines } from "./hazardStyles";
 import { NRI_COLORS, NRI_NO_RATING_EDGE, type NriExtra } from "@/lib/hazards/nri";
 import { PLACES_BIN_COLORS } from "@/lib/civic/places";
 import type { HealthExtra } from "@/lib/layers/health";
+import { SVI_BIN_COLORS, SVI_NO_RANK_EDGE, type SviExtra } from "@/lib/civic/svi";
 
 export function riskColor(f: LayerFeature): string {
   const x = f.properties.extra as NriExtra | undefined;
@@ -45,5 +47,25 @@ export const healthStyle: LayerStyle = {
   lines: (f) => {
     const published = (f.properties.extra as HealthExtra | undefined)?.bin != null;
     return polyOutlines(f, published ? "#1F2937" : NRI_NO_RATING_EDGE, published ? 0.45 : 0.85, 1, !published);
+  },
+};
+
+// ---------------------------------------------------------------- social vulnerability (CDC/ATSDR SVI)
+
+export function vulnerabilityColor(f: LayerFeature): string {
+  const bin = (f.properties.extra as SviExtra | undefined)?.bin;
+  return bin == null ? SVI_NO_RANK_EDGE : SVI_BIN_COLORS[bin];
+}
+
+export const vulnerabilityStyle: LayerStyle = {
+  color: "#C2410C",
+  icon: () => null,
+  colorFor: vulnerabilityColor,
+  label: (f) => f.properties.name,
+  labelMax: 12,
+  polygons: (f) => ((f.properties.extra as SviExtra | undefined)?.bin != null ? polyFills(f, vulnerabilityColor(f), 0.55) : null),
+  lines: (f) => {
+    const ranked = (f.properties.extra as SviExtra | undefined)?.bin != null;
+    return polyOutlines(f, ranked ? "#1F2937" : SVI_NO_RANK_EDGE, ranked ? 0.45 : 0.85, 1, !ranked);
   },
 };

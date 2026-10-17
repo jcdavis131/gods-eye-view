@@ -54,6 +54,9 @@ export type LayerId =
   | "ust"
   | "riskindex"
   | "health"
+  | "schools"
+  | "hospitals"
+  | "vulnerability"
   | "relief"
   | "slope"
   | "contours"
@@ -133,6 +136,9 @@ export const LAYER_IDS: LayerId[] = [
   "ust",
   "riskindex",
   "health",
+  "schools",
+  "hospitals",
+  "vulnerability",
   "relief",
   "slope",
   "contours",

@@ -9,6 +9,7 @@ import type { LayerStyle } from "./renderer";
 import type { LayerFeature } from "@/lib/layers/types";
 import type { ZoningFamily } from "@/lib/zoning/features";
 import { isLoadedBox } from "@/lib/layers/civicBox";
+import type { SchoolExtra } from "@/lib/civic/schools";
 import { polyFills, polyOutlines, UNRATED } from "./hazardStyles";
 
 const LOADED_BOX = "#E5E7EB";
@@ -247,4 +248,34 @@ export const ustStyle: LayerStyle = {
   labelWhen: (f) => !isLoadedBox(f),
   polygons: (f) => (isLoadedBox(f) || f.properties.kind === "not-given" ? null : polyFills(f, ustColor(f), 0.45)),
   lines: (f) => (isLoadedBox(f) ? polyOutlines(f, LOADED_BOX, 0.7, 1.5, true) : polyOutlines(f, f.properties.kind === "not-given" ? UST_NOT_GIVEN : "#9A3412", 0.6, 1, f.properties.kind === "not-given")),
+};
+
+// ---------------------------------------------------------------- public schools (NCES)
+
+export const SCHOOL_LEVEL_COLOR: Record<SchoolExtra["levelClass"], string> = {
+  elementary: "#22D3EE",
+  middle: "#3B82F6",
+  high: "#A78BFA",
+  other: "#94A3B8",
+};
+/** A full virtual school's point is an office: drawn in a faint tint of its level. */
+const SCHOOL_VIRTUAL_COLOR = "#E0F2FE";
+
+function schoolColor(f: LayerFeature): string {
+  if (isLoadedBox(f)) return LOADED_BOX;
+  const x = f.properties.extra as SchoolExtra | undefined;
+  if (x?.virtual) return SCHOOL_VIRTUAL_COLOR;
+  return SCHOOL_LEVEL_COLOR[x?.levelClass ?? "other"];
+}
+
+export const schoolsStyle: LayerStyle = {
+  color: "#0EA5E9",
+  icon: () => null,
+  colorFor: schoolColor,
+  pointSize: (f) => ((f.properties.extra as SchoolExtra | undefined)?.charter ? 8 : 6),
+  label: (f) => f.properties.name,
+  labelMax: 25,
+  labelWhen: (f) => !isLoadedBox(f),
+  lines: (f) => (isLoadedBox(f) ? polyOutlines(f, LOADED_BOX, 0.7, 1.5, true) : null),
+  scaleByDistance: [5e3, 1.0, 4e4, 0.6],
 };

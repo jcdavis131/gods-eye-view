@@ -107,6 +107,37 @@ describe("what the catalogue lets be embedded", () => {
     for (const c of COLLECTIONS) expect(c.embedText, c.id).toBe(EMBED_TEXT[c.id as keyof typeof EMBED_TEXT]);
   });
 
+  it("shares a field's one label across cards only for a place word or within one source's family", () => {
+    // FIELD_LABEL is keyed by the bare field name, so a second card embedding a field gets the
+    // first card's label (STATUS is "FUDS status"). A field on more than one card must either
+    // carry a place word, which means the same on every card, or stay inside one family of
+    // cards read from the same source. A new card reusing another source's field fails here
+    // until it is given a field of its own or a family is reviewed.
+    const PLACE_LABELS = new Set(["state", "county", "city"]);
+    const FAMILIES: string[][] = [
+      ["nrhp-listed", "nhl-listed"],
+      ["emef-sems", "emef-tri", "emef-rcra", "emef-acres"],
+      ["fuds-properties", "fuds-projects", "fuds-mrs"],
+      ["nri-counties", "nri-tracts"],
+      ["places-county", "places-tract"],
+    ];
+    const cardsOf = new Map<string, string[]>();
+    for (const [card, fields] of Object.entries(EMBED_TEXT)) for (const f of fields) cardsOf.set(f, [...(cardsOf.get(f) ?? []), card]);
+    const shared = [...cardsOf].filter(([, cards]) => cards.length > 1);
+    expect(shared.length).toBeGreaterThan(0);
+    for (const [f, cards] of shared) {
+      if (PLACE_LABELS.has(FIELD_LABEL[f])) continue;
+      expect(
+        FAMILIES.some((fam) => cards.every((c) => fam.includes(c))),
+        `${f} ("${FIELD_LABEL[f]}") is embedded by ${cards.join(", ")}`,
+      ).toBe(true);
+    }
+    // The check bites: hospitals embedding FUDS's STATUS would be labelled "FUDS status".
+    const withStatus = [...(cardsOf.get("STATUS") ?? []), "hifld-hospitals"];
+    expect(PLACE_LABELS.has(FIELD_LABEL.STATUS)).toBe(false);
+    expect(FAMILIES.some((fam) => withStatus.every((c) => fam.includes(c)))).toBe(false);
+  });
+
   it("labels every embedText field, and lets no field end in 'name' outside the reviewed list", () => {
     for (const c of COLLECTIONS) {
       for (const f of c.embedText) {

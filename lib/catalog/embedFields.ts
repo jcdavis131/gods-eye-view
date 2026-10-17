@@ -59,6 +59,10 @@ export const EMBED_TEXT = {
   "nps-whs": [],
   "places-county": ["statedesc", "category", "measure", "year", "data_value_type"],
   "places-tract": ["category", "measure", "year", "data_value_type"],
+  "svi-counties": ["COUNTY", "STATE"],
+  "svi-tracts": ["STATE", "COUNTY"],
+  "hifld-hospitals": ["TYPE", "TRAUMA", "HELIPAD", "STATE"],
+  "nces-public-schools": ["SCHOOL_LEVEL", "SCHOOL_TYPE_TEXT", "CHARTER_TEXT", "VIRTUAL", "SY_STATUS_TEXT", "ULOCALE", "GSLO", "GSHI", "LSTATE"],
 } satisfies Record<string, string[]>;
 
 export type CollectionId = keyof typeof EMBED_TEXT;
@@ -89,7 +93,12 @@ export const NAME_FIELDS_ALLOWED: ReadonlySet<string> = new Set([
   "cas_chem_name",
 ]);
 
-/** The words a field is embedded under: static word vectors gain from the field's meaning, not its code. One label per upstream field name. */
+/**
+ * The words a field is embedded under: static word vectors gain from the field's meaning, not its
+ * code. One label per upstream field name, shared by every card that embeds the field, so a field
+ * on more than one card must be a place word or stay within one source's family of cards
+ * (recordText.test.ts checks it).
+ */
 export const FIELD_LABEL: Readonly<Record<string, string>> = {
   // NWI (decoded locally from the Cowardin code)
   WETLAND_TYPE: "wetland type",
@@ -238,6 +247,21 @@ export const FIELD_LABEL: Readonly<Record<string, string>> = {
   VLCN_RISKR: "volcanic activity risk",
   WFIR_RISKR: "wildfire risk",
   WNTW_RISKR: "winter weather risk",
+  // HIFLD hospitals (STATUS is not embedded: FIELD_LABEL has one label per field name, and STATUS is FUDS's;
+  // NAICS_DESC is not either: a *desc field is treated as free text, and TYPE already says the kind)
+  TYPE: "hospital type",
+  TRAUMA: "trauma center level",
+  HELIPAD: "helipad",
+  // NCES public schools (CCD's published categories; names, the street and the counts are not embedded)
+  SCHOOL_LEVEL: "school level",
+  SCHOOL_TYPE_TEXT: "school type",
+  CHARTER_TEXT: "charter school",
+  VIRTUAL: "virtual school status",
+  SY_STATUS_TEXT: "school status",
+  ULOCALE: "locale",
+  GSLO: "lowest grade",
+  GSHI: "highest grade",
+  LSTATE: "state",
 };
 
 /**
@@ -260,6 +284,8 @@ export const RECORD_VECTOR_CARDS: ReadonlySet<string> = new Set([
   "fema-nfhl-zones",
   "padus-units",
   "nid-dams",
+  "hifld-hospitals",
+  "nces-public-schools",
 ]);
 
 export const NO_RECORD_VECTORS: Readonly<Record<string, string>> = {
@@ -289,6 +315,8 @@ export const NO_RECORD_VECTORS: Readonly<Record<string, string>> = {
   "nps-whs": "names and links only; nothing embeddable",
   "places-county": "joined in the browser onto the shared county outlines; record vectors deferred to the next round",
   "places-tract": "deferred with places-county",
+  "svi-counties": "joined in the browser onto the shared county outlines, as nri-counties; record vectors deferred to the next round",
+  "svi-tracts": "deferred with svi-counties",
 };
 
 /** Fields that must never be embedded whatever a card says: the deny list, the dossier's "published name", and any *name field not reviewed. */

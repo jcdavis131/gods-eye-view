@@ -7,6 +7,9 @@ import { NextRequest } from "next/server";
 import cty from "@/lib/hazards/fixtures/nri-cty-sanantonio.json";
 import trPage from "@/lib/hazards/fixtures/nri-tr-page.json";
 import tr from "@/lib/hazards/fixtures/nri-tr-sanantonio.json";
+import fipsTravis from "@/lib/hazards/fixtures/nri-fips-48453.json";
+import fipsTract from "@/lib/hazards/fixtures/nri-fips-48453001308.json";
+import fipsNone from "@/lib/hazards/fixtures/nri-fips-none.json";
 
 vi.mock("@/lib/server/cache", () => ({
   cached: async <T,>(_k: string, _ttl: number, produce: () => Promise<T>) => ({ value: await produce(), age: 0, hit: false }),
@@ -83,5 +86,38 @@ describe("op=nri", () => {
     expect((await get("op=nri&level=state&bbox=-99,29,-98,30")).status).toBe(400);
     expect((await get("op=nri&bbox=-98,29,-99,30")).status).toBe(400);
     expect(calls).toEqual([]);
+  });
+});
+
+// op=nri&fips= (round 5): one county or tract by FIPS, attributes only, for the paired click
+// answer and the MCP social_vulnerability tool. Captures of 2026-10-16, unmodified.
+
+describe("op=nri&fips=", () => {
+  it("reads one county by STCOFIPS with the named fields, no geometry", async () => {
+    answer = (u) => (u.startsWith(`${NRI}/National_Risk_Index_Counties/FeatureServer/0/query?`) ? fipsTravis : null);
+    const res = await GET(new NextRequest("http://localhost/api/hazards?op=nri&fips=48453"));
+    const body = (await res.json()) as { data: { level: string; row: Record<string, unknown> }; caveats: string[] };
+    expect(res.status).toBe(200);
+    const p = new URL(calls[0]).searchParams;
+    expect(p.get("where")).toBe("STCOFIPS='48453'");
+    expect(p.get("returnGeometry")).toBe("false");
+    expect(p.get("outFields")).toContain("SOVI_RATNG");
+    expect(body.data.level).toBe("county");
+    expect(body.data.row).toMatchObject({ STCOFIPS: "48453", SOVI_RATNG: "Very Low" });
+    expect(body.data.row.SOVI_SCORE as number).toBeCloseTo(14.76, 2);
+    expect(body.caveats.join(" ")).toContain("Census Community Resilience Estimate");
+  });
+
+  it("reads a tract by TRACTFIPS, and answers 404 'not in the index' for a FIPS FEMA has no row for", async () => {
+    answer = (u) => (u.includes("National_Risk_Index_Census_Tracts") ? fipsTract : u.includes("National_Risk_Index_Counties") ? fipsNone : null);
+    const t = await GET(new NextRequest("http://localhost/api/hazards?op=nri&fips=48453001308"));
+    expect(t.status).toBe(200);
+    expect(new URL(calls[0]).searchParams.get("where")).toBe("TRACTFIPS='48453001308'");
+    expect(((await t.json()) as { data: { row: { SOVI_RATNG: string } } }).data.row.SOVI_RATNG).toBe("Very Low");
+    const miss = await GET(new NextRequest("http://localhost/api/hazards?op=nri&fips=99999"));
+    expect(miss.status).toBe(404);
+    expect(((await miss.json()) as { error: string }).error).toMatch(/^not in the index/);
+    const bad = await GET(new NextRequest("http://localhost/api/hazards?op=nri&fips=4845"));
+    expect(bad.status).toBe(400);
   });
 });

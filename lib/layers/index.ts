@@ -57,6 +57,8 @@ import { contaminantsLayer } from "./contaminants";
 import { ustLayer } from "./ust";
 import { riskindexLayer } from "./riskindex";
 import { healthLayer } from "./health";
+import { schoolsLayer } from "./schools";
+import { vulnerabilityLayer } from "./vulnerability";
 import { sportsLayer } from "./sports";
 import { constructsLayer } from "./constructs";
 import { fieldLayer } from "./field";
@@ -121,6 +123,8 @@ export const LAYERS: LayerDefinition[] = [
   ustLayer,
   riskindexLayer,
   healthLayer,
+  schoolsLayer,
+  vulnerabilityLayer,
   sportsLayer,
   constructsLayer,
   fieldLayer,

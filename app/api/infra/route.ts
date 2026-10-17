@@ -1,5 +1,5 @@
 // Infrastructure API: transmission lines, pipelines, rail, public-use airports,
-// dams, power plants, Quaternary faults, landslides, the PLSS grid with its
+// dams, hospitals, power plants, Quaternary faults, landslides, the PLSS grid with its
 // Township-Range-Section search, and the geologic map unit at a point. Keyless
 // federal services (and Macrostrat), CORS open and edge-cached like /api/land,
 // with the shared envelope (lib/server/respond.ts).
@@ -15,6 +15,11 @@
 //                                            bases (PRIVATEUSE=0 only). Box at most 8 degrees.
 //   /api/infra?op=dams&bbox=…                USACE National Inventory of Dams: hazard potential,
 //                                            condition, height, storage. Box at most 1.5 degrees.
+//   /api/infra?op=hospitals&bbox=…[&status=all] HIFLD hospitals (FEMA RAPT's copy, the last
+//                                            public one). A box over 20 degrees gets every
+//                                            hospital nationally as packed rows (one pull held
+//                                            a day); a smaller box the full record as GeoJSON.
+//                                            Open only unless status=all.
 //   /api/infra?op=plants&bbox=…&min=MW       EIA-860M plants (bundled monthly snapshot) and
 //                                            Wikidata nuclear plants outside the US. Any box;
 //                                            past one response's size, the largest US plants.
@@ -27,7 +32,9 @@
 // Every query asks for an explicit field list: owner and operator names are
 // relayed as the registry publishes them, but NID's representative and
 // designer names, any street address, and free-text notes (the landslide
-// inventory's quote news stories naming homeowners) are never requested. Nothing here
+// inventory's quote news stories naming homeowners) are never requested. The one
+// address requested is a hospital's: an institution's, as its state licensing
+// source publishes it; its telephone and staff count are not. Nothing here
 // searches by an owner or operator; the T-R-S search reads survey numbers only.
 
 import type { NextRequest } from "next/server";
@@ -55,6 +62,22 @@ import {
 import { eiaPlants, largestFirst, wikidataNuclear, type EiaSnapshot, type WikidataSnapshot } from "@/lib/infra/plants";
 import { parseTrs, plssCandidates, sectionWhere, townshipWhere, trsLabel } from "@/lib/infra/plss";
 import { parseMacrostrat } from "@/lib/infra/geology";
+import {
+  buildHospitals,
+  HOSPITAL_FIELDS,
+  HOSPITAL_NATIONAL_FIELDS,
+  HOSPITALS_BOX_MAX_DEG,
+  HOSPITALS_CAVEAT,
+  HOSPITALS_DATA_EDIT,
+  HOSPITALS_MAX_PAGES,
+  HOSPITALS_NATIONAL_MIN_DEG,
+  HOSPITALS_PAGE,
+  HOSPITALS_URL,
+  hospitalWhere,
+  NATIONAL_COLUMNS,
+  packNational,
+  type HospitalStatus,
+} from "@/lib/infra/hospitals";
 
 export const maxDuration = 60;
 export const OPTIONS = options;
@@ -414,6 +437,75 @@ async function opDams(bbox: Bbox): Promise<OpResult> {
   };
 }
 
+// ---------------------------------------------------------------- hospitals (HIFLD via FEMA RAPT)
+
+const HOSPITALS_GATE = { gate: "fema-rapt-hospitals", minIntervalMs: 250, timeoutMs: 25_000, tries: 2 };
+
+/** Every hospital of a status, paged by FID until FEMA says the answer is whole. */
+async function hospitalsNational(status: HospitalStatus) {
+  const rows: ArcgisFc["features"] = [];
+  let cut = false;
+  for (let page = 0; page < HOSPITALS_MAX_PAGES; page++) {
+    const f = await arcgisQuery(
+      "hifld-hospitals",
+      HOSPITALS_URL,
+      { where: hospitalWhere(status), outFields: HOSPITAL_NATIONAL_FIELDS.join(","), returnGeometry: "true", outSR: "4326", geometryPrecision: "5", orderByFields: "FID", resultRecordCount: String(HOSPITALS_PAGE), resultOffset: String(page * HOSPITALS_PAGE) },
+      HOSPITALS_GATE,
+    );
+    rows.push(...f.features);
+    cut = truncated(f);
+    if (!cut) break;
+  }
+  return { rows: packNational(rows as Row[]), truncated: cut };
+}
+
+async function opHospitals(bbox: Bbox, status: HospitalStatus): Promise<OpResult> {
+  const national = bbox[2] - bbox[0] > HOSPITALS_NATIONAL_MIN_DEG || bbox[3] - bbox[1] > HOSPITALS_NATIONAL_MIN_DEG;
+  const box: Bbox = national ? bbox : snapBbox(bbox, HOSPITALS_BOX_MAX_DEG, 0.25);
+  if (national) {
+    const n = await cached(`hosp:national:${status}`, DAY, () => hospitalsNational(status), INFRA_DEADLINE);
+    return hospitalsResult({ columns: [...NATIONAL_COLUMNS], rows: n.value.rows }, n.value.rows.length, n.value.truncated, n.age, true, bbox, status);
+  }
+  const r = await cached(
+    `hosp:${status}:${box.join(",")}`,
+    DAY,
+    async () => {
+      const f = await boxQuery(box, { name: "hifld-hospitals", url: HOSPITALS_URL, gate: HOSPITALS_GATE.gate, where: hospitalWhere(status), outFields: HOSPITAL_FIELDS.join(","), orderBy: "FID" });
+      return { features: buildHospitals(f.features as Row[]), truncated: truncated(f) };
+    },
+    INFRA_DEADLINE,
+  );
+  return hospitalsResult(fc(r.value.features), r.value.features.length, r.value.truncated, r.age, false, box, status);
+}
+
+function hospitalsResult(data: unknown, count: number, cut: boolean, age: number, national: boolean, box: Bbox, status: HospitalStatus): OpResult {
+  const caveats = [
+    HOSPITALS_CAVEAT,
+    "Beds and trauma levels are as published; -999 beds and 'NOT AVAILABLE' are shown as not published, never 0. Names and addresses are institutions' as their licensing sources publish them; no telephone, staff or patient field is requested.",
+    status === "open" ? "Open hospitals only (STATUS = 'OPEN'); ask status=all for the hospitals HIFLD lists as closed too." : "Open and closed hospitals, as HIFLD's STATUS says.",
+  ];
+  if (national) caveats.push("Every hospital in the United States and territories as packed rows (`columns`, then `rows`: ID, NAME, CITY, STATE, TYPE, STATUS, BEDS, TRAUMA, COUNTYFIPS, lon, lat, values as published); ask a box of 20 degrees or less for the full record as GeoJSON (clamped to 6 degrees around its centre).");
+  else caveats.push(BOX_CAVEAT);
+  if (cut) caveats.push(national ? `FEMA's answer was still cut after ${HOSPITALS_MAX_PAGES} pages: some hospitals are missing from this answer.` : "The record limit was hit; ask a smaller box for every hospital.");
+  return {
+    data,
+    meta: { source: "HIFLD Hospitals (FEMA RAPT copy)", bbox: national ? null : box, national, status, count, truncated: cut, dataLastEdited: HOSPITALS_DATA_EDIT, cacheAge: age },
+    ttlS: 6 * 3600,
+    provenance: [
+      provenance(source("hifld-hospitals"), {
+        kind: "published",
+        seriesId: `Hospitals_RAPT FeatureServer layer 6, ${hospitalWhere(status)}${national ? ", national, packed rows" : ""}`,
+        upstreamUrl: HOSPITALS_URL,
+        period: `data last edited ${HOSPITALS_DATA_EDIT}`,
+        retrievedAt: fetchedAt(age),
+        revision: "FEMA's copy of HIFLD's hospital layer; each row carries its own SOURCEDATE",
+        notes: national ? ["national"] : [`bbox ${box.join(",")}`],
+      }),
+    ],
+    caveats,
+  };
+}
+
 // ---------------------------------------------------------------- power plants (bundled snapshots)
 
 let eiaData: Promise<EiaSnapshot> | null = null;
@@ -668,6 +760,13 @@ export async function GET(req: NextRequest) {
         const b = box(1.5, 0.25);
         return b ? respond(await opDams(b)) : badRequest(BBOX_HELP);
       }
+      case "hospitals": {
+        const b = box(360, 0.25);
+        if (!b) return badRequest(BBOX_HELP);
+        const st = q.get("status") ?? "open";
+        if (st !== "open" && st !== "all") return badRequest("status=open (default) | all");
+        return respond(await opHospitals(b, st));
+      }
       case "plants": {
         const b = box(360, 1);
         if (!b) return badRequest(BBOX_HELP);
@@ -699,7 +798,7 @@ export async function GET(req: NextRequest) {
         return respond(await opGeology(lon, lat));
       }
       default:
-        return badRequest("unknown op: transmission | pipelines | rail | airports | dams | plants | faults | landslides | plss | plss-search | geology");
+        return badRequest("unknown op: transmission | pipelines | rail | airports | dams | hospitals | plants | faults | landslides | plss | plss-search | geology");
     }
   } catch (err) {
     return withCors(jsonError(err));

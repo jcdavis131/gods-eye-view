@@ -29,6 +29,9 @@ import { NRI_CAVEATS, NRI_SOVI_NOTE, NRI_TERMS } from "@/lib/hazards/nri";
 import { NAIP_CAVEAT } from "@/lib/terrain/naip";
 import { ABPP_CAVEAT, ABPP_STUDY_DEFINITION, NHA_CAVEAT, UNITS_CAVEAT, WHS_CAVEAT } from "@/lib/land/heritage";
 import { PLACES_CAVEAT } from "@/lib/civic/places";
+import { SVI_CAVEAT, SVI_VINTAGE_NOTE } from "@/lib/civic/svi";
+import { HOSPITALS_CAVEAT } from "@/lib/infra/hospitals";
+import { SCHOOLS_CAVEAT } from "@/lib/civic/schools";
 import { DENY_FIELD, EMBED_TEXT } from "./embedFields";
 
 export interface Exclusion {
@@ -79,7 +82,7 @@ export interface Collection {
   /** Sensitive-location and personal-data handling. */
   sensitivity: string;
   /** Curation round it entered. */
-  round: 1 | 2 | 3 | 4;
+  round: 1 | 2 | 3 | 4 | 5;
 }
 
 /** Which shelf a layer's collections sit on (the /catalog page's grouping). */
@@ -89,7 +92,8 @@ export const SHELVES: Array<{ id: string; title: string; layers: LayerId[] }> = 
   { id: "water", title: "Water", layers: ["impaired", "pfas", "hydro"] },
   { id: "contaminants", title: "Contaminants", layers: ["contaminants", "ust"] },
   { id: "hazards", title: "Hazards and risk", layers: ["riskindex"] },
-  { id: "health", title: "Health", layers: ["health"] },
+  { id: "health", title: "Health", layers: ["health", "vulnerability", "hospitals"] },
+  { id: "education", title: "Education", layers: ["schools"] },
   { id: "imagery", title: "Imagery and maps", layers: ["wayback", "topo", "naip"] },
   { id: "infrastructure", title: "Infrastructure", layers: ["dams"] },
 ];
@@ -98,6 +102,7 @@ const R1 = "2026-10-12";
 const R2 = "2026-10-13";
 const R3 = "2026-10-15";
 const R4 = "2026-10-16";
+const R5 = "2026-10-16";
 
 export const COLLECTIONS: readonly Collection[] = [
   // ------------------------------------------------------------ round 1: land and heritage
@@ -755,7 +760,7 @@ export const COLLECTIONS: readonly Collection[] = [
     excluded: [
       { what: "NRI's own county polygons", why: "the globe has one county outline source (TIGERweb, via /api/economy?op=areas); counties are joined by FIPS" },
       { what: "the other 430 or so fields (per-hazard frequencies, exposures, loss ratios, percentiles)", why: "the dossier shows the composite, loss, social vulnerability, resilience and the 18 ratings; the rest are FEMA's inputs" },
-      { what: "a CDC/ATSDR SVI number beside FEMA's", why: "FEMA's social vulnerability comes from the Census Community Resilience Estimate; the CDC index waits until the two can be told apart on screen (D-C1)" },
+      { what: "CDC/ATSDR SVI", why: "on its own layer (vulnerability), shown beside this score in the click answer, never merged with it: FEMA's social vulnerability comes from the Census Community Resilience Estimate, CDC's from ACS, and they can disagree" },
     ],
     caveats: [...NRI_CAVEATS, NRI_SOVI_NOTE, NRI_TERMS],
     searchable: ["STCOFIPS", "NRI_ID"],
@@ -951,6 +956,100 @@ export const COLLECTIONS: readonly Collection[] = [
     ops: ["civic?op=health"],
     sensitivity: "Model-based estimates for counties and tracts; no individual records; small-population tracts are withheld by CDC.",
     round: 4,
+  },
+  // ------------------------------------------------------------ round 5: social vulnerability
+  {
+    id: "svi-counties",
+    title: "CDC/ATSDR Social Vulnerability Index 2022 by county",
+    layer: "vulnerability",
+    sources: ["cdc-svi"],
+    what: "CDC/ATSDR's Social Vulnerability Index 2022 for every county (Connecticut in its planning regions): the overall percentile, the four theme percentiles (socioeconomic status, household characteristics, racial and ethnic minority status, housing type and transportation) and the flag count, from one national pull joined by FIPS onto the county outlines the globe already draws; a click adds CDC's 16 ACS estimates with their margins and, in its own block, FEMA's NRI social vulnerability for the same county.",
+    recordIs: "A county's percentile among all US counties, 0 least to 1 most vulnerable, from ACS 2018-2022 estimates. A relative measure, not a measure of risk by itself, and not FEMA's NRI social vulnerability (a different index from the Census Community Resilience Estimate).",
+    coverage: { spatial: "United States (the states and DC), by county; Connecticut planning regions 09110-09190; drawn below 2,500 km", temporal: "ACS 2018-2022 (SVI 2022)", count: { value: 3144, of: "county rows in SVI2022 US county (layer 1, returnCountOnly); 0 with RPL_THEMES < 0", countedOn: R5 } },
+    freshness: { statement: "CDC last edited the county layer's data on 2024-12-18. The service description still says '2020 Social Vulnerability Index (SVI) USA' while every layer is named SVI2022; the layer names are trusted.", readFrom: "FeatureServer layer 1 editingInfo.dataLastEditDate; layer names; service description", recordedOn: R5 },
+    excluded: [
+      { what: "SVI's own county polygons", why: "the globe has one county outline source (TIGERweb, via /api/economy?op=areas); counties are joined by FIPS" },
+      { what: "the EP_ estimates on the globe's colour", why: "click only: the map colours the published percentile ranks" },
+      { what: "Puerto Rico and the other territories", why: "not in SVI's US database; they read 'not in this release'" },
+      { what: "a number made from both SVI and FEMA's NRI", why: "they are shown side by side in their native forms, each titled with its publisher; nothing is converted, averaged or ranked across them" },
+    ],
+    caveats: [SVI_CAVEAT, SVI_VINTAGE_NOTE],
+    searchable: ["FIPS"],
+    embedText: EMBED_TEXT["svi-counties"],
+    ops: ["civic?op=svi"],
+    sensitivity: "Published county percentile ranks from ACS estimates; no person-level data.",
+    round: 5,
+  },
+  {
+    id: "svi-tracts",
+    title: "CDC/ATSDR Social Vulnerability Index 2022 by census tract",
+    layer: "vulnerability",
+    sources: ["cdc-svi"],
+    what: "The same rankings for every census tract, on SVI's own tract polygons below 60 km (the height FEMA's NRI tracts load at), in a box of at most 0.4 degrees, paged by CDC's 2,000-record limit.",
+    recordIs: "A tract's percentile among all US tracts, by its 11-digit FIPS with its county and state. CDC does not rank tracts with no population or unreliable estimates (-999): shown as not ranked, never as least vulnerable.",
+    coverage: { spatial: "United States (the states and DC), by census tract; drawn below 60 km", temporal: "ACS 2018-2022 (SVI 2022)", count: { value: 84120, of: "tract rows in SVI2022 US tract (layer 2, returnCountOnly); 778 tracts not ranked (RPL_THEMES < 0)", countedOn: R5 } },
+    freshness: { statement: "As svi-counties: SVI 2022, the layers named SVI2022 although the service description says 2020.", readFrom: "FeatureServer layer 2 name; layer 1 editingInfo", recordedOn: R5 },
+    excluded: [
+      { what: "tracts above 60 km camera height", why: "84,120 polygons; the county ranking is shown instead" },
+      { what: "a tract's percentile compared with a county's", why: "CDC ranks each level among its own" },
+    ],
+    caveats: [SVI_CAVEAT],
+    searchable: ["FIPS"],
+    embedText: EMBED_TEXT["svi-tracts"],
+    ops: ["civic?op=svi"],
+    sensitivity: "Published tract percentile ranks; CDC does not rank tracts with no population or unreliable estimates.",
+    round: 5,
+  },
+  // ------------------------------------------------------------ round 5: hospitals
+  {
+    id: "hifld-hospitals",
+    title: "Hospitals (HIFLD, FEMA's copy)",
+    layer: "hospitals",
+    sources: ["hifld-hospitals"],
+    what: "Every hospital in HIFLD's hospital layer as FEMA's Resilience Analysis and Planning Tool last copied it: open hospitals nationally from orbit with a short record (name, type, status, beds, trauma level, city, state, county FIPS), and below 300 km the full record: address, beds, trauma level, helipad, owner type, NAICS industry, the state licensing source with its date, and the date HIFLD checked the location against imagery.",
+    recordIs: "A licensed hospital as its state licensing source published it on the date shown, which can be years old. Not a list of emergency departments, and not a measure of capacity today.",
+    coverage: { spatial: "United States and territories; national dots from orbit, the full record in a box of at most 6 degrees below 300 km", temporal: "per-row SOURCEDATE 2012-06-05 to 2025-07-03", count: { value: 8514, of: "hospitals in Hospitals_RAPT layer 6 (returnCountOnly); 8,140 STATUS='OPEN', 374 CLOSED; 481 with BEDS = -999 (439 of them open)", countedOn: R5 } },
+    freshness: { statement: "FEMA last edited the layer's data on 2026-04-22. HIFLD Open's own hospital service no longer exists, so this copy is not refreshed from it; each row carries the date its source published it.", readFrom: "FeatureServer layer 6 editingInfo.dataLastEditDate; SOURCEDATE min and max (outStatistics, 2026-10-16)", recordedOn: R5 },
+    excluded: [
+      { what: "TELEPHONE, TTL_STAFF, ALT_NAME and VAL_METHOD", why: "never requested: a contact field, a staff count and bookkeeping" },
+      { what: "CMS Hospital General Information (star ratings)", why: "no shared key, no coordinates and no CORS (re-probed 2026-10-16); an exact address match is deferred (D5-8)" },
+      { what: "closed hospitals, by default", why: "374 rows are CLOSED; a 'Closed too' chip draws them grey" },
+    ],
+    caveats: [HOSPITALS_CAVEAT],
+    // What the palette matches besides the published name (NAME is on the deny list as a
+    // field; the name is the feature's label): ID on "HIFLD id", COUNTYFIPS on "county",
+    // CITY and STATE on "place" (lib/search/allowlist.test.ts checks each)
+    searchable: ["ID", "COUNTYFIPS", "CITY", "STATE"],
+    embedText: EMBED_TEXT["hifld-hospitals"],
+    ops: ["infra?op=hospitals"],
+    sensitivity:
+      "Institutions as their licensing agency published them; no staff, patient or contact data. A hospital is labelled by its published name, an institution's (as a public dam keeps its name), so the palette's letter match finds it by name; NAME as a field is on the deny list and is never embedded. Whether institution names may be searched is flagged for review; the fallback labels by HIFLD id. ADDRESS, WEBSITE and SOURCE are shown on click and never searched or embedded; OWNER (a category: non-profit, proprietary, government) is shown on click only, because the deny list matches the field name.",
+    round: 5,
+  },
+  // ------------------------------------------------------------ round 5: public schools
+  {
+    id: "nces-public-schools",
+    title: "Public schools (NCES EDGE, school year 2024-25)",
+    layer: "schools",
+    sources: ["nces-edge-public"],
+    what: "Every public school in NCES's 2024-25 administrative data (the Common Core of Data directory and membership), as points below 25 km inside the civic box: name, district, grades, level, school type, charter and virtual status, locale, enrollment, free or reduced-price lunch, FTE teachers and the student-teacher ratio as NCES publishes them, with a link to NCES's own page for the school.",
+    recordIs: "A public school as its state reported it to NCES for 2024-25; enrollment is the October count. A full virtual school's point is its administrative address, not where students are. A negative value is one of CCD's reporting codes, never 0.",
+    coverage: { spatial: "United States, as NCES lists public schools; points below 25 km, in a box of at most 0.2 degrees", temporal: "school year 2024-25", count: { value: 101110, of: "schools in EDGE_ADMINDATA_PUBLICSCH_2425 layer 1 (returnCountOnly); 1,865 report a negative TOTAL; 501 Inactive and 372 Future are not drawn", countedOn: R5 } },
+    freshness: { statement: "The service publishes no edit date (a MapServer); its name and layer say school year 2024-25.", readFrom: "EDGE_ADMINDATA_PUBLICSCH_2425 MapServer layer 1 ?f=json (no editingInfo); layer name", recordedOn: R5 },
+    excluded: [
+      { what: "race and ethnicity, sex and grade-level enrollment cells (AM..WH, *ALM/*ALF, PK..AE, TOTMENROL, TOTFENROL)", why: "never requested: at a small school a cell can identify a child" },
+      { what: "PHONE and LSTREET2", why: "never requested" },
+      { what: "private schools", why: "a different NCES survey (EDGE private schools); deferred (D5-9)" },
+      { what: "school district outlines", why: "fabric already draws school districts (kind=school)" },
+      { what: "Inactive and Future schools", why: "not operating in 2024-25; counted in the layer note, not drawn" },
+    ],
+    caveats: [SCHOOLS_CAVEAT],
+    searchable: ["NCESSCH", "SCH_NAME"],
+    embedText: EMBED_TEXT["nces-public-schools"],
+    ops: ["civic?op=schools"],
+    sensitivity:
+      "Public institutions' directory data as NCES publishes it; school-level race and sex counts are deliberately not read. SCH_NAME and LEA_NAME end in NAME and are never embedded; SCH_NAME is searchable (a public school's name is an institution's, flagged for review; the fallback is NCESSCH only). LSTREET1 is shown on click and never searched or embedded. Free or reduced-price lunch is shown as NCES publishes it, with no added suppression threshold for very small schools (flagged for review).",
+    round: 5,
   },
 ];
 

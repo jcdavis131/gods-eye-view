@@ -133,6 +133,13 @@ describe("voice words for community health", () => {
     expect(layerOf("show community health over travis county")).toMatchObject({ layer: "health", place: "travis county" });
     expect(layerOf("show diabetes rate")).toMatchObject({ layer: "health" });
     expect(layerOf("show chronic disease")).toMatchObject({ layer: "health" });
+    expect(layerOf("show social vulnerability over travis county")).toMatchObject({ layer: "vulnerability", place: "travis county" });
+    expect(layerOf("show the social vulnerability index")).toMatchObject({ layer: "vulnerability" });
+    expect(layerOf("show svi")).toMatchObject({ layer: "vulnerability" });
+    expect(layerOf("show hospitals near austin")).toMatchObject({ layer: "hospitals", place: "austin" });
+    expect(layerOf("show trauma centers")).toMatchObject({ layer: "hospitals" });
+    expect(layerOf("show public schools near austin")).toMatchObject({ layer: "schools", place: "austin" });
+    expect(layerOf("show schools")).toMatchObject({ layer: "schools" });
   });
 });
 
