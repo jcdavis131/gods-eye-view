@@ -1,8 +1,10 @@
-# Catalogued collections as place towers (spec)
+# Catalogued collections as place towers
 
 eye's catalogued collections can be counted per place and handed to
 vector-places (the county and metro-year place embedding) as candidate towers.
-This page is the spec. One export is built: NPL. The vector-places repository
+This page is the spec and the record of what is built: NPL (a year series),
+UST releases, UST facilities and FUDS properties (static snapshots). ATTAINS
+and PAD-US are not built; the reasons are below. The vector-places repository
 is not changed from here; it converts the JSON on its side.
 
 ## Contract
@@ -12,14 +14,18 @@ as-is by `/api/catalog?op=place-export&collection=<card id>` (MCP tool
 `place_export`). Nothing is pulled at request time.
 
 - `places`: 5-digit county FIPS, from `lib/places/data/counties.json` (TIGERweb ACS2023, 3,222 counties, pulled 2026-10-01).
-- `meta.years`, `meta.features`, and `value[place][year][feature]`.
+- `meta.form`: `series` (`meta.years`, `value[place][year][feature]`; NPL) or `static` (one snapshot dated by `meta.asOf`, `meta.years` null, `value[place][feature]`; UST, FUDS). Nothing static is carried across years. Every served response has it: the UST and FUDS files carry it, and `lib/catalog/placeExport.ts` adds it from `PLACE_EXPORT_FORM` where a file has none (`npl-county.json`, whose script and shas are unchanged).
+- `meta.features`, in the order of the innermost value array.
 - `nullPlaces`: counties whose value is unknown (null for every feature and year), each with its reason. vector-places sets mask = 0 for these.
+- `nullCells` (static exports where a source leaves single fields null): `{ place: { feature: reason } }`; the value there is null, never 0.
 - `meta.zero_vs_missing` and `meta.zeroRule`: when a county absent from `places` and `nullPlaces` has a true 0. Only a complete-census source may say so.
 - `meta.source`: layer URL, query, every page's URL and response sha256, fetch time, `Last-Modified` when sent (null otherwise, never invented), and the service's own data edit date.
-- `siteIds` (or the source's record ids): what each count was made from, so any number can be re-derived.
-- A completeness check the script runs before writing (for NPL: the distinct ids read equal the service's `returnCountOnly`).
+- `siteIds`, `sourceIds` or `propertyIds` (the source's record ids): what each count was made from, so any number can be re-derived.
+- A completeness check the script runs before writing (the rows or distinct ids read equal the service's `returnCountOnly`).
 
-On the vector-places side this maps to the `places/fetch/table.py` npz shape: `years[Y]`, `places[P]`, `features[F]`, `value[Y,P,F]` with NaN where masked, `mask`, `reason`, and the file provenance. A tower module follows `places/towers/t6_banking.py` (`ID`, `NAME`, `TABLE`, `features()`), its source entry follows `sources/registry.json`, and it must earn its place on the bench like any other tower (coverage of at least 0.5 observed).
+County joins share `lib/places/countyJoin.ts` (UST and FUDS; NPL's script carries the same rule inline and is unchanged): a county name is matched whole first, lists are split on commas and slashes only, a bare name that is both a county and an independent city is not placed by name (both are its candidates; FUDS then lets the point decide between them), and a name that matches nothing fails closed. It also holds the point-in-county test (even-odd, holes counted, never the nearest county).
+
+On the vector-places side a series maps to the `places/fetch/table.py` npz shape: `years[Y]`, `places[P]`, `features[F]`, `value[Y,P,F]` with NaN where masked, `mask`, `reason`, and the file provenance. A static export maps to table.py's per-place extras, `place_<feature>[P]` with `place_<feature>_mask`, and its reason per cell from `nullPlaces` and `nullCells`. A tower module follows `places/towers/t6_banking.py` (`ID`, `NAME`, `TABLE`, `features()`), its source entry follows `sources/registry.json`, and it must earn its place on the bench like any other tower (coverage of at least 0.5 observed).
 
 ## Built: T-npl (`npl-status`)
 
@@ -40,20 +46,50 @@ On the vector-places side this maps to the `places/fetch/table.py` npz shape: `y
 
 Proposed derived feature: `npl_active_per_100k`, computed in vector-places from its own population tower, with `derived:zero_denominator` as the reason where the denominator is 0.
 
-## Spec only (not built)
+## Built: T-ust (`ust-releases-county`, `ust-facilities-county`)
 
-| Candidate | Source state | Tower form | Blocker |
-|---|---|---|---|
-| UST releases and facilities (`ust-releases-county`, `ust-facilities-county`) | EPA UST Finder, a 2018-2021 state-records composite (tribal to October 2025), county names, no FIPS | Static per-place values: `place_ust_release_count`, `place_ust_open_count`, `place_ust_facility_count`. Not a year series, and nothing is carried across years. | The county-name join, with the same fail-closed rule. A state with gaps in UST Finder's coverage gets mask = 0, not 0. |
-| FUDS properties (`fuds-properties`) | USACE FY2024 inventory, current state, a point per property | Possibly `fuds_properties[p]` from the FY2024 snapshot only | Needs a point-in-county join (not done: `counties.json` has centroids, not outlines). The properties layer's year field is a data year, not a history. |
-| Impaired waters (`attains-impaired`) | Per state and reporting cycle; no county field, and units cross counties | None this round | Placing a unit in a county would need an areal or length apportionment, which is a modelling choice and not a published value. |
-| Protected areas (`padus-units`) | PAD-US 4.1, current state | `place_padus_gap12_share` (share of area in GAP 1-2) | An area share is a derived geometry number; vector-places has to rule whether it counts as published. |
+`scripts/export-ust-county.mjs` -> `lib/catalog/data/ust-releases-county.json` and `lib/catalog/data/ust-facilities-county.json`.
+
+- Source: EPA UST Finder FeatureServer, keyless, layer 3 (Releases_by_County) and layer 2 (Facilities_by_County), every row: 3,220 each on 2026-10-16, equal to the service's own count. EPA last edited both layers on 2026-02-13. The point layers (0 and 1) are never requested: many sites are private homes. `POPULATION` is not exported (Puerto Rico's rows carry -99, and vector-places has its own population tower).
+- Form: static. The service calls itself a national composite of state records as of 2018-2021, tribal records to October 2025. One value per county, not a year series.
+- Features: releases `ust_release_count`, `ust_open_release_count`, `ust_nfa_release_count`; facilities `ust_facility_count`, `ust_open_tanks`, `ust_closed_tanks`, `ust_tos_tanks`. Each is the layer's own field, as published; nothing is derived (an "unknown status" count by subtraction stays out, as on the card).
+- County join: the layers carry no FIPS. Each of the 3,222 counties is looked up by state and normalised name; a name must match one row and a row serves one county. Virginia's independent cities are mostly named bare in UST Finder ("Norton"), so "<X> city" takes the bare name only when the state has no "<X> County". Check: each county's Census internal point must fall in the polygon of the row its name matched (the layer's own outlines, about 100 m generalised, not exported). 3,208 do, 3 coastal points (Kodiak Island, Aransas, Island WA) fall in no polygon, 0 fall in another row's.
+- Zero vs missing: `as-published`. Every county has a row, so no 0 comes from an absent row. A 0 is the layer's own and is kept and listed in `meta.publishedZeros` (9 release counts: Kalawao HI, Cleveland and Madison AR, Jefferson FL, Issaquena MS, and Camuy, Santa Isabel, Vieques and Culebra PR; 919 facility-layer zeros, 884 of them temporarily-out-of-service tanks). The composite is only as complete as each state's records, so vector-places may keep a published 0 or mask it; the export does not decide that.
+- Null (2026-10-16): 11 `nullPlaces`, all `join:no_source_row`: Connecticut's 9 planning regions (UST Finder has the 8 legacy counties) and Chugach and Copper River, AK (UST Finder has their predecessor Valdez-Cordova). These 9 rows are listed in `meta.unusedSourceRows`; nothing is split or summed across geographies.
+- Null cells (`nullCells`, `source:null_in_county_layer`), by state in `meta.counts.nullCellsByState` and explained in `meta.nullCellNote`:
+  - open releases 505: all 120 of Kentucky's counties, plus 385 counties in 34 other states (Texas 58, Tennessee 37, Virginia 34, North Dakota 33, Arkansas 29, and fewer elsewhere, Puerto Rico 8 among them);
+  - no-further-action releases 225: all 78 of Puerto Rico's, plus 147 elsewhere: 119 in Kentucky, 21 in Washington, Arkansas 2, and Florida, Hawaii, Idaho, Mississippi and Texas 1 each;
+  - open tanks 80: Puerto Rico's 78 and two Georgia counties, 13123 (Gilmer) and 13125 (Glascock), which publish 0 facilities;
+  - closed and temporarily-out-of-service tanks 118 each: Puerto Rico's 78, 38 California counties (Los Angeles among them) and the same two Georgia counties.
+- What the release-status nulls most likely mean: the layer never publishes a 0 for `Open_Count` or `No_Further_Action_Count` (live, 2026-10-16: no row `= 0` in either, 505 and 225 `IS NULL`), so for many counties a null there is most likely a 0 the layer did not write. Of the 385 open-count nulls outside Kentucky, 359 are counties whose release count equals their no-further-action count, which leaves nothing open; where all three fields are published (2,614 counties), open plus no further action equals the release count in 2,456 and is never above it. Nine counties publish 0 releases with a null status count (Kalawao, HI among them), where the status can only be 0. Of the 147 no-further-action nulls outside Puerto Rico, 119 are Kentucky's (open is null there too) and 17 have open equal to the release count. The nulls are kept, not filled: filling them is vector-places' modelling choice. The missingness is not random (whole states, and in other states the counties where every release has one status), so it should not be treated as random. The evidence is in `meta.nullPattern`.
+- Observed share of the 3,222 counties: release count 0.9966, open releases 0.8399, no-further-action 0.9268, facility count 0.9966, open tanks 0.9718, closed tanks 0.9600, out-of-service tanks 0.9600.
+
+## Built: T-fuds (`fuds-properties`)
+
+`scripts/export-fuds-county.mjs` -> `lib/catalog/data/fuds-county.json`.
+
+- Source: USACE FUDS FeatureServer layer 1 (property points), keyless, every row: 10,123 on 2026-10-16, equal to the service's count; 14 are exact duplicates (Palau, identical in every requested field), so 10,109 properties. USACE last edited the layer on 2026-10-07; every row is FISCALYEAR 2024, which USACE calls preliminary. Requested: property number, STATUS, COUNTY, STATE, FISCALYEAR and the point. Never requested: CURRENTOWNER, FEATUREDESCRIPTION, FEATURENAME and the other name fields. The file has property numbers per county and no coordinates.
+- Form: static, the FY2024 inventory. FISCALYEAR is the data year, not a history.
+- Features: `fuds_properties` (properties USACE locates in the county), `fuds_properties_with_projects` (STATUS "with projects" or "with all projects at site closeout"), `fuds_properties_with_open_projects` (STATUS "with projects", not all at closeout). Eligibility is not a feature (463 null, three categories).
+- County join, as NPL's: USACE's COUNTY string by name places a property (9,517). Its point is then only a check: 7,807 agree, 493 are in another county of the state (369 of them adjacent, which is what a large range or airfield whose point sits over the line looks like; kept, listed in `meta.pointDisagreements`), 231 are in no county of the state. The point places a property when it is in exactly one county of the property's state and the string is blank (21), names no county (105; this places Connecticut's legacy-county properties that have a point), or could name more than one: a name that is both a county and an independent city (ST LOUIS, FAIRFAX, RICHMOND, BALTIMORE) is ambiguous by name, and the point decides when it is in one of the two (51; e.g. B07MO0988, "ST LOUIS", goes to St. Louis city, 29510). A list of counties is decided the same way; none was on 2026-10-16. The 177 are split in `meta.counts.joinMethod.pointOnlyByNameReason`; where the point is in neither, those counties are null. Three single names one edit from exactly one county of the state are taken and listed (`meta.nearNames`: SCHUYKILL, BARNEWELL, WHICHITA). The outlines are TIGERweb Generalized_ACS2023 Counties 500K, the vintage of `counties.json`, fetched by the script and not committed.
+- Out of scope: 138 properties in American Samoa, the Northern Marianas, Guam, Palau and the Virgin Islands, which are not in `counties.json`.
+- Zero vs missing: `complete-census` for located properties. The FUDS inventory is USACE's complete list, so a county in neither `places` nor `nullPlaces` has 0, and that 0 means no property USACE locates in this county. It does not mean no FUDS property is there: 265 of the 9,971 in-scope properties (2.7%) have a state but no county string and no point in a county (`meta.unlocated`, by state: NC 51, TX 52, VA 43, LA 23, FL 16, WY 13, ID 11, NY 10, MD 10, and fewer elsewhere). USACE locates them in no county, so they are in no county's count, and a county's 0 does not rule them out. Cam approved this zero rule on 2026-10-16 (`meta.zeroRuleStatus`); the strict alternative is below and kept in `meta.counts.strictRule` for reference.
+- Null (2026-10-16): 14 `nullPlaces`: 9 `join:unplaced_property_in_state` (all of Connecticut: 5 properties with a legacy county string and no point in a planning region), 3 `join:ambiguous_county_or_city` (two "BALTIMORE" properties whose points are in Anne Arundel: Baltimore County, Baltimore city and Anne Arundel), 2 `join:predecessor_county` (two Valdez-Cordova properties: Chugach and Copper River, Census's successors). The join places 9,697 of the 9,971 in-scope properties (`meta.counts.placed`), but 125 of those are in counties that another property nulled (Connecticut 49; Chugach and Copper River 43; Baltimore County, Baltimore city and Anne Arundel 33; listed per county in `meta.placedThenNulled`), so 9,572 are counted (`meta.counts.counted`, the property numbers in `propertyIds`). 1,638 counties have at least one, 1,570 have a true 0.
+- Coverage: 0.9957 of counties observed. The strict alternative, NPL's rule applied to unlocated properties too (every county of a state with one null), gives 0.4050, with 27 states and Puerto Rico entirely null; it is reported in `meta.counts.strictRule` for reference. The shipped rule is the definitional one: the feature counts properties USACE locates in the county, and that list is complete. Cam approved it on 2026-10-16 (keep the zeros); the strict alternative stays in `meta.counts.strictRule` for reference.
+- Not done: the 493 point disagreements were not checked one by one against USACE's property pages.
+
+## Not built
+
+| Candidate | Source state | Why not this round |
+|---|---|---|
+| Impaired waters (`attains-impaired`) | Per state and reporting cycle; no county field, and assessment units cross counties | Placing a unit in a county needs an areal or length apportionment, which is a modelling choice and not a published value. |
+| Protected areas (`padus-units`) | PAD-US 4.1, current state, 647,844 units in the four categories | The proposed `place_padus_gap12_share` is an area share computed from geometry, a derived number; vector-places has to rule whether it counts as published before it is built. A count of units per county would mostly count easements and designations, and a unit crosses counties. |
 
 ## Deferred
 
-- A point-in-county join from each site's own coordinates. It would place NPL's multi-county, county-or-city and Connecticut sites, and FUDS properties. It needs county outlines, which `counties.json` does not carry.
-- The UST, FUDS and PAD-US exports above.
-- Importing these into vector-places is that repository's work.
+- Re-running NPL with the shared join and the point-in-county test, which would place its Connecticut sites and multi-county sites by their points. Its script is unchanged in this round, so its committed file and shas are unchanged.
+- ATTAINS and PAD-US, above.
+- Importing these into vector-places is that repository's work: a tower module per export (`ID`, `NAME`, `TABLE`, `features()`), a source entry in `sources/registry.json` (UST `zero_vs_missing` "missing" with published zeros kept; FUDS "true_zero"), and the bench's coverage bar.
 
 ## Round 4 candidates (spec only; layers round 4, 2026-10-16)
 

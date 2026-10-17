@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import { PLACE_EXPORTS } from "../catalog/placeExport";
 import { asObject, boundPayload, httpFetchJson, NOT_DEPLOYED_NOTE, qs, relay, stripGeometry, toolByName, TOOLS, type FetchJson, type JsonReply } from "./tools";
 
 /** A fetchJson that records the path and answers what the test asked for. */
@@ -87,6 +88,8 @@ describe("every tool asks for the exact route URL", () => {
     ["catalog_search", { q: "wetland habitat" }, "/api/catalog?op=search&q=wetland%20habitat"],
     ["catalog_search", { q: "dams", limit: 3 }, "/api/catalog?op=search&q=dams&limit=3"],
     ["place_export", { collection: "npl-status" }, "/api/catalog?op=place-export&collection=npl-status"],
+    ["place_export", { collection: "fuds-properties" }, "/api/catalog?op=place-export&collection=fuds-properties"],
+    ["place_export", { collection: "ust-releases-county" }, "/api/catalog?op=place-export&collection=ust-releases-county"],
     ["openapi", {}, "/api/openapi"],
   ];
   for (const [name, input, url] of cases) {
@@ -141,6 +144,7 @@ describe("input schemas reject bad input", () => {
     ["water_trace", { comid: 23398863, mode: "down", distance: 900 }],
     ["risk_index", { bbox: [-98, 29, -99, 30] }],
     ["risk_index", { bbox: [-99, 29, -98, 30], level: "state" }],
+    ["place_export", { collection: "attains-impaired" }],
   ];
   for (const [name, input] of bad) {
     it(`${name} ${JSON.stringify(input)}`, async () => {
@@ -154,6 +158,11 @@ describe("input schemas reject bad input", () => {
     const f = fake();
     await expect(toolByName("areas")!.run({}, { fetchJson: f.fetchJson })).rejects.toThrow(/bbox/);
     expect(f.calls).toHaveLength(0);
+  });
+
+  it("place_export offers exactly the committed exports", () => {
+    const js = z.toJSONSchema(toolByName("place_export")!.inputSchema) as unknown as { properties: { collection: { enum: string[] } } };
+    expect(js.properties.collection.enum).toEqual([...PLACE_EXPORTS]);
   });
 
   it("schemas are strict-ish: every tool has an object schema that converts to JSON schema", () => {
