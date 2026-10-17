@@ -1,7 +1,7 @@
 // /api/terrain?op=naip and op=naipmosaic with Planetary Computer's answers captured
 // 2026-10-16 (lib/terrain/fixtures/pc-*, unmodified): the STAC search at Des Moines (8 years),
-// the 2023 and 2011 mosaic registrations, the 2023 mosaic's info, and Planetary Computer's 404
-// for an id it does not hold. The route's own in-memory cache is real here, so a held id is
+// the 2023 and 2011 mosaic registrations, the 2023 mosaic's info, Planetary Computer's 404
+// for an id it does not hold, and the one-item year searches for 2011, 2023 and 2026 (none). The route's own in-memory cache is real here, so a held id is
 // checked and registered again exactly once. No network.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
@@ -10,6 +10,9 @@ import reg2023 from "@/lib/terrain/fixtures/pc-register-2023.json";
 import reg2011 from "@/lib/terrain/fixtures/pc-register-2011.json";
 import info2023 from "@/lib/terrain/fixtures/pc-info-2023.json";
 import info404 from "@/lib/terrain/fixtures/pc-info-404.json";
+import year2011 from "@/lib/terrain/fixtures/pc-stac-year-2011.json";
+import year2023 from "@/lib/terrain/fixtures/pc-stac-year-2023.json";
+import year2026 from "@/lib/terrain/fixtures/pc-stac-year-2026.json";
 import { cacheDelete } from "@/lib/server/cache";
 import { GET } from "./route";
 
@@ -17,6 +20,12 @@ const PC = "https://planetarycomputer.microsoft.com/api";
 const calls: Array<{ url: string; method: string; body: unknown }> = [];
 let answer: (url: string, body: unknown) => Response | null = () => null;
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "content-type": "application/json" } });
+const YEARS: Record<string, unknown> = { "2011": year2011, "2023": year2023, "2026": year2026 };
+/** The one-item STAC search for a year, as captured. */
+const yearSearch = (u: string, body: unknown) => {
+  const y = (body as { query?: { "naip:year"?: { eq?: string } } } | undefined)?.query?.["naip:year"]?.eq;
+  return u === `${PC}/stac/v1/search` && y && YEARS[y] ? json(YEARS[y]) : null;
+};
 
 beforeEach(() => {
   calls.length = 0;
@@ -59,16 +68,18 @@ describe("op=naip", () => {
 
 describe("op=naipmosaic", () => {
   it("registers the year's cql2 filter (naip:year as a string) and answers the tile template", async () => {
-    answer = (u) => (u === `${PC}/data/v1/mosaic/register` ? json(reg2011) : null);
+    answer = (u, b) => (u === `${PC}/data/v1/mosaic/register` ? json(reg2011) : yearSearch(u, b));
     const { status, body } = await get("op=naipmosaic&year=2011");
     expect(status).toBe(200);
-    expect(calls[0].body).toEqual({ "filter-lang": "cql2-json", filter: { op: "and", args: [{ op: "=", args: [{ property: "collection" }, "naip"] }, { op: "=", args: [{ property: "naip:year" }, "2011"] }] } });
+    expect(calls.map((c) => c.url)).toEqual([`${PC}/stac/v1/search`, `${PC}/data/v1/mosaic/register`]);
+    expect(calls[0].body).toEqual({ collections: ["naip"], query: { "naip:year": { eq: "2011" } }, limit: 1 });
+    expect(calls[1].body).toEqual({ "filter-lang": "cql2-json", filter: { op: "and", args: [{ op: "=", args: [{ property: "collection" }, "naip"] }, { op: "=", args: [{ property: "naip:year" }, "2011"] }] } });
     expect(body.data.searchid).toBe("0bae9ecc67f679c8a96f9b046ca52a95");
     expect(body.data.tiles).toBe(`${PC}/data/v1/mosaic/0bae9ecc67f679c8a96f9b046ca52a95/tiles/WebMercatorQuad/{z}/{x}/{y}@1x?collection=naip&assets=image&asset_bidx=image%7C1%2C2%2C3&format=png`);
   });
 
   it("checks a held id and registers again exactly once when Planetary Computer no longer knows it", async () => {
-    answer = (u) => (u === `${PC}/data/v1/mosaic/register` ? json(reg2023) : null);
+    answer = (u, b) => (u === `${PC}/data/v1/mosaic/register` ? json(reg2023) : yearSearch(u, b));
     await get("op=naipmosaic&year=2023");
     // Held now: the next ask checks it. A known id is kept without registering.
     answer = (u) => (u.endsWith("/47390dd3950110f09a58e4678f4f6192/info") ? json(info2023) : null);
@@ -92,6 +103,29 @@ describe("op=naipmosaic", () => {
     expect(again.body.reregistered).toBe(true);
     expect(calls.filter((c) => c.url.endsWith("/register"))).toHaveLength(1);
     expect(calls.filter((c) => c.url.endsWith("/info"))).toHaveLength(1);
+    // Still "not found" right after: one check, no second register inside 10 minutes; the held
+    // id is served and the "not found" is held, so asking again calls nothing.
+    calls.length = 0;
+    const cooling = await get("op=naipmosaic&year=2023");
+    expect(cooling.status).toBe(200);
+    expect(cooling.body.reregistered).toBe(false);
+    expect((cooling.body as { reregisterCooling?: boolean }).reregisterCooling).toBe(true);
+    expect(calls.map((c) => c.url)).toEqual([`${PC}/data/v1/mosaic/47390dd3950110f09a58e4678f4f6192/info`]);
+    calls.length = 0;
+    await get("op=naipmosaic&year=2023");
+    expect(calls).toEqual([]);
+  });
+
+  it("refuses a year the STAC search lists no item for, before any register, and holds that", async () => {
+    answer = (u, b) => yearSearch(u, b);
+    calls.length = 0;
+    const r = await get("op=naipmosaic&year=2026");
+    expect(r.status).toBe(400);
+    expect((r.body as unknown as { error: string }).error).toMatch(/lists no NAIP item for 2026/);
+    expect(calls.map((c) => c.url)).toEqual([`${PC}/stac/v1/search`]);
+    calls.length = 0;
+    expect((await get("op=naipmosaic&year=2026")).status).toBe(400);
+    expect(calls).toEqual([]);
   });
 
   it("serves the held id when the check fails other than 'not found', and does not ask again at once", async () => {

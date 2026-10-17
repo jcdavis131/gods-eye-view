@@ -5,6 +5,8 @@
 //
 //   years   POST /api/stac/v1/search {collections: ["naip"], intersects: point}
 //           -> one row per year with each item's acquisition date and id
+//   listed  POST /api/stac/v1/search {collections: ["naip"], query: naip:year}
+//           limit 1 -> whether the year has any item; no item, no register
 //   mosaic  POST /api/data/v1/mosaic/register with a cql2-json filter on
 //           collection = naip and naip:year = "<yyyy>" (a string) -> searchid;
 //           ids are registered at run time, never hard-coded (round 2 saw a
@@ -40,6 +42,30 @@ export function stacBody(lon: number, lat: number, year?: number): Record<string
   if (year != null) body.query = { "naip:year": { eq: String(year) } };
   return body;
 }
+
+/**
+ * The STAC search that says whether a year has any NAIP item anywhere: one item is enough. The
+ * year this is written in can pass parseNaipYear long before it is published (2025 and 2026 had
+ * none on 2026-10-16), so a year is registered only after this answers an item.
+ */
+export function stacYearBody(year: number): Record<string, unknown> {
+  return { collections: ["naip"], query: { "naip:year": { eq: String(year) } }, limit: 1 };
+}
+
+/** True when a stacYearBody answer lists at least one item of that year. */
+export function naipYearListed(j: unknown, year: number): boolean {
+  const feats = (j as { features?: Array<{ properties?: Record<string, unknown> }> } | null)?.features ?? [];
+  return feats.some((f) => parseNaipYear(f.properties?.["naip:year"]) === year);
+}
+
+/** op=naipmosaic's 400 for a year with no NAIP item anywhere; the layer reads it back by NAIP_UNLISTED. */
+export const NAIP_UNLISTED = "Planetary Computer lists no NAIP item for";
+export function naipUnlistedMessage(year: number): string {
+  return `op=naipmosaic: ${NAIP_UNLISTED} ${year}, so there is no ${year} mosaic to register; op=naip gives the years flown at a point.`;
+}
+
+/** At most one register again per year in this long when Planetary Computer keeps answering "not found". */
+export const NAIP_REREGISTER_COOLDOWN_MS = 10 * 60_000;
 
 /** The mosaic register body for one year: naip:year is a string in the collection. */
 export function registerBody(year: number): Record<string, unknown> {

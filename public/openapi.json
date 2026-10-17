@@ -2669,7 +2669,7 @@
                 "naipmosaic"
               ]
             },
-            "description": "tile: a rendered PNG tile. point: a class or slope at lon, lat. products: the catalog. wayback: Esri World Imagery Wayback's release index. topo: the USGS historical topographic map editions and sheets at lon, lat. waybackdate: when a Wayback release's pixels were captured at lon, lat. naip: USDA NAIP aerial photograph years at a point (lon, lat; snapped to 0.001 degrees), from Microsoft Planetary Computer's STAC search: years [{ year, items: [{ id, date (acquisition, YYYY-MM-DD), gsd (m), state }] }], oldest first; none outside the conterminous US. naipmosaic: registers (or reuses, 24 h) Planetary Computer's mosaic for one year (year=yyyy, 2010 onward) and answers { year, searchid, tiles (XYZ template on planetarycomputer.microsoft.com), minZoom 11 }; a held id is checked against Planetary Computer at most every 10 minutes and registered again once when it is no longer known; when the check fails the held id is served (meta.infoChecked false). Tiles load from Planetary Computer directly; below level 11 it answers no content."
+            "description": "tile: a rendered PNG tile. point: a class or slope at lon, lat. products: the catalog. wayback: Esri World Imagery Wayback's release index. topo: the USGS historical topographic map editions and sheets at lon, lat. waybackdate: when a Wayback release's pixels were captured at lon, lat. naip: USDA NAIP aerial photograph years at a point (lon, lat; snapped to 0.001 degrees), from Microsoft Planetary Computer's STAC search: years [{ year, items: [{ id, date (acquisition, YYYY-MM-DD), gsd (m), state }] }], oldest first; none outside the conterminous US. naipmosaic: registers (or reuses, 24 h) Planetary Computer's mosaic for one year (year=yyyy, 2010 onward; a year the STAC search lists no NAIP item for is a 400, never registered) and answers { year, searchid, tiles (XYZ template on planetarycomputer.microsoft.com), minZoom 11 }; a held id is checked against Planetary Computer at most every 10 minutes and registered again when it is no longer known, at most once a year per 10 minutes (meta.reregisterCooling true while it waits); when the check fails the held id is served (meta.infoChecked false). Tiles load from Planetary Computer directly; below level 11 it answers no content."
           },
           {
             "name": "release",
@@ -2749,7 +2749,7 @@
               "type": "integer",
               "minimum": 2010
             },
-            "description": "op=naipmosaic: the NAIP year, 2010 to the current year."
+            "description": "op=naipmosaic: the NAIP year, 2010 to the current year, and only one Planetary Computer lists NAIP items for (else 400)."
           }
         ],
         "responses": {
@@ -10000,6 +10000,10 @@
               "reregistered": {
                 "type": "boolean",
                 "description": "the held id was unknown to Planetary Computer and was registered again"
+              },
+              "reregisterCooling": {
+                "type": "boolean",
+                "description": "the held id was unknown to Planetary Computer, but this year was registered again under 10 minutes ago, so the held id is served as is"
               }
             }
           }
