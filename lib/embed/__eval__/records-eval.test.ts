@@ -19,7 +19,8 @@
 // This is a regression guard, not the evidence for lifting ?semantic=1: the same agent wrote the
 // queries and chose tau on them, so tau passes by construction. Lifting the flag waits on a blind
 // query set judged against the bars in the eval's DESIGN (P >= 0.65, R@8 >= 0.45, empty <= 0.30,
-// zero control rows). Cost: the pinned weights plus 4,067 record embeds, about 0.15 s and 150 MB.
+// zero control rows). RECORD_TAU is 0.5 by Cam's call (2026-10-17), which misses two of those bars
+// on v3: empty is 0.404, and n30 shows a row. Both are pinned below as accepted, measured exceptions. Cost: the pinned weights plus 4,067 record embeds, about 0.15 s and 150 MB.
 //
 // When a card joins RECORD_VECTOR_CARDS, the coverage test fails and its message says what to do
 // (NEW_CARD_STEPS). The eval's scripts and DESIGN are in the writeups folder named there.
@@ -88,9 +89,27 @@ function grade(q: Query, r: Row): number {
 // weights or the record text updates this table.
 const MEASURED: Record<string, { P: number; R: number; empty: number }> = {
   "0.4": { P: 0.758, R: 0.647, empty: 0.157 },
+  "0.5": { P: 0.847, R: 0.459, empty: 0.404 },
   "0.6": { P: 0.863, R: 0.222, empty: 0.652 },
 };
 const TOL = 0.02;
+
+/**
+ * DESIGN 7.2 bars that RECORD_TAU misses, each accepted by Cam and keyed to the measured value:
+ * the run may not be worse than the value accepted (plus TOL), so a worse rate still fails.
+ */
+const ACCEPTED_BAR_MISSES: Record<string, { bar: number; accepted: number; decision: string }> = {
+  empty: { bar: 0.3, accepted: 0.404, decision: "Cam, 2026-10-17: \"Cutoff 0.50\" (run 4 at 0.5: empty 0.404 against the 0.30 bar)" },
+};
+const BARS = { P: 0.65, R: 0.45, empty: 0.3 };
+
+/**
+ * Controls allowed to show a row at RECORD_TAU, and the only card each may land on. Any other
+ * control showing a row, or one of these landing on any other card, fails.
+ */
+const KNOWN_CONTROL_LEAKS: Record<string, { card: string; decision: string }> = {
+  n30: { card: "bia-lar", decision: "Cam, 2026-10-17: \"Cutoff 0.50\" (run 4: n30 \"Alaska Native corporation lands\" on bia-lar at 0.506)" },
+};
 
 describe("records by meaning (hand-written eval, labelled as such)", () => {
   const model = potionNode();
@@ -130,12 +149,10 @@ describe("records by meaning (hand-written eval, labelled as such)", () => {
     }
   });
 
-  // Run 3 (18 cards) found no tau step that passes. Run 4 (DESIGN 7.3a: category words in the
-  // bia-lar and wrc-communities record text) still finds none: at 0.4, 6 of the 37 controls show a
-  // row ("wildfire perimeters" on a WRC community, four tribal controls on BIA land areas, "evacuation
-  // zones" on an NFHL zone), and the first step with none, 0.55, fails recall and empty. This test
-  // fails until that is decided (DESIGN "Run 4 (7.3a)"); it is not relaxed here.
-  it("controls (nothing relevant loaded) show no record at RECORD_TAU", () => {
+  // Run 4 (DESIGN 7.3a) found no tau step that passes. Cam chose 0.5 (2026-10-17): there one control
+  // shows a row, n30 "Alaska Native corporation lands" on bia-lar, and it is the only one allowed
+  // (KNOWN_CONTROL_LEAKS). Every other control must show nothing, and n30 may land only on bia-lar.
+  it("controls (nothing relevant loaded) show no record at RECORD_TAU, except the accepted leaks", () => {
     const leaks = queries
       .filter((q) => q.kind === "control")
       .map((q) => {
@@ -144,8 +161,12 @@ describe("records by meaning (hand-written eval, labelled as such)", () => {
         return { q, hits: v ? index.search(v, K, RECORD_TAU) : [] };
       })
       .filter((x) => x.hits.length > 0)
-      .map(({ q, hits }) => `${q.id} "${q.q}" -> ${rowOf.get(featureKey(hits[0].feature))!.card} ${hits[0].score.toFixed(3)} (${hits.length} row${hits.length === 1 ? "" : "s"})`);
-    expect(leaks, `controls showing a row at RECORD_TAU ${RECORD_TAU}`).toEqual([]);
+      .filter(({ q, hits }) => {
+        const known = KNOWN_CONTROL_LEAKS[q.id];
+        return !known || hits.some((h) => rowOf.get(featureKey(h.feature))!.card !== known.card);
+      })
+      .map(({ q, hits }) => `${q.id} "${q.q}" -> ${[...new Set(hits.map((h) => rowOf.get(featureKey(h.feature))!.card))].join(", ")} ${hits[0].score.toFixed(3)} (${hits.length} row${hits.length === 1 ? "" : "s"})`);
+    expect(leaks, `controls showing a row at RECORD_TAU ${RECORD_TAU} (allowed: ${Object.entries(KNOWN_CONTROL_LEAKS).map(([id, k]) => `${id} on ${k.card}`).join(", ")})`).toEqual([]);
   });
 
   it("real queries: precision, recall@8 and empty match the measured run at RECORD_TAU", () => {
@@ -159,5 +180,16 @@ describe("records by meaning (hand-written eval, labelled as such)", () => {
     expect(Math.abs(precision - m.P), `P ${precision.toFixed(3)}`).toBeLessThanOrEqual(TOL);
     expect(Math.abs(recall - m.R), `R ${recall.toFixed(3)}`).toBeLessThanOrEqual(TOL);
     expect(Math.abs(empty - m.empty), `empty ${empty.toFixed(3)}`).toBeLessThanOrEqual(TOL);
+
+    // The DESIGN 7.2 bars: met, or missed by no more than an accepted, measured exception.
+    const got = { P: precision, R: recall, empty };
+    for (const key of ["P", "R"] as const) {
+      const miss = ACCEPTED_BAR_MISSES[key];
+      const floor = miss ? miss.accepted - TOL : BARS[key];
+      expect(got[key], `${key} ${got[key].toFixed(3)} against bar ${BARS[key]}${miss ? ` (accepted ${miss.accepted}: ${miss.decision})` : ""}`).toBeGreaterThanOrEqual(floor);
+    }
+    const missE = ACCEPTED_BAR_MISSES.empty;
+    const ceil = missE ? missE.accepted + TOL : BARS.empty;
+    expect(empty, `empty ${empty.toFixed(3)} against bar ${BARS.empty}${missE ? ` (accepted ${missE.accepted}: ${missE.decision})` : ""}`).toBeLessThanOrEqual(ceil);
   });
 });

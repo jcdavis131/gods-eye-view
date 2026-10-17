@@ -34,7 +34,7 @@ import { openHere } from "@/lib/whatshere/here";
 import { queryText } from "@/lib/catalog/recordText";
 import { potionBrowser } from "@/lib/embed/loadBrowser";
 import { RecordIndex, featureKey, type RecordHit } from "@/lib/embed/recordIndex";
-// Minimum cosine for a record to be shown by meaning: 0.4, measured by the records eval (lib/embed/recordTau.ts).
+// Minimum cosine for a record to be shown by meaning: 0.5, Cam's call on the records eval's run 4 (lib/embed/recordTau.ts).
 // The group stays flagged (semanticRecordsOn) until a blind query set passes.
 import { RECORD_TAU } from "@/lib/embed/recordTau";
 

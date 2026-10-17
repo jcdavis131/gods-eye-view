@@ -20,5 +20,11 @@
  * perimeters" now lands on a WRC community at 0.495; four tribal controls on BIA land areas,
  * 0.428 to 0.506), and the first step with none, 0.55, has R@8 0.379 and empty 0.517. Left at 0.4
  * (DESIGN "Run 4 (7.3a)").
+ *
+ * Decision (Cam, 2026-10-17): "Cutoff 0.50". Run 4 at 0.5: P 0.847, R@8 0.459, empty 0.404, and
+ * one control shows a row: n30 "Alaska Native corporation lands", on bia-lar at 0.506. The empty
+ * bar (0.30) is missed and n30 is an accepted leak; both are pinned in the records eval so a worse
+ * run still fails (DESIGN "Decision (Cam, 2026-10-17): tau 0.50"). The group stays behind
+ * ?semantic=1: lifting it still needs a blind query set.
  */
-export const RECORD_TAU = 0.4;
+export const RECORD_TAU = 0.5;
