@@ -607,6 +607,15 @@ export const TOOLS: ToolDef[] = [
     },
   }),
   defineTool({
+    name: "broadband_availability",
+    title: "FCC broadband availability for one county (BDC December 2025, via Esri)",
+    description:
+      "Fixed broadband availability for one county from the FCC Broadband Data Collection, December 2025, as Esri summarizes it (GET /api/civic?op=broadband&level=place): Broadband Serviceable Locations in total and by the FCC's served (100/20 Mbps or more on low-latency fiber, cable, copper or licensed fixed wireless), underserved (25/3 up to 100/20) and unserved tiers, each by technology (copper, cable, fiber, licensed fixed wireless, licensed-by-rule fixed wireless), unique providers, and Esri's 6- and 12-month-previous counts as published. shares[] gives each share as a named ratio of two published counts (e.g. UnservedBSLs / TotalBSLs), null where there are no locations. Availability as providers report it: not subscription, not measured speed. Esri's layer is under the Esri Master License Agreement; the figures are the FCC's. Connecticut is published only in its legacy counties (09001-09015), so a planning-region FIPS (09110-09190) answers 404 'not in this release'. " +
+      ENVELOPE,
+    inputSchema: z.object({ fips: z.string().regex(/^\d{5}$/, "5-digit county FIPS").describe("5-digit county FIPS, e.g. 48453 (Travis County, TX).") }),
+    handler: (i, ctx) => relay(ctx, "/api/civic" + qs({ op: "broadband", level: "place", fips: i.fips })),
+  }),
+  defineTool({
     name: "live_events",
     title: "Where the world is doing something unusual now",
     description:

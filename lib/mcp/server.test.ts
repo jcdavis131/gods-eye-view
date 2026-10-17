@@ -40,6 +40,7 @@ const EXPECTED_TOOL_NAMES = [
   "water_trace",
   "risk_index",
   "social_vulnerability",
+  "broadband_availability",
   "live_events",
   "catalog_search",
   "place_export",
