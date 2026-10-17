@@ -81,6 +81,8 @@ describe("every tool asks for the exact route URL", () => {
     ["water_trace", { lon: -116.2023, lat: 43.615 }, "/api/water?op=reach&lon=-116.2023&lat=43.615"],
     ["water_trace", { comid: 23398863, mode: "gauges", distance: 150 }, "/api/water?op=trace&comid=23398863&mode=gauges&distance=150"],
     ["water_trace", { comid: 23398863, mode: "basin" }, "/api/water?op=trace&comid=23398863&mode=basin"],
+    ["risk_index", { bbox: [-99, 29, -98, 30] }, "/api/hazards?op=nri&bbox=-99,29,-98,30"],
+    ["risk_index", { bbox: [-98.55, 29.4, -98.45, 29.5], level: "tract" }, "/api/hazards?op=nri&bbox=-98.55,29.4,-98.45,29.5&level=tract"],
     ["live_events", {}, "/api/live"],
     ["catalog_search", { q: "wetland habitat" }, "/api/catalog?op=search&q=wetland%20habitat"],
     ["catalog_search", { q: "dams", limit: 3 }, "/api/catalog?op=search&q=dams&limit=3"],
@@ -137,6 +139,8 @@ describe("input schemas reject bad input", () => {
     ["water_trace", { comid: 23398863 }],
     ["water_trace", { lon: -116.2, lat: 43.6, comid: 23398863, mode: "down" }],
     ["water_trace", { comid: 23398863, mode: "down", distance: 900 }],
+    ["risk_index", { bbox: [-98, 29, -99, 30] }],
+    ["risk_index", { bbox: [-99, 29, -98, 30], level: "state" }],
   ];
   for (const [name, input] of bad) {
     it(`${name} ${JSON.stringify(input)}`, async () => {

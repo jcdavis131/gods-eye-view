@@ -167,7 +167,7 @@ export default function InfoPanel() {
   const details = Object.entries(p.details ?? {}).filter(([, v]) => v != null && v !== "" && v !== false);
   const isLiveLayer =
     !p.simulated &&
-    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "employers", "banks", "spending", "constructs", "field", "flood", "wetlands", "publiclands", "relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "transmission", "pipelines", "plants", "rail", "airports", "dams", "faults", "landslides", "geology", "plss", "parcels", "zoning", "permits", "licences", "envpermits", "historic", "crithab", "contaminants", "wayback", "topo", "impaired", "pfas", "ust", "hydro"].includes(p.layer);
+    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "employers", "banks", "spending", "constructs", "field", "flood", "wetlands", "publiclands", "relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "transmission", "pipelines", "plants", "rail", "airports", "dams", "faults", "landslides", "geology", "plss", "parcels", "zoning", "permits", "licences", "envpermits", "historic", "crithab", "contaminants", "wayback", "topo", "impaired", "pfas", "ust", "hydro", "riskindex"].includes(p.layer);
   const banner = BANNER[p.layer];
   const iss = p.layer === "satellites" && p.id === "25544";
   const construct = p.layer === "constructs" || p.layer === "field" || p.layer === "alerts";
@@ -340,6 +340,7 @@ export default function InfoPanel() {
 
 /** One-line reminders of what a layer's features are and are not. */
 const BANNER: Partial<Record<string, string>> = {
+  riskindex: "FEMA NATIONAL RISK INDEX \u00b7 A RELATIVE INDEX, NOT A LIKELIHOOD \u00b7 COUNTY AND TRACT SCORES ARE NOT COMPARABLE",
   hydro: "NHD PICTURE \u00b7 TRACE AND FLOW ON THE NHDPLUS V2 NETWORK \u00b7 MODELLED FLOW, NOT A MEASUREMENT",
   flood: "REGULATORY FLOOD MAP · NOT A FORECAST",
   parcels: "PUBLIC RECORD AS ITS SOURCE PUBLISHES IT · A TAX MAP, NOT A SURVEY",

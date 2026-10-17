@@ -50,6 +50,7 @@ export type LayerId =
   | "impaired"
   | "pfas"
   | "ust"
+  | "riskindex"
   | "relief"
   | "slope"
   | "contours"
@@ -125,6 +126,7 @@ export const LAYER_IDS: LayerId[] = [
   "impaired",
   "pfas",
   "ust",
+  "riskindex",
   "relief",
   "slope",
   "contours",

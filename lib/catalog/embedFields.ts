@@ -49,6 +49,8 @@ export const EMBED_TEXT = {
   "nhd-hydro-picture": [],
   "nldi-trace": [],
   "nhdplus-v21-reach": ["ftype"],
+  "nri-counties": ["COUNTY", "STATEABBRV", "RISK_RATNG", "EAL_RATNG", "SOVI_RATNG", "RESL_RATNG", "AVLN_RISKR", "CFLD_RISKR", "CWAV_RISKR", "DRGT_RISKR", "ERQK_RISKR", "HAIL_RISKR", "HWAV_RISKR", "HRCN_RISKR", "ISTM_RISKR", "IFLD_RISKR", "LNDS_RISKR", "LTNG_RISKR", "SWND_RISKR", "TRND_RISKR", "TSUN_RISKR", "VLCN_RISKR", "WFIR_RISKR", "WNTW_RISKR"],
+  "nri-tracts": ["STATEABBRV", "RISK_RATNG", "EAL_RATNG", "SOVI_RATNG", "RESL_RATNG", "AVLN_RISKR", "CFLD_RISKR", "CWAV_RISKR", "DRGT_RISKR", "ERQK_RISKR", "HAIL_RISKR", "HWAV_RISKR", "HRCN_RISKR", "ISTM_RISKR", "IFLD_RISKR", "LNDS_RISKR", "LTNG_RISKR", "SWND_RISKR", "TRND_RISKR", "TSUN_RISKR", "VLCN_RISKR", "WFIR_RISKR", "WNTW_RISKR"],
 } satisfies Record<string, string[]>;
 
 export type CollectionId = keyof typeof EMBED_TEXT;
@@ -189,6 +191,30 @@ export const FIELD_LABEL: Readonly<Record<string, string>> = {
   Survey_Year: "survey year",
   // NHDPlus V2.1 reach (click answer): the NHD feature type as its published word
   ftype: "NHD feature type",
+  // FEMA National Risk Index (COUNTY and STATE-like fields reuse the labels above)
+  STATEABBRV: "state",
+  RISK_RATNG: "composite risk rating",
+  EAL_RATNG: "expected annual loss rating",
+  SOVI_RATNG: "social vulnerability rating (as published in the NRI)",
+  RESL_RATNG: "community resilience rating",
+  AVLN_RISKR: "avalanche risk",
+  CFLD_RISKR: "coastal flooding risk",
+  CWAV_RISKR: "cold wave risk",
+  DRGT_RISKR: "drought risk",
+  ERQK_RISKR: "earthquake risk",
+  HAIL_RISKR: "hail risk",
+  HWAV_RISKR: "heat wave risk",
+  HRCN_RISKR: "hurricane risk",
+  ISTM_RISKR: "ice storm risk",
+  IFLD_RISKR: "inland flooding risk",
+  LNDS_RISKR: "landslide risk",
+  LTNG_RISKR: "lightning risk",
+  SWND_RISKR: "strong wind risk",
+  TRND_RISKR: "tornado risk",
+  TSUN_RISKR: "tsunami risk",
+  VLCN_RISKR: "volcanic activity risk",
+  WFIR_RISKR: "wildfire risk",
+  WNTW_RISKR: "winter weather risk",
 };
 
 /**
@@ -230,6 +256,8 @@ export const NO_RECORD_VECTORS: Readonly<Record<string, string>> = {
   "nhd-hydro-picture": "a picture of mapped water; no record",
   "nldi-trace": "computed per click from NLDI; no stored record",
   "nhdplus-v21-reach": "a click answer for one reach, not a feature on the globe",
+  "nri-counties": "joined in the browser onto the shared county outlines; record vectors deferred to the next round",
+  "nri-tracts": "deferred with nri-counties",
 };
 
 /** Fields that must never be embedded whatever a card says: the deny list, the dossier's "published name", and any *name field not reviewed. */

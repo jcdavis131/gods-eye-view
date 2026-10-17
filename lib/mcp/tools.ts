@@ -560,6 +560,15 @@ export const TOOLS: ToolDef[] = [
       relay(ctx, "/api/water" + (i.comid != null ? qs({ op: "trace", comid: i.comid, mode: i.mode, distance: i.distance }) : qs({ op: "reach", lon: i.lon, lat: i.lat }))),
   }),
   defineTool({
+    name: "risk_index",
+    title: "FEMA National Risk Index for counties or tracts in a box",
+    description:
+      "FEMA's National Risk Index (December 2025) as published (GET /api/hazards?op=nri): level county (default) gives attribute rows for every county touching the bbox (STCOFIPS, COUNTY, STATEABBRV, RISK_SCORE and RISK_RATNG, EAL_VALT in dollars a year and EAL_RATNG, SOVI_SCORE/SOVI_RATNG, RESL_SCORE/RESL_RATNG, and the 18 hazard ratings AVLN_RISKR to WNTW_RISKR); level tract gives tract polygons with the same fields plus TRACTFIPS (box at most 0.6 degrees). A relative index: ratings are percentiles among all counties (or tracts), not likelihoods; 'Not Applicable' and 'Insufficient Data' are not low. Social vulnerability here is FEMA's (from the Census Community Resilience Estimate), not CDC SVI. " +
+      ENVELOPE,
+    inputSchema: z.object({ bbox, level: z.enum(["county", "tract"]).optional() }),
+    handler: (i, ctx) => relay(ctx, "/api/hazards" + qs({ op: "nri", bbox: bboxStr(i.bbox), level: i.level })),
+  }),
+  defineTool({
     name: "live_events",
     title: "Where the world is doing something unusual now",
     description:

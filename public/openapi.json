@@ -2389,10 +2389,11 @@
               "enum": [
                 "wildfire",
                 "fires",
-                "alerts"
+                "alerts",
+                "nri"
               ]
             },
-            "description": "wildfire: NIFC WFIGS perimeters and incident points (US). fires: NASA FIRMS 24 h hotspots in a bbox. alerts: NWS + GDACS + EONET."
+            "description": "wildfire: NIFC WFIGS perimeters and incident points (US). fires: NASA FIRMS 24 h hotspots in a bbox. alerts: NWS + GDACS + EONET. nri: FEMA National Risk Index, December 2025, as FEMA publishes it: composite risk score and rating, expected annual loss (EAL_VALT, dollars a year) and its rating, social vulnerability (SOVI_*, which FEMA says comes from the Census Community Resilience Estimate, not CDC SVI) and community resilience (RESL_*), and the 18 hazard ratings (*_RISKR). level=county (default; the box is snapped as op=areas snaps it, at most 18 degrees on a 1 degree grid): attribute rows only, to join by STCOFIPS onto county outlines (Connecticut in planning regions 09110-09190). level=tract (box at most 0.6 degrees, snapped to 0.05): NRI's tract polygons as GeoJSON, paged by 2,000. Ratings are verbatim; Not Applicable, Insufficient Data, No Rating and Data Unavailable are not a class. A relative index (a percentile among all counties, or all tracts), not a likelihood; county and tract scores are not comparable."
           },
           {
             "name": "bbox",
@@ -2400,7 +2401,7 @@
             "schema": {
               "$ref": "#/components/schemas/Bbox"
             },
-            "description": "`w,s,e,n` degrees, op=fires only; snapped outward to a 1° grid. Default: the whole globe."
+            "description": "`w,s,e,n` degrees, op=fires only; snapped outward to a 1° grid. Default: the whole globe. op=nri: required."
           },
           {
             "name": "max",
@@ -2412,6 +2413,19 @@
               "default": 5000
             },
             "description": "op=fires: most rows returned; above it the detections are binned (brightest per cell)."
+          },
+          {
+            "name": "level",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "county",
+                "tract"
+              ],
+              "default": "county"
+            },
+            "description": "op=nri: county (attribute rows) or tract (polygons)."
           }
         ],
         "responses": {
@@ -2437,6 +2451,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/HazardsAlertsResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HazardsNriResponse"
                     }
                   ]
                 }
@@ -9663,6 +9680,40 @@
           }
         ],
         "x-op": "trace"
+      },
+      "HazardsNriResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "description": "level=county: { level: 'county', rows: [ { NRI_ID, STATEABBRV, COUNTY, STCOFIPS, POPULATION, BUILDVALUE, RISK_SCORE, RISK_RATNG, EAL_VALT, EAL_RATNG, SOVI_SCORE, SOVI_RATNG, RESL_SCORE, RESL_RATNG, NRI_VER, AVLN_RISKR ... WNTW_RISKR } ] } as FEMA publishes them. level=tract: a GeoJSON FeatureCollection of tract polygons (simplified to 0.0005 degrees) with the same properties plus TRACTFIPS."
+              },
+              "level": {
+                "type": "string",
+                "enum": [
+                  "county",
+                  "tract"
+                ]
+              },
+              "bbox": {
+                "$ref": "#/components/schemas/Bbox"
+              },
+              "count": {
+                "type": "integer"
+              },
+              "capped": {
+                "type": "boolean",
+                "description": "FEMA's answer was still cut at its record limit after the pages asked: ask a smaller box."
+              }
+            }
+          }
+        ],
+        "x-op": "nri"
       }
     }
   }

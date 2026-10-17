@@ -128,6 +128,15 @@ describe("voice words for contaminated sites", () => {
   });
 });
 
+describe("voice words for the National Risk Index", () => {
+  it("hears risk index before hazards", () => {
+    expect(layerOf("show the national risk index over texas")).toMatchObject({ layer: "riskindex", place: "texas" });
+    expect(layerOf("show disaster risk")).toMatchObject({ layer: "riskindex" });
+    expect(layerOf("show hazard risk")).toMatchObject({ layer: "riskindex" });
+    expect(layerOf("show hazards")).toMatchObject({ layer: "hazards" });
+  });
+});
+
 describe("voice words for rivers and streams", () => {
   it("hears streams and hydrography before rivers", () => {
     expect(layerOf("show rivers and streams over boise")).toMatchObject({ layer: "hydro", place: "boise" });

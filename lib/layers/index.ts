@@ -53,6 +53,7 @@ import { licencesLayer } from "./licences";
 import { envpermitsLayer } from "./envpermits";
 import { contaminantsLayer } from "./contaminants";
 import { ustLayer } from "./ust";
+import { riskindexLayer } from "./riskindex";
 import { sportsLayer } from "./sports";
 import { constructsLayer } from "./constructs";
 import { fieldLayer } from "./field";
@@ -113,6 +114,7 @@ export const LAYERS: LayerDefinition[] = [
   envpermitsLayer,
   contaminantsLayer,
   ustLayer,
+  riskindexLayer,
   sportsLayer,
   constructsLayer,
   fieldLayer,

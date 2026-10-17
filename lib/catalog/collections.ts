@@ -25,6 +25,7 @@ import { NPL_CAVEAT } from "@/lib/permits/npl";
 import { FUDS_CAVEAT } from "@/lib/permits/fuds";
 import { UST_CAVEAT } from "@/lib/permits/ust";
 import { FLOW_CAVEAT, HYDRO_CAVEAT } from "@/lib/water/nldi";
+import { NRI_CAVEATS, NRI_SOVI_NOTE, NRI_TERMS } from "@/lib/hazards/nri";
 import { DENY_FIELD, EMBED_TEXT } from "./embedFields";
 
 export interface Exclusion {
@@ -84,6 +85,7 @@ export const SHELVES: Array<{ id: string; title: string; layers: LayerId[] }> = 
   { id: "species", title: "Species", layers: ["crithab"] },
   { id: "water", title: "Water", layers: ["impaired", "pfas", "hydro"] },
   { id: "contaminants", title: "Contaminants", layers: ["contaminants", "ust"] },
+  { id: "hazards", title: "Hazards and risk", layers: ["riskindex"] },
   { id: "imagery", title: "Imagery and maps", layers: ["wayback", "topo"] },
   { id: "infrastructure", title: "Infrastructure", layers: ["dams"] },
 ];
@@ -734,6 +736,48 @@ export const COLLECTIONS: readonly Collection[] = [
     embedText: EMBED_TEXT["nhdplus-v21-reach"],
     ops: ["water?op=reach"],
     sensitivity: "Agency hydrography; waterbody names are place names.",
+    round: 4,
+  },
+  // ------------------------------------------------------------ round 4: hazards and risk
+  {
+    id: "nri-counties",
+    title: "FEMA National Risk Index by county",
+    layer: "riskindex",
+    sources: ["fema-nri"],
+    what: "FEMA's National Risk Index for every county (Connecticut in its planning regions): the composite risk score and rating, expected annual loss in dollars and its rating, social vulnerability and community resilience as published in the index, and a rating for each of 18 natural hazards (avalanche to winter weather). Joined by FIPS onto the county outlines the globe already draws (Census TIGERweb); NRI's own county geometry is not fetched.",
+    recordIs: "A county's percentile among all US counties, in FEMA's rating words. 'Very High' is high compared with everywhere else, not likely; expected annual loss is a modelled long-run average, not a forecast. 'Not Applicable', 'Insufficient Data', 'No Rating' and 'Data Unavailable' are not a class and never read as low.",
+    coverage: { spatial: "United States and territories, by county (Connecticut planning regions 09110-09190); drawn below 2,500 km", temporal: "NRI version December 2025", count: { value: 3232, of: "county rows in National_Risk_Index_Counties (returnCountOnly)", countedOn: R4 } },
+    freshness: { statement: "NRI_VER 'December 2025' (1.20.0); the layer's data last edited 2025-12-16.", readFrom: "NRI_VER field; FeatureServer layer 0 editingInfo.dataLastEditDate; item description", recordedOn: R4 },
+    excluded: [
+      { what: "NRI's own county polygons", why: "the globe has one county outline source (TIGERweb, via /api/economy?op=areas); counties are joined by FIPS" },
+      { what: "the other 430 or so fields (per-hazard frequencies, exposures, loss ratios, percentiles)", why: "the dossier shows the composite, loss, social vulnerability, resilience and the 18 ratings; the rest are FEMA's inputs" },
+      { what: "a CDC/ATSDR SVI number beside FEMA's", why: "FEMA's social vulnerability comes from the Census Community Resilience Estimate; the CDC index waits until the two can be told apart on screen (D-C1)" },
+    ],
+    caveats: [...NRI_CAVEATS, NRI_SOVI_NOTE, NRI_TERMS],
+    searchable: ["STCOFIPS", "NRI_ID"],
+    embedText: EMBED_TEXT["nri-counties"],
+    ops: ["hazards?op=nri"],
+    sensitivity: "Published county indices; no personal data.",
+    round: 4,
+  },
+  {
+    id: "nri-tracts",
+    title: "FEMA National Risk Index by census tract",
+    layer: "riskindex",
+    sources: ["fema-nri"],
+    what: "The same National Risk Index fields for every census tract, drawn on NRI's own tract polygons below 60 km, paged by FEMA's 2,000-record limit.",
+    recordIs: "A tract's percentile among all US tracts, in FEMA's rating words; computed separately from the county index and not comparable with it. A tract has no name: it is shown by its 11-digit FIPS with its county and state.",
+    coverage: { spatial: "United States and territories, by census tract; drawn below 60 km", temporal: "NRI version December 2025", count: { value: 85154, of: "tract rows in National_Risk_Index_Census_Tracts (returnCountOnly)", countedOn: R4 } },
+    freshness: { statement: "NRI_VER 'December 2025'; the layer's data last edited 2025-12-16.", readFrom: "NRI_VER field; FeatureServer layer 0 editingInfo.dataLastEditDate", recordedOn: R4 },
+    excluded: [
+      { what: "tracts above 60 km camera height", why: "85,154 polygons; the county index is shown instead" },
+      { what: "a tract's score compared with a county's", why: "FEMA computes them separately" },
+    ],
+    caveats: [...NRI_CAVEATS, NRI_SOVI_NOTE, NRI_TERMS],
+    searchable: ["TRACTFIPS", "STCOFIPS", "NRI_ID"],
+    embedText: EMBED_TEXT["nri-tracts"],
+    ops: ["hazards?op=nri"],
+    sensitivity: "Published tract indices; no personal data.",
     round: 4,
   },
 ];

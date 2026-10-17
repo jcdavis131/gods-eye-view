@@ -12,6 +12,7 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import FieldControls from "./FieldControls";
 import TileControls, { PICTURE_LAYERS } from "./TileControls";
+import LayerOptions, { OPTION_LAYERS } from "./LayerOptions";
 
 /** One layer in the pinned list: dot, name, badges, count, switch, status line. */
 function LayerRow({
@@ -82,6 +83,7 @@ function LayerRow({
       )}
       {on && l.id === "field" && <FieldControls />}
       {on && PICTURE_LAYERS.has(l.id) && <TileControls id={l.id} />}
+      {on && OPTION_LAYERS.has(l.id) && <LayerOptions id={l.id} />}
     </li>
   );
 }
@@ -172,12 +174,13 @@ function CompactLayers({
     <div className="px-2 py-2">
       <Tiles items={groups.primary} layers={layers} status={status} setLayer={setLayer} />
       {layers.field && <FieldControls />}
-      {LAYERS.filter((l) => layers[l.id] && PICTURE_LAYERS.has(l.id)).map((l) => (
+      {LAYERS.filter((l) => layers[l.id] && (PICTURE_LAYERS.has(l.id) || OPTION_LAYERS.has(l.id))).map((l) => (
         <div key={l.id} className="mt-2">
           <div className="px-1 text-[9px] uppercase tracking-widest" style={{ color: l.color }}>
             {l.label}
           </div>
           <TileControls id={l.id} />
+          <LayerOptions id={l.id} />
         </div>
       ))}
       {groups.more.length > 0 && (

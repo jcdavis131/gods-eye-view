@@ -136,6 +136,8 @@ export interface Prefs {
   waybackRelease: number | null;
   /** USGS historical topographic map edition year the Historic topo maps layer draws; null = the newest at the view centre. */
   topoYear: number | null;
+  /** National Risk Index: what the layer colours by, "composite" or a hazard code (TRND, HRCN, ...). */
+  nriHazard: string;
   /** The viewer's opacity for each picture layer (0..1); absent = the layer's default. */
   tileAlpha: Partial<Record<LayerId, number>>;
   /** CelesTrak GP groups to load. "active" is ~10k objects and opt-in. */
@@ -164,6 +166,7 @@ export const DEFAULT_PREFS: Prefs = {
   seaLevelFt: 3,
   waybackRelease: null,
   topoYear: null,
+  nriHazard: "composite",
   tileAlpha: {},
   satelliteGroups: ["stations", "visual", "gps-ops", "military", "weather"],
   observer: null,
