@@ -1016,7 +1016,10 @@ export const COLLECTIONS: readonly Collection[] = [
       { what: "closed hospitals, by default", why: "374 rows are CLOSED; a 'Closed too' chip draws them grey" },
     ],
     caveats: [HOSPITALS_CAVEAT],
-    searchable: ["ID"],
+    // What the palette matches besides the published name (NAME is on the deny list as a
+    // field; the name is the feature's label): ID on "HIFLD id", COUNTYFIPS on "county",
+    // CITY and STATE on "place" (lib/search/allowlist.test.ts checks each)
+    searchable: ["ID", "COUNTYFIPS", "CITY", "STATE"],
     embedText: EMBED_TEXT["hifld-hospitals"],
     ops: ["infra?op=hospitals"],
     sensitivity:

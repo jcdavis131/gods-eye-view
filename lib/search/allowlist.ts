@@ -78,8 +78,10 @@ export const SEARCHABLE_DETAILS: ReadonlySet<string> = new Set([
   // historic places: NPS's NRIS reference number. Never the property's name (it can be
   // a person's: "Milam, Ben, Statue"); the feature is named by its number instead
   "nris refnum",
-  // public schools and hospitals: NCES's school id and HIFLD's hospital id (the feature
-  // is labelled by the institution's published name)
+  // public schools: NCES's school id (the feature is labelled by the school's published
+  // name). Hospitals' "HIFLD id" is matched by "hifld id" above, the key HIFLD's
+  // transmission lines share; a hospital's county FIPS and city, state are on "county"
+  // and "place" below
   "nces school id",
   // contaminated sites: EPA's program and FRS registry ids. Never the facility name
   // (EPA's primary_name can be a sole proprietor's own name or a street address)

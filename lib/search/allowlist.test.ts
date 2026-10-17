@@ -114,6 +114,29 @@ describe("the search allowlist on infrastructure layers", () => {
   });
 });
 
+describe("hospitals", () => {
+  it("finds a hospital by a bare HIFLD id and by each field its card lists, never by owner type, address or industry", async () => {
+    const { buildHospitals } = await import("@/lib/infra/hospitals");
+    const { collection } = await import("@/lib/catalog/collections");
+    // FEMA RAPT's own row (lib/infra/fixtures/hosp-box-austin.json, captured 2026-10-17).
+    const row = {
+      ID: "0133978746", NAME: "ARISE AUSTIN MEDICAL CENTER", ADDRESS: "3003 BEE CAVE ROAD", CITY: "AUSTIN", STATE: "TX", ZIP: "78746",
+      TYPE: "GENERAL ACUTE CARE", STATUS: "OPEN", COUNTYFIPS: "48453", BEDS: 19, TRAUMA: "NOT AVAILABLE", HELIPAD: "N", OWNER: "PROPRIETARY",
+      NAICS_DESC: "GENERAL MEDICAL AND SURGICAL HOSPITALS", SOURCE: "https://www.hhs.texas.gov/providers/health-care-facilities-regulation",
+      SOURCEDATE: 1709856000000, VAL_DATE: 1418083200000, WEBSITE: "NOT AVAILABLE",
+    };
+    const [f] = buildHospitals([{ geometry: { type: "Point", coordinates: [-97.79, 30.27] }, properties: row }]);
+    // The bare id, as typed into the palette: the feature id is "hifld-hosp:<ID>", so only the dossier key finds it.
+    expect(searchableDetail("HIFLD id")).toBe(true);
+    expect(matchScore(f.properties, "0133978746")).toBe(1);
+    const card = collection("hifld-hospitals")!;
+    for (const field of card.searchable) {
+      expect(matchScore(f.properties, String(row[field as keyof typeof row]).toLowerCase()), field).toBeGreaterThan(0);
+    }
+    for (const no of ["proprietary", "bee cave", "3003", "tx 78746", "general medical and surgical", "hhs.texas.gov"]) expect(matchScore(f.properties, no), no).toBe(0);
+  });
+});
+
 describe("historic places", () => {
   it("finds a National Register listing by its NRIS number, never by the property's name (which can be a person's)", async () => {
     const { buildHistoric } = await import("@/lib/land/features");
