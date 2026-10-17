@@ -80,6 +80,14 @@ describe("tracts", () => {
     expect(SUPPRESSED_LEGEND).toBe("10 or fewer vouchers, or none (HUD suppresses)");
   });
 
+  it("a tract is found in the palette by its GEOID (the card's one searchable field)", async () => {
+    const { matchScore } = await import("@/lib/search/allowlist");
+    const b = buildHousing(feats(hcvAustin), feats(qctAustin), 0);
+    const t = b.features.find((f) => f.properties.id === "housing:hcv:48453002220")!;
+    expect(matchScore(t.properties, "48453002220")).toBeGreaterThan(0);
+    expect(matchScore(t.properties, "austin")).toBe(0);
+  });
+
   it("QCT outlines come after the tracts, and membership is shown on the tract", () => {
     const b = buildHousing(feats(hcvAustin), feats(qctAustin), 0);
     expect(b.qct).toBe(46);
