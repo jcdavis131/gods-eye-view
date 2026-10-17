@@ -34,6 +34,7 @@ const OPTION_KEYS: Partial<Record<LayerDefinition["id"], Array<keyof Prefs>>> = 
   wayback: ["waybackRelease"],
   topo: ["topoYear"],
   riskindex: ["nriHazard"],
+  historic: ["nhlOnly"],
 };
 
 export default function LayerHost() {

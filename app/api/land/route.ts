@@ -15,7 +15,7 @@
 //                                          code) and the year of the imagery each was mapped
 //                                          from (NWI Data_Source). Same box rules; NWI answers
 //                                          at most 500 polygons a query.
-//   /api/land?op=historic&bbox=w,s,e,n[&polygons=1]
+//   /api/land?op=historic&bbox=w,s,e,n[&polygons=1][&nhl=1]
 //                                          National Register of Historic Places listings NPS
 //                                          publishes as non-restricted: points, and with
 //                                          polygons=1 boundaries too. Box at most 0.12
@@ -61,6 +61,7 @@ import {
   buildWetlands,
   NRHP_CAVEAT,
   NRHP_FIELDS,
+  nrhpWhere,
   NWI_CAVEAT,
   nwiImagerySummary,
   PADUS_CATEGORIES,
@@ -301,12 +302,12 @@ async function opWetlands(bbox: Bbox): Promise<OpResult> {
  */
 const NRHP_WHERE = "STATUS='Listed' AND (Address IS NULL OR UPPER(Address) NOT LIKE '%RESTRICT%')";
 
-function nrhpQuery(layer: 0 | 1, bbox: Bbox) {
+function nrhpQuery(layer: 0 | 1, bbox: Bbox, nhlOnly = false) {
   return arcgisQuery(
     "nps-nrhp",
     `${NRHP}/${layer}`,
     {
-      where: NRHP_WHERE,
+      where: nrhpWhere(NRHP_WHERE, nhlOnly),
       ...envelope(bbox),
       outFields: NRHP_FIELDS.join(","),
       returnGeometry: "true",
@@ -322,15 +323,16 @@ function nrhpQuery(layer: 0 | 1, bbox: Bbox) {
  * too (the layer asks for them only below 10 km). A boundary query that fails leaves the
  * points standing and says the boundaries are missing.
  */
-async function opHistoric(bbox: Bbox, boundaries: boolean): Promise<OpResult> {
+async function opHistoric(bbox: Bbox, boundaries: boolean, nhlOnly = false): Promise<OpResult> {
+  const tag = nhlOnly ? ":nhl" : "";
   const [pts, bnd] = await Promise.all([
-    cached("nrhp-pt:" + bbox.join(","), DAY, async () => {
-      const fc = await nrhpQuery(0, bbox);
+    cached("nrhp-pt:" + bbox.join(",") + tag, DAY, async () => {
+      const fc = await nrhpQuery(0, bbox, nhlOnly);
       return { features: buildHistoric(fc.features, "point"), truncated: truncated(fc) || fc.features.length >= NRHP_MAX };
     }, LAND_DEADLINE),
     boundaries
-      ? cached("nrhp-bnd:" + bbox.join(","), DAY, async () => {
-          const fc = await nrhpQuery(1, bbox);
+      ? cached("nrhp-bnd:" + bbox.join(",") + tag, DAY, async () => {
+          const fc = await nrhpQuery(1, bbox, nhlOnly);
           return { features: buildHistoric(fc.features, "boundary"), truncated: truncated(fc) || fc.features.length >= NRHP_MAX };
         }, LAND_DEADLINE).catch(() => null)
       : Promise.resolve(null),
@@ -345,6 +347,7 @@ async function opHistoric(bbox: Bbox, boundaries: boolean): Promise<OpResult> {
     "Property names are shown as NPS lists them and can include a person's name; they are not searchable. No street address is requested.",
     BOX_CAVEAT,
   ];
+  if (nhlOnly) caveats.push("National Historic Landmarks only (nhl=1: NPS's Is_NHL flag), with the same listed-only and restricted-address exclusions; every other National Register listing in the box is left out of this answer, not absent.");
   if (pts.value.truncated) caveats.push(`NPS's points were capped at the first ${NRHP_MAX.toLocaleString("en-US")} in this box; ask for a smaller box for every listing.`);
   if (bnd?.value.truncated) caveats.push(`NPS's boundaries were capped at the first ${NRHP_MAX.toLocaleString("en-US")} in this box.`);
   if (boundaries && !bnd) caveats.push("NPS's boundary layer did not answer this time; the points are shown, the boundaries are missing (boundaries: null).");
@@ -353,6 +356,7 @@ async function opHistoric(bbox: Bbox, boundaries: boolean): Promise<OpResult> {
     meta: {
       source: "National Park Service, National Register of Historic Places spatial data (public, non-restricted listings)",
       bbox,
+      nhlOnly,
       points: pts.value.features.length,
       // null when boundaries were asked for and NPS did not answer; absent when not asked for.
       ...(boundaries ? { boundaries: bnd ? bnd.value.features.length : null } : {}),
@@ -638,7 +642,7 @@ export async function GET(req: NextRequest) {
       case "historic": {
         const b = parseBbox(q.get("bbox"), 0.12, 0.02);
         if (!b) return badRequest(BBOX_HELP);
-        return respond(await opHistoric(b, q.get("polygons") === "1"));
+        return respond(await opHistoric(b, q.get("polygons") === "1", q.get("nhl") === "1"));
       }
       case "crithab": {
         const lon = numParam(q.get("lon"));

@@ -24,6 +24,10 @@ import rangesBarton from "@/lib/land/fixtures/ranges-3-barton.json";
 import rangesPecos from "@/lib/land/fixtures/ranges-3-pecos.json";
 import rangesAustin from "@/lib/land/fixtures/ranges-3-austin.json";
 import rangesSeattle from "@/lib/land/fixtures/ranges-3-seattle.json";
+import nhlBoundaries from "@/lib/land/fixtures/nhl-bnd-cambridge.json";
+import nhlPoints from "@/lib/land/fixtures/nhl-pt-cambridge.json";
+import nhlCountExcl from "@/lib/land/fixtures/nhl-bnd-cambridge-count-excl.json";
+import nhlCountNoExcl from "@/lib/land/fixtures/nhl-bnd-cambridge-count-noexcl.json";
 
 vi.mock("@/lib/server/cache", () => ({
   cached: async <T,>(_k: string, _ttl: number, produce: () => Promise<T>) => ({ value: await produce(), age: 0, hit: false }),
@@ -178,6 +182,40 @@ describe("op=historic", () => {
     const bad = await get("op=historic&bbox=1,2,3");
     expect(bad.status).toBe(400);
     expect(calls).toEqual([]);
+  });
+});
+
+// NPS answers captured 2026-10-16 for -71.14,42.36,-71.12,42.38 (Cambridge, MA), unmodified: listed
+// NHL boundaries with the restricted-address exclusion (10), and the counts with and without it
+// (10 and 11): in this box, dropping the exclusion would add a row. That row is not committed.
+describe("op=historic&nhl=1 (Landmarks only)", () => {
+  const strict = (u: string) => {
+    const where = param(u, "where") ?? "";
+    // Only the full where is answered: listed, restricted addresses excluded, and the NHL clause.
+    if (!where.startsWith("STATUS='Listed' AND (Address IS NULL OR UPPER(Address) NOT LIKE '%RESTRICT%')") || !where.endsWith(" AND Is_NHL='X'")) return null;
+    if (u.includes("/nrhp_locations/MapServer/0/query")) return json(nhlPoints);
+    if (u.includes("/nrhp_locations/MapServer/1/query")) return json(nhlBoundaries);
+    return null;
+  };
+
+  it("ANDs the NHL clause onto the listed-only and restricted-address exclusions, never replacing them", async () => {
+    expect((nhlCountNoExcl as { count: number }).count - (nhlCountExcl as { count: number }).count).toBe(1);
+    answer = strict;
+    const { status, body } = await get("op=historic&bbox=-71.14,42.36,-71.12,42.38&polygons=1&nhl=1");
+    expect(status).toBe(200);
+    expect(calls).toHaveLength(2);
+    for (const u of calls) expect(param(u, "where")).toBe("STATUS='Listed' AND (Address IS NULL OR UPPER(Address) NOT LIKE '%RESTRICT%') AND Is_NHL='X'");
+    const b = body as unknown as { boundaries: number; nhlOnly: boolean; data: { features: Array<{ properties: { details: Record<string, unknown> } }> } };
+    expect(b.nhlOnly).toBe(true);
+    expect(b.boundaries).toBe((nhlCountExcl as { count: number }).count);
+    for (const f of b.data.features) expect(f.properties.details["national historic landmark"]).toMatch(/^yes/);
+    expect(body.caveats?.join(" ")).toMatch(/National Historic Landmarks only/);
+  });
+
+  it("leaves the where unchanged without nhl=1", async () => {
+    answer = (u) => (u.includes("/nrhp_locations/MapServer/") ? json(nhlPoints) : null);
+    await get("op=historic&bbox=-71.14,42.36,-71.12,42.38");
+    expect(param(calls[0], "where")).toBe("STATUS='Listed' AND (Address IS NULL OR UPPER(Address) NOT LIKE '%RESTRICT%')");
   });
 });
 

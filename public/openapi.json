@@ -2504,7 +2504,7 @@
                 "elevation"
               ]
             },
-            "description": "flood: FEMA NFHL zones. wetlands: USFWS NWI polygons with imagery years. historic: NPS National Register listings (public, non-restricted). crithab: USFWS critical habitat (final and proposed) at lon, lat. publiclands: USGS PAD-US 4.1 units with owners and access. elevation: USGS 3DEP EPQS at lon, lat."
+            "description": "flood: FEMA NFHL zones. wetlands: USFWS NWI polygons with imagery years. historic (nhl=1 for National Historic Landmarks only): NPS National Register listings (public, non-restricted). crithab: USFWS critical habitat (final and proposed) at lon, lat. publiclands: USGS PAD-US 4.1 units with owners and access. elevation: USGS 3DEP EPQS at lon, lat."
           },
           {
             "name": "bbox",
@@ -2544,6 +2544,17 @@
               "maximum": 90
             },
             "description": "op=elevation, crithab: latitude of the point."
+          },
+          {
+            "name": "nhl",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            },
+            "description": "op=historic: National Historic Landmarks only (NPS's Is_NHL = 'X'), ANDed onto the listed-only and restricted-address exclusions, never replacing them."
           }
         ],
         "responses": {

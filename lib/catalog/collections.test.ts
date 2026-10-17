@@ -49,6 +49,7 @@ describe("the catalogue", () => {
       "nhdplus-v21-reach",
       "nri-counties",
       "nri-tracts",
+      "nhl-listed",
     ]);
     const ids = COLLECTIONS.map((c) => c.id);
     expect(new Set(ids).size).toBe(ids.length);

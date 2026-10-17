@@ -780,6 +780,27 @@ export const COLLECTIONS: readonly Collection[] = [
     sensitivity: "Published tract indices; no personal data.",
     round: 4,
   },
+  // ------------------------------------------------------------ round 4: land and heritage
+  {
+    id: "nhl-listed",
+    title: "National Historic Landmarks (the 'Landmarks only' chip on Historic places)",
+    layer: "historic",
+    sources: ["nps-nrhp"],
+    what: "The National Register listings NPS flags as National Historic Landmarks (Is_NHL = 'X'), from the same nrhp_locations service and query the Historic places layer already makes, with the NHL clause ANDed on: points for every landmark NPS maps, and boundaries below 10 km.",
+    recordIs: "A National Register listing that is also a National Historic Landmark, at the location NPS publishes. The same exclusions as every listing: listed only, no restricted address; absence is not absence on the ground.",
+    coverage: { spatial: "United States; points below 25 km, boundaries below 10 km", temporal: null, count: { value: 1196, of: "listed NHL points (layer 0, Is_NHL='X' AND STATUS='Listed', none with a restricted address); 1,699 listed NHL boundaries on layer 1 after the restricted-address exclusion (1,700 before)", countedOn: R4 } },
+    freshness: { statement: "As nrhp-listed: the service publishes no edit date.", readFrom: "nrhp_locations MapServer ?f=json (no editingInfo)", recordedOn: R4 },
+    excluded: [
+      { what: "the one listed NHL boundary whose Address reads restricted (layer 1)", why: "the NHL clause is ANDed onto the restricted-address exclusion and never replaces it" },
+      { what: "every listing that is not an NHL, while the chip is on", why: "landmarks only; switching the chip off brings them back" },
+    ],
+    caveats: ["Only what NPS publishes as non-restricted, as for every National Register listing; withheld archaeological sites are not in this source."],
+    searchable: ["NRIS_Refnum"],
+    embedText: EMBED_TEXT["nhl-listed"],
+    ops: ["land?op=historic"],
+    sensitivity: "Agency-published, non-restricted listings only; restricted-address records are filtered out; property names (RESNAME) can be a person's and are never searched or embedded.",
+    round: 4,
+  },
 ];
 
 /** One collection by id. */

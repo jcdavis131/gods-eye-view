@@ -46,12 +46,12 @@ export function historicViewKey(v: ViewState): string {
 }
 
 /** The request for a view: centred on the view key's cell so viewers in one cell share the route's cache entry. */
-export function historicRequest(v: Pick<ViewState, "lon" | "lat" | "height">): string {
+export function historicRequest(v: Pick<ViewState, "lon" | "lat" | "height">, nhlOnly = false): string {
   const lon = Math.round(v.lon / KEY_GRID) * KEY_GRID;
   const lat = Math.round(v.lat / KEY_GRID) * KEY_GRID;
   const bbox = bboxAround(lat, lon, BOX_RADIUS_M);
   const near = tierOf(v.height) === "near";
-  return `/api/land?op=historic&bbox=${bbox.map((x) => x.toFixed(4)).join(",")}${near ? "&polygons=1" : ""}`;
+  return `/api/land?op=historic&bbox=${bbox.map((x) => x.toFixed(4)).join(",")}${near ? "&polygons=1" : ""}${nhlOnly ? "&nhl=1" : ""}`;
 }
 
 async function fetchHistoric(ctx: FetchContext): Promise<FetchResult> {
@@ -65,7 +65,8 @@ async function fetchHistoric(ctx: FetchContext): Promise<FetchResult> {
     };
   }
   const tier = tierOf(ctx.view.height);
-  const env = await proxy<FeatureCollection>(historicRequest(ctx.view), ctx);
+  const nhlOnly = ctx.options.nhlOnly === true;
+  const env = await proxy<FeatureCollection>(historicRequest(ctx.view, nhlOnly), ctx);
   const meta = env as unknown as { bbox?: [number, number, number, number]; truncated?: boolean; boundaries?: number | null };
   const features = memos[tier].stable(env.data.features as unknown as LayerFeature[]);
   const loaded = Array.isArray(meta.bbox) && meta.bbox.length === 4 ? meta.bbox : null;
@@ -89,9 +90,10 @@ async function fetchHistoric(ctx: FetchContext): Promise<FetchResult> {
     source: "NPS National Register",
     fetchedAt: ctx.now,
     note:
-      `${points} listed places in the dashed box (${nhl} National Historic Landmarks)${tail} · only what NPS publishes as non-restricted: withheld archaeological sites are not shown` +
+      (nhlOnly ? `${points} National Historic Landmarks in the dashed box (landmarks only: other listings hidden)${tail}` : `${points} listed places in the dashed box (${nhl} National Historic Landmarks)${tail}`) +
+      ` · only what NPS publishes as non-restricted: withheld archaeological sites are not shown` +
       (meta.truncated ? " · showing the first 2,000, zoom in" : ""),
-    meta: { count: features.length },
+    meta: { count: features.length, nhlOnly },
   };
 }
 

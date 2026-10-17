@@ -138,6 +138,8 @@ export interface Prefs {
   topoYear: number | null;
   /** National Risk Index: what the layer colours by, "composite" or a hazard code (TRND, HRCN, ...). */
   nriHazard: string;
+  /** Historic places: National Historic Landmarks only (the "Landmarks only" chip). */
+  nhlOnly: boolean;
   /** The viewer's opacity for each picture layer (0..1); absent = the layer's default. */
   tileAlpha: Partial<Record<LayerId, number>>;
   /** CelesTrak GP groups to load. "active" is ~10k objects and opt-in. */
@@ -167,6 +169,7 @@ export const DEFAULT_PREFS: Prefs = {
   waybackRelease: null,
   topoYear: null,
   nriHazard: "composite",
+  nhlOnly: false,
   tileAlpha: {},
   satelliteGroups: ["stations", "visual", "gps-ops", "military", "weather"],
   observer: null,

@@ -1,13 +1,14 @@
 "use client";
 // Controls under a data layer's row (not a picture's opacity, which is
-// TileControls): the National Risk Index hazard picker and its legend.
+// TileControls): the National Risk Index hazard picker and its legend, and
+// the "Landmarks only" chip on Historic places.
 
 import type { LayerId } from "@/lib/layers/types";
 import { useSettings } from "@/lib/store/settings";
 import { NRI_CLASSES, NRI_COLORS, NRI_HAZARDS, NRI_HAZARD_CODES, NRI_NO_RATING_EDGE, parseNriPick } from "@/lib/hazards/nri";
 
 /** Layers with controls here. */
-export const OPTION_LAYERS = new Set<LayerId>(["riskindex"]);
+export const OPTION_LAYERS = new Set<LayerId>(["riskindex", "historic"]);
 
 function RiskPicker() {
   const pick = parseNriPick(useSettings((s) => s.prefs.nriHazard));
@@ -49,7 +50,25 @@ function RiskPicker() {
   );
 }
 
+function LandmarksChip() {
+  const on = useSettings((s) => s.prefs.nhlOnly);
+  const setPref = useSettings((s) => s.setPref);
+  return (
+    <>
+      <button
+        type="button"
+        aria-pressed={on}
+        onClick={() => setPref("nhlOnly", !on)}
+        className={`border px-2 py-0.5 text-[10px] uppercase tracking-widest ${on ? "border-primary/60 bg-primary/10 text-primary" : "border-border text-foreground/80 hover:bg-accent"}`}
+      >
+        Landmarks only
+      </button>
+      <div>National Historic Landmarks as NPS flags them (Is_NHL), with the same exclusions: listed only, no restricted addresses.</div>
+    </>
+  );
+}
+
 export default function LayerOptions({ id }: { id: LayerId }) {
   if (!OPTION_LAYERS.has(id)) return null;
-  return <div className="mt-1.5 space-y-1 pl-4 text-[10px] text-muted-foreground md:text-[9px]">{id === "riskindex" && <RiskPicker />}</div>;
+  return <div className="mt-1.5 space-y-1 pl-4 text-[10px] text-muted-foreground md:text-[9px]">{id === "riskindex" && <RiskPicker />}{id === "historic" && <LandmarksChip />}</div>;
 }
