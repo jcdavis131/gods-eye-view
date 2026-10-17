@@ -3,9 +3,9 @@
 // import-free with only erasable TypeScript, so node runs it by type
 // stripping and vitest loads it directly.
 //
-//   spc-tornado-county.json  NOAA SPC's 1950-2025 tornado file, counted per
-//                            county per year: one row of the file counts once
-//                            for each county named in its f1..f4 columns.
+//   spc-tornado-county.json  NOAA SPC's 1950-2025 all-tornadoes file, counted
+//                            as distinct tornadoes per county per year across
+//                            each tornado's rows (bakeSpc says how).
 //   landslide-county.json    USGS's county_analysis.csv (slope-relief
 //                            landslide susceptibility, 2024), keyed by FIPS by
 //                            an exact (ST, COUNTY) name join.
@@ -23,7 +23,7 @@ export interface CountyRef {
   stusab: string;
 }
 
-export const SPC_URL = "https://www.spc.noaa.gov/wcm/data/1950-2025_actual_tornadoes.csv";
+export const SPC_URL = "https://www.spc.noaa.gov/wcm/data/1950-2025_all_tornadoes.csv";
 export const LANDSLIDE_CSV_URL = "https://www.sciencebase.gov/catalog/file/get/65ccea5bd34ef4b119cb3bac?name=county_analysis.csv";
 
 export const CENSUS_CHANGES_2010 = "https://www.census.gov/programs-surveys/geography/technical-documentation/county-changes.2010.html";
@@ -41,6 +41,20 @@ export const LANDSLIDE_RENAMES: ReadonlyArray<{ st: string; county: string; to: 
   { st: "SD", county: "Shannon County", to: "46102", what: "renamed Oglala Lakota County (2015-05-01), new code", citation: CENSUS_CHANGES_2010 },
   { st: "LA", county: "La Salle Parish", to: "22059", what: "spelling changed to LaSalle Parish, same code", citation: CENSUS_CHANGES_2010 },
 ];
+
+/**
+ * Current counties whose boundary Census lists as changed since 2010 (county-changes.2010, "Substantial
+ * County or County Equivalent Boundary Changes" and the counties created since). USGS's county table
+ * is on 2010 counties, so these get no landslide row, even where a 2010 name matches exactly.
+ */
+export const BOUNDARY_CHANGED_SINCE_2010: Readonly<Record<string, string>> = {
+  "02063": "Chugach Census Area, created in 2019 from Valdez-Cordova Census Area",
+  "02066": "Copper River Census Area, created in 2019 from Valdez-Cordova Census Area",
+  "02105": "Hoonah-Angoon Census Area, part taken for the new Petersburg Borough in 2013",
+  "02195": "Petersburg Borough, created in 2013 from Petersburg Census Area with a changed boundary",
+  "02198": "Prince of Wales-Hyder Census Area, added part of the former Petersburg Census Area in 2013",
+  "51019": "Bedford County, VA, absorbed the former independent city of Bedford in 2013",
+};
 
 /** Connecticut's legacy county FIPS, which current Census geography replaced with planning regions. */
 export const CT_LEGACY = /^090(0[1-9]|1[0-5])$/;
@@ -96,7 +110,10 @@ export interface SpcBake {
     lastModified: string | null;
     sha256: string | null;
     rows: number;
+    wholeTrackRows: number;
     stateSegmentRows: number;
+    continuationRows: number;
+    unattachedContinuationRows: number;
     noCounty: number;
     malformedLines: number;
     countyCodes: number;
@@ -113,9 +130,21 @@ export interface SpcBake {
 }
 
 /**
- * SPC's tornado file per county per year. Each row (a tornado, or for a multi-state tornado one
- * state's segment, sn = 0) counts once for each county FIPS stf + f1..f4 it names; a row naming no
- * county (all f = 0) is counted in meta.noCounty. Codes not in `counties` are listed, never placed.
+ * SPC's all-tornadoes file per county per year. The file has three kinds of row (SPC's sn/sg codes):
+ *   sn = 1, sg = 1 or 2  one tornado in one state: the whole tornado, or one state's segment of a
+ *                        multi-state tornado (sg = 2). Its f1..f4 name up to four of that state's counties.
+ *   sn = 0, sg = 1       the whole-track summary of a multi-state tornado. Skipped: its state segments
+ *                        carry the counties (in the 2025 file, every county the 70 naming one list is
+ *                        also named by a segment).
+ *   sn = 0, sg = -9      a continuation: counties five and on of a tornado crossing more than four.
+ *                        Attached to its tornado: same year, same om before any "-NN" suffix, same
+ *                        state; when several, the one on the same date, then the one with all four
+ *                        f columns filled. A row with no single such tornado counts as its own
+ *                        tornado, so its counties are never lost (meta.unattachedContinuationRows).
+ * A tornado is its year + om (SPC's tornado number; from 2007 a unique "YYMMDDHHMM-NN"). It counts
+ * once per county per year however many of its rows name the county (a tornado that leaves a state
+ * and comes back). A tornado-state record naming no county in any of its rows is counted in
+ * meta.noCounty. Codes not in `counties` are listed, never placed.
  */
 export function bakeSpc(text: string, counties: readonly CountyRef[], lastModified: string | null, sha256: string | null = null): SpcBake {
   const { header, rows, malformed } = parseCsv(text);
@@ -124,38 +153,69 @@ export function bakeSpc(text: string, counties: readonly CountyRef[], lastModifi
     if (i < 0) throw new Error(`SPC file has no ${n} column`);
     return i;
   };
-  const [yr, stf, sn] = [col("yr"), col("stf"), col("sn")];
+  const [om, yr, date, stf, sn, sg] = [col("om"), col("yr"), col("date"), col("stf"), col("sn"), col("sg")];
   const fs = ["f1", "f2", "f3", "f4"].map(col);
   const known = new Set(counties.map((c) => c.geoid));
   const rename = new Map(SPC_RENAMES.map((r) => [r.from, r.to]));
-  const perCounty = new Map<string, Map<number, Set<number>>>();
-  const seenCodes = new Set<string>();
-  let noCounty = 0;
+  const countiesOf = (r: string[]) => [...new Set(fs.map((j) => r[j]).filter((f) => /^\d+$/.test(f) && Number(f) > 0).map((f) => `${r[stf].padStart(2, "0")}${f.padStart(3, "0")}`))];
+  const tornadoId = (r: string[]) => `${r[yr]}|${r[om]}`;
+  const group = (r: string[]) => `${r[yr]}|${r[om].split("-")[0]}|${r[stf]}`;
+  // One record per tornado and state, keyed tornado id + state; byGroup holds the rows a continuation can attach to.
+  const records = new Map<string, { tornado: string; year: number; codes: Set<string> }>();
+  const byGroup = new Map<string, string[][]>();
+  const continuations: string[][] = [];
+  const add = (key: string, tornado: string, year: number, codes: string[]) => {
+    let rec = records.get(key);
+    if (!rec) records.set(key, (rec = { tornado, year, codes: new Set() }));
+    for (const c of codes) rec.codes.add(c);
+  };
+  let wholeTrack = 0;
   let segments = 0;
+  let unattached = 0;
   let first: number | null = null;
   let last: number | null = null;
-  rows.forEach((r, i) => {
+  for (const r of rows) {
     const year = Number(r[yr]);
-    if (!Number.isInteger(year)) return;
+    if (!Number.isInteger(year)) continue;
     first = first == null ? year : Math.min(first, year);
     last = last == null ? year : Math.max(last, year);
-    if (r[sn] === "0") segments++;
-    const codes = fs.map((j) => r[j]).filter((f) => /^\d+$/.test(f) && Number(f) > 0);
-    if (!codes.length) {
-      noCounty++;
-      return;
+    if (r[sg] === "-9") continuations.push(r);
+    else if (r[sn] === "0") wholeTrack++;
+    else {
+      if (r[sg] === "2") segments++;
+      add(`${tornadoId(r)}|${r[stf]}`, tornadoId(r), year, countiesOf(r));
+      const g = byGroup.get(group(r));
+      if (g) g.push(r);
+      else byGroup.set(group(r), [r]);
     }
-    for (const f of codes) {
-      const raw = `${r[stf].padStart(2, "0")}${f.padStart(3, "0")}`;
+  }
+  for (const r of continuations) {
+    let cands = byGroup.get(group(r)) ?? [];
+    const ids = () => new Set(cands.map(tornadoId));
+    if (ids().size > 1) cands = cands.filter((p) => p[date] === r[date]);
+    if (ids().size > 1) cands = cands.filter((p) => fs.every((j) => /^\d+$/.test(p[j]) && Number(p[j]) > 0));
+    const only = ids().size === 1 ? [...ids()][0] : null;
+    if (only) add(`${only}|${r[stf]}`, only, Number(r[yr]), countiesOf(r));
+    else {
+      unattached++;
+      add(`${tornadoId(r)}|${r[stf]}|continuation`, `${tornadoId(r)}|continuation`, Number(r[yr]), countiesOf(r));
+    }
+  }
+  const perCounty = new Map<string, Map<number, Set<string>>>();
+  const seenCodes = new Set<string>();
+  let noCounty = 0;
+  for (const rec of records.values()) {
+    if (!rec.codes.size) noCounty++;
+    for (const raw of rec.codes) {
       seenCodes.add(raw);
       const code = rename.get(raw) ?? raw;
       let years = perCounty.get(code);
       if (!years) perCounty.set(code, (years = new Map()));
-      let set = years.get(year);
-      if (!set) years.set(year, (set = new Set()));
-      set.add(i);
+      let set = years.get(rec.year);
+      if (!set) years.set(rec.year, (set = new Set()));
+      set.add(rec.tornado);
     }
-  });
+  }
   const legacyCt = [...perCounty.keys()].filter((k) => CT_LEGACY.test(k)).sort();
   const unmatched = [...perCounty.keys()].filter((k) => !known.has(k) && !CT_LEGACY.test(k)).sort();
   const out = sortedObject(
@@ -165,13 +225,16 @@ export function bakeSpc(text: string, counties: readonly CountyRef[], lastModifi
   );
   return {
     meta: {
-      what: "A derivation, not an upstream file: rows of SPC's tornado file counted per county per year. A row is one tornado, or one state's segment of a multi-state tornado (sn = 0); it counts once in each county its f1..f4 name.",
-      source: "NOAA/NWS Storm Prediction Center, 1950-2025 actual tornadoes (US federal work)",
+      what: "A derivation, not an upstream file: SPC's all-tornadoes file counted as distinct tornadoes per county per year. A tornado counts once in each county any of its rows names: its row, or for a multi-state tornado its state segments (sg = 2), plus its continuation rows past four counties (sg = -9). The whole-track summaries of multi-state tornadoes (sn = 0, sg = 1) are skipped, because their segments name the counties.",
+      source: "NOAA/NWS Storm Prediction Center, 1950-2025 all tornadoes (US federal work)",
       url: SPC_URL,
       lastModified,
       sha256,
       rows: rows.length,
+      wholeTrackRows: wholeTrack,
       stateSegmentRows: segments,
+      continuationRows: continuations.length,
+      unattachedContinuationRows: unattached,
       noCounty,
       malformedLines: malformed,
       countyCodes: seenCodes.size,
@@ -202,6 +265,7 @@ export interface LandslideBake {
     rows: number;
     exact: number;
     renamed: Array<{ st: string; county: string; to: string; what: string; citation: string }>;
+    excluded: Array<{ st: string; county: string; geoid: string; why: string }>;
     unmatched: Array<{ st: string; county: string }>;
     malformedLines: number;
     generatedBy: string;
@@ -217,7 +281,7 @@ const num = (s: string | undefined): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-/** USGS's county CSV keyed by FIPS: an exact (ST, COUNTY) match against `counties`, then the rename table; the rest are listed. */
+/** USGS's county CSV keyed by FIPS: an exact (ST, COUNTY) match against `counties`, then the rename table; a county whose boundary changed since 2010 is excluded and listed, and the rest are listed. */
 export function bakeLandslide(text: string, counties: readonly CountyRef[], sha256: string | null = null): LandslideBake {
   const { header, rows, malformed } = parseCsv(text);
   const col = (n: string) => {
@@ -233,28 +297,29 @@ export function bakeLandslide(text: string, counties: readonly CountyRef[], sha2
   const used = new Set<string>();
   const unmatched: Array<{ st: string; county: string }> = [];
   const renamed: LandslideBake["meta"]["renamed"] = [];
+  const excluded: LandslideBake["meta"]["excluded"] = [];
   let exact = 0;
   for (const r of rows) {
     const k = `${r[cSt]}|${r[cName]}`;
     let geoid = key.get(k);
-    if (geoid) exact++;
-    else {
-      const rn = renames.get(k);
-      if (rn) {
-        geoid = rn.to;
-        renamed.push({ ...rn });
-      }
+    const rn = geoid ? undefined : renames.get(k);
+    if (rn) geoid = rn.to;
+    if (geoid && geoid in BOUNDARY_CHANGED_SINCE_2010) {
+      excluded.push({ st: r[cSt], county: r[cName], geoid, why: BOUNDARY_CHANGED_SINCE_2010[geoid] });
+      continue;
     }
     if (!geoid || used.has(geoid)) {
       unmatched.push({ st: r[cSt], county: r[cName] });
       continue;
     }
+    if (rn) renamed.push({ ...rn });
+    else exact++;
     used.add(geoid);
     out.push([geoid, vals.map((j) => num(r[j]))]);
   }
   return {
     meta: {
-      what: "A derivation, not an upstream file: USGS's county_analysis.csv (2010 counties) keyed by current county FIPS by an exact state + county name match, plus Census-documented renames. Values as published.",
+      what: "A derivation, not an upstream file: USGS's county_analysis.csv (2010 counties) keyed by current county FIPS by an exact state + county name match, plus Census-documented renames. A current county whose boundary Census lists as changed since 2010 gets no row (meta.excluded). Values as published.",
       source: "U.S. Geological Survey: Belair and others (2024), Slope-Relief Threshold Landslide Susceptibility Models for the United States and Puerto Rico",
       doi: "10.5066/P13KAGU3",
       licence: "CC0 1.0",
@@ -264,6 +329,7 @@ export function bakeLandslide(text: string, counties: readonly CountyRef[], sha2
       rows: rows.length,
       exact,
       renamed,
+      excluded,
       unmatched,
       malformedLines: malformed,
       generatedBy: "scripts/bake-hazard-history.mjs",

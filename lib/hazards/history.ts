@@ -22,7 +22,7 @@
 import type { Point, Series } from "@/lib/series/types";
 import { provenance, type Provenance } from "@/lib/provenance/types";
 import { source } from "@/lib/provenance/sources";
-import type { LandslideBake, SpcBake } from "./bake";
+import { BOUNDARY_CHANGED_SINCE_2010, type LandslideBake, type SpcBake } from "./bake";
 
 /**
  * Cam's decision 1 (pending): whether a year with no FEMA declaration or no SPC tornado is a 0
@@ -93,12 +93,8 @@ export function cagUrl(stusab: string, fips: string, element: CagElement, year: 
 
 export const CT_LEGACY = /^090(0[1-9]|1[0-5])$/;
 export const CT_REGION = /^091[1-9]0$/;
-/** 2010 counties whose boundary changed after 2010 (Census county-change pages): no landslide row. */
-export const BOUNDARY_CHANGED_SINCE_2010: Readonly<Record<string, string>> = {
-  "02063": "Chugach Census Area, created in 2019 from Valdez-Cordova Census Area",
-  "02066": "Copper River Census Area, created in 2019 from Valdez-Cordova Census Area",
-  "02195": "Petersburg Borough, created in 2013 from Petersburg Census Area with a changed boundary",
-};
+/** Counties whose boundary changed after 2010 (Census county-change pages): no landslide row. Kept by the bake. */
+export { BOUNDARY_CHANGED_SINCE_2010 };
 /** FEMA files declarations before the 2019 split under Valdez-Cordova (02261), which names no current county. */
 export const FEMA_VALDEZ_CORDOVA_NOTE =
   "FEMA files Alaska declarations made before the 2019 split of Valdez-Cordova Census Area under its old code 261 (11 rows on 2026-10-17, 1986-2020); that code names no current county, so those rows are not attached to Chugach or Copper River.";
@@ -272,6 +268,8 @@ export interface LandslideLine {
 
 /** One county's landslide row, or null with the reason. */
 export function landslideLine(bake: Pick<LandslideBake, "counties" | "columns">, fips: string): { line: LandslideLine | null; reason: MissingReason | null } {
+  // Fail closed before the row lookup: a 2010 row is never attached to a changed boundary.
+  if (fips in BOUNDARY_CHANGED_SINCE_2010) return { line: null, reason: "join:boundary_changed_since_2010" };
   const row = bake.counties[fips];
   if (row) {
     const at = (c: string) => {
@@ -281,7 +279,6 @@ export function landslideLine(bake: Pick<LandslideBake, "counties" | "columns">,
     return { line: { prop_susc: at("prop_susc"), susc_area: at("susc_area"), county_area: at("county_area"), v2_ls_count: at("v2_ls_count"), v2_density: at("v2_density") }, reason: null };
   }
   if (CT_REGION.test(fips)) return { line: null, reason: "join:legacy_ct_counties" };
-  if (fips in BOUNDARY_CHANGED_SINCE_2010) return { line: null, reason: "join:boundary_changed_since_2010" };
   return { line: null, reason: "source:not_in_release" };
 }
 
@@ -461,11 +458,11 @@ export function assembleHistory(i: HistoryInputs): HistoryAnswer {
   // SPC (bake)
   const spcProv = provenance(source("noaa-spc"), {
     kind: "published",
-    seriesId: "1950-2025_actual_tornadoes.csv, counted per county per year (lib/hazards/data/spc-tornado-county.json)",
+    seriesId: "1950-2025_all_tornadoes.csv, distinct tornadoes per county per year (lib/hazards/data/spc-tornado-county.json)",
     upstreamUrl: i.spc.meta.url,
     retrievedAt: `${BAKED_ON}T00:00:00.000Z`,
     releasedAt: i.spc.meta.lastModified ? new Date(i.spc.meta.lastModified).toISOString() : undefined,
-    method: "rows of SPC's file naming the county in f1..f4, per year (a multi-state tornado counts once per state segment); baked by scripts/bake-hazard-history.mjs",
+    method: "distinct tornadoes per year naming the county in f1..f4 of any of their rows (state segments and continuation rows past four counties included; the whole-track summaries of multi-state tornadoes skipped); baked by scripts/bake-hazard-history.mjs",
   });
   asOf.spc = String(i.spc.meta.lastYear ?? "");
   if (CT_REGION.test(i.fips)) missing.push({ source: "SPC", reason: "join:legacy_ct_counties" });

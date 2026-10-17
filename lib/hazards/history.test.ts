@@ -214,10 +214,13 @@ describe("SPC and landslide bakes in the answer", () => {
     expect(sum(on)).toBe(71);
     expect(spcPerYear(spc, "09110", true)).toBeNull();
   });
-  it("Travis 0.361 susceptible; Connecticut regions and the three changed Alaska areas are null with the reason", () => {
+  it("Travis 0.361 susceptible; Connecticut regions and the six changed boundaries are null with the reason", () => {
     expect(landslideLine(ls, "48453").line).toMatchObject({ prop_susc: 0.361441295, v2_ls_count: 1 });
     expect(landslideLine(ls, "09110")).toEqual({ line: null, reason: "join:legacy_ct_counties" });
-    for (const f of ["02063", "02066", "02195"]) expect(landslideLine(ls, f).reason).toBe("join:boundary_changed_since_2010");
+    for (const f of ["02063", "02066", "02105", "02195", "02198", "51019"]) expect(landslideLine(ls, f), f).toEqual({ line: null, reason: "join:boundary_changed_since_2010" });
+    // Fail closed even if a bake carried a 2010 row for a changed county (USGS's own Bedford County, VA row).
+    const withRow = { columns: ls.columns, counties: { ...ls.counties, "51019": [1965.974072, 1707.26073, 0.8684045, 2, 0.001171467] } };
+    expect(landslideLine(withRow, "51019")).toEqual({ line: null, reason: "join:boundary_changed_since_2010" });
     expect(landslideLine(ls, "02158").line).not.toBeNull();
     expect(landslideLine(ls, "46102").line).not.toBeNull();
   });
