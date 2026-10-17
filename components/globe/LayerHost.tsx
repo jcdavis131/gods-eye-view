@@ -36,6 +36,7 @@ const OPTION_KEYS: Partial<Record<LayerDefinition["id"], Array<keyof Prefs>>> = 
   riskindex: ["nriHazard"],
   historic: ["nhlOnly"],
   naip: ["naipYear"],
+  health: ["placesMeasure"],
 };
 
 export default function LayerHost() {

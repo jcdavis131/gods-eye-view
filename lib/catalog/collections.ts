@@ -28,6 +28,7 @@ import { FLOW_CAVEAT, HYDRO_CAVEAT } from "@/lib/water/nldi";
 import { NRI_CAVEATS, NRI_SOVI_NOTE, NRI_TERMS } from "@/lib/hazards/nri";
 import { NAIP_CAVEAT } from "@/lib/terrain/naip";
 import { ABPP_CAVEAT, ABPP_STUDY_DEFINITION, NHA_CAVEAT, UNITS_CAVEAT, WHS_CAVEAT } from "@/lib/land/heritage";
+import { PLACES_CAVEAT } from "@/lib/civic/places";
 import { DENY_FIELD, EMBED_TEXT } from "./embedFields";
 
 export interface Exclusion {
@@ -88,6 +89,7 @@ export const SHELVES: Array<{ id: string; title: string; layers: LayerId[] }> = 
   { id: "water", title: "Water", layers: ["impaired", "pfas", "hydro"] },
   { id: "contaminants", title: "Contaminants", layers: ["contaminants", "ust"] },
   { id: "hazards", title: "Hazards and risk", layers: ["riskindex"] },
+  { id: "health", title: "Health", layers: ["health"] },
   { id: "imagery", title: "Imagery and maps", layers: ["wayback", "topo", "naip"] },
   { id: "infrastructure", title: "Infrastructure", layers: ["dams"] },
 ];
@@ -906,6 +908,48 @@ export const COLLECTIONS: readonly Collection[] = [
     embedText: EMBED_TEXT["nps-whs"],
     ops: ["land?op=heritage"],
     sensitivity: "Inscribed sites; SiteOwner values are organisations and are not shown or searched.",
+    round: 4,
+  },
+  // ------------------------------------------------------------ round 4: health
+  {
+    id: "places-county",
+    title: "CDC PLACES community health estimates by county",
+    layer: "health",
+    sources: ["cdc-places"],
+    what: "CDC's PLACES model-based estimates for 40 measures (health outcomes, prevention, risk behaviours, health status, disability and health-related social needs) for every county, age-adjusted, one measure at a time from one whole-measure pull, joined by FIPS onto the shared county outlines and binned by national quintiles; a click lists every measure for the county by CDC category.",
+    recordIs: "A model-based estimate of the share of adults with a condition or behaviour in a county, with its 95% confidence interval and data year (2023; 2022 for five measures). Not a count of diagnosed people and not for ranking small differences.",
+    coverage: { spatial: "United States counties (Connecticut planning regions); drawn below 2,500 km", temporal: "data year 2023 (2022 for colorectal screening, dental visits, mammography, sleep and tooth loss)", count: { value: 2958, of: "counties with an age-adjusted DIABETES row (229,298 county rows in all measures and value types)", countedOn: R4 } },
+    freshness: { statement: "The 2025 release; the county dataset's rows were last updated 2025-12-04.", readFrom: "data.cdc.gov swc5-untb rowsUpdatedAt and dataset name", recordedOn: R4 },
+    excluded: [
+      { what: "a per-county or within_box query while panning", why: "a cold per-location call took 13.8 s and a within_box 19.6 s on 2026-10-16; the county level uses one whole-measure pull held a week" },
+      { what: "state rows", why: "PLACES has none (only US); the layer asks the viewer to descend to counties" },
+      { what: "ZCTA and place datasets", why: "out of this round" },
+    ],
+    caveats: [PLACES_CAVEAT],
+    searchable: ["locationid", "locationname"],
+    embedText: EMBED_TEXT["places-county"],
+    ops: ["civic?op=health"],
+    sensitivity: "Model-based estimates for counties and tracts; no individual records; small-population tracts are withheld by CDC.",
+    round: 4,
+  },
+  {
+    id: "places-tract",
+    title: "CDC PLACES community health estimates by census tract",
+    layer: "health",
+    sources: ["cdc-places"],
+    what: "The same 40 measures for every published census tract, crude prevalence as CDC publishes tracts, asked by countyfips for at most six counties in view below 100 km and drawn on TIGER tract outlines (fabric op=field), binned by quintiles of the tracts loaded.",
+    recordIs: "A crude model-based estimate for a tract (by its 11-digit FIPS). Tracts with very small populations are not published, and a tract with no row is shown as not published, never 0.",
+    coverage: { spatial: "United States census tracts (Connecticut in planning-region tract codes); drawn below 100 km, six counties at a time", temporal: "data year 2023 (2022 for five measures)", count: { value: 83522, of: "tracts in cwsq-ngmh (3,047,284 tract rows in all measures)", countedOn: R4 } },
+    freshness: { statement: "The 2025 release; CDC last updated the tract dataset 2025-12-12.", readFrom: "data.cdc.gov cwsq-ngmh (civic lane read; the release date per the county dataset)", recordedOn: R4 },
+    excluded: [
+      { what: "within_box tract queries", why: "19.6 s cold; tracts are asked by county" },
+      { what: "national tract quintiles", why: "3 million rows; the bins are quintiles of the tracts loaded, and the legend says so" },
+    ],
+    caveats: [PLACES_CAVEAT],
+    searchable: ["locationname"],
+    embedText: EMBED_TEXT["places-tract"],
+    ops: ["civic?op=health"],
+    sensitivity: "Model-based estimates for counties and tracts; no individual records; small-population tracts are withheld by CDC.",
     round: 4,
   },
 ];

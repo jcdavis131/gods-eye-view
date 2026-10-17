@@ -57,6 +57,8 @@ export const EMBED_TEXT = {
   "nps-nha": [],
   "abpp-battlefields": ["WAR", "STATE", "BOUNDARY"],
   "nps-whs": [],
+  "places-county": ["statedesc", "category", "measure", "year", "data_value_type"],
+  "places-tract": ["category", "measure", "year", "data_value_type"],
 } satisfies Record<string, string[]>;
 
 export type CollectionId = keyof typeof EMBED_TEXT;
@@ -206,6 +208,12 @@ export const FIELD_LABEL: Readonly<Record<string, string>> = {
   UNIT_TYPE: "NPS unit type",
   REGION: "NPS region",
   WAR: "war",
+  // CDC PLACES (CDC's measure wording is a closed vocabulary of 40 published strings)
+  statedesc: "state",
+  category: "health measure category",
+  measure: "health measure",
+  year: "data year",
+  data_value_type: "value type",
   BOUNDARY: "battlefield survey area",
   "naip:state": "state",
   datetime: "photographed on",
@@ -279,6 +287,8 @@ export const NO_RECORD_VECTORS: Readonly<Record<string, string>> = {
   "nps-nha": "the only text is NPS's free-text description, which is not embedded (D-HE2)",
   "abpp-battlefields": "record vectors deferred with nps-units",
   "nps-whs": "names and links only; nothing embeddable",
+  "places-county": "joined in the browser onto the shared county outlines; record vectors deferred to the next round",
+  "places-tract": "deferred with places-county",
 };
 
 /** Fields that must never be embedded whatever a card says: the deny list, the dossier's "published name", and any *name field not reviewed. */

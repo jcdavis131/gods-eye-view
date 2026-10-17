@@ -128,6 +128,14 @@ describe("voice words for contaminated sites", () => {
   });
 });
 
+describe("voice words for community health", () => {
+  it("hears community health and its plain names", () => {
+    expect(layerOf("show community health over travis county")).toMatchObject({ layer: "health", place: "travis county" });
+    expect(layerOf("show diabetes rate")).toMatchObject({ layer: "health" });
+    expect(layerOf("show chronic disease")).toMatchObject({ layer: "health" });
+  });
+});
+
 describe("voice words for national heritage", () => {
   it("hears parks, battlefields and world heritage", () => {
     expect(layerOf("show battlefields over virginia")).toMatchObject({ layer: "heritage", place: "virginia" });

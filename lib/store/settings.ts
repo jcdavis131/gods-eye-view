@@ -142,6 +142,8 @@ export interface Prefs {
   nhlOnly: boolean;
   /** USDA NAIP year the Aerial photos by year layer draws; null = the newest at the view centre. */
   naipYear: number | null;
+  /** Community health: the CDC PLACES measure drawn (a measureid, e.g. DIABETES). */
+  placesMeasure: string;
   /** The viewer's opacity for each picture layer (0..1); absent = the layer's default. */
   tileAlpha: Partial<Record<LayerId, number>>;
   /** CelesTrak GP groups to load. "active" is ~10k objects and opt-in. */
@@ -173,6 +175,7 @@ export const DEFAULT_PREFS: Prefs = {
   nriHazard: "composite",
   nhlOnly: false,
   naipYear: null,
+  placesMeasure: "DIABETES",
   tileAlpha: {},
   satelliteGroups: ["stations", "visual", "gps-ops", "military", "weather"],
   observer: null,

@@ -6,9 +6,10 @@
 import type { LayerId } from "@/lib/layers/types";
 import { useSettings } from "@/lib/store/settings";
 import { NRI_CLASSES, NRI_COLORS, NRI_HAZARDS, NRI_HAZARD_CODES, NRI_NO_RATING_EDGE, parseNriPick } from "@/lib/hazards/nri";
+import { isPlacesMeasure, PLACES_BIN_COLORS, PLACES_DEFAULT_MEASURE, PLACES_MEASURES, SOCIAL_NEEDS, type PlacesMeasure } from "@/lib/civic/places";
 
 /** Layers with controls here. */
-export const OPTION_LAYERS = new Set<LayerId>(["riskindex", "historic"]);
+export const OPTION_LAYERS = new Set<LayerId>(["riskindex", "historic", "health"]);
 
 function RiskPicker() {
   const pick = parseNriPick(useSettings((s) => s.prefs.nriHazard));
@@ -68,7 +69,53 @@ function LandmarksChip() {
   );
 }
 
+function MeasurePicker() {
+  const raw = useSettings((s) => s.prefs.placesMeasure);
+  const setPref = useSettings((s) => s.setPref);
+  const pick: PlacesMeasure = isPlacesMeasure(raw) ? raw : PLACES_DEFAULT_MEASURE;
+  const entries = Object.entries(PLACES_MEASURES) as Array<[PlacesMeasure, (typeof PLACES_MEASURES)[PlacesMeasure]]>;
+  const cats = [...new Set(entries.map(([, m]) => m.category))];
+  return (
+    <>
+      <label className="flex items-center gap-2">
+        <span className="w-14 shrink-0 uppercase tracking-widest">Measure</span>
+        <select
+          value={pick}
+          onChange={(e) => setPref("placesMeasure", e.target.value)}
+          className="min-w-0 flex-1 border border-border bg-transparent px-1 py-0.5 text-foreground"
+          aria-label="CDC PLACES measure"
+        >
+          {cats.map((c) => (
+            <optgroup key={c} label={c}>
+              {entries
+                .filter(([, m]) => m.category === c)
+                .map(([id, m]) => (
+                  <option key={id} value={id} className="bg-background">
+                    {m.short} ({m.year}){SOCIAL_NEEDS.includes(id) ? ", optional module: not every state" : ""}
+                  </option>
+                ))}
+            </optgroup>
+          ))}
+        </select>
+      </label>
+      <ul className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
+        {PLACES_BIN_COLORS.map((c, i) => (
+          <li key={c} className="flex items-center gap-1 text-[9px] text-muted-foreground">
+            <span className="inline-block size-2 shrink-0 border border-black/40" style={{ background: c }} aria-hidden />
+            quintile {i + 1}
+          </li>
+        ))}
+        <li className="flex items-center gap-1 text-[9px] text-muted-foreground">
+          <span className="inline-block size-2 shrink-0 border border-dashed" style={{ borderColor: NRI_NO_RATING_EDGE }} aria-hidden />
+          not published
+        </li>
+      </ul>
+      <div>{PLACES_MEASURES[pick].name}. Counties: age-adjusted, national quintiles; tracts below 100 km: crude, quintiles of the tracts in view. Model-based estimates, not counts.</div>
+    </>
+  );
+}
+
 export default function LayerOptions({ id }: { id: LayerId }) {
   if (!OPTION_LAYERS.has(id)) return null;
-  return <div className="mt-1.5 space-y-1 pl-4 text-[10px] text-muted-foreground md:text-[9px]">{id === "riskindex" && <RiskPicker />}{id === "historic" && <LandmarksChip />}</div>;
+  return <div className="mt-1.5 space-y-1 pl-4 text-[10px] text-muted-foreground md:text-[9px]">{id === "riskindex" && <RiskPicker />}{id === "historic" && <LandmarksChip />}{id === "health" && <MeasurePicker />}</div>;
 }

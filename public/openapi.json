@@ -81,6 +81,10 @@
       "description": "News events: GDELT 2.0 conflict events folded into the cities they were coded at; no actors, no article links."
     },
     {
+      "name": "civic",
+      "description": "Community indicators for counties and tracts (round 4: CDC PLACES)."
+    },
+    {
       "name": "meta",
       "description": "This description."
     },
@@ -3915,6 +3919,141 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/civic": {
+      "get": {
+        "summary": "Community health estimates (CDC PLACES) by county and tract",
+        "description": "op=health: CDC PLACES, 2025 release (data year 2023; 2022 for five measures), model-based estimates for 40 measures. level=county&measure=: every county's age-adjusted prevalence for one measure from one whole-measure pull (held a week), with national quintile `breaks`; join by `fips` onto county outlines (Connecticut in planning regions). level=tract&measure=&counties=: crude prevalence for every published tract of at most 6 counties, asked by countyfips (never within_box). level=place&fips=: every measure for one county, age-adjusted. A county or tract with no row is not published, never 0. Estimates, not counts of diagnosed people; not for ranking small differences.",
+        "tags": [
+          "civic"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "health"
+              ]
+            },
+            "description": "health: CDC PLACES."
+          },
+          {
+            "name": "level",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "county",
+                "tract",
+                "place"
+              ],
+              "default": "county"
+            },
+            "description": "county (one measure, every county), tract (one measure, up to 6 counties' tracts) or place (every measure, one county)."
+          },
+          {
+            "name": "measure",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ACCESS2",
+                "ARTHRITIS",
+                "BINGE",
+                "BPHIGH",
+                "BPMED",
+                "CANCER",
+                "CASTHMA",
+                "CHD",
+                "CHECKUP",
+                "CHOLSCREEN",
+                "COGNITION",
+                "COLON_SCREEN",
+                "COPD",
+                "CSMOKING",
+                "DENTAL",
+                "DEPRESSION",
+                "DIABETES",
+                "DISABILITY",
+                "EMOTIONSPT",
+                "FOODINSECU",
+                "FOODSTAMP",
+                "GHLTH",
+                "HEARING",
+                "HIGHCHOL",
+                "HOUSINSECU",
+                "INDEPLIVE",
+                "LACKTRPT",
+                "LONELINESS",
+                "LPA",
+                "MAMMOUSE",
+                "MHLTH",
+                "MOBILITY",
+                "OBESITY",
+                "PHLTH",
+                "SELFCARE",
+                "SHUTUTILITY",
+                "SLEEP",
+                "STROKE",
+                "TEETHLOST",
+                "VISION"
+              ]
+            },
+            "description": "CDC's measureid (level=county and level=tract)."
+          },
+          {
+            "name": "counties",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{5}(,\\d{5}){0,5}$"
+            },
+            "description": "level=tract: up to 6 five-digit county FIPS."
+          },
+          {
+            "name": "fips",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{5}$"
+            },
+            "description": "level=place: a five-digit county FIPS."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope for the op.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/Cors"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CivicHealthResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/Upstream"
           }
         }
       }
@@ -9936,6 +10075,126 @@
           }
         ],
         "x-op": "heritage"
+      },
+      "CivicHealthResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "description": "level=county or tract: { level, measure, rows: [row] }; level=place: { level, fips, values: [ { fips, name, state, measure, value, low, high, year, type, population } ] }.",
+                "properties": {
+                  "level": {
+                    "type": "string"
+                  },
+                  "measure": {
+                    "type": "string"
+                  },
+                  "rows": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "fips": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "state": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "value": {
+                          "type": [
+                            "number",
+                            "null"
+                          ],
+                          "description": "percent as published; null: not published"
+                        },
+                        "low": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "high": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "year": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        },
+                        "population": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "measure": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "CDC's wording"
+                  },
+                  "short": {
+                    "type": "string"
+                  },
+                  "category": {
+                    "type": "string"
+                  },
+                  "year": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "valueType": {
+                "type": "string"
+              },
+              "count": {
+                "type": "integer"
+              },
+              "breaks": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "description": "level=county: the four national quintile cut points of the published values"
+              },
+              "coverage": {
+                "type": "array",
+                "description": "level=tract: per county, covered or error (count null: unknown, not missing)",
+                "items": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "health"
       }
     }
   }
