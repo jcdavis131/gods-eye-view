@@ -134,7 +134,11 @@ describe("records by meaning (hand-written eval, labelled as such)", () => {
   it("controls (nothing relevant loaded) show no record at RECORD_TAU", () => {
     const leaks = queries
       .filter((q) => q.kind === "control")
-      .map((q) => ({ q, hits: index.search(model.embed(queryText(q.q)!), K, RECORD_TAU) }))
+      .map((q) => {
+        const text = queryText(q.q);
+        const v = text ? model.embed(text) : null;
+        return { q, hits: v ? index.search(v, K, RECORD_TAU) : [] };
+      })
       .filter((x) => x.hits.length > 0)
       .map(({ q, hits }) => `${q.id} "${q.q}" -> ${rowOf.get(featureKey(hits[0].feature))!.card} ${hits[0].score.toFixed(3)} (${hits.length} row${hits.length === 1 ? "" : "s"})`);
     expect(leaks, `controls showing a row at RECORD_TAU ${RECORD_TAU}`).toEqual([]);
