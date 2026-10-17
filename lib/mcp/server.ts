@@ -84,7 +84,7 @@ export const PROMPTS: PromptDef[] = [
     build: ({ fips }) =>
       [
         `Prepare a county due-diligence brief for FIPS ${fips}.`,
-        "1. Call sectors(fips) for the NAICS mix and location quotients; call county_history(fips) for employment, wage, home value and rent trends.",
+        "1. Call sectors(fips) for the NAICS mix and location quotients; call county_history(fips) for employment, wage, home value and rent trends, and county_history(fips, topic: hazards) for declarations, drought, climate and tornadoes.",
         "2. Call companies_near(fips) for SEC-registered public companies headquartered there, banks(fips) for FDIC deposits and federal_spending(fips) for USAspending totals.",
         "3. Call indicators(category: 'housing') and pulse() for the national backdrop, and release_calendar() to say which of these numbers is about to be revised.",
         "Write: one paragraph on jobs and wages, one on housing (values, rents, affordability estimate and its formula), one on the corporate and public-money footprint, then a short list of what is missing (withheld QCEW cells, null values) and the next release dates.",

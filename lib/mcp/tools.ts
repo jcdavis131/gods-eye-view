@@ -436,13 +436,19 @@ export const TOOLS: ToolDef[] = [
     name: "county_history",
     title: "Multi-year history for a county",
     description:
-      "Backfilled research series for one county as data.series[]: QCEW employment and average weekly wage (USD, quarterly), Zillow ZHVI (USD) and ZORI (USD/month, monthly), momentum:county:<fips> (estimate, index -1..1, formula in provenance.method) and the affordability index, each a Series with points [{ t: epoch ms, v }] and provenance. years bounds the window (1..26, default 10); lag shifts the momentum inputs by months (0..12) for lead/lag studies.",
-    inputSchema: z.object({
-      fips: countyFips,
-      years: z.number().int().min(1).max(26).optional().describe("Years of history to return; default 10."),
-      lag: z.number().int().min(0).max(12).optional().describe("Months of lag applied to the momentum inputs; default 0."),
-    }),
-    handler: (i, ctx) => relay(ctx, "/api/economy/history" + qs({ op: "county", fips: i.fips, years: i.years, lag: i.lag })),
+      "Backfilled research series for one county as data.series[]: QCEW employment and average weekly wage (USD, quarterly), Zillow ZHVI (USD) and ZORI (USD/month, monthly), momentum:county:<fips> (estimate, index -1..1, formula in provenance.method) and the affordability index, each a Series with points [{ t: epoch ms, v }] and provenance. years bounds the window (1..26, default 10); lag shifts the momentum inputs by months (0..12) for lead/lag studies. topic: \"hazards\" instead returns the county's hazard history (GET /api/hazards?op=history): FEMA disaster declarations per year by type (fema:dr/em/fm) and the newest 50 declarations, the U.S. Drought Monitor's weekly DSCI (0-500) since 2000 and this week's D0-D4 shares, NOAA Climate at a Glance annual temperature and precipitation since 1895, NOAA SPC tornadoes per year since 1950, and USGS landslide susceptibility; years is then the last 1..26 years (default all) and lag is not accepted. Connecticut's planning regions get drought only.",
+    inputSchema: z
+      .object({
+        fips: countyFips,
+        years: z.number().int().min(1).max(26).optional().describe("Years of history to return; default 10 (economy) or all (hazards)."),
+        lag: z.number().int().min(0).max(12).optional().describe("Months of lag applied to the momentum inputs; default 0. Economy only."),
+        topic: z.enum(["economy", "hazards"]).optional().describe("economy (default) or hazards."),
+      })
+      .refine((v) => v.topic !== "hazards" || v.lag == null, "lag applies to the economy topic only"),
+    handler: (i, ctx) =>
+      i.topic === "hazards"
+        ? relay(ctx, "/api/hazards" + qs({ op: "history", fips: i.fips, years: i.years, declarations: 50 }))
+        : relay(ctx, "/api/economy/history" + qs({ op: "county", fips: i.fips, years: i.years, lag: i.lag })),
   }),
   defineTool({
     name: "company",
