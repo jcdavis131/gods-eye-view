@@ -336,7 +336,7 @@ export const hospitalsLayer = boxLayer({
   id: "hospitals",
   label: "Hospitals (HIFLD)",
   description:
-    "Hospitals from HIFLD as FEMA last copied it (the last public copy; data edited April 2026): every open hospital in the United States from orbit, coloured by HIFLD's type and sized by published beds, trauma centres ringed; below 300 km the full record: address, beds, trauma level, helipad, owner type, NAICS industry, and the licensing source with its date. Closed hospitals on a toggle. Each record is as its state licensing source published it, which can be years old; not a list of emergency departments.",
+    "Hospitals from HIFLD as FEMA last copied it (the last public copy; data edited April 2026): every open hospital in the United States from orbit, coloured by HIFLD's type and sized by published beds (a hospital with no published beds at the base size), its trauma level in the record; below 300 km the full record: address, beds, trauma level, helipad, owner type, NAICS industry, and the licensing source with its date. Closed hospitals on a toggle, drawn grey. Each record is as its state licensing source published it, which can be years old; not a list of emergency departments.",
   color: "#EF4444",
   attribution: "Homeland Infrastructure Foundation-Level Data (DHS GMO, ORNL), via FEMA RAPT",
   source: "HIFLD hospitals (FEMA RAPT)",
