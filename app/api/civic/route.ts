@@ -1,6 +1,7 @@
-// Civic API: community indicators for counties and tracts. CORS open,
-// edge-cached, with the shared envelope (lib/server/respond.ts). Round 4 has
-// one op; later rounds add svi, broadband, ejscreen and housing here.
+// Civic API: community indicators for counties and tracts, and public schools.
+// CORS open, edge-cached, with the shared envelope (lib/server/respond.ts).
+// Round 4 added health, round 5 svi and schools; later rounds add broadband,
+// ejscreen and housing here.
 //
 //   /api/civic?op=health&level=county&measure=DIABETES
 //        CDC PLACES (2025 release): every county's age-adjusted prevalence for one
@@ -14,18 +15,47 @@
 //   /api/civic?op=health&level=place&fips=48453
 //        Every measure for one county, age-adjusted, for the click answer. Held a week.
 //
-// All through the civic gate (one request a second to data.cdc.gov, a 429 or 503
-// closes it for ten minutes). A county or tract with no row is not published,
-// never 0.
+//   /api/civic?op=svi&level=county
+//        CDC/ATSDR SVI 2022: every county's overall and four theme percentiles and flag
+//        count, attributes only (two pages of 2,000), held a week. Join by `fips` onto
+//        county outlines (Connecticut in planning regions). -999 ("not ranked") is null.
+//   /api/civic?op=svi&level=tract&bbox=w,s,e,n
+//        SVI's own tract polygons in a box of at most 0.4 degrees (snapped to 0.05), at
+//        most two pages, held a week per box.
+//   /api/civic?op=svi&level=place&fips=48453 (or an 11-digit tract)
+//        One county or tract with the 16 estimates and margins; 404 when CDC has no row.
+//
+// All through the civic gate (one request a second to data.cdc.gov, one every 500 ms
+// to an ArcGIS organisation; a 429 or 503 closes it for ten minutes). A county or
+// tract with no row is not published, never 0.
 
 import type { NextRequest } from "next/server";
 import { cached } from "@/lib/server/cache";
 import { jsonError } from "@/lib/server/upstream";
-import { badRequest, ok, options, withCors } from "@/lib/server/respond";
+import { badRequest, notFound, ok, options, withCors } from "@/lib/server/respond";
 import { preferIpv4 } from "@/lib/server/net";
 import { provenance } from "@/lib/provenance/types";
 import { source } from "@/lib/provenance/sources";
-import { civicJson } from "@/lib/civic/request";
+import { civicJson, runRows } from "@/lib/civic/request";
+import { parseBbox as gridBbox, type Bbox } from "@/lib/civic/bbox";
+import {
+  SVI_ATTRIBUTION,
+  SVI_BREAKS,
+  SVI_CAVEAT,
+  SVI_COUNTY_FIELDS,
+  SVI_COUNTY_LAYER,
+  SVI_COUNTY_PAGES,
+  SVI_PAGE,
+  SVI_PLACE_FIELDS,
+  SVI_THEMES,
+  SVI_TRACT_BOX_DEG,
+  SVI_TRACT_LAYER,
+  SVI_TRACT_PAGES,
+  SVI_VINTAGE_NOTE,
+  sviPlace,
+  sviRow,
+  type SviRow,
+} from "@/lib/civic/svi";
 import {
   countyMeasureUrl,
   isPlacesMeasure,
@@ -108,6 +138,132 @@ async function healthPlace(fips: string) {
   );
 }
 
+// ---------------------------------------------------------------- svi (CDC/ATSDR SVI 2022)
+
+const SVI_HELP = "op=svi needs level=county, level=tract&bbox=w,s,e,n (at most 0.4 degrees a side), or level=place&fips=<5-digit county or 11-digit tract FIPS>";
+const SVI_CAVEATS = [SVI_CAVEAT, SVI_VINTAGE_NOTE];
+
+const sviProv = (layer: string, seriesId: string, age: number, notes?: string[]) =>
+  provenance(source("cdc-svi"), { kind: "published", seriesId, upstreamUrl: layer, period: "ACS 2018-2022 (SVI 2022)", retrievedAt: at(age), notes });
+
+/** The compact county row the layer joins: percentiles in SVI_THEMES order, null where not ranked. */
+const compactSvi = (r: SviRow) => ({ fips: r.fips, name: r.county, state: r.stAbbr, rpl: r.rpl, flags: r.flags });
+
+async function sviCounty() {
+  const r = await cached(
+    "svi:county",
+    WEEK_MS,
+    async () => {
+      const rows: SviRow[] = [];
+      let cut = false;
+      for (let page = 0; page < SVI_COUNTY_PAGES; page++) {
+        const res = await runRows(
+          "cdc-svi",
+          { kind: "arcgis", layer: SVI_COUNTY_LAYER, params: { where: "1=1", outFields: SVI_COUNTY_FIELDS.join(","), returnGeometry: "false", orderByFields: "FIPS", resultRecordCount: String(SVI_PAGE), resultOffset: String(page * SVI_PAGE) } },
+          25_000,
+        );
+        for (const f of res.features) {
+          const row = sviRow(f.properties ?? {});
+          if (row) rows.push(row);
+        }
+        cut = res.truncated;
+        if (!cut) break;
+      }
+      return { rows, cut };
+    },
+    { deadlineMs: 45_000 },
+  );
+  const notRanked = r.value.rows.filter((x) => x.rpl[0] == null).length;
+  const caveats = [...SVI_CAVEATS, "Counties come as attribute rows only: join them by `fips` onto your own county outlines (Connecticut in planning regions 09110-09190, as TIGER current is). A county with no row is not in this release (SVI US covers the states and DC), never 0."];
+  if (r.value.cut) caveats.push(`CDC's answer was still cut at ${SVI_COUNTY_PAGES * SVI_PAGE} counties: some counties are missing from this answer, not unranked.`);
+  return ok(
+    { level: "county", themes: SVI_THEMES.map((t) => t.name), rows: r.value.rows.map(compactSvi) },
+    {
+      meta: { source: SVI_ATTRIBUTION, count: r.value.rows.length, notRanked, breaks: [...SVI_BREAKS], capped: r.value.cut, cacheAge: r.age },
+      ttlS: 86_400,
+      provenance: [sviProv(SVI_COUNTY_LAYER, "CDC_ATSDR_Social_Vulnerability_Index_2022_USA FeatureServer layer 1 (SVI2022 US county), attributes", r.age)],
+      caveats,
+    },
+  );
+}
+
+async function sviTract(b: Bbox) {
+  const r = await cached(
+    `svi:tract:${b.join(",")}`,
+    WEEK_MS,
+    async () => {
+      const features: Array<{ type: "Feature"; geometry: GeoJSON.Geometry | null; properties: Record<string, unknown> }> = [];
+      let cut = false;
+      const [w, s, e, n] = b;
+      for (let page = 0; page < SVI_TRACT_PAGES; page++) {
+        const res = await runRows(
+          "cdc-svi",
+          {
+            kind: "arcgis",
+            layer: SVI_TRACT_LAYER,
+            params: {
+              where: "1=1",
+              geometry: JSON.stringify({ xmin: w, ymin: s, xmax: e, ymax: n }),
+              geometryType: "esriGeometryEnvelope",
+              inSR: "4326",
+              spatialRel: "esriSpatialRelIntersects",
+              outSR: "4326",
+              outFields: SVI_COUNTY_FIELDS.join(","),
+              returnGeometry: "true",
+              geometryPrecision: "5",
+              maxAllowableOffset: "0.0005",
+              orderByFields: "FIPS",
+              resultRecordCount: String(SVI_PAGE),
+              resultOffset: String(page * SVI_PAGE),
+            },
+          },
+          25_000,
+        );
+        for (const f of res.features) features.push({ type: "Feature", geometry: f.geometry, properties: f.properties ?? {} });
+        cut = res.truncated;
+        if (!cut) break;
+      }
+      return { features, cut };
+    },
+    { deadlineMs: 45_000 },
+  );
+  const caveats = [...SVI_CAVEATS, "SVI's own tract polygons, simplified to 0.0005 degrees. A tract CDC does not rank carries -999 in every RPL_ field: not ranked, never least vulnerable."];
+  if (r.value.cut) caveats.push(`CDC's answer for this box was still cut at ${SVI_TRACT_PAGES * SVI_PAGE} tracts: ask a smaller box for every tract.`);
+  return ok(
+    { type: "FeatureCollection", features: r.value.features },
+    {
+      meta: { source: SVI_ATTRIBUTION, level: "tract", bbox: b, count: r.value.features.length, capped: r.value.cut, breaks: [...SVI_BREAKS], cacheAge: r.age },
+      ttlS: 86_400,
+      provenance: [sviProv(SVI_TRACT_LAYER, "CDC_ATSDR_Social_Vulnerability_Index_2022_USA FeatureServer layer 2 (SVI2022 US tract), polygons simplified to 0.0005 degrees", r.age, [`bbox ${b.join(",")}`])],
+      caveats,
+    },
+  );
+}
+
+async function sviPlaceOp(fips: string) {
+  const layer = fips.length === 5 ? SVI_COUNTY_LAYER : SVI_TRACT_LAYER;
+  const r = await cached(
+    `svi:place:${fips}`,
+    WEEK_MS,
+    async () => {
+      const res = await runRows("cdc-svi", { kind: "arcgis", layer, params: { where: `FIPS='${fips}'`, outFields: SVI_PLACE_FIELDS.join(","), returnGeometry: "false" } }, 20_000);
+      const place = res.features.map((f) => sviPlace(f.properties ?? {})).find((p) => p != null) ?? null;
+      return { place };
+    },
+    { deadlineMs: 25_000 },
+  );
+  if (!r.value.place) return notFound(`not in this release: CDC/ATSDR SVI 2022 has no row for FIPS ${fips} (SVI US covers the states and DC)`);
+  return ok(
+    { level: fips.length === 5 ? "county" : "tract", fips, ...r.value.place },
+    {
+      meta: { source: SVI_ATTRIBUTION, cacheAge: r.age },
+      ttlS: 86_400,
+      provenance: [sviProv(layer, `CDC_ATSDR_Social_Vulnerability_Index_2022_USA FeatureServer layer ${fips.length === 5 ? 1 : 2}, FIPS='${fips}'`, r.age)],
+      caveats: [...SVI_CAVEATS, "Estimates (EP_) are percentages from ACS 2018-2022 with their margins of error (MP_) as CDC publishes them; null where CDC publishes none."],
+    },
+  );
+}
+
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams;
   const op = q.get("op") ?? "";
@@ -130,8 +286,21 @@ export async function GET(req: NextRequest) {
         }
         return badRequest(HEALTH_HELP);
       }
+      case "svi": {
+        const level = q.get("level") ?? "county";
+        if (level === "county") return await sviCounty();
+        if (level === "tract") {
+          const b = gridBbox(q.get("bbox"), SVI_TRACT_BOX_DEG, 0.05);
+          return b ? await sviTract(b) : badRequest(SVI_HELP);
+        }
+        if (level === "place") {
+          const fips = q.get("fips") ?? "";
+          return /^(\d{5}|\d{11})$/.test(fips) ? await sviPlaceOp(fips) : badRequest(SVI_HELP);
+        }
+        return badRequest(SVI_HELP);
+      }
       default:
-        return badRequest("unknown op: health");
+        return badRequest("unknown op: health | svi");
     }
   } catch (err) {
     return withCors(jsonError(err));

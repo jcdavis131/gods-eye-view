@@ -59,6 +59,8 @@ export const EMBED_TEXT = {
   "nps-whs": [],
   "places-county": ["statedesc", "category", "measure", "year", "data_value_type"],
   "places-tract": ["category", "measure", "year", "data_value_type"],
+  "svi-counties": ["COUNTY", "STATE"],
+  "svi-tracts": ["STATE", "COUNTY"],
 } satisfies Record<string, string[]>;
 
 export type CollectionId = keyof typeof EMBED_TEXT;
@@ -289,6 +291,8 @@ export const NO_RECORD_VECTORS: Readonly<Record<string, string>> = {
   "nps-whs": "names and links only; nothing embeddable",
   "places-county": "joined in the browser onto the shared county outlines; record vectors deferred to the next round",
   "places-tract": "deferred with places-county",
+  "svi-counties": "joined in the browser onto the shared county outlines, as nri-counties; record vectors deferred to the next round",
+  "svi-tracts": "deferred with svi-counties",
 };
 
 /** Fields that must never be embedded whatever a card says: the deny list, the dossier's "published name", and any *name field not reviewed. */

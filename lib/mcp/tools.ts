@@ -233,6 +233,21 @@ const bboxStr = (b: number[]) => b.join(",");
 
 const ENVELOPE = "Every route answers { ...meta, data } where meta carries source, asOf/period and cacheAge; routes that opt in add provenance[] (see resource gev://docs/API.md).";
 
+/**
+ * FEMA's own note on where its social vulnerability comes from: the same text as NRI_SOVI_NOTE in
+ * lib/hazards/nri.ts (kept literal: this directory compiles alone; tools.test.ts checks they agree).
+ */
+export const SOVI_LINEAGE_NOTE =
+  "Social vulnerability as published in the National Risk Index. FEMA: \"Data for Social Vulnerability are provided by the U.S. Census Community Resilience Estimate\"; it is not the CDC/ATSDR Social Vulnerability Index, and the two can disagree.";
+
+/** One side of a pairing: the route's answer verbatim, or what its 404 means; never a value made up. */
+async function side(ctx: ToolCtx, path: string, missing: string): Promise<{ status: number; payload: JsonObject }> {
+  const r = await relay(ctx, path);
+  // A route's own 404 (an error string from the handler) means no row; a path the server lacks keeps relay's not-deployed note.
+  if (r.status === 404 && typeof r.payload.error === "string" && r.payload.error !== "non-JSON reply") return { status: 404, payload: { ...r.payload, missing } };
+  return r;
+}
+
 // ---- the tools ------------------------------------------------------------
 
 /** Every MCP tool, in the order they are listed to clients. Append here to add one; the manifest, docs table and tests follow. */
@@ -567,6 +582,29 @@ export const TOOLS: ToolDef[] = [
       ENVELOPE,
     inputSchema: z.object({ bbox, level: z.enum(["county", "tract"]).optional() }),
     handler: (i, ctx) => relay(ctx, "/api/hazards" + qs({ op: "nri", bbox: bboxStr(i.bbox), level: i.level })),
+  }),
+  defineTool({
+    name: "social_vulnerability",
+    title: "CDC/ATSDR SVI beside FEMA's NRI social vulnerability for one county or tract",
+    description:
+      "Two different social vulnerability indices for one place, side by side and never merged: cdcSvi is CDC/ATSDR's Social Vulnerability Index 2022 (GET /api/civic?op=svi&level=place: overall and four theme percentiles 0-1, 0 least to 1 most vulnerable among US counties or tracts, flags, and 16 ACS 2018-2022 estimates with margins; null where CDC does not rank); femaNri is FEMA's National Risk Index row (GET /api/hazards?op=nri&fips=: SOVI_SCORE 0-100 and SOVI_RATNG, from the Census Community Resilience Estimate, plus the rest of the NRI row). Each keeps its native form; do not convert one to the other, average them or rank one against the other. A side FEMA or CDC has no row for comes back with HTTP 404 and `missing` ('not in this release' or 'not in the index'); the other side is still answered. " +
+      ENVELOPE,
+    inputSchema: z.object({ fips: z.string().regex(/^(\d{5}|\d{11})$/, "5-digit county or 11-digit tract FIPS").describe("5-digit county FIPS (48453, Travis County, TX) or 11-digit census tract FIPS (48453001308).") }),
+    handler: async (i, ctx) => {
+      const [cdc, fema] = await Promise.all([
+        side(ctx, "/api/civic" + qs({ op: "svi", level: "place", fips: i.fips }), "not in this release: CDC/ATSDR SVI 2022 has no row for this FIPS"),
+        side(ctx, "/api/hazards" + qs({ op: "nri", fips: i.fips }), "not in the index: FEMA's National Risk Index has no row for this FIPS"),
+      ]);
+      return {
+        status: cdc.status === 200 || fema.status === 200 ? 200 : cdc.status,
+        payload: {
+          fips: i.fips,
+          cdcSvi: { title: "CDC/ATSDR Social Vulnerability Index 2022 (ACS 2018-2022; percentile 0-1)", status: cdc.status, ...cdc.payload },
+          femaNri: { title: "FEMA National Risk Index: social vulnerability (Census Community Resilience Estimate; score 0-100 and rating)", status: fema.status, ...fema.payload },
+          note: `Two indices from different publishers and inputs, shown side by side; nothing here is derived from both. ${SOVI_LINEAGE_NOTE}`,
+        },
+      };
+    },
   }),
   defineTool({
     name: "live_events",

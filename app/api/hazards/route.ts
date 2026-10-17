@@ -27,6 +27,10 @@
 //                                         level=tract (box at most 0.4 degrees, snapped to
 //                                         0.05): NRI's tract polygons, paged by 2,000. Held a
 //                                         week; answers or fails within 45 s.
+//   /api/hazards?op=nri&fips=48453        One county (5 digits) or tract (11 digits) by FIPS,
+//                                         the same named fields, no geometry; 404 "not in the
+//                                         index" when FEMA has no row. For a click answer and
+//                                         the MCP social_vulnerability pairing. Held a week.
 //
 // FIRMS confidence stays on each instrument's own scale: VIIRS low / nominal /
 // high, MODIS 0–100 %. Nothing here merges or rescales them.
@@ -37,7 +41,7 @@
 import type { NextRequest } from "next/server";
 import { cached } from "@/lib/server/cache";
 import { jsonError } from "@/lib/server/upstream";
-import { badRequest, ok, options, withCors } from "@/lib/server/respond";
+import { badRequest, notFound, ok, options, withCors } from "@/lib/server/respond";
 import { preferIpv4 } from "@/lib/server/net";
 import { provenance, type Provenance } from "@/lib/provenance/types";
 import { source } from "@/lib/provenance/sources";
@@ -390,6 +394,44 @@ async function opNri(b: GridBbox, level: "county" | "tract"): Promise<OpResult> 
   };
 }
 
+/**
+ * One NRI row by FIPS: the county layer by STCOFIPS (5 digits) or the tract layer by TRACTFIPS
+ * (11 digits), attributes only. Null when FEMA publishes no row (the route answers 404).
+ */
+async function opNriFips(fips: string): Promise<OpResult | null> {
+  const county = fips.length === 5;
+  const layer = county ? NRI_COUNTIES : NRI_TRACTS;
+  const r = await cached(
+    `nri:fips:${fips}`,
+    WEEK_MS,
+    async () => {
+      const j = await arcgisRowsCapped<Record<string, unknown>>(
+        "fema-nri",
+        layer,
+        { where: `${county ? "STCOFIPS" : "TRACTFIPS"}='${fips}'`, outFields: (county ? NRI_COUNTY_FIELDS : NRI_TRACT_FIELDS).join(","), returnGeometry: "false" },
+        NRI_GATE,
+      );
+      return { row: j.rows[0] ?? null };
+    },
+    { deadlineMs: 30_000 },
+  );
+  if (!r.value.row) return null;
+  return {
+    data: { level: county ? "county" : "tract", fips, row: r.value.row },
+    meta: { source: "FEMA National Risk Index (December 2025)", level: county ? "county" : "tract", cacheAge: r.age },
+    ttlS: 86_400,
+    provenance: [
+      provenance(source("fema-nri"), {
+        kind: "published",
+        seriesId: `${county ? "National_Risk_Index_Counties" : "National_Risk_Index_Census_Tracts"} FeatureServer layer 0, ${county ? "STCOFIPS" : "TRACTFIPS"}='${fips}', attributes`,
+        upstreamUrl: layer,
+        retrievedAt: new Date(Date.now() - r.age).toISOString(),
+      }),
+    ],
+    caveats: [...NRI_CAVEATS, NRI_SOVI_NOTE, NRI_TERMS, NRI_CITATION, "Ratings are FEMA's words, verbatim. 'Not Applicable', 'Insufficient Data', 'No Rating' and 'Data Unavailable' are not a class and never mean low."],
+  };
+}
+
 function respond(r: OpResult) {
   return ok(r.data, { meta: r.meta, provenance: r.provenance, caveats: r.caveats, ttlS: r.ttlS });
 }
@@ -410,6 +452,12 @@ export async function GET(req: NextRequest) {
       case "alerts":
         return respond(await opAlerts());
       case "nri": {
+        const fips = q.get("fips");
+        if (fips != null) {
+          if (!/^(\d{5}|\d{11})$/.test(fips)) return badRequest("fips=<5-digit county or 11-digit tract FIPS>, e.g. fips=48453");
+          const r = await opNriFips(fips);
+          return r ? respond(r) : notFound(`not in the index: FEMA's National Risk Index has no ${fips.length === 5 ? "county" : "tract"} row for FIPS ${fips}`);
+        }
         const level = q.get("level") ?? "county";
         if (level !== "county" && level !== "tract") return badRequest("level=county | tract");
         // Counties: the box /api/economy?op=areas snaps the same bbox to (18 degrees, 1 degree grid), so a client

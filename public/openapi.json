@@ -2403,7 +2403,7 @@
                 "nri"
               ]
             },
-            "description": "wildfire: NIFC WFIGS perimeters and incident points (US). fires: NASA FIRMS 24 h hotspots in a bbox. alerts: NWS + GDACS + EONET. nri: FEMA National Risk Index, December 2025, as FEMA publishes it: composite risk score and rating, expected annual loss (EAL_VALT, dollars a year) and its rating, social vulnerability (SOVI_*, which FEMA says comes from the Census Community Resilience Estimate, not CDC SVI) and community resilience (RESL_*), and the 18 hazard ratings (*_RISKR). level=county (default; the box is snapped as op=areas snaps it, at most 18 degrees on a 1 degree grid): attribute rows only, to join by STCOFIPS onto county outlines (Connecticut in planning regions 09110-09190). level=tract (box at most 0.4 degrees, snapped to 0.05, around the box's centre): NRI's tract polygons as GeoJSON, paged by 2,000, at most two pages (dense 0.4 degree boxes over New York City hold 2,544 to 2,884 tracts and take both pages). Ratings are verbatim; Not Applicable, Insufficient Data, No Rating and Data Unavailable are not a class. A relative index (a percentile among all counties, or all tracts), not a likelihood; county and tract scores are not comparable."
+            "description": "wildfire: NIFC WFIGS perimeters and incident points (US). fires: NASA FIRMS 24 h hotspots in a bbox. alerts: NWS + GDACS + EONET. nri: FEMA National Risk Index, December 2025, as FEMA publishes it: composite risk score and rating, expected annual loss (EAL_VALT, dollars a year) and its rating, social vulnerability (SOVI_*, which FEMA says comes from the Census Community Resilience Estimate, not CDC SVI) and community resilience (RESL_*), and the 18 hazard ratings (*_RISKR). level=county (default; the box is snapped as op=areas snaps it, at most 18 degrees on a 1 degree grid): attribute rows only, to join by STCOFIPS onto county outlines (Connecticut in planning regions 09110-09190). level=tract (box at most 0.4 degrees, snapped to 0.05, around the box's centre): NRI's tract polygons as GeoJSON, paged by 2,000, at most two pages (dense 0.4 degree boxes over New York City hold 2,544 to 2,884 tracts and take both pages). Ratings are verbatim; Not Applicable, Insufficient Data, No Rating and Data Unavailable are not a class. A relative index (a percentile among all counties, or all tracts), not a likelihood; county and tract scores are not comparable. op=nri&fips=: one county (5 digits, by STCOFIPS) or tract (11 digits, by TRACTFIPS) with the same named fields and no geometry, `data: { level, fips, row }`; 404 'not in the index' when FEMA has no row (for a click answer and the MCP social_vulnerability pairing)."
           },
           {
             "name": "bbox",
@@ -2411,7 +2411,7 @@
             "schema": {
               "$ref": "#/components/schemas/Bbox"
             },
-            "description": "`w,s,e,n` degrees, op=fires only; snapped outward to a 1° grid. Default: the whole globe. op=nri: required."
+            "description": "`w,s,e,n` degrees, op=fires only; snapped outward to a 1° grid. Default: the whole globe. op=nri: required unless fips is given."
           },
           {
             "name": "max",
@@ -2436,6 +2436,15 @@
               "default": "county"
             },
             "description": "op=nri: county (attribute rows) or tract (polygons)."
+          },
+          {
+            "name": "fips",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^(\\d{5}|\\d{11})$"
+            },
+            "description": "op=nri: one county (5-digit FIPS) or tract (11-digit FIPS) instead of a box."
           }
         ],
         "responses": {
@@ -2475,6 +2484,9 @@
           },
           "502": {
             "$ref": "#/components/responses/Upstream"
+          },
+          "404": {
+            "description": "op=nri&fips=: FEMA publishes no row for this FIPS (not in the index); `{ error }`."
           }
         }
       },
@@ -3920,8 +3932,8 @@
     },
     "/api/civic": {
       "get": {
-        "summary": "Community health estimates (CDC PLACES) by county and tract",
-        "description": "op=health: CDC PLACES, 2025 release (data year 2023; 2022 for five measures), model-based estimates for 40 measures. level=county&measure=: every county's age-adjusted prevalence for one measure from one whole-measure pull (held a week), with national quintile `breaks`; join by `fips` onto county outlines (Connecticut in planning regions). level=tract&measure=&counties=: crude prevalence for every published tract of at most 6 counties, asked by countyfips (never within_box). level=place&fips=: every measure for one county, age-adjusted. A county or tract with no row is not published, never 0. Estimates, not counts of diagnosed people; not for ranking small differences.",
+        "summary": "Community indicators by county and tract: health estimates (CDC PLACES) and social vulnerability (CDC/ATSDR SVI)",
+        "description": "op=health: CDC PLACES, 2025 release (data year 2023; 2022 for five measures), model-based estimates for 40 measures. level=county&measure=: every county's age-adjusted prevalence for one measure from one whole-measure pull (held a week), with national quintile `breaks`; join by `fips` onto county outlines (Connecticut in planning regions). level=tract&measure=&counties=: crude prevalence for every published tract of at most 6 counties, asked by countyfips (never within_box). level=place&fips=: every measure for one county, age-adjusted. A county or tract with no row is not published, never 0. Estimates, not counts of diagnosed people; not for ranking small differences. op=svi: CDC/ATSDR Social Vulnerability Index 2022 (ACS 2018-2022). level=county: every county's overall percentile (RPL_THEMES) and four theme percentiles (Socioeconomic Status, Household Characteristics, Racial and Ethnic Minority Status, Housing Type and Transportation) and F_TOTAL, attributes only, as compact rows { fips, name, state, rpl: [overall, theme1..theme4], flags } (held a week); join by `fips` onto county outlines (Connecticut in planning regions). level=tract&bbox=: SVI's own tract polygons (GeoJSON, simplified to 0.0005 degrees) in a box of at most 0.4 degrees snapped to 0.05, at most two pages of 2,000. level=place&fips=: one county (5 digits) or tract (11 digits) with the 16 estimates (EP_) and margins (MP_); 404 when CDC has no row. CDC's -999 ('not ranked': 778 tracts, 0 counties on 2026-10-16) is sent as null, never 0. A percentile among US counties (or tracts), 0 least to 1 most vulnerable; not FEMA's NRI social vulnerability (/api/hazards?op=nri, from the Census Community Resilience Estimate), and the two are never merged.",
         "tags": [
           "civic"
         ],
@@ -3933,10 +3945,11 @@
             "schema": {
               "type": "string",
               "enum": [
-                "health"
+                "health",
+                "svi"
               ]
             },
-            "description": "health: CDC PLACES."
+            "description": "health: CDC PLACES. svi: CDC/ATSDR Social Vulnerability Index 2022."
           },
           {
             "name": "level",
@@ -3950,7 +3963,7 @@
               ],
               "default": "county"
             },
-            "description": "county (one measure, every county), tract (one measure, up to 6 counties' tracts) or place (every measure, one county)."
+            "description": "op=health: county (one measure, every county), tract (one measure, up to 6 counties' tracts) or place (every measure, one county). op=svi: county (every county, attributes), tract (polygons in bbox) or place (one county or tract by fips)."
           },
           {
             "name": "measure",
@@ -4016,9 +4029,17 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^\\d{5}$"
+              "pattern": "^(\\d{5}|\\d{11})$"
             },
-            "description": "level=place: a five-digit county FIPS."
+            "description": "level=place: a five-digit county FIPS (op=health), or a five-digit county or 11-digit tract FIPS (op=svi)."
+          },
+          {
+            "name": "bbox",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/Bbox"
+            },
+            "description": "op=svi&level=tract: `w,s,e,n`, at most 0.4 degrees a side around the box's centre, snapped outward to 0.05."
           }
         ],
         "responses": {
@@ -4038,6 +4059,9 @@
                   "oneOf": [
                     {
                       "$ref": "#/components/schemas/CivicHealthResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/CivicSviResponse"
                     }
                   ]
                 }
@@ -4049,6 +4073,9 @@
           },
           "502": {
             "$ref": "#/components/responses/Upstream"
+          },
+          "404": {
+            "description": "op=svi&level=place: CDC has no row for this FIPS (not in this release); `{ error }`."
           }
         }
       }
@@ -9882,7 +9909,7 @@
             "properties": {
               "data": {
                 "type": "object",
-                "description": "level=county: { level: 'county', rows: [ { NRI_ID, STATEABBRV, COUNTY, STCOFIPS, POPULATION, BUILDVALUE, RISK_SCORE, RISK_RATNG, EAL_VALT, EAL_RATNG, SOVI_SCORE, SOVI_RATNG, RESL_SCORE, RESL_RATNG, NRI_VER, AVLN_RISKR ... WNTW_RISKR } ] } as FEMA publishes them. level=tract: a GeoJSON FeatureCollection of tract polygons (simplified to 0.0005 degrees) with the same properties plus TRACTFIPS."
+                "description": "level=county: { level: 'county', rows: [ { NRI_ID, STATEABBRV, COUNTY, STCOFIPS, POPULATION, BUILDVALUE, RISK_SCORE, RISK_RATNG, EAL_VALT, EAL_RATNG, SOVI_SCORE, SOVI_RATNG, RESL_SCORE, RESL_RATNG, NRI_VER, AVLN_RISKR ... WNTW_RISKR } ] } as FEMA publishes them. level=tract: a GeoJSON FeatureCollection of tract polygons (simplified to 0.0005 degrees) with the same properties plus TRACTFIPS. fips=: { level, fips, row } with the same fields, one row."
               },
               "level": {
                 "type": "string",
@@ -10198,6 +10225,104 @@
           }
         ],
         "x-op": "health"
+      },
+      "CivicSviResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "description": "level=county: { level, themes: [5 CDC theme names], rows: [ { fips, name, state, rpl: [overall, theme1, theme2, theme3, theme4], flags } ] }. level=tract: a GeoJSON FeatureCollection of SVI tract polygons with FIPS, COUNTY, STATE, ST_ABBR, RPL_THEMES, RPL_THEME1-4, F_TOTAL as CDC publishes them (-999: not ranked). level=place: { level, fips, row: { fips, county, state, stAbbr, rpl, flags }, location, population, measures: { POV150: { estimate, margin }, ... 16 } }.",
+                "properties": {
+                  "level": {
+                    "type": "string",
+                    "enum": [
+                      "county",
+                      "tract",
+                      "place"
+                    ]
+                  },
+                  "rows": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "fips": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "state": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "rpl": {
+                          "type": "array",
+                          "items": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "minItems": 5,
+                          "maxItems": 5,
+                          "description": "percentiles 0-1; null: not ranked by CDC"
+                        },
+                        "flags": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "count": {
+                "type": "integer"
+              },
+              "notRanked": {
+                "type": "integer",
+                "description": "level=county: rows CDC does not rank (overall)"
+              },
+              "breaks": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "description": "the fixed colour breaks the globe uses: 0.25, 0.5, 0.75"
+              },
+              "capped": {
+                "type": "boolean",
+                "description": "CDC's answer was still cut at its record limit after the pages asked"
+              }
+            }
+          }
+        ],
+        "x-op": "svi",
+        "x-feature-properties": [
+          "FIPS",
+          "COUNTY",
+          "STATE",
+          "ST_ABBR",
+          "RPL_THEMES",
+          "RPL_THEME1",
+          "RPL_THEME2",
+          "RPL_THEME3",
+          "RPL_THEME4",
+          "F_TOTAL"
+        ]
       }
     }
   }

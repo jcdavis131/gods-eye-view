@@ -325,3 +325,29 @@ describe("the topo edition in the share link", () => {
     useGlobe.getState().setLayer("topo", false);
   });
 });
+
+describe("the SVI theme in the share link", () => {
+  it("round-trips sv= as a theme 1-4 and drops the overall ranking and anything else", () => {
+    const s: ShareState = { layers: ["vulnerability"], sv: 3 };
+    const q = shareQuery(s);
+    expect(q).toContain("sv=3");
+    expect(parseShare(q)).toEqual(s);
+    expect(parseShare("?sv=0").sv).toBeUndefined();
+    expect(parseShare("?sv=5").sv).toBeUndefined();
+    expect(parseShare("?sv=").sv).toBeUndefined();
+  });
+
+  it("is written only while Social vulnerability is on and a theme is picked", async () => {
+    const { currentShare } = await import("./share");
+    const { useGlobe } = await import("@/lib/store/globe");
+    const { useSettings } = await import("@/lib/store/settings");
+    useSettings.getState().setPref("sviTheme", "2");
+    useGlobe.getState().setLayer("vulnerability", false);
+    expect(currentShare().sv).toBeUndefined();
+    useGlobe.getState().setLayer("vulnerability", true);
+    expect(currentShare().sv).toBe(2);
+    useSettings.getState().setPref("sviTheme", "0");
+    expect(currentShare().sv).toBeUndefined();
+    useGlobe.getState().setLayer("vulnerability", false);
+  });
+});

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { PLACE_EXPORTS } from "../catalog/placeExport";
-import { asObject, boundPayload, httpFetchJson, NOT_DEPLOYED_NOTE, qs, relay, stripGeometry, toolByName, TOOLS, type FetchJson, type JsonReply } from "./tools";
+import { NRI_SOVI_NOTE } from "../hazards/nri";
+import { asObject, boundPayload, httpFetchJson, NOT_DEPLOYED_NOTE, qs, relay, SOVI_LINEAGE_NOTE, stripGeometry, toolByName, TOOLS, type FetchJson, type JsonReply } from "./tools";
 
 /** A fetchJson that records the path and answers what the test asked for. */
 function fake(status = 200, body: unknown = { source: "x", data: { ok: true } }): { calls: string[]; fetchJson: FetchJson } {
@@ -99,13 +100,58 @@ describe("every tool asks for the exact route URL", () => {
   }
 
   it("covers every registered tool", () => {
-    const named = new Set(cases.map((c) => c[0]));
+    // social_vulnerability asks two routes; its own describe below checks both URLs.
+    const named = new Set([...cases.map((c) => c[0]), "social_vulnerability"]);
     for (const t of TOOLS) expect(named.has(t.name), t.name).toBe(true);
+  });
+});
+
+describe("social_vulnerability", () => {
+  const svi = { source: "cdc", data: { level: "county", fips: "48453", row: { rpl: [0.5702, 0.5527, 0.0935, 0.882, 0.7805] } } };
+  const nri = { source: "fema", data: { level: "county", fips: "48453", row: { SOVI_SCORE: 14.75826972, SOVI_RATNG: "Very Low" } } };
+  const answering = (byPath: (p: string) => JsonReply | null) => {
+    const calls: string[] = [];
+    const fetchJson: FetchJson = async (p) => {
+      calls.push(p);
+      return byPath(p) ?? { status: 500, body: { error: "unexpected" }, url: p };
+    };
+    return { calls, fetchJson };
+  };
+
+  it("asks CDC's place row and FEMA's row by FIPS, and returns both verbatim under their own titles", async () => {
+    const f = answering((p) => (p.startsWith("/api/civic") ? { status: 200, body: svi, url: p } : { status: 200, body: nri, url: p }));
+    const r = await toolByName("social_vulnerability")!.run({ fips: "48453" }, { fetchJson: f.fetchJson });
+    expect(f.calls.sort()).toEqual(["/api/civic?op=svi&level=place&fips=48453", "/api/hazards?op=nri&fips=48453"]);
+    expect(r.status).toBe(200);
+    const cdc = r.payload.cdcSvi as Record<string, unknown>;
+    const fema = r.payload.femaNri as Record<string, unknown>;
+    expect(cdc.title).toMatch(/^CDC\/ATSDR Social Vulnerability Index 2022/);
+    expect(fema.title).toMatch(/^FEMA National Risk Index: social vulnerability \(Census Community Resilience Estimate/);
+    expect(cdc.data).toEqual(svi.data);
+    expect(fema.data).toEqual(nri.data);
+    // Nothing at the top level is computed from both.
+    expect(Object.keys(r.payload).sort()).toEqual(["cdcSvi", "femaNri", "fips", "note"]);
+    expect(r.payload.note).toContain(SOVI_LINEAGE_NOTE);
+  });
+
+  it("keeps CDC's side when FEMA has no row, and says which side is missing", async () => {
+    const f = answering((p) => (p.startsWith("/api/civic") ? { status: 200, body: svi, url: p } : { status: 404, body: { error: "not in the index: FEMA's National Risk Index has no county row for FIPS 48453" }, url: p }));
+    const r = await toolByName("social_vulnerability")!.run({ fips: "48453" }, { fetchJson: f.fetchJson });
+    expect(r.status).toBe(200);
+    expect((r.payload.cdcSvi as Record<string, unknown>).data).toEqual(svi.data);
+    expect((r.payload.femaNri as Record<string, unknown>).status).toBe(404);
+    expect((r.payload.femaNri as Record<string, unknown>).missing).toMatch(/^not in the index/);
+  });
+
+  it("quotes FEMA's lineage note exactly as lib/hazards/nri.ts does", () => {
+    expect(SOVI_LINEAGE_NOTE).toBe(NRI_SOVI_NOTE);
   });
 });
 
 describe("input schemas reject bad input", () => {
   const bad: [string, unknown][] = [
+    ["social_vulnerability", { fips: "4845" }],
+    ["social_vulnerability", { fips: "484530013" }],
     ["water_report", { lon: 200, lat: 0 }],
     ["water_report", { lon: -98 }],
     ["areas", { bbox: [1, 2, 3] }],

@@ -33,6 +33,8 @@ import PowerWaterAside from "./PowerWaterAside";
 import TriAside from "./TriAside";
 import NldiAside from "./NldiAside";
 import HealthAside from "./HealthAside";
+import SviAside from "./SviAside";
+import type { SviExtra } from "@/lib/civic/svi";
 import type { HealthExtra } from "@/lib/layers/health";
 import { useGroundPick, type ReachAnswer } from "@/lib/terrain/ground";
 
@@ -169,7 +171,7 @@ export default function InfoPanel() {
   const details = Object.entries(p.details ?? {}).filter(([, v]) => v != null && v !== "" && v !== false);
   const isLiveLayer =
     !p.simulated &&
-    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "employers", "banks", "spending", "constructs", "field", "flood", "wetlands", "publiclands", "relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "transmission", "pipelines", "plants", "rail", "airports", "dams", "faults", "landslides", "geology", "plss", "parcels", "zoning", "permits", "licences", "envpermits", "historic", "crithab", "contaminants", "wayback", "topo", "impaired", "pfas", "ust", "hydro", "riskindex", "naip", "heritage", "health"].includes(p.layer);
+    !["satellites", "launches", "water", "groundwater", "turbidity", "trade", "commerce", "realestate", "companies", "employers", "banks", "spending", "constructs", "field", "flood", "wetlands", "publiclands", "relief", "slope", "contours", "soils", "firehazard", "landcover", "sealevel", "transmission", "pipelines", "plants", "rail", "airports", "dams", "faults", "landslides", "geology", "plss", "parcels", "zoning", "permits", "licences", "envpermits", "historic", "crithab", "contaminants", "wayback", "topo", "impaired", "pfas", "ust", "hydro", "riskindex", "naip", "heritage", "health", "vulnerability"].includes(p.layer);
   const banner = BANNER[p.layer];
   const iss = p.layer === "satellites" && p.id === "25544";
   const construct = p.layer === "constructs" || p.layer === "field" || p.layer === "alerts";
@@ -278,6 +280,7 @@ export default function InfoPanel() {
         {disclaimer && <p className="border-t border-border/60 px-3 py-2 text-[9px] leading-snug text-muted-foreground">{disclaimer}</p>}
 
         {p.layer === "health" && (p.extra as HealthExtra | undefined)?.level === "county" && <HealthAside key={`places:${p.id}`} fips={(p.extra as HealthExtra).fips} />}
+        {p.layer === "vulnerability" && (p.extra as SviExtra | undefined)?.fips && <SviAside key={`svi:${p.id}`} fips={(p.extra as SviExtra).fips} level={(p.extra as SviExtra).level} />}
         {hydroPick && <NldiAside key={`nldi:${p.id}`} reach={hydroPick} />}
         {gauge && lonlat && <NldiAside key={`nldi:${p.id}`} lon={lonlat[0]} lat={lonlat[1]} />}
         {gauge?.primary && (
@@ -343,6 +346,7 @@ export default function InfoPanel() {
 
 /** One-line reminders of what a layer's features are and are not. */
 const BANNER: Partial<Record<string, string>> = {
+  vulnerability: "CDC/ATSDR SVI 2022 \u00b7 A PERCENTILE AMONG US COUNTIES (OR TRACTS), NOT A RISK \u00b7 NOT FEMA'S NRI SOCIAL VULNERABILITY",
   health: "CDC PLACES \u00b7 MODEL-BASED ESTIMATES, NOT COUNTS OF DIAGNOSED PEOPLE \u00b7 NOT FOR RANKING SMALL DIFFERENCES",
   heritage: "NPS DESIGNATIONS, NOT OWNERSHIP \u00b7 BATTLEFIELDS ARE SURVEY AREAS, MOSTLY PRIVATE LAND \u00b7 A HERITAGE AREA IS NOT FEDERAL LAND",
   naip: "USDA NAIP AS FLOWN \u00b7 A YEAR IS A MOSAIC OF FLIGHTS \u00b7 THE DATE ON CLICK IS THE PHOTO UNDER THE CURSOR",

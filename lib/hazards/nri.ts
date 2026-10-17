@@ -185,6 +185,7 @@ export function nriDetails(r: NriRow, level: "county" | "tract"): Record<string,
   d["composite risk (FEMA NRI)"] = `${word(r.riskRating)}${score(r.riskScore)}`;
   d["expected annual loss"] = `${usd(r.ealValue)}${r.ealRating ? ` (${r.ealRating})` : ""}`;
   d["social vulnerability, as published in the NRI"] = `${word(r.soviRating)}${score(r.soviScore)}`;
+  d["a different index"] = "CDC/ATSDR SVI is on the Social vulnerability layer";
   d["community resilience (NRI)"] = `${word(r.reslRating)}${score(r.reslScore)}`;
   const rank = (w: string | null) => (isNriClass(w) ? NRI_CLASSES.indexOf(w) : NRI_CLASSES.length);
   const order = [...NRI_HAZARD_CODES].sort((a, b) => rank(r.hazards[a]) - rank(r.hazards[b]) || NRI_HAZARDS[a].localeCompare(NRI_HAZARDS[b]));

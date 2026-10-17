@@ -7,6 +7,10 @@ import { NextRequest } from "next/server";
 import northeast from "@/lib/civic/fixtures/places-county-diabetes-northeast-trimmed.json";
 import tracts from "@/lib/civic/fixtures/places-tract-09110-diabetes.json";
 import travis from "@/lib/civic/fixtures/places-county-48453-all.json";
+import sviCounties from "@/lib/civic/fixtures/svi-county-ct-tx.json";
+import sviTracts from "@/lib/civic/fixtures/svi-tract-austin.json";
+import sviTravis from "@/lib/civic/fixtures/svi-place-48453.json";
+import sviNone from "@/lib/civic/fixtures/svi-place-none.json";
 
 vi.mock("@/lib/server/cache", () => ({
   cached: async <T,>(_k: string, _ttl: number, produce: () => Promise<T>) => ({ value: await produce(), age: 0, hit: false }),
@@ -80,8 +84,70 @@ describe("op=health", () => {
 
   it("refuses an unknown measure, a seventh county or a bad FIPS without asking", async () => {
     answer = () => json([]);
-    for (const qs of ["op=health&measure=HAPPINESS", "op=health&level=tract&measure=DIABETES&counties=1,2", "op=health&level=tract&measure=DIABETES&counties=01001,01003,01005,01007,01009,01011,01013", "op=health&level=place&fips=4845", "op=svi"]) {
+    for (const qs of ["op=health&measure=HAPPINESS", "op=health&level=tract&measure=DIABETES&counties=1,2", "op=health&level=tract&measure=DIABETES&counties=01001,01003,01005,01007,01009,01011,01013", "op=health&level=place&fips=4845", "op=broadband"]) {
       expect((await get(qs)).status, qs).toBe(400);
+    }
+    expect(calls).toEqual([]);
+  });
+});
+
+// op=svi with CDC's ArcGIS service replaced by answers captured 2026-10-16 (lib/civic/fixtures,
+// unmodified): Connecticut's nine planning regions plus Travis and Bexar, an Austin tract box,
+// Travis County's place row, and a FIPS CDC has no row for.
+
+const SVI = "https://services3.arcgis.com/ZvidGQkLaDJxRSJ2/arcgis/rest/services/CDC_ATSDR_Social_Vulnerability_Index_2022_USA/FeatureServer";
+type SviBody = { data: { rows?: Array<{ fips: string; rpl: Array<number | null>; flags: number | null }>; features?: unknown[]; fips?: string; row?: { rpl: number[] }; measures?: Record<string, { estimate: number | null }> }; count: number; breaks?: number[]; caveats: string[]; provenance: Array<{ source: { id: string } }>; error?: string };
+async function getSvi(qs: string) {
+  const res = await GET(new NextRequest(`http://localhost/api/civic?${qs}`));
+  return { status: res.status, body: (await res.json()) as SviBody };
+}
+
+describe("op=svi", () => {
+  it("level=county: attributes only, named fields, ordered for paging, compact rows on fixed breaks", async () => {
+    answer = (u) => (u.startsWith(`${SVI}/1/query?`) ? json(sviCounties) : null);
+    const { status, body } = await getSvi("op=svi&level=county");
+    expect(status).toBe(200);
+    expect(calls).toHaveLength(1);
+    const p = new URL(calls[0]).searchParams;
+    expect(p.get("returnGeometry")).toBe("false");
+    expect(p.get("orderByFields")).toBe("FIPS");
+    expect(p.get("outFields")).toBe("FIPS,COUNTY,STATE,ST_ABBR,RPL_THEMES,RPL_THEME1,RPL_THEME2,RPL_THEME3,RPL_THEME4,F_TOTAL");
+    expect(body.count).toBe(11);
+    expect(body.breaks).toEqual([0.25, 0.5, 0.75]);
+    expect(body.data.rows!.find((r) => r.fips === "48453")).toMatchObject({ rpl: [0.5702, 0.5527, 0.0935, 0.882, 0.7805], flags: 2 });
+    expect(body.data.rows!.filter((r) => r.fips.startsWith("09")).map((r) => r.fips)).toEqual(["09110", "09120", "09130", "09140", "09150", "09160", "09170", "09180", "09190"]);
+    expect(body.provenance[0].source.id).toBe("cdc-svi");
+    expect(body.caveats.join(" ")).toContain("not FEMA's social vulnerability");
+    expect(body.caveats.join(" ")).toContain("describes itself as the 2020 SVI");
+  });
+
+  it("level=tract: SVI's own polygons in a snapped box of at most 0.4 degrees", async () => {
+    answer = (u) => (u.startsWith(`${SVI}/2/query?`) ? json(sviTracts) : null);
+    const { status, body } = await getSvi("op=svi&level=tract&bbox=-97.76,30.25,-97.72,30.29");
+    expect(status).toBe(200);
+    const p = new URL(calls[0]).searchParams;
+    expect(p.get("returnGeometry")).toBe("true");
+    expect(p.get("outSR")).toBe("4326");
+    expect(JSON.parse(p.get("geometry")!)).toEqual({ xmin: -97.8, ymin: 30.25, xmax: -97.7, ymax: 30.3 });
+    expect(body.data.features).toHaveLength(27);
+  });
+
+  it("level=place: one row with the 16 estimates; a FIPS CDC has no row for is a 404, never an empty success", async () => {
+    answer = (u) => (u.startsWith(`${SVI}/1/query?`) ? json(new URL(u).searchParams.get("where") === "FIPS='48453'" ? sviTravis : sviNone) : null);
+    const ok = await getSvi("op=svi&level=place&fips=48453");
+    expect(ok.status).toBe(200);
+    expect(ok.body.data.fips).toBe("48453");
+    expect(ok.body.data.row!.rpl[0]).toBe(0.5702);
+    expect(Object.keys(ok.body.data.measures!)).toHaveLength(16);
+    expect(ok.body.data.measures!.POV150.estimate).toBe(17.3);
+    const miss = await getSvi("op=svi&level=place&fips=99999");
+    expect(miss.status).toBe(404);
+    expect(miss.body.error).toMatch(/^not in this release/);
+  });
+
+  it("refuses a bad level, box or FIPS before asking CDC", async () => {
+    for (const qs of ["op=svi&level=state", "op=svi&level=tract", "op=svi&level=tract&bbox=-97,30,-98,31", "op=svi&level=place&fips=4845", "op=svi&level=place&fips=48453'--"]) {
+      expect((await getSvi(qs)).status, qs).toBe(400);
     }
     expect(calls).toEqual([]);
   });
