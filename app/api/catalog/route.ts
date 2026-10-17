@@ -10,9 +10,10 @@
 //   /api/catalog?op=search&q=...  the collections ranked by meaning (embedding of the
 //                                 query against each card's own prose; collections only,
 //                                 records are searched in the browser palette)
-//   /api/catalog?op=place-export&collection=npl-status
+//   /api/catalog?op=place-export&collection=npl-status|ust-releases-county|ust-facilities-county|fuds-properties
 //                                 a committed per-county aggregate (a candidate
-//                                 vector-places tower; docs/place-towers.md)
+//                                 vector-places tower; docs/place-towers.md):
+//                                 npl-status by year, the others one static snapshot
 //
 // The same entries are listed for people at /catalog.
 //

@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { LAYER_IDS } from "@/lib/layers/types";
 import { COLLECTIONS, catalogued } from "@/lib/catalog/collections";
+import { PLACE_EXPORTS, PLACE_EXPORT_FORM } from "@/lib/catalog/placeExport";
+import nplFile from "@/lib/catalog/data/npl-county.json";
 import { GET } from "./route";
 
 const fetchSpy = vi.fn(async () => {
@@ -98,6 +100,30 @@ describe("/api/catalog?op=place-export", () => {
     expect(sites["30049"]).toEqual(expect.arrayContaining(["MTD006230346", "MTSFN7578012"]));
     expect(Object.keys(d.nullPlaces).filter((g) => g.startsWith("30")).every((g) => d.nullPlaces[g] === "join:multi_county")).toBe(true);
     expect((await get("op=place-export&collection=nope")).status).toBe(400);
+    expect((await get("op=place-export&collection=attains-impaired")).status).toBe(400);
     expect((await get("op=place-export")).status).toBe(400);
+  });
+
+  it("serves the static UST and FUDS exports with their caveats", async () => {
+    for (const id of ["ust-releases-county", "ust-facilities-county", "fuds-properties"]) {
+      const r = await get(`op=place-export&collection=${id}`);
+      expect(r.status, id).toBe(200);
+      const d = r.body.data as { meta: { collection: string; form: string; years: null }; places: string[]; value: unknown[][] };
+      expect(d.meta).toMatchObject({ collection: id, form: "static", years: null });
+      expect(d.value).toHaveLength(d.places.length);
+      expect((r.body as { caveats?: string[] }).caveats?.length ?? 0).toBeGreaterThan(0);
+    }
+  });
+
+  it("serves meta.form for every export, from PLACE_EXPORT_FORM when the file has none (npl-county.json)", async () => {
+    expect((nplFile.meta as { form?: string }).form).toBeUndefined();
+    for (const id of PLACE_EXPORTS) {
+      const r = await get(`op=place-export&collection=${id}`);
+      expect((r.body.data as { meta: { form: string } }).meta.form, id).toBe(PLACE_EXPORT_FORM[id]);
+    }
+    expect(PLACE_EXPORT_FORM["npl-status"]).toBe("series");
+    // The served copy carries the rest of meta unchanged.
+    const npl = (await get("op=place-export&collection=npl-status")).body.data as { meta: Record<string, unknown> };
+    expect({ ...npl.meta, form: undefined }).toEqual({ ...nplFile.meta, form: undefined });
   });
 });

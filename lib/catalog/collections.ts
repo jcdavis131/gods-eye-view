@@ -23,7 +23,7 @@ import { NMFS_CAVEAT, RANGES_CAVEAT } from "@/lib/land/features";
 import { TRI_CAVEAT } from "@/lib/permits/tri";
 import { NPL_CAVEAT } from "@/lib/permits/npl";
 import { FUDS_CAVEAT } from "@/lib/permits/fuds";
-import { UST_CAVEAT } from "@/lib/permits/ust";
+import { UST_CAVEAT, UST_FACILITY_NULLS, UST_RELEASE_NULLS } from "@/lib/permits/ust";
 import { DENY_FIELD, EMBED_TEXT } from "./embedFields";
 
 export interface Exclusion {
@@ -451,7 +451,7 @@ export const COLLECTIONS: readonly Collection[] = [
     caveats: [FUDS_CAVEAT],
     searchable: ["FUDSUNIQUEPROPERTYNUMBER"],
     embedText: EMBED_TEXT["fuds-properties"],
-    ops: ["permits?op=contaminants"],
+    ops: ["permits?op=contaminants", "catalog?op=place-export"],
     sensitivity: "Agency-published DoD cleanup records. The owner and narrative fields stay at the source. Property names (FEATURENAME, DODFORMERLYUSEDDEFENSESITENAME) can carry a private surname (13 names on layer 1 contain 'PROPERTY', e.g. 'BARTLETT PROPERTY (WURTSMITH AIR FORCE BASE)'); they are shown in the record and on the label, never searched or embedded.",
     round: 3,
   },
@@ -510,10 +510,10 @@ export const COLLECTIONS: readonly Collection[] = [
       { what: "an 'unknown status' count by subtraction", why: "13,179 releases nationally have an unknown status, yet some counties sum exactly; the arithmetic is not trustworthy, so nothing is derived" },
       { what: "a per-capita rate", why: "not computed; the layer's population is shown as given" },
     ],
-    caveats: [UST_CAVEAT],
+    caveats: [UST_CAVEAT, UST_RELEASE_NULLS],
     searchable: ["County"],
     embedText: EMBED_TEXT["ust-releases-county"],
-    ops: ["permits?op=ust"],
+    ops: ["permits?op=ust", "catalog?op=place-export"],
     sensitivity: "County aggregates only. No site, name or address is requested.",
     round: 3,
   },
@@ -530,10 +530,10 @@ export const COLLECTIONS: readonly Collection[] = [
       { what: "a FIPS join", why: "the layers have no FIPS code; the name join leaves a non-matching or non-unique county unjoined and says so (all 57 counties joined in the Gulf Coast test box, 2026-10-15)" },
       { what: "facility names and addresses", why: "never requested; county counts only" },
     ],
-    caveats: [UST_CAVEAT],
+    caveats: [UST_CAVEAT, UST_FACILITY_NULLS],
     searchable: [],
     embedText: EMBED_TEXT["ust-facilities-county"],
-    ops: ["permits?op=ust"],
+    ops: ["permits?op=ust", "catalog?op=place-export"],
     sensitivity: "County aggregates only. The NAME field here is the county's name; it is not embedded under that field name (the deny list keeps any bare NAME out).",
     round: 3,
   },
