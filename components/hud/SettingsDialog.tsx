@@ -97,7 +97,7 @@ function KeyField({ id }: { id: ApiKeyId }) {
           placeholder="not set — feature stays on the free path"
           autoComplete="off"
           spellCheck={false}
-          className="h-8 rounded-none border-border bg-black/40 font-mono text-[11px]"
+          className="h-8 rounded-none border-border bg-input font-mono text-[11px]"
         />
         {meta.secret && (
           <button
