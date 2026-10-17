@@ -15,7 +15,7 @@ import type { FetchContext, FetchResult, LayerDefinition, LayerFeature, ViewStat
 import { proxy } from "./aircraft";
 import { viewBbox } from "./water";
 import { COUNTY_MAX_HEIGHT_M, countyViewBbox, loadCountyOutlines } from "./areas";
-import { buildTracts, joinCounties, NRI_HAZARDS, NRI_TRACT_MAX_M, nriRow, parseNriPick } from "@/lib/hazards/nri";
+import { buildTracts, joinCounties, NRI_HAZARDS, NRI_TRACT_BOX_DEG, NRI_TRACT_MAX_M, nriRow, parseNriPick } from "@/lib/hazards/nri";
 
 const KEY_GRID = 0.5;
 const TRACT_GRID = 0.05;
@@ -36,7 +36,8 @@ async function fetchRiskindex(ctx: FetchContext): Promise<FetchResult> {
   const empty = (note: string): FetchResult => ({ collection: { type: "FeatureCollection", features: [] }, source: "FEMA National Risk Index", fetchedAt: ctx.now, note, meta: { count: 0, pick } });
   if (ctx.view.height > COUNTY_MAX_HEIGHT_M) return empty(`descend below ${(COUNTY_MAX_HEIGHT_M / 1000).toLocaleString("en-US")} km for FEMA's National Risk Index by county`);
   if (ctx.view.height <= NRI_TRACT_MAX_M) {
-    const b = viewBbox(ctx, 30_000).map((x) => x.toFixed(3)).join(",");
+    // The route answers at most NRI_TRACT_BOX_DEG a side, around the view's centre.
+    const b = viewBbox(ctx, 20_000).map((x) => x.toFixed(3)).join(",");
     const env = await proxy<FeatureCollection>(`/api/hazards?op=nri&level=tract&bbox=${b}`, ctx);
     const features = buildTracts(env.data.features as never, pick);
     const capped = (env as unknown as { capped?: boolean }).capped;
@@ -44,7 +45,7 @@ async function fetchRiskindex(ctx: FetchContext): Promise<FetchResult> {
       collection: { type: "FeatureCollection", features: features as LayerFeature[] },
       source: "FEMA National Risk Index (tracts)",
       fetchedAt: ctx.now,
-      note: `${features.length} census tracts · ${pickLabel(pick)}, FEMA's rating words · dashed grey: no rating (never low) · a tract's percentile among all US tracts, not comparable with a county's${capped ? " · cut at FEMA's record limit: zoom in for every tract" : ""}`,
+      note: `${features.length} census tracts · ${pickLabel(pick)}, FEMA's rating words · dashed grey: no rating (never low) · a tract's percentile among all US tracts, not comparable with a county's · tracts within ${NRI_TRACT_BOX_DEG / 2} degrees of the view's centre${capped ? " · cut at FEMA's record limit: zoom in for every tract" : ""}`,
       meta: { count: features.length, level: "tract", pick },
     };
   }

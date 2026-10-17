@@ -20,8 +20,14 @@ export const NRI_TRACTS = "https://services.arcgis.com/XG15cJAlne2vxtgt/arcgis/r
 export const NRI_TRACT_MAX_M = 60_000;
 /** The layers' maxRecordCount (read 2026-10-16). */
 export const NRI_PAGE = 2000;
-/** Tract pages asked for one box at most (a 0.6 degree box held 73 tracts at San Antonio). */
-export const NRI_MAX_PAGES = 5;
+/**
+ * The largest tract box, degrees a side. Los Angeles is the densest box measured (2026-10-16):
+ * 0.6 x 0.4 degrees held 1,913 tracts (2.26 MB answered, 1.34 MB of it FEMA's GeoJSON, almost
+ * all attributes: a coarser maxAllowableOffset saved under 12 %), 0.4 x 0.4 held 1,523.
+ */
+export const NRI_TRACT_BOX_DEG = 0.4;
+/** Tract pages asked for one box at most: one 0.4 degree box has never needed a second. */
+export const NRI_MAX_PAGES = 2;
 
 /** The 18 hazards, in FEMA's field prefixes, with FEMA's names (the field aliases, read 2026-10-16). */
 export const NRI_HAZARDS = {

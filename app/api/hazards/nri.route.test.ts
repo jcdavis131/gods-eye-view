@@ -70,6 +70,14 @@ describe("op=nri", () => {
     expect(body.count).toBe(5 + 73);
   });
 
+  it("asks at most a 0.4 degree tract box, around the centre of a wider one", async () => {
+    answer = (u) => (u.startsWith(`${NRI}/National_Risk_Index_Census_Tracts/FeatureServer/0/query?`) ? tr : null);
+    calls.length = 0;
+    const { status } = await get("op=nri&level=tract&bbox=-118.5,33.8,-117.9,34.2");
+    expect(status).toBe(200);
+    expect(JSON.parse(new URL(calls[0]).searchParams.get("geometry")!)).toEqual({ xmin: -118.4, ymin: 33.8, xmax: -118, ymax: 34.2 });
+  });
+
   it("refuses a bad level or box without asking", async () => {
     answer = () => cty;
     expect((await get("op=nri&level=state&bbox=-99,29,-98,30")).status).toBe(400);
