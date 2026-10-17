@@ -18,6 +18,7 @@ import type { FetchContext, FetchResult, LayerDefinition, LayerFeature, ViewStat
 import { proxy } from "./aircraft";
 import { viewBbox } from "./water";
 import { COUNTY_MAX_HEIGHT_M, countyViewBbox, loadCountyOutlines } from "./areas";
+import { civicLoadedBox } from "./civicBox";
 import {
   BDC_ATTRIBUTION,
   BDC_SOURCE_LABEL,
@@ -57,11 +58,13 @@ async function fetchBroadband(ctx: FetchContext): Promise<FetchResult> {
   if (ctx.view.height <= BROADBAND_HEX_MAX_M) {
     const env = await proxy<FeatureCollection>(broadbandHexRequest(ctx), ctx);
     const features = buildBroadbandHexes(env.data.features as never, m);
-    const capped = (env as unknown as { capped?: boolean }).capped;
+    const { capped, bbox } = env as unknown as { capped?: boolean; bbox?: [number, number, number, number] };
+    // The box the hexagons were asked for, dashed: outside it is not loaded, which is not "no data".
+    const box = Array.isArray(bbox) && bbox.length === 4 ? [civicLoadedBox("broadband", bbox, "BDC hexagons")] : [];
     return {
       ...base,
       source: `${BDC_SOURCE_LABEL} (H3 hexagons)`,
-      collection: { type: "FeatureCollection", features: features as LayerFeature[] },
+      collection: { type: "FeatureCollection", features: [...(features as LayerFeature[]), ...box] },
       note: `${features.length} H3 hexagons (about 0.7 km2 each) · ${label} (fixed breaks) · hexagons within ${BROADBAND_HEX_BOX_DEG / 2} degrees of the view's centre; outside that box is not loaded, not "no data"${capped ? " · cut at 2,000 hexagons: zoom in for every hexagon" : ""} · available, not subscribed`,
       meta: { count: features.length, level: "hex", measure: m },
     };
@@ -92,7 +95,6 @@ export const broadbandLayer: LayerDefinition = {
   defaultEnabled: false,
   viewDependent: true,
   viewKey: broadbandViewKey,
-  estimate: "Counts of locations as providers report availability to the FCC; a share is a ratio of two published counts.",
   attribution: BDC_ATTRIBUTION,
   fetch: fetchBroadband,
 };

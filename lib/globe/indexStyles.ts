@@ -79,14 +79,19 @@ export function broadbandColor(f: LayerFeature): string {
   return bin == null ? BROADBAND_NO_DATA_EDGE : BROADBAND_BIN_COLORS[bin];
 }
 
+const isLoadedBox = (f: LayerFeature) => f.properties.kind === "loaded-box";
+
 export const broadbandStyle: LayerStyle = {
   color: "#2563EB",
   icon: () => null,
-  colorFor: broadbandColor,
+  colorFor: (f) => (isLoadedBox(f) ? "#E5E7EB" : broadbandColor(f)),
   label: (f) => f.properties.name,
   labelMax: 12,
+  // Counties are labelled; hexagons (named by H3 id) and the loaded box are not.
+  labelWhen: (f) => (f.properties.extra as BroadbandExtra | undefined)?.level === "county",
   polygons: (f) => ((f.properties.extra as BroadbandExtra | undefined)?.bin != null ? polyFills(f, broadbandColor(f), 0.55) : null),
   lines: (f) => {
+    if (isLoadedBox(f)) return polyOutlines(f, "#E5E7EB", 0.7, 1.5, true);
     const x = f.properties.extra as BroadbandExtra | undefined;
     const drawn = x?.bin != null;
     return polyOutlines(f, drawn ? "#1F2937" : BROADBAND_NO_DATA_EDGE, drawn ? (x?.level === "hex" ? 0.25 : 0.45) : 0.85, 1, !drawn);

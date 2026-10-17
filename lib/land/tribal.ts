@@ -35,7 +35,7 @@ import { ringsArea } from "@/lib/fabric/geo";
 import { recordText, withEmbedText } from "@/lib/catalog/recordText";
 
 export const BIA_LAR_LAYER = "https://biamaps.geoplatform.gov/server/rest/services/DivLTR/BIA_AIAN_National_LAR/FeatureServer/0";
-export const BIA_LAR_PAGE = "https://www.bia.gov/bia/ots/dltr/bogs";
+export const BIA_LAR_PAGE = "https://www.bia.gov/bia/ots/dltr";
 /** The fields asked (named, never *). GlobalID is not asked. */
 export const TRIBAL_FIELDS = ["LARID", "LARNAME", "CLASSIFICATION", "GISACRES", "REGION"] as const;
 /** The national pull's simplification, degrees. */
@@ -155,7 +155,7 @@ export function tribalDetails(p: Readonly<Record<string, unknown>>): Record<stri
     "LAR id": str(p.LARID) ?? "not published",
     "BIA says": TRIBAL_REFERENCE_ONLY,
     "not this": "Census tribal statistical areas (on the Field layer); and never a statement about jurisdiction",
-    "BIA geospatial page": BIA_LAR_PAGE,
+    "BIA land titles and records page": BIA_LAR_PAGE,
   };
 }
 
