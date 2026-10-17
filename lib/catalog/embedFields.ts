@@ -61,7 +61,7 @@ export const EMBED_TEXT = {
   "places-tract": ["category", "measure", "year", "data_value_type"],
   "svi-counties": ["COUNTY", "STATE"],
   "svi-tracts": ["STATE", "COUNTY"],
-  "hifld-hospitals": ["TYPE", "TRAUMA", "HELIPAD", "NAICS_DESC", "STATE"],
+  "hifld-hospitals": ["TYPE", "TRAUMA", "HELIPAD", "STATE"],
 } satisfies Record<string, string[]>;
 
 export type CollectionId = keyof typeof EMBED_TEXT;
@@ -241,11 +241,11 @@ export const FIELD_LABEL: Readonly<Record<string, string>> = {
   VLCN_RISKR: "volcanic activity risk",
   WFIR_RISKR: "wildfire risk",
   WNTW_RISKR: "winter weather risk",
-  // HIFLD hospitals (HIFLD's STATUS is not embedded: FIELD_LABEL has one label per field name, and STATUS is FUDS's)
+  // HIFLD hospitals (STATUS is not embedded: FIELD_LABEL has one label per field name, and STATUS is FUDS's;
+  // NAICS_DESC is not either: a *desc field is treated as free text, and TYPE already says the kind)
   TYPE: "hospital type",
   TRAUMA: "trauma center level",
   HELIPAD: "helipad",
-  NAICS_DESC: "NAICS industry",
 };
 
 /**

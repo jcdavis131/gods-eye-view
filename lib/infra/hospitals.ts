@@ -135,7 +135,7 @@ export function buildHospitals(rows: readonly Row[], short = false): LayerFeatur
         details: Object.fromEntries(Object.entries(details).filter(([, v]) => v != null)) as Record<string, string>,
         extra: short
           ? extra
-          : withEmbedText(extra, recordText("hifld-hospitals", { TYPE: type, TRAUMA: trauma, HELIPAD: yesNo(p.HELIPAD), NAICS_DESC: str(p.NAICS_DESC), STATE: state })),
+          : withEmbedText(extra, recordText("hifld-hospitals", { TYPE: type, TRAUMA: trauma, HELIPAD: yesNo(p.HELIPAD), STATE: state })),
       },
     });
   }
