@@ -17,6 +17,10 @@
 //                                            proposed) containing the point
 //   wayback     /api/terrain?op=waybackdate  when the drawn Wayback release's pixels
 //                                            were captured there (Esri's metadata)
+//   hydro       /api/water?op=reach          the NHDPlus V2 reach the point drains to (USGS
+//                                            NLDI + EPA V2.1); the dossier offers its traces
+//   naip        /api/terrain?op=naip         NAIP flight dates at the point: the drawn
+//                                            year's photograph first, then the other years
 //   topo        /api/terrain?op=topo         USGS historical topographic sheets at the
 //                                            point: the drawn edition first, with
 //                                            citation, GeoPDF and GeoTIFF
@@ -37,11 +41,13 @@ import { critHabText, nmfsText, rangeGroup, rangeText, type CritHabSpecies, type
 import { useSettings } from "@/lib/store/settings";
 import { resolveTopoYear, sheetText, type TopoSheet, type TopoYear } from "./topo";
 import { captureText, parseReleaseId, zoomForHeight, type WaybackCapture } from "./wayback";
+import { reachDetails, type Reach } from "@/lib/water/nldi";
+import { naipItemText, resolveNaipYear, type NaipYear } from "./naip";
 
 /** Above this camera height a ground click is not a question about the ground. */
 export const GROUND_MAX_HEIGHT_M = 150_000;
 
-export type GroundPart = "soils" | "firehazard" | "landcover" | "slope" | "elevation" | "geology" | "crithab" | "topo" | "wayback";
+export type GroundPart = "soils" | "firehazard" | "landcover" | "slope" | "elevation" | "geology" | "crithab" | "topo" | "wayback" | "hydro" | "naip";
 
 export interface PartState {
   loading: boolean;
@@ -78,6 +84,8 @@ const PART_OF: Partial<Record<LayerId, GroundPart>> = {
   crithab: "crithab",
   topo: "topo",
   wayback: "wayback",
+  hydro: "hydro",
+  naip: "naip",
 };
 
 /** The parts to ask for, given which layers are on (each once, in a fixed order). */
@@ -109,6 +117,8 @@ const SOURCE_OF: Record<GroundPart, string> = {
   crithab: "USFWS and NOAA Fisheries critical habitat",
   topo: "USGS historical topo maps",
   wayback: "Esri Wayback metadata",
+  hydro: "USGS NLDI + EPA NHDPlus V2.1",
+  naip: "USDA NAIP via Planetary Computer",
 };
 
 type Details = NonNullable<LayerFeature["properties"]["details"]>;
@@ -245,6 +255,23 @@ export function groundDetails(p: Pick<GroundPick, "lon" | "lat" | "parts">): Det
       d["imagery note"] = `Esri's metadata for this release at about zoom level ${a.z}; a capture date is when the pixels were taken, a release date when Esri published them${a.fallback ? "; the release in the link is not in Esri's index, so these are the newest release's dates, as drawn" : ""}`;
     }
   }
+  const na = p.parts.naip;
+  if (na && !waiting(d, "aerial photograph", na, "Planetary Computer")) {
+    const a = na.data as NaipAnswer | null;
+    if (!a?.years.length) d["aerial photograph (NAIP)"] = "no NAIP photograph here (NAIP covers the conterminous United States)";
+    else {
+      const drawn = a.years.find((y) => y.year === a.year);
+      d["aerial photograph (NAIP)"] = drawn ? `${drawn.year}: ${naipItemText(drawn)}` : `no ${a.year} photograph at this point`;
+      const others = a.years.filter((y) => y.year !== a.year).map((y) => y.year);
+      if (others.length) d["other NAIP years here"] = others.join(", ");
+      d["NAIP note"] = "the flight date of the quarter-quad under the click, as Planetary Computer's STAC lists it; a year's mosaic joins flights from different days";
+    }
+  }
+  const hy = p.parts.hydro;
+  if (hy && !waiting(d, "drains to", hy, "USGS NLDI")) {
+    const a = hy.data as ReachAnswer | null;
+    Object.assign(d, reachDetails(a?.reach ?? null, a?.comid ?? null));
+  }
   d.point = `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}`;
   return d;
 }
@@ -299,6 +326,18 @@ export interface WaybackDateAnswer {
   fallback?: boolean;
 }
 
+/** What /api/water?op=reach answers: the comid NLDI found at the point (null: none) and EPA's attributes (null: not published or not answered). */
+export interface ReachAnswer {
+  comid: number | null;
+  reach: Reach | null;
+}
+
+/** What a NAIP answer holds in the pick: the years at the point and the year drawn. */
+export interface NaipAnswer {
+  years: NaipYear[];
+  year: number | null;
+}
+
 /** What a topo answer holds in the pick: the sheets and years at the point, and the edition drawn. */
 export interface TopoAnswer {
   sheets: TopoSheet[];
@@ -327,6 +366,15 @@ const ASK: Record<GroundPart, (lon: string, lat: string) => Promise<unknown>> = 
       const d = (await getJson(base)).data as WaybackDateAnswer | undefined;
       return d ? { ...d, fallback: true } : null;
     }
+  },
+  naip: async (lon, lat) => {
+    const d = (await getJson(`/api/terrain?op=naip&lon=${lon}&lat=${lat}`)).data as { years?: NaipYear[] } | undefined;
+    const years = d?.years ?? [];
+    return { years, year: resolveNaipYear(years, useSettings.getState().prefs.naipYear).year } satisfies NaipAnswer;
+  },
+  hydro: async (lon, lat) => {
+    const d = (await getJson(`/api/water?op=reach&lon=${lon}&lat=${lat}`)).data as Partial<ReachAnswer> | undefined;
+    return { comid: d?.comid ?? null, reach: d?.reach ?? null } satisfies ReachAnswer;
   },
   topo: async (lon, lat) => {
     const d = (await getJson(`/api/terrain?op=topo&lon=${lon}&lat=${lat}`)).data as { sheets?: TopoSheet[]; years?: TopoYear[] } | undefined;

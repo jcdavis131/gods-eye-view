@@ -542,6 +542,33 @@ export const TOOLS: ToolDef[] = [
     handler: (i, ctx) => relay(ctx, "/api/water" + qs({ op: "normals", sites: i.sites.join(","), date: i.date })),
   }),
   defineTool({
+    name: "water_trace",
+    title: "The river reach a point drains to, and where its water goes",
+    description:
+      "Two steps on the NHDPlus V2 network through USGS NLDI. With lon and lat: the reach the point drains to (GET /api/water?op=reach): { comid, reach: { name, ftypeWord, streamOrder, drainageKm2, flowCfs (EROM gauge-adjusted mean annual flow, model output), runoffCfs, reachcode, fdate } }, comid null where there is no NHDPlus catchment. With comid and mode: one trace (GET /api/water?op=trace) as GeoJSON: down = main stem downstream (MultiLineString, distance default 100 km), basin = drainage basin polygon (at most 2,000 vertices), gauges = USGS stream gauges upstream (Points with identifier USGS-<site>, default 150 km); distance at most 500 km, and the gauge count depends on it. A river path by flowline, unlike downstream (HUC-12 watersheds). " +
+      ENVELOPE,
+    inputSchema: z
+      .object({
+        lon: lon.optional(),
+        lat: lat.optional(),
+        comid: z.number().int().positive().optional().describe("NHDPlus V2 comid from the lon/lat step"),
+        mode: z.enum(["down", "basin", "gauges"]).optional(),
+        distance: z.number().int().min(1).max(500).optional().describe("km of channel for down and gauges"),
+      })
+      .refine((v) => (v.lon != null && v.lat != null && v.comid == null && v.mode == null) || (v.comid != null && v.mode != null && v.lon == null && v.lat == null), "pass lon and lat (the reach), or comid and mode (a trace)"),
+    handler: (i, ctx) =>
+      relay(ctx, "/api/water" + (i.comid != null ? qs({ op: "trace", comid: i.comid, mode: i.mode, distance: i.distance }) : qs({ op: "reach", lon: i.lon, lat: i.lat }))),
+  }),
+  defineTool({
+    name: "risk_index",
+    title: "FEMA National Risk Index for counties or tracts in a box",
+    description:
+      "FEMA's National Risk Index (December 2025) as published (GET /api/hazards?op=nri): level county (default) gives attribute rows for every county touching the bbox (STCOFIPS, COUNTY, STATEABBRV, RISK_SCORE and RISK_RATNG, EAL_VALT in dollars a year and EAL_RATNG, SOVI_SCORE/SOVI_RATNG, RESL_SCORE/RESL_RATNG, and the 18 hazard ratings AVLN_RISKR to WNTW_RISKR); level tract gives tract polygons with the same fields plus TRACTFIPS (box at most 0.4 degrees). A relative index: ratings are percentiles among all counties (or tracts), not likelihoods; 'Not Applicable' and 'Insufficient Data' are not low. Social vulnerability here is FEMA's (from the Census Community Resilience Estimate), not CDC SVI. " +
+      ENVELOPE,
+    inputSchema: z.object({ bbox, level: z.enum(["county", "tract"]).optional() }),
+    handler: (i, ctx) => relay(ctx, "/api/hazards" + qs({ op: "nri", bbox: bboxStr(i.bbox), level: i.level })),
+  }),
+  defineTool({
     name: "live_events",
     title: "Where the world is doing something unusual now",
     description:

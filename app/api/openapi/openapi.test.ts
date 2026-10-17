@@ -59,6 +59,7 @@ describe("public/openapi.json", () => {
     ["/api/events", "app/api/events/route.ts", "conflict"],
     ["/api/zoning", "app/api/zoning/route.ts", "point"],
     ["/api/permits", "app/api/permits/route.ts", "building"],
+    ["/api/civic", "app/api/civic/route.ts", "health"],
   ])("documents exactly the ops %s dispatches", (route, file, one) => {
     expect(new Set(opsDocumented(route))).toEqual(new Set(opsInRoute(file)));
     expect(opsDocumented(route)).toContain(one);
@@ -73,7 +74,7 @@ describe("public/openapi.json", () => {
   it("has a response schema tagged x-op for every documented op", () => {
     const schemas = spec.components.schemas as Record<string, { "x-op"?: string }>;
     const tagged = Object.values(schemas).map((s) => s["x-op"]).filter((x): x is string => !!x);
-    for (const route of ["/api/economy", "/api/water", "/api/hazards", "/api/land", "/api/space", "/api/terrain", "/api/soil", "/api/infra", "/api/air", "/api/events", "/api/zoning", "/api/permits"]) {
+    for (const route of ["/api/economy", "/api/water", "/api/hazards", "/api/land", "/api/space", "/api/terrain", "/api/soil", "/api/infra", "/api/air", "/api/events", "/api/zoning", "/api/permits", "/api/civic"]) {
       for (const op of opsDocumented(route)) expect(tagged, `${route} op=${op}`).toContain(op);
     }
     for (const mode of opsDocumented("/api/parcels", "mode")) expect(tagged, `/api/parcels mode=${mode}`).toContain(mode);

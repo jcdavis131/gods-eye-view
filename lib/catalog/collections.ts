@@ -24,6 +24,11 @@ import { TRI_CAVEAT } from "@/lib/permits/tri";
 import { NPL_CAVEAT } from "@/lib/permits/npl";
 import { FUDS_CAVEAT } from "@/lib/permits/fuds";
 import { UST_CAVEAT, UST_FACILITY_NULLS, UST_RELEASE_NULLS } from "@/lib/permits/ust";
+import { FLOW_CAVEAT, HYDRO_CAVEAT } from "@/lib/water/nldi";
+import { NRI_CAVEATS, NRI_SOVI_NOTE, NRI_TERMS } from "@/lib/hazards/nri";
+import { NAIP_CAVEAT } from "@/lib/terrain/naip";
+import { ABPP_CAVEAT, ABPP_STUDY_DEFINITION, NHA_CAVEAT, UNITS_CAVEAT, WHS_CAVEAT } from "@/lib/land/heritage";
+import { PLACES_CAVEAT } from "@/lib/civic/places";
 import { DENY_FIELD, EMBED_TEXT } from "./embedFields";
 
 export interface Exclusion {
@@ -74,22 +79,25 @@ export interface Collection {
   /** Sensitive-location and personal-data handling. */
   sensitivity: string;
   /** Curation round it entered. */
-  round: 1 | 2 | 3;
+  round: 1 | 2 | 3 | 4;
 }
 
 /** Which shelf a layer's collections sit on (the /catalog page's grouping). */
 export const SHELVES: Array<{ id: string; title: string; layers: LayerId[] }> = [
-  { id: "land", title: "Land and heritage", layers: ["wetlands", "historic", "flood", "publiclands"] },
+  { id: "land", title: "Land and heritage", layers: ["wetlands", "historic", "flood", "publiclands", "heritage"] },
   { id: "species", title: "Species", layers: ["crithab"] },
-  { id: "water", title: "Water quality", layers: ["impaired", "pfas"] },
+  { id: "water", title: "Water", layers: ["impaired", "pfas", "hydro"] },
   { id: "contaminants", title: "Contaminants", layers: ["contaminants", "ust"] },
-  { id: "imagery", title: "Imagery and maps", layers: ["wayback", "topo"] },
+  { id: "hazards", title: "Hazards and risk", layers: ["riskindex"] },
+  { id: "health", title: "Health", layers: ["health"] },
+  { id: "imagery", title: "Imagery and maps", layers: ["wayback", "topo", "naip"] },
   { id: "infrastructure", title: "Infrastructure", layers: ["dams"] },
 ];
 
 const R1 = "2026-10-12";
 const R2 = "2026-10-13";
 const R3 = "2026-10-15";
+const R4 = "2026-10-16";
 
 export const COLLECTIONS: readonly Collection[] = [
   // ------------------------------------------------------------ round 1: land and heritage
@@ -670,6 +678,279 @@ export const COLLECTIONS: readonly Collection[] = [
     ops: ["terrain?op=topo"],
     sensitivity: "Published federal maps; no personal data. Sheet names are place names.",
     round: 2,
+  },
+  // ------------------------------------------------------------ round 4: rivers and where the water goes
+  {
+    id: "nhd-hydro-picture",
+    title: "National Hydrography Dataset streams and water bodies (picture)",
+    layer: "hydro",
+    sources: ["usgs-nhd"],
+    what: "The USGS National Hydrography Dataset as The National Map draws it: streams, rivers, canals and water bodies as transparent line art in USGS's cached tiles, loaded by the browser from basemap.nationalmap.gov at every height. While it is on, the Surface water layer stops drawing Natural Earth's generalised rivers.",
+    recordIs: "A picture of NHD's mapped surface water at the tile's scale (high-resolution NHD at large scales, NHDPlus at small ones, as the service describes). A drawn line is a mapped channel, not a statement that water flows in it today.",
+    coverage: { spatial: "United States; tiles cached to level 23 (drawn to 16 here)", temporal: null, count: null },
+    freshness: { statement: "The service says its data was refreshed in September 2026.", readFrom: "USGSHydroCached MapServer ?f=json copyrightText (\"Data refreshed September, 2026.v1.1\")", recordedOn: R4 },
+    excluded: [
+      { what: "a click answer on the picture itself", why: "pixels carry no attributes; a click asks NLDI and EPA for the NHDPlus V2 reach the point drains to (nhdplus-v21-reach)" },
+      { what: "NHDPlus HR as the click answer", why: "deferred (D-H1): its point query took 51 s and 18.6 s on two of five calls on 2026-10-16 and named a canal at the Boise River" },
+    ],
+    caveats: [HYDRO_CAVEAT],
+    searchable: [],
+    embedText: EMBED_TEXT["nhd-hydro-picture"],
+    ops: ["terrain?op=products"],
+    sensitivity: "A picture of streams and water bodies; no personal data.",
+    round: 4,
+  },
+  {
+    id: "nldi-trace",
+    title: "Where the water goes: NLDI traces on the NHDPlus V2 network",
+    layer: "hydro",
+    sources: ["usgs-nldi", "usgs-water"],
+    what: "Three navigations from the NHDPlus V2 reach a point drains to, through the USGS Network Linked Data Index: the main stem downstream as flowlines (default 100 km), the drainage basin as one polygon (NLDI's simplified basin, at most 2,000 vertices), and the USGS stream gauges NLDI indexes upstream (default 150 km). Offered in the Rivers and streams ground dossier and on every USGS gauge of the Surface water layer; a gauge the Surface water layer already draws is drawn once.",
+    recordIs: "A path, a basin or a list of gauges computed by NLDI on the medium-resolution NHDPlus V2 network for one reach and one distance; the count of gauges depends on the distance asked. A river path, not the HUC-12 watersheds it passes through (fabric's \"Watersheds downstream\").",
+    coverage: { spatial: "Conterminous United States (the NHDPlus V2 network); a point outside it has no reach", temporal: null, count: null },
+    freshness: { statement: "The NHDPlus V2 network is static between releases; NLDI's gauge index follows USGS's site list.", readFrom: "NLDI linked-data root (sources list: comid, nwissite, ...); EPA V2.1 fdate per flowline", recordedOn: R4 },
+    excluded: [
+      { what: "a stored path or basin per place", why: "computed per click from NLDI and held 30 days; not enumerated, so not counted" },
+      { what: "the basin as county shares", why: "a derived number, not a published one (D-H3)" },
+      { what: "a second gauge client", why: "upstream gauges are NLDI's site list; live readings stay with the Surface water layer's USGS gauges" },
+    ],
+    caveats: [HYDRO_CAVEAT, "NLDI's upstream gauge list can include inactive sites; the count depends on the distance asked."],
+    searchable: [],
+    embedText: EMBED_TEXT["nldi-trace"],
+    ops: ["water?op=trace"],
+    sensitivity: "Network paths and public stream-gauge sites only; no personal data.",
+    round: 4,
+  },
+  {
+    id: "nhdplus-v21-reach",
+    title: "The NHDPlus V2.1 reach a point drains to",
+    layer: "hydro",
+    sources: ["usgs-nldi", "epa-nhdplus-v21"],
+    what: "For a clicked point, the NHDPlus V2 catchment containing it (NLDI comid/position) and that reach's attributes from EPA's NHDPlus V2.1 Network Flowline layer: GNIS name, NHD feature type, Strahler stream order, total drainage area, and two modelled mean annual flows (EROM gauge-adjusted QE_MA and runoff-only QA_MA, cubic feet per second).",
+    recordIs: "A flowline of the medium-resolution NHDPlus V2 network: where the point drains to, which near a small stream can be a larger river. Flows are model output, not measurements; -9999 and missing values read 'not published'.",
+    coverage: { spatial: "Conterminous United States and the NHDPlus V2 vector processing units", temporal: null, count: { value: 2724612, of: "flowlines in EPA's NHDPlus V2.1 Network Flowline layer (returnCountOnly)", countedOn: R4 } },
+    freshness: { statement: "Each flowline carries its NHD feature date (Boise River reach 23398863: 2001-03-08); the V2.1 attributes are static.", readFrom: "fdate field, NHDPlus MapServer layer 2", recordedOn: R4 },
+    excluded: [
+      { what: "uppercase field names", why: "the layer answers 400 to them; lowercase names are asked" },
+      { what: "a sentinel as a value", why: "-9999 drainage areas, stream order 0 or -9 and null flows read 'not published', never 0" },
+      { what: "NHDPlus HR attributes", why: "deferred (D-H1): slow and erratic on 2026-10-16" },
+    ],
+    caveats: [HYDRO_CAVEAT, FLOW_CAVEAT],
+    searchable: ["gnis_name", "reachcode"],
+    embedText: EMBED_TEXT["nhdplus-v21-reach"],
+    ops: ["water?op=reach"],
+    sensitivity: "Agency hydrography; waterbody names are place names.",
+    round: 4,
+  },
+  // ------------------------------------------------------------ round 4: hazards and risk
+  {
+    id: "nri-counties",
+    title: "FEMA National Risk Index by county",
+    layer: "riskindex",
+    sources: ["fema-nri"],
+    what: "FEMA's National Risk Index for every county (Connecticut in its planning regions): the composite risk score and rating, expected annual loss in dollars and its rating, social vulnerability and community resilience as published in the index, and a rating for each of 18 natural hazards (avalanche to winter weather). Joined by FIPS onto the county outlines the globe already draws (Census TIGERweb); NRI's own county geometry is not fetched.",
+    recordIs: "A county's percentile among all US counties, in FEMA's rating words. 'Very High' is high compared with everywhere else, not likely; expected annual loss is a modelled long-run average, not a forecast. 'Not Applicable', 'Insufficient Data', 'No Rating' and 'Data Unavailable' are not a class and never read as low.",
+    coverage: { spatial: "United States and territories, by county (Connecticut planning regions 09110-09190); drawn below 2,500 km", temporal: "NRI version December 2025", count: { value: 3232, of: "county rows in National_Risk_Index_Counties (returnCountOnly)", countedOn: R4 } },
+    freshness: { statement: "NRI_VER 'December 2025' (1.20.0); the layer's data last edited 2025-12-16.", readFrom: "NRI_VER field; FeatureServer layer 0 editingInfo.dataLastEditDate; item description", recordedOn: R4 },
+    excluded: [
+      { what: "NRI's own county polygons", why: "the globe has one county outline source (TIGERweb, via /api/economy?op=areas); counties are joined by FIPS" },
+      { what: "the other 430 or so fields (per-hazard frequencies, exposures, loss ratios, percentiles)", why: "the dossier shows the composite, loss, social vulnerability, resilience and the 18 ratings; the rest are FEMA's inputs" },
+      { what: "a CDC/ATSDR SVI number beside FEMA's", why: "FEMA's social vulnerability comes from the Census Community Resilience Estimate; the CDC index waits until the two can be told apart on screen (D-C1)" },
+    ],
+    caveats: [...NRI_CAVEATS, NRI_SOVI_NOTE, NRI_TERMS],
+    searchable: ["STCOFIPS", "NRI_ID"],
+    embedText: EMBED_TEXT["nri-counties"],
+    ops: ["hazards?op=nri"],
+    sensitivity: "Published county indices; no personal data.",
+    round: 4,
+  },
+  {
+    id: "nri-tracts",
+    title: "FEMA National Risk Index by census tract",
+    layer: "riskindex",
+    sources: ["fema-nri"],
+    what: "The same National Risk Index fields for every census tract, drawn on NRI's own tract polygons below 60 km, paged by FEMA's 2,000-record limit.",
+    recordIs: "A tract's percentile among all US tracts, in FEMA's rating words; computed separately from the county index and not comparable with it. A tract has no name: it is shown by its 11-digit FIPS with its county and state.",
+    coverage: { spatial: "United States and territories, by census tract; drawn below 60 km", temporal: "NRI version December 2025", count: { value: 85154, of: "tract rows in National_Risk_Index_Census_Tracts (returnCountOnly)", countedOn: R4 } },
+    freshness: { statement: "NRI_VER 'December 2025'; the layer's data last edited 2025-12-16.", readFrom: "NRI_VER field; FeatureServer layer 0 editingInfo.dataLastEditDate", recordedOn: R4 },
+    excluded: [
+      { what: "tracts above 60 km camera height", why: "85,154 polygons; the county index is shown instead" },
+      { what: "a tract's score compared with a county's", why: "FEMA computes them separately" },
+    ],
+    caveats: [...NRI_CAVEATS, NRI_SOVI_NOTE, NRI_TERMS],
+    searchable: ["TRACTFIPS", "STCOFIPS", "NRI_ID"],
+    embedText: EMBED_TEXT["nri-tracts"],
+    ops: ["hazards?op=nri"],
+    sensitivity: "Published tract indices; no personal data.",
+    round: 4,
+  },
+  // ------------------------------------------------------------ round 4: land and heritage
+  {
+    id: "nhl-listed",
+    title: "National Historic Landmarks (the 'Landmarks only' chip on Historic places)",
+    layer: "historic",
+    sources: ["nps-nrhp"],
+    what: "The National Register listings NPS flags as National Historic Landmarks (Is_NHL = 'X'), from the same nrhp_locations service and query the Historic places layer already makes, with the NHL clause ANDed on: points for every landmark NPS maps, and boundaries below 10 km.",
+    recordIs: "A National Register listing that is also a National Historic Landmark, at the location NPS publishes. The same exclusions as every listing: listed only, no restricted address; absence is not absence on the ground.",
+    coverage: { spatial: "United States; points below 25 km, boundaries below 10 km", temporal: null, count: { value: 1196, of: "listed NHL points (layer 0, Is_NHL='X' AND STATUS='Listed', none with a restricted address); 1,699 listed NHL boundaries on layer 1 after the restricted-address exclusion (1,700 before)", countedOn: R4 } },
+    freshness: { statement: "As nrhp-listed: the service publishes no edit date.", readFrom: "nrhp_locations MapServer ?f=json (no editingInfo)", recordedOn: R4 },
+    excluded: [
+      { what: "the one listed NHL boundary whose Address reads restricted (layer 1)", why: "the NHL clause is ANDed onto the restricted-address exclusion and never replaces it" },
+      { what: "every listing that is not an NHL, while the chip is on", why: "landmarks only; switching the chip off brings them back" },
+    ],
+    caveats: ["Only what NPS publishes as non-restricted, as for every National Register listing; withheld archaeological sites are not in this source."],
+    searchable: ["NRIS_Refnum"],
+    embedText: EMBED_TEXT["nhl-listed"],
+    ops: ["land?op=historic"],
+    sensitivity: "Agency-published, non-restricted listings only; restricted-address records are filtered out; property names (RESNAME) can be a person's and are never searched or embedded.",
+    round: 4,
+  },
+  // ------------------------------------------------------------ round 4: imagery
+  {
+    id: "naip-years",
+    title: "USDA NAIP aerial photographs by year, 2010 onward",
+    layer: "naip",
+    sources: ["usda-naip-pc"],
+    what: "The National Agriculture Imagery Program's leaf-on aerial photographs (0.3 to 1 m), one year at a time, from Microsoft Planetary Computer: the years flown at the view centre from its STAC search, and each year's mosaic registered at run time (never a hard-coded id), loaded by the browser from Planetary Computer. A click gives the flight date, resolution, state and item id of the quarter-quad under the cursor.",
+    recordIs: "A STAC item: one quarter-quad photograph of one NAIP year, with its acquisition date. A year's mosaic joins many flights; the date on click is the photograph under the cursor, not the whole view.",
+    coverage: { spatial: "Conterminous United States; tiles from level 11 (about 20 km or closer)", temporal: "2010 onward; 6 to 11 years per place (Des Moines 8, San Francisco 6, DC 11, Austin 6 in the imagery lane's probes; Des Moines re-probed 2026-10-16: 2011-2023)", count: null },
+    freshness: { statement: "The newest item at Des Moines is 2023 (ia_m_4109328_nw_15_030_20230902_20240104); NAIP flies each state every two to three years.", readFrom: "STAC search at -93.62, 41.59 (datetime and naip:year of the newest item)", recordedOn: R4 },
+    excluded: [
+      { what: "years before 2010 and state historic aerials (Texas, North Carolina)", why: "no keyless national source before 2010; the state services are phase 2 (D-I1, D-I2)" },
+      { what: "tile proxying or caching here", why: "tiles load from Planetary Computer in the browser; Vercel never carries the image bytes" },
+      { what: "a per-place count", why: "the years differ by place; counted per point, not nationally" },
+    ],
+    caveats: [NAIP_CAVEAT],
+    searchable: ["id"],
+    embedText: EMBED_TEXT["naip-years"],
+    ops: ["terrain?op=naip", "terrain?op=naipmosaic"],
+    sensitivity: "Public aerial imagery at 0.3-1 m; no personal data is read or stored.",
+    round: 4,
+  },
+  // ------------------------------------------------------------ round 4: national heritage
+  {
+    id: "nps-units",
+    title: "National Park System units, authorised boundaries",
+    layer: "heritage",
+    sources: ["nps-lrd-boundaries"],
+    what: "Every National Park System unit as NPS's Land Resources Division publishes it: the authorised boundary (layer 2) below 250 km, and the unit's centroid (layer 0) from farther away, with the unit code, name, type (national park, monument, historic site, battlefield, ...), state, NPS region and the date the boundary was last edited.",
+    recordIs: "A park unit's designation and its authorised outline. Not all land inside is federally owned: ownership and access are Public lands (PAD-US).",
+    coverage: { spatial: "United States and territories; boundaries in a box of at most 2 degrees below 250 km, centroids nationally", temporal: null, count: { value: 437, of: "unit boundaries (layer 2); 437 centroids (layer 0)", countedOn: R4 } },
+    freshness: { statement: "NPS last edited the boundary layer on 2026-10-16.", readFrom: "FeatureServer layer 2 editingInfo.lastEditDate; DATE_EDIT per unit", recordedOn: R4 },
+    excluded: [
+      { what: "tract-level land status (layer 1)", why: "ownership is PAD-US's (Public lands); this layer is designation" },
+      { what: "the Creator, Editor and metadata fields", why: "bookkeeping, and an editor field can hold a person's name" },
+      { what: "fetching nps.gov", why: "the unit page is an outbound link only; nps.gov reset TLS from the build box" },
+    ],
+    caveats: [UNITS_CAVEAT],
+    searchable: ["UNIT_CODE", "UNIT_NAME"],
+    embedText: EMBED_TEXT["nps-units"],
+    ops: ["land?op=heritage"],
+    sensitivity: "Agency boundaries of park units; no ownership or personal data.",
+    round: 4,
+  },
+  {
+    id: "nps-nha",
+    title: "National Heritage Areas",
+    layer: "heritage",
+    sources: ["nps-nha"],
+    what: "The 62 National Heritage Areas Congress has designated, as NPS's Heritage Partnerships Program maps them, each with NPS's paragraph about the area and a link to the area's own site; one national answer, simplified to 0.01 degrees.",
+    recordIs: "A partnership region designated by Congress: not federal land and not a park unit. NPS's description is shown as NPS serves it.",
+    coverage: { spatial: "United States; one national answer", temporal: null, count: { value: 62, of: "heritage area polygons (WASO_NHA_Map2026 layer 0)", countedOn: R4 } },
+    freshness: { statement: "The service says its geometry was last updated April 2025 and its metadata December 2025; last edited 2026-01-07.", readFrom: "FeatureServer layer 0 description and editingInfo.lastEditDate", recordedOn: R4 },
+    excluded: [
+      { what: "embedding the descriptions", why: "they are free text, which the record-text rules keep out; a reviewed exception for these 62 agency paragraphs is Cam's call (D-HE2)" },
+      { what: "EDIT_BY, ORIGINATOR and the survey bookkeeping fields", why: "never requested; an editor field can hold a person's name" },
+      { what: "the older WASO_BND_NHA layer", why: "12 features, superseded by the 2026 map" },
+    ],
+    caveats: [NHA_CAVEAT],
+    searchable: ["UNIT"],
+    embedText: EMBED_TEXT["nps-nha"],
+    ops: ["land?op=heritage"],
+    sensitivity: "Agency-published partnership regions; descriptions are NPS text.",
+    round: 4,
+  },
+  {
+    id: "abpp-battlefields",
+    title: "Battlefields of the Civil War, Revolutionary War and War of 1812 (ABPP survey areas)",
+    layer: "heritage",
+    sources: ["nps-abpp"],
+    what: "The American Battlefield Protection Program's survey boundaries for the principal battlefields of three wars: study areas outlined and core areas filled, coloured by war, with ABPP's site code, battle name, state and acres; below 1,500 km, in a box of at most 8 degrees.",
+    recordIs: "A survey area: where ABPP's survey placed a battle's tactical context (study area) or where most of the fighting occurred inside it (core area). Not a property line and not a National Register listing.",
+    coverage: { spatial: "United States, where ABPP surveyed", temporal: null, count: { value: 342, of: "Civil War study areas (layer 0); core areas 332; Revolutionary War 159 and 146; War of 1812 80 and 70", countedOn: R4 } },
+    freshness: { statement: "ABPP last edited the service on 2025-09-09; the Civil War survey update was last revised in 2014.", readFrom: "FeatureServer editingInfo.lastEditDate; item description", recordedOn: R4 },
+    excluded: [
+      { what: "Potential National Register boundaries and the Civil War resurvey layers (2-4, 7, 10)", why: "a third tier reads as 'listed'; the Register itself is Historic places" },
+      { what: "owner or person fields", why: "none exist in the source" },
+    ],
+    caveats: [ABPP_CAVEAT, ABPP_STUDY_DEFINITION],
+    searchable: ["SITE"],
+    embedText: EMBED_TEXT["abpp-battlefields"],
+    ops: ["land?op=heritage"],
+    sensitivity: "Survey areas only; no owner or person fields exist in the source.",
+    round: 4,
+  },
+  {
+    id: "nps-whs",
+    title: "World Heritage Sites with an NPS boundary",
+    layer: "heritage",
+    sources: ["nps-whs"],
+    what: "The World Heritage Sites NPS publishes boundaries for (35 rows), one site per inscription: the nine Frank Lloyd Wright buildings of inscription 1496rev are one site with their components listed. The UNESCO page and the site's own page are linked as the service gives them.",
+    recordIs: "An inscription on UNESCO's World Heritage List, at the boundary NPS publishes. A row with no name reads 'unnamed in source', never filled in; a row with no geometry is not drawn.",
+    coverage: { spatial: "United States; one national answer", temporal: null, count: { value: 35, of: "rows in World_Heritage_Sites layer 0 (27 inscriptions after grouping; one row has no name and no geometry, so 26 are drawn)", countedOn: R4 } },
+    freshness: { statement: "NPS last edited the service on 2024-12-10.", readFrom: "FeatureServer layer 0 editingInfo.lastEditDate", recordedOn: R4 },
+    excluded: [
+      { what: "SiteOwner", why: "organisations, but owners all the same: never requested, shown or searched" },
+      { what: "inscriptions without an NPS-published boundary", why: "not in this service; absence here is not absence from the List" },
+    ],
+    caveats: [WHS_CAVEAT],
+    searchable: ["WHS_Ref"],
+    embedText: EMBED_TEXT["nps-whs"],
+    ops: ["land?op=heritage"],
+    sensitivity: "Inscribed sites; SiteOwner values are organisations and are not shown or searched.",
+    round: 4,
+  },
+  // ------------------------------------------------------------ round 4: health
+  {
+    id: "places-county",
+    title: "CDC PLACES community health estimates by county",
+    layer: "health",
+    sources: ["cdc-places"],
+    what: "CDC's PLACES model-based estimates for 40 measures (health outcomes, prevention, risk behaviours, health status, disability and health-related social needs) for every county, age-adjusted, one measure at a time from one whole-measure pull, joined by FIPS onto the shared county outlines and binned by national quintiles; a click lists every measure for the county by CDC category.",
+    recordIs: "A model-based estimate of the share of adults with a condition or behaviour in a county, with its 95% confidence interval and data year (2023; 2022 for five measures). Not a count of diagnosed people and not for ranking small differences.",
+    coverage: { spatial: "United States counties (Connecticut planning regions); drawn below 2,500 km", temporal: "data year 2023 (2022 for colorectal screening, dental visits, mammography, sleep and tooth loss)", count: { value: 2957, of: "counties with an age-adjusted DIABETES value (2,958 rows with the national one; 229,298 county rows in all measures and value types)", countedOn: R4 } },
+    freshness: { statement: "The 2025 release; the county dataset's rows were last updated 2025-12-04.", readFrom: "data.cdc.gov swc5-untb rowsUpdatedAt and dataset name", recordedOn: R4 },
+    excluded: [
+      { what: "a per-county or within_box query while panning", why: "a cold per-location call took 13.8 s and a within_box 19.6 s on 2026-10-16; the county level uses one whole-measure pull held a week" },
+      { what: "state rows", why: "PLACES has none (only US); the layer asks the viewer to descend to counties" },
+      { what: "ZCTA and place datasets", why: "out of this round" },
+    ],
+    caveats: [PLACES_CAVEAT],
+    searchable: ["locationid", "locationname"],
+    embedText: EMBED_TEXT["places-county"],
+    ops: ["civic?op=health"],
+    sensitivity: "Model-based estimates for counties and tracts; no individual records; small-population tracts are withheld by CDC.",
+    round: 4,
+  },
+  {
+    id: "places-tract",
+    title: "CDC PLACES community health estimates by census tract",
+    layer: "health",
+    sources: ["cdc-places"],
+    what: "The same 40 measures for every published census tract, crude prevalence as CDC publishes tracts, asked by countyfips for at most six counties in view below 100 km and drawn on TIGER tract outlines (fabric op=field), binned by quintiles of the tracts loaded.",
+    recordIs: "A crude model-based estimate for a tract (by its 11-digit FIPS). Tracts with very small populations are not published, and a tract with no row is shown as not published, never 0.",
+    coverage: { spatial: "United States census tracts (Connecticut in planning-region tract codes); drawn below 100 km, six counties at a time", temporal: "data year 2023 (2022 for five measures)", count: { value: 83522, of: "tracts in cwsq-ngmh (3,047,284 tract rows in all measures)", countedOn: R4 } },
+    freshness: { statement: "The 2025 release; CDC last updated the tract dataset 2025-12-12.", readFrom: "data.cdc.gov cwsq-ngmh (civic lane read; the release date per the county dataset)", recordedOn: R4 },
+    excluded: [
+      { what: "within_box tract queries", why: "19.6 s cold; tracts are asked by county" },
+      { what: "national tract quintiles", why: "3 million rows; the bins are quintiles of the tracts loaded, and the legend says so" },
+    ],
+    caveats: [PLACES_CAVEAT],
+    searchable: ["locationname"],
+    embedText: EMBED_TEXT["places-tract"],
+    ops: ["civic?op=health"],
+    sensitivity: "Model-based estimates for counties and tracts; no individual records; small-population tracts are withheld by CDC.",
+    round: 4,
   },
 ];
 

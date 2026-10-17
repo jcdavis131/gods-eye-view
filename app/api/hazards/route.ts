@@ -17,6 +17,16 @@
 //                                         Severities as published. NWS alerts the live
 //                                         feed behind Live warnings outlined carry
 //                                         liveOutlined (none is dropped either).
+//   /api/hazards?op=nri&bbox=w,s,e,n[&level=county|tract]
+//                                         FEMA National Risk Index (December 2025): composite
+//                                         risk, expected annual loss, social vulnerability,
+//                                         community resilience and the 18 hazard ratings, as
+//                                         FEMA publishes them. level=county (box at most 18
+//                                         degrees, snapped to 1, as op=areas): attribute rows only, joined
+//                                         by FIPS onto the county outlines the globe draws;
+//                                         level=tract (box at most 0.4 degrees, snapped to
+//                                         0.05): NRI's tract polygons, paged by 2,000. Held a
+//                                         week; answers or fails within 45 s.
 //
 // FIRMS confidence stays on each instrument's own scale: VIIRS low / nominal /
 // high, MODIS 0–100 %. Nothing here merges or rescales them.
@@ -62,6 +72,10 @@ import {
   wfigs,
 } from "@/lib/hazards/sources";
 import type { LayerFeature } from "@/lib/layers/types";
+import { arcgisQuery, arcgisRowsCapped, envelope, truncated } from "@/lib/server/arcgis";
+import { parseBbox as gridBbox, type Bbox as GridBbox } from "@/lib/civic/bbox";
+import { snapBbox as countyBox } from "@/lib/economy/assemble";
+import { NRI_CAVEATS, NRI_CITATION, NRI_COUNTIES, NRI_COUNTY_FIELDS, NRI_MAX_PAGES, NRI_PAGE, NRI_SOVI_NOTE, NRI_TERMS, NRI_TRACT_BOX_DEG, NRI_TRACT_FIELDS, NRI_TRACTS } from "@/lib/hazards/nri";
 
 export const maxDuration = 60;
 export const OPTIONS = options;
@@ -317,6 +331,65 @@ async function opAlerts(): Promise<OpResult> {
   };
 }
 
+const WEEK_MS = 7 * 24 * 3600_000;
+const NRI_GATE = { gate: "fema-nri", minIntervalMs: 250, timeoutMs: 25_000, tries: 2 };
+/** Two pages at two tries of 25 s each would outlast the function's 60 s; the answer lands in the cache regardless. */
+const NRI_DEADLINE_MS = 45_000;
+
+/**
+ * FEMA NRI for a box. Counties: attribute rows only (the browser joins them by FIPS onto the
+ * county outlines it already draws), one page and a second when the first is cut at 2,000.
+ * Tracts: NRI's own polygons, paged by 2,000 up to NRI_MAX_PAGES; a box still cut there says so.
+ */
+async function opNri(b: GridBbox, level: "county" | "tract"): Promise<OpResult> {
+  const layer = level === "county" ? NRI_COUNTIES : NRI_TRACTS;
+  const r = await cached(`nri:${level}:${b.join(",")}`, WEEK_MS, async () => {
+    const rows: Array<Record<string, unknown>> = [];
+    const features: Array<{ type: "Feature"; geometry: GeoJSON.Geometry | null; properties: Record<string, unknown> }> = [];
+    let cut = false;
+    for (let page = 0; page < (level === "county" ? 2 : NRI_MAX_PAGES); page++) {
+      const base = {
+        where: "1=1",
+        ...envelope(b),
+        orderByFields: level === "county" ? "STCOFIPS" : "TRACTFIPS",
+        resultRecordCount: String(NRI_PAGE),
+        resultOffset: String(page * NRI_PAGE),
+      };
+      if (level === "county") {
+        const j = await arcgisRowsCapped<Record<string, unknown>>("fema-nri", layer, { ...base, outFields: NRI_COUNTY_FIELDS.join(","), returnGeometry: "false" }, NRI_GATE);
+        rows.push(...j.rows);
+        cut = j.exceeded;
+      } else {
+        const fc = await arcgisQuery("fema-nri", layer, { ...base, outFields: NRI_TRACT_FIELDS.join(","), returnGeometry: "true", geometryPrecision: "5", maxAllowableOffset: "0.0005" }, NRI_GATE);
+        for (const f of fc.features) features.push({ type: "Feature", geometry: f.geometry, properties: f.properties as Record<string, unknown> });
+        cut = truncated(fc);
+      }
+      if (!cut) break;
+    }
+    return { rows, features, cut };
+  }, { deadlineMs: NRI_DEADLINE_MS });
+  const caveats = [...NRI_CAVEATS, NRI_SOVI_NOTE, NRI_TERMS, NRI_CITATION];
+  caveats.push("Ratings are FEMA's words, verbatim. 'Not Applicable', 'Insufficient Data', 'No Rating' and 'Data Unavailable' are not a class and never mean low.");
+  if (level === "county") caveats.push("Counties come as attribute rows only: join them by STCOFIPS onto your own county outlines (the globe uses Census TIGERweb's current counties, which share NRI's Connecticut planning regions, 09110-09190).");
+  if (r.value.cut) caveats.push(`FEMA's answer for this box was still cut at ${(level === "county" ? 2 : NRI_MAX_PAGES) * NRI_PAGE} records: ask a smaller box for every ${level}.`);
+  const retrievedAt = new Date(Date.now() - r.age).toISOString();
+  return {
+    data: level === "county" ? { level, rows: r.value.rows } : { type: "FeatureCollection", features: r.value.features },
+    meta: { source: "FEMA National Risk Index (December 2025)", level, bbox: b, count: level === "county" ? r.value.rows.length : r.value.features.length, capped: r.value.cut, cacheAge: r.age },
+    ttlS: 86_400,
+    provenance: [
+      provenance(source("fema-nri"), {
+        kind: "published",
+        seriesId: `${level === "county" ? "National_Risk_Index_Counties" : "National_Risk_Index_Census_Tracts"} FeatureServer layer 0, ${level === "county" ? "attributes" : "polygons simplified to 0.0005 degrees"}`,
+        upstreamUrl: layer,
+        retrievedAt,
+        notes: [`bbox ${b.join(",")}`],
+      }),
+    ],
+    caveats,
+  };
+}
+
 function respond(r: OpResult) {
   return ok(r.data, { meta: r.meta, provenance: r.provenance, caveats: r.caveats, ttlS: r.ttlS });
 }
@@ -336,8 +409,18 @@ export async function GET(req: NextRequest) {
       }
       case "alerts":
         return respond(await opAlerts());
+      case "nri": {
+        const level = q.get("level") ?? "county";
+        if (level !== "county" && level !== "tract") return badRequest("level=county | tract");
+        // Counties: the box /api/economy?op=areas snaps the same bbox to (18 degrees, 1 degree grid), so a client
+        // joining onto those outlines has a row asked for every outline it drew.
+        const raw = gridBbox(q.get("bbox"), 360, 0.0001);
+        const b = level === "county" ? (raw ? countyBox(raw) : null) : gridBbox(q.get("bbox"), NRI_TRACT_BOX_DEG, 0.05);
+        if (!b) return badRequest("bbox=w,s,e,n required, west < east and south < north, e.g. bbox=-99,29,-98,30");
+        return respond(await opNri(b, level));
+      }
       default:
-        return badRequest(`unknown op: wildfire | fires | alerts (FIRMS files: ${FIRMS_FILES.map((f) => f.id).join(", ")})`);
+        return badRequest(`unknown op: wildfire | fires | alerts | nri (FIRMS files: ${FIRMS_FILES.map((f) => f.id).join(", ")})`);
     }
   } catch (err) {
     return withCors(jsonError(err));

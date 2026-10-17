@@ -12,6 +12,8 @@ describe("historic places layer", () => {
     expect(historicViewKey(view(5_000))).toMatch(/,near$/);
     expect(historicRequest(view(20_000))).not.toContain("polygons=1");
     expect(historicRequest(view(5_000))).toContain("&polygons=1");
+    expect(historicRequest(view(5_000))).not.toContain("nhl=1");
+    expect(historicRequest(view(5_000), true)).toMatch(/&polygons=1&nhl=1$/);
   });
 
   it("asks the same box for every view in one grid cell, so viewers share the route's cache", () => {

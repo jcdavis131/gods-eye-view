@@ -36,11 +36,14 @@ import { floodLayer } from "./flood";
 import { wetlandsLayer } from "./wetlands";
 import { publiclandsLayer } from "./publiclands";
 import { historicLayer } from "./historic";
+import { heritageLayer } from "./heritage";
 import { impairedLayer } from "./impaired";
 import { pfasLayer } from "./pfas";
 import { TERRAIN_LAYERS } from "./terrain";
 import { waybackLayer } from "./wayback";
 import { topoLayer } from "./topo";
+import { hydroLayer } from "./hydro";
+import { naipLayer } from "./naip";
 import { INFRA_LAYERS } from "./infra";
 import { airqualityLayer } from "./airquality";
 import { AIRNOW_ENABLED } from "@/lib/air/airnow";
@@ -52,6 +55,8 @@ import { licencesLayer } from "./licences";
 import { envpermitsLayer } from "./envpermits";
 import { contaminantsLayer } from "./contaminants";
 import { ustLayer } from "./ust";
+import { riskindexLayer } from "./riskindex";
+import { healthLayer } from "./health";
 import { sportsLayer } from "./sports";
 import { constructsLayer } from "./constructs";
 import { fieldLayer } from "./field";
@@ -97,9 +102,12 @@ export const LAYERS: LayerDefinition[] = [
   pfasLayer,
   publiclandsLayer,
   historicLayer,
+  heritageLayer,
   ...TERRAIN_LAYERS,
   waybackLayer,
   topoLayer,
+  hydroLayer,
+  naipLayer,
   ...INFRA_LAYERS,
   // Off until the operator decides on AirNow's data-user form (lib/air/airnow.ts).
   ...(AIRNOW_ENABLED ? [airqualityLayer] : []),
@@ -111,6 +119,8 @@ export const LAYERS: LayerDefinition[] = [
   envpermitsLayer,
   contaminantsLayer,
   ustLayer,
+  riskindexLayer,
+  healthLayer,
   sportsLayer,
   constructsLayer,
   fieldLayer,

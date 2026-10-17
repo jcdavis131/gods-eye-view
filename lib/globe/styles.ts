@@ -26,8 +26,8 @@ import { constructsStyle } from "./constructStyles";
 import { fieldStyle } from "./fieldStyles";
 import { alertsStyle } from "./alertStyles";
 import { firesStyle, hazardsStyle, wildfireStyle } from "./hazardStyles";
-import { floodStyle, historicStyle, impairedStyle, pfasStyle, publiclandsStyle, wetlandsStyle } from "./landStyles";
-import { contoursStyle, crithabStyle, firehazardStyle, landcoverStyle, reliefStyle, sealevelStyle, slopeStyle, soilsStyle, topoStyle, waybackStyle } from "./terrainStyles";
+import { floodStyle, heritageStyle, historicStyle, impairedStyle, pfasStyle, publiclandsStyle, wetlandsStyle } from "./landStyles";
+import { contoursStyle, crithabStyle, firehazardStyle, hydroStyle, landcoverStyle, naipStyle, reliefStyle, sealevelStyle, slopeStyle, soilsStyle, topoStyle, waybackStyle } from "./terrainStyles";
 import {
   airportsStyle,
   airqualityStyle,
@@ -44,6 +44,7 @@ import {
 } from "./infraStyles";
 import { parcelsStyle } from "./parcelStyles";
 import { contaminantsStyle, envpermitsStyle, licencesStyle, permitsStyle, ustStyle, zoningStyle } from "./civicStyles";
+import { healthStyle, riskindexStyle } from "./indexStyles";
 
 /** Distinctive major-group colours for the occupations layer: one hue per SOC major group. */
 const OCCUPATION_COLORS: Record<string, string> = {
@@ -464,11 +465,14 @@ export const STYLES: Partial<Record<LayerId, LayerStyle>> = {
   wetlands: wetlandsStyle,
   publiclands: publiclandsStyle,
   historic: historicStyle,
+  heritage: heritageStyle,
   impaired: impairedStyle,
   pfas: pfasStyle,
   crithab: crithabStyle,
   wayback: waybackStyle,
   topo: topoStyle,
+  hydro: hydroStyle,
+  naip: naipStyle,
   relief: reliefStyle,
   slope: slopeStyle,
   contours: contoursStyle,
@@ -495,6 +499,8 @@ export const STYLES: Partial<Record<LayerId, LayerStyle>> = {
   envpermits: envpermitsStyle,
   contaminants: contaminantsStyle,
   ust: ustStyle,
+  riskindex: riskindexStyle,
+  health: healthStyle,
   sports: sportsStyle,
   constructs: constructsStyle,
   field: fieldStyle,
@@ -538,11 +544,14 @@ export const FOLLOW_RANGE: Record<LayerId, number> = {
   wetlands: 3_000,
   publiclands: 40_000,
   historic: 2_000,
+  heritage: 150_000,
   impaired: 3_000,
   pfas: 4_000,
   crithab: 20_000,
   wayback: 5_000,
   topo: 5_000,
+  hydro: 5_000,
+  naip: 5_000,
   // Picture layers have no features to follow; a "ground here" answer sits at its click.
   relief: 5_000,
   slope: 5_000,
@@ -570,6 +579,8 @@ export const FOLLOW_RANGE: Record<LayerId, number> = {
   envpermits: 8_000,
   contaminants: 8_000,
   ust: 120_000,
+  riskindex: 200_000,
+  health: 200_000,
   sports: 500_000,
   constructs: 150_000,
   field: 400_000,

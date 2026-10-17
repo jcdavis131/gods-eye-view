@@ -10,6 +10,12 @@ import cwsRows from "@/lib/water/fixtures/cws-collegeville.json";
 import cwsGeom from "@/lib/water/fixtures/cws-collegeville-geom.json";
 import patCentroid from "@/lib/water/fixtures/pat-centroid-collegeville.json";
 import patResults from "@/lib/water/fixtures/pat-results-collegeville.json";
+import nldiPos from "@/lib/water/fixtures/nldi-position-boise.json";
+import nldiOcean from "@/lib/water/fixtures/nldi-position-ocean.json";
+import nldiDm from "@/lib/water/fixtures/nldi-dm-boise.json";
+import nldiGauges from "@/lib/water/fixtures/nldi-ut-gauges-boise.json";
+import nldiBasin from "@/lib/water/fixtures/nldi-basin-boise.json";
+import epaV21 from "@/lib/water/fixtures/epa-v21-boise.json";
 
 vi.mock("@/lib/server/cache", () => ({
   cached: async <T,>(_k: string, _ttl: number, produce: () => Promise<T>) => ({ value: await produce(), age: 0, hit: false }),
@@ -159,6 +165,88 @@ describe("op=pfas", () => {
   it("refuses a bad box without asking", async () => {
     answer = pfas();
     expect((await get("op=pfas&bbox=-75.4,40.13,-75.55,40.25")).status).toBe(400);
+    expect(calls).toEqual([]);
+  });
+});
+
+// NLDI and EPA answers captured 2026-10-16 at the Boise River, unmodified (lib/water/fixtures/nldi-*, epa-v21-*).
+const NLDI = "https://api.water.usgs.gov/nldi/linked-data";
+const EPA = "https://watersgeo.epa.gov/arcgis/rest/services/NHDPlus/NHDPlus/MapServer/2/query?";
+const status404 = (body: unknown) => new Response(JSON.stringify(body), { status: 404, headers: { "content-type": "application/json" } });
+type RBody = { data: { comid: number | null; reach: { name: string | null; flowCfs: number | null } | null; type?: string; features?: Array<{ geometry: { type: string }; properties: Record<string, unknown> }> }; meta?: { distanceKm?: number | null; count?: number }; distanceKm?: number | null; count?: number; caveats: string[]; provenance: Array<{ source: { id: string } }> };
+
+describe("op=reach", () => {
+  it("asks NLDI for the catchment at the snapped point, then EPA V2.1 by comid with lowercase fields", async () => {
+    answer = (u) => (u.startsWith(`${NLDI}/comid/position?`) ? json(nldiPos) : u.startsWith(EPA) ? json(epaV21) : null);
+    const { status, body } = (await get("op=reach&lon=-116.20231&lat=43.61504")) as unknown as { status: number; body: RBody };
+    expect(status).toBe(200);
+    expect(calls).toHaveLength(2);
+    expect(decodeURIComponent(calls[0])).toContain("POINT(-116.202 43.615)");
+    const q = new URL(calls[1]).searchParams;
+    expect(q.get("where")).toBe("comid=23398863");
+    expect(q.get("outFields")).toBe(q.get("outFields")!.toLowerCase());
+    expect(body.data.comid).toBe(23398863);
+    expect(body.data.reach).toMatchObject({ name: "Boise River" });
+    expect(body.provenance.map((p) => p.source.id)).toEqual(["usgs-nldi", "epa-nhdplus-v21"]);
+    expect(body.caveats.join(" ")).toMatch(/model estimate, not a measurement/);
+  });
+
+  it("answers 'no reach here' (comid null, 200) where NLDI has no catchment, and never asks EPA", async () => {
+    answer = (u) => (u.startsWith(`${NLDI}/comid/position?`) ? status404(nldiOcean) : null);
+    const { status, body } = (await get("op=reach&lon=-70&lat=40")) as unknown as { status: number; body: RBody };
+    expect(status).toBe(200);
+    expect(body.data).toMatchObject({ comid: null, reach: null });
+    expect(calls).toHaveLength(1);
+    expect(body.caveats.join(" ")).toMatch(/no reach here, not an error/);
+  });
+
+  it("keeps the comid with unknown attributes when EPA does not answer", async () => {
+    answer = (u) => (u.startsWith(`${NLDI}/comid/position?`) ? json(nldiPos) : u.startsWith(EPA) ? new Response("no", { status: 400 }) : null);
+    const { status, body } = (await get("op=reach&lon=-116.2023&lat=43.6150")) as unknown as { status: number; body: RBody };
+    expect(status).toBe(200);
+    expect(body.data).toMatchObject({ comid: 23398863, reach: null });
+    expect(body.caveats.join(" ")).toMatch(/unknown, not absent/);
+  });
+
+  it("refuses a missing point", async () => {
+    expect((await get("op=reach&lon=-116.2")).status).toBe(400);
+    expect(calls).toEqual([]);
+  });
+});
+
+describe("op=trace", () => {
+  it("sends the default distance and makes the main stem one line set", async () => {
+    answer = (u) => (u.startsWith(`${NLDI}/comid/23398863/navigation/DM/flowlines?`) ? json(nldiDm) : null);
+    const { status, body } = (await get("op=trace&comid=23398863&mode=down")) as unknown as { status: number; body: RBody };
+    expect(status).toBe(200);
+    expect(new URL(calls[0]).searchParams.get("distance")).toBe("100");
+    expect(body.data.features).toHaveLength(1);
+    expect(body.data.features![0].geometry.type).toBe("MultiLineString");
+    expect(body.count).toBe(79);
+    expect(body.caveats.join(" ")).toMatch(/not the watersheds/);
+  });
+
+  it("lists the gauges upstream within the asked distance, capped at 500 km", async () => {
+    answer = (u) => (u.startsWith(`${NLDI}/comid/23398863/navigation/UT/nwissite?`) ? json(nldiGauges) : null);
+    const { body } = (await get("op=trace&comid=23398863&mode=gauges&distance=900")) as unknown as { status: number; body: RBody };
+    expect(new URL(calls[0]).searchParams.get("distance")).toBe("500");
+    expect(body.distanceKm).toBe(500);
+    expect(body.data.features).toHaveLength(128);
+    expect(body.data.features![0].properties).toMatchObject({ identifier: "USGS-13186000", siteNo: "13186000" });
+  });
+
+  it("returns NLDI's simplified basin as one polygon", async () => {
+    answer = (u) => (u.startsWith(`${NLDI}/comid/23398863/basin?`) ? json(nldiBasin) : null);
+    const { body } = (await get("op=trace&comid=23398863&mode=basin")) as unknown as { status: number; body: RBody };
+    expect(new URL(calls[0]).searchParams.get("simplified")).toBe("true");
+    expect(body.data.features![0].geometry.type).toBe("Polygon");
+    expect(body.data.features![0].properties.vertices).toBe(793);
+  });
+
+  it("refuses a bad comid, mode or distance without asking", async () => {
+    for (const qs of ["op=trace&mode=down", "op=trace&comid=abc&mode=down", "op=trace&comid=23398863&mode=sideways", "op=trace&comid=23398863&mode=down&distance=-5"]) {
+      expect((await get(qs)).status, qs).toBe(400);
+    }
     expect(calls).toEqual([]);
   });
 });

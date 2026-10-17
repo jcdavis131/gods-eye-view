@@ -15,7 +15,16 @@
 //                                          code) and the year of the imagery each was mapped
 //                                          from (NWI Data_Source). Same box rules; NWI answers
 //                                          at most 500 polygons a query.
-//   /api/land?op=historic&bbox=w,s,e,n[&polygons=1]
+//   /api/land?op=heritage&kind=units|nha|battlefields|whs[&bbox=w,s,e,n]
+//                                         National heritage from four NPS services:
+//                                         park units (boundaries in a box of at most 2
+//                                         degrees, or every unit's centroid without a
+//                                         box), National Heritage Areas and World
+//                                         Heritage Sites (one national answer each), and
+//                                         ABPP battlefield study and core areas of three
+//                                         wars (a box of at most 8 degrees). Held a day
+//                                         (boxes) or a week (national answers).
+//   /api/land?op=historic&bbox=w,s,e,n[&polygons=1][&nhl=1]
 //                                          National Register of Historic Places listings NPS
 //                                          publishes as non-restricted: points, and with
 //                                          polygons=1 boundaries too. Box at most 0.12
@@ -54,6 +63,28 @@ import { provenance, type Provenance } from "@/lib/provenance/types";
 import { source } from "@/lib/provenance/sources";
 import { numParam, parseBbox, type Bbox } from "@/lib/civic/bbox";
 import {
+  ABPP_CAVEAT,
+  ABPP_FIELDS,
+  ABPP_LAYERS,
+  ABPP_STUDY_DEFINITION,
+  buildBattlefields,
+  buildNha,
+  buildUnits,
+  buildWhs,
+  isHeritageKind,
+  NHA_CAVEAT,
+  NHA_FIELDS,
+  NPS_ABPP,
+  NPS_LRD,
+  NPS_NHA,
+  NPS_WHS,
+  UNIT_FIELDS,
+  UNITS_CAVEAT,
+  WHS_CAVEAT,
+  WHS_FIELDS,
+  type HeritageKind,
+} from "@/lib/land/heritage";
+import {
   buildFloodZones,
   buildHistoric,
   CRITHAB_CAVEAT,
@@ -61,6 +92,7 @@ import {
   buildWetlands,
   NRHP_CAVEAT,
   NRHP_FIELDS,
+  nrhpWhere,
   NWI_CAVEAT,
   nwiImagerySummary,
   PADUS_CATEGORIES,
@@ -301,12 +333,12 @@ async function opWetlands(bbox: Bbox): Promise<OpResult> {
  */
 const NRHP_WHERE = "STATUS='Listed' AND (Address IS NULL OR UPPER(Address) NOT LIKE '%RESTRICT%')";
 
-function nrhpQuery(layer: 0 | 1, bbox: Bbox) {
+function nrhpQuery(layer: 0 | 1, bbox: Bbox, nhlOnly = false) {
   return arcgisQuery(
     "nps-nrhp",
     `${NRHP}/${layer}`,
     {
-      where: NRHP_WHERE,
+      where: nrhpWhere(NRHP_WHERE, nhlOnly),
       ...envelope(bbox),
       outFields: NRHP_FIELDS.join(","),
       returnGeometry: "true",
@@ -322,15 +354,16 @@ function nrhpQuery(layer: 0 | 1, bbox: Bbox) {
  * too (the layer asks for them only below 10 km). A boundary query that fails leaves the
  * points standing and says the boundaries are missing.
  */
-async function opHistoric(bbox: Bbox, boundaries: boolean): Promise<OpResult> {
+async function opHistoric(bbox: Bbox, boundaries: boolean, nhlOnly = false): Promise<OpResult> {
+  const tag = nhlOnly ? ":nhl" : "";
   const [pts, bnd] = await Promise.all([
-    cached("nrhp-pt:" + bbox.join(","), DAY, async () => {
-      const fc = await nrhpQuery(0, bbox);
+    cached("nrhp-pt:" + bbox.join(",") + tag, DAY, async () => {
+      const fc = await nrhpQuery(0, bbox, nhlOnly);
       return { features: buildHistoric(fc.features, "point"), truncated: truncated(fc) || fc.features.length >= NRHP_MAX };
     }, LAND_DEADLINE),
     boundaries
-      ? cached("nrhp-bnd:" + bbox.join(","), DAY, async () => {
-          const fc = await nrhpQuery(1, bbox);
+      ? cached("nrhp-bnd:" + bbox.join(",") + tag, DAY, async () => {
+          const fc = await nrhpQuery(1, bbox, nhlOnly);
           return { features: buildHistoric(fc.features, "boundary"), truncated: truncated(fc) || fc.features.length >= NRHP_MAX };
         }, LAND_DEADLINE).catch(() => null)
       : Promise.resolve(null),
@@ -345,6 +378,7 @@ async function opHistoric(bbox: Bbox, boundaries: boolean): Promise<OpResult> {
     "Property names are shown as NPS lists them and can include a person's name; they are not searchable. No street address is requested.",
     BOX_CAVEAT,
   ];
+  if (nhlOnly) caveats.push("National Historic Landmarks only (nhl=1: NPS's Is_NHL flag), with the same listed-only and restricted-address exclusions; every other National Register listing in the box is left out of this answer, not absent.");
   if (pts.value.truncated) caveats.push(`NPS's points were capped at the first ${NRHP_MAX.toLocaleString("en-US")} in this box; ask for a smaller box for every listing.`);
   if (bnd?.value.truncated) caveats.push(`NPS's boundaries were capped at the first ${NRHP_MAX.toLocaleString("en-US")} in this box.`);
   if (boundaries && !bnd) caveats.push("NPS's boundary layer did not answer this time; the points are shown, the boundaries are missing (boundaries: null).");
@@ -353,6 +387,7 @@ async function opHistoric(bbox: Bbox, boundaries: boolean): Promise<OpResult> {
     meta: {
       source: "National Park Service, National Register of Historic Places spatial data (public, non-restricted listings)",
       bbox,
+      nhlOnly,
       points: pts.value.features.length,
       // null when boundaries were asked for and NPS did not answer; absent when not asked for.
       ...(boundaries ? { boundaries: bnd ? bnd.value.features.length : null } : {}),
@@ -614,6 +649,87 @@ async function opElevation(lon: number, lat: number): Promise<OpResult> {
 /** EPQS answered, but with text instead of a JSON value. */
 class NoValue extends Error {}
 
+const NPS_GATE = { gate: "nps-arcgis", minIntervalMs: 250, timeoutMs: 25_000, tries: 2 };
+const HERITAGE_HELP = "kind=units | nha | battlefields | whs; bbox=w,s,e,n for units (boundaries, at most 2 degrees; without a box, every unit's centroid) and battlefields (at most 8 degrees)";
+
+/**
+ * National heritage, one kind per call. Units: boundaries in a box (simplified to a thousandth
+ * of its span) or every centroid; NHA and WHS: one national answer each, held a week;
+ * battlefields: six ABPP layers in a box, a layer that fails counted in `coverage` (unknown,
+ * not none).
+ */
+async function opHeritage(kind: HeritageKind, bbox: Bbox | null): Promise<OpResult> {
+  const geo = (layer: string, params: Record<string, string>) => arcgisQuery("nps-heritage", layer, { where: "1=1", returnGeometry: "true", outSR: "4326", resultRecordCount: "2000", ...params }, NPS_GATE);
+  const prov = (id: Parameters<typeof source>[0], seriesId: string, url: string, age: number, notes?: string[]) => provenance(source(id), { kind: "published", seriesId, upstreamUrl: url, retrievedAt: fetchedAt(age), notes });
+  if (kind === "units") {
+    if (bbox) {
+      const off = Math.max(0.0001, Math.min(0.002, (bbox[2] - bbox[0]) / 1000));
+      const r = await cached(`heritage:units:${bbox.join(",")}`, DAY, async () => {
+        const fc = await geo(`${NPS_LRD}/2`, { ...envelope(bbox), outFields: UNIT_FIELDS.join(","), geometryPrecision: "5", maxAllowableOffset: String(off) });
+        return { features: buildUnits(fc.features, "polygon"), cut: truncated(fc) };
+      });
+      return {
+        data: { type: "FeatureCollection", features: r.value.features },
+        meta: { source: "NPS Land Resources Division, unit boundaries", kind, bbox, shape: "polygon", count: r.value.features.length, cacheAge: r.age },
+        ttlS: 3600,
+        provenance: [prov("nps-lrd-boundaries", `NPS_Land_Resources_Division_Boundary_and_Tract_Data_Service layer 2 (nps_boundary), simplified to ${off} degrees`, `${NPS_LRD}/2`, r.age, [`bbox ${bbox.join(",")}`])],
+        caveats: [UNITS_CAVEAT, BOX_CAVEAT],
+      };
+    }
+    const r = await cached("heritage:units:centroids", 7 * DAY, async () => {
+      const fc = await geo(`${NPS_LRD}/0`, { outFields: UNIT_FIELDS.join(","), geometryPrecision: "4" });
+      return { features: buildUnits(fc.features, "point"), cut: truncated(fc) };
+    });
+    return {
+      data: { type: "FeatureCollection", features: r.value.features },
+      meta: { source: "NPS Land Resources Division, unit centroids", kind, shape: "point", count: r.value.features.length, cacheAge: r.age },
+      ttlS: 86_400,
+      provenance: [prov("nps-lrd-boundaries", "NPS_Land_Resources_Division_Boundary_and_Tract_Data_Service layer 0 (nps_boundary_centroids)", `${NPS_LRD}/0`, r.age)],
+      caveats: [UNITS_CAVEAT],
+    };
+  }
+  if (kind === "nha") {
+    const r = await cached("heritage:nha", 7 * DAY, async () => buildNha((await geo(NPS_NHA, { outFields: NHA_FIELDS.join(","), geometryPrecision: "3", maxAllowableOffset: "0.01" })).features));
+    return {
+      data: { type: "FeatureCollection", features: r.value },
+      meta: { source: "NPS National Heritage Areas (WASO_NHA_Map2026)", kind, count: r.value.length, cacheAge: r.age },
+      ttlS: 86_400,
+      provenance: [prov("nps-nha", "WASO_NHA_Map2026 layer 0, simplified to 0.01 degrees", NPS_NHA, r.age)],
+      caveats: [NHA_CAVEAT, "Each area's description is NPS's own text, shown as NPS serves it; it is not searched or embedded."],
+    };
+  }
+  if (kind === "whs") {
+    const r = await cached("heritage:whs", 7 * DAY, async () => buildWhs((await geo(NPS_WHS, { outFields: WHS_FIELDS.join(","), geometryPrecision: "4", maxAllowableOffset: "0.001" })).features));
+    return {
+      data: { type: "FeatureCollection", features: r.value },
+      meta: { source: "NPS World Heritage Sites", kind, count: r.value.length, cacheAge: r.age },
+      ttlS: 86_400,
+      provenance: [prov("nps-whs", "World_Heritage_Sites layer 0, simplified to 0.001 degrees, grouped by inscription", NPS_WHS, r.age)],
+      caveats: [WHS_CAVEAT, "The organisations NPS lists as site owners are not requested."],
+    };
+  }
+  const b = bbox!;
+  const parts = await Promise.all(
+    ABPP_LAYERS.map((l) =>
+      cached(`heritage:abpp:${l.id}:${b.join(",")}`, 7 * DAY, async () => {
+        const fc = await geo(`${NPS_ABPP}/${l.id}`, { ...envelope(b), outFields: ABPP_FIELDS.join(","), geometryPrecision: "5", maxAllowableOffset: "0.0005" });
+        return { features: buildBattlefields(fc.features, l), cut: truncated(fc) };
+      }).catch(() => null),
+    ),
+  );
+  if (parts.every((p) => p == null)) throw new Error("NPS's battlefield layers did not answer");
+  const coverage = ABPP_LAYERS.map((l, i) => ({ id: `abpp-${l.id}`, name: `${l.war} ${l.boundary} areas`, state: parts[i] ? (parts[i]!.value.cut ? "partial" : "covered") : "error", count: parts[i] ? parts[i]!.value.features.length : null }));
+  const caveats = [ABPP_CAVEAT, ABPP_STUDY_DEFINITION, "Potential National Register boundaries and the Civil War resurvey layers are not drawn, so nothing here reads as listed.", BOX_CAVEAT];
+  for (const c of coverage) if (c.state === "error") caveats.push(`NPS's ${c.name} layer did not answer this time: unknown, not none.`);
+  return {
+    data: { type: "FeatureCollection", features: parts.flatMap((p) => p?.value.features ?? []) },
+    meta: { source: "NPS American Battlefield Protection Program", kind, bbox: b, coverage, cacheAge: Math.max(...parts.map((p) => p?.age ?? 0)) },
+    ttlS: coverage.some((c) => c.state === "error") ? 600 : 3600,
+    provenance: [prov("nps-abpp", "ABPP_Battlefield_Boundaries layers 0, 1, 5, 6, 8, 9 (study and core areas), simplified to 0.0005 degrees", NPS_ABPP, Math.max(...parts.map((p) => p?.age ?? 0)), [`bbox ${b.join(",")}`])],
+    caveats,
+  };
+}
+
 function respond(r: OpResult) {
   return ok(r.data, { meta: r.meta, provenance: r.provenance, caveats: r.caveats, ttlS: r.ttlS });
 }
@@ -638,7 +754,15 @@ export async function GET(req: NextRequest) {
       case "historic": {
         const b = parseBbox(q.get("bbox"), 0.12, 0.02);
         if (!b) return badRequest(BBOX_HELP);
-        return respond(await opHistoric(b, q.get("polygons") === "1"));
+        return respond(await opHistoric(b, q.get("polygons") === "1", q.get("nhl") === "1"));
+      }
+      case "heritage": {
+        const kind = q.get("kind");
+        if (!isHeritageKind(kind)) return badRequest(HERITAGE_HELP);
+        const raw = q.get("bbox");
+        const b = raw == null || raw === "" ? null : kind === "battlefields" ? parseBbox(raw, 8, 0.5) : parseBbox(raw, 2, 0.25);
+        if ((raw && !b) || (kind === "battlefields" && !b)) return badRequest(HERITAGE_HELP);
+        return respond(await opHeritage(kind, kind === "units" || kind === "battlefields" ? b : null));
       }
       case "crithab": {
         const lon = numParam(q.get("lon"));
@@ -658,7 +782,7 @@ export async function GET(req: NextRequest) {
         return respond(await opElevation(lon, lat));
       }
       default:
-        return badRequest("unknown op: flood | wetlands | historic | crithab | publiclands | elevation");
+        return badRequest("unknown op: flood | wetlands | historic | heritage | crithab | publiclands | elevation");
     }
   } catch (err) {
     return withCors(jsonError(err));

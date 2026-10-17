@@ -81,6 +81,10 @@
       "description": "News events: GDELT 2.0 conflict events folded into the cities they were coded at; no actors, no article links."
     },
     {
+      "name": "civic",
+      "description": "Community indicators for counties and tracts (round 4: CDC PLACES)."
+    },
+    {
       "name": "meta",
       "description": "This description."
     },
@@ -503,10 +507,12 @@
                 "normals",
                 "impaired",
                 "pfas",
+                "reach",
+                "trace",
                 "report"
               ]
             },
-            "description": "gauges: USGS latest continuous readings in a bbox (flow, stage, temperature, DO, conductance, pH, turbidity, reservoir elevation/storage). wells: USGS latest daily groundwater levels with aquifer names. nwps: NOAA NWPS gauges with flood categories. twdb: Texas reservoirs. drought: US Drought Monitor current polygons. history: 365 days of daily means for one site and parameter. matchup: instantaneous values for one site and parameter in a window. normals: USGS daily-mean discharge percentiles (5th to 95th) for a calendar day, per site (sites=, date=MM-DD). impaired: EPA ATTAINS assessment units states report as impaired (303(d)), lines and areas, in a box clamped to 0.12 degrees and snapped to 0.02 (not the 4 degree water box): category with its meaning, 303(d) listing and TMDL (null when not reported, never N), reporting cycle, overall status, EPA action status verbatim and the How's My Waterway link; 2,000 per layer; `coverage` says per layer whether it answered (a failed layer has count null: unknown, not none). A listing for the whole unit and one cycle, not a measurement; waters not returned were not reported impaired, which includes waters never assessed. pfas: PFAS in public drinking water, EPA UCMR 5 (2023-2025), for the water systems serving a box clamped to 0.12 degrees and snapped to 0.02: systems found by EPA's community water system service areas first, then by EPA's estimated location; each system detected, not-detected, not-in-ucmr5 or unknown, with the highest single result per PFAS in ng/L (never compared with a health limit); service-area polygons only with polygons=1. Samples are taken where treated water enters the distribution system, not at a tap. report: the community water report for a point."
+            "description": "gauges: USGS latest continuous readings in a bbox (flow, stage, temperature, DO, conductance, pH, turbidity, reservoir elevation/storage). wells: USGS latest daily groundwater levels with aquifer names. nwps: NOAA NWPS gauges with flood categories. twdb: Texas reservoirs. drought: US Drought Monitor current polygons. history: 365 days of daily means for one site and parameter. matchup: instantaneous values for one site and parameter in a window. normals: USGS daily-mean discharge percentiles (5th to 95th) for a calendar day, per site (sites=, date=MM-DD). impaired: EPA ATTAINS assessment units states report as impaired (303(d)), lines and areas, in a box clamped to 0.12 degrees and snapped to 0.02 (not the 4 degree water box): category with its meaning, 303(d) listing and TMDL (null when not reported, never N), reporting cycle, overall status, EPA action status verbatim and the How's My Waterway link; 2,000 per layer; `coverage` says per layer whether it answered (a failed layer has count null: unknown, not none). A listing for the whole unit and one cycle, not a measurement; waters not returned were not reported impaired, which includes waters never assessed. pfas: PFAS in public drinking water, EPA UCMR 5 (2023-2025), for the water systems serving a box clamped to 0.12 degrees and snapped to 0.02: systems found by EPA's community water system service areas first, then by EPA's estimated location; each system detected, not-detected, not-in-ucmr5 or unknown, with the highest single result per PFAS in ng/L (never compared with a health limit); service-area polygons only with polygons=1. Samples are taken where treated water enters the distribution system, not at a tap. report: the community water report for a point. reach: the NHDPlus V2 reach a point (lon, lat; snapped to 0.001 degrees) drains to: USGS NLDI's catchment containing the point (comid), then EPA's NHDPlus V2.1 attributes by comid (GNIS name, NHD feature type, Strahler order, total drainage area km², modelled mean annual flow in cfs as EROM gauge-adjusted QE_MA and runoff-only QA_MA). A point with no catchment (ocean, outside the network) answers 200 with comid null; -9999 and missing values are null, never 0; flows are model output, not measurements. trace: one NLDI navigation from a reach (comid from op=reach): mode=down the main stem downstream as a MultiLineString (distance default 100 km), mode=gauges the USGS stream gauges upstream as Points (default 150 km), mode=basin the drainage basin as one polygon (NLDI's simplified basin, at most 2,000 vertices; to fit, holes and islands below an area that grows with the cut are left out and counted in droppedRings, droppedUnderKm2: a dropped hole adds ground that does not drain there, a dropped island leaves out ground that does); distance is always sent and capped at 500 km. A river path on the NHDPlus V2 network, not the HUC-12 chain of /api/fabric?op=downstream."
           },
           {
             "$ref": "#/components/parameters/format"
@@ -590,6 +596,38 @@
               "pattern": "^\\d{2}-\\d{2}$"
             },
             "description": "op=normals: MM-DD, the calendar day; today (UTC) when omitted."
+          },
+          {
+            "name": "comid",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "description": "op=trace: NHDPlus V2 comid, from op=reach (e.g. 23398863, the Boise River at Boise)."
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "down",
+                "basin",
+                "gauges"
+              ]
+            },
+            "description": "op=trace: down (main stem downstream), basin (drainage basin), gauges (USGS stream gauges upstream)."
+          },
+          {
+            "name": "distance",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            },
+            "description": "op=trace with mode=down or gauges: km of channel to navigate (default 100 for down, 150 for gauges; at most 500). The gauge count depends on it."
           }
         ],
         "responses": {
@@ -636,6 +674,12 @@
                     },
                     {
                       "$ref": "#/components/schemas/WaterPfasResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/WaterReachResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/WaterTraceResponse"
                     },
                     {
                       "$ref": "#/components/schemas/WaterReportResponse"
@@ -2355,10 +2399,11 @@
               "enum": [
                 "wildfire",
                 "fires",
-                "alerts"
+                "alerts",
+                "nri"
               ]
             },
-            "description": "wildfire: NIFC WFIGS perimeters and incident points (US). fires: NASA FIRMS 24 h hotspots in a bbox. alerts: NWS + GDACS + EONET."
+            "description": "wildfire: NIFC WFIGS perimeters and incident points (US). fires: NASA FIRMS 24 h hotspots in a bbox. alerts: NWS + GDACS + EONET. nri: FEMA National Risk Index, December 2025, as FEMA publishes it: composite risk score and rating, expected annual loss (EAL_VALT, dollars a year) and its rating, social vulnerability (SOVI_*, which FEMA says comes from the Census Community Resilience Estimate, not CDC SVI) and community resilience (RESL_*), and the 18 hazard ratings (*_RISKR). level=county (default; the box is snapped as op=areas snaps it, at most 18 degrees on a 1 degree grid): attribute rows only, to join by STCOFIPS onto county outlines (Connecticut in planning regions 09110-09190). level=tract (box at most 0.4 degrees, snapped to 0.05, around the box's centre): NRI's tract polygons as GeoJSON, paged by 2,000, at most two pages (dense 0.4 degree boxes over New York City hold 2,544 to 2,884 tracts and take both pages). Ratings are verbatim; Not Applicable, Insufficient Data, No Rating and Data Unavailable are not a class. A relative index (a percentile among all counties, or all tracts), not a likelihood; county and tract scores are not comparable."
           },
           {
             "name": "bbox",
@@ -2366,7 +2411,7 @@
             "schema": {
               "$ref": "#/components/schemas/Bbox"
             },
-            "description": "`w,s,e,n` degrees, op=fires only; snapped outward to a 1° grid. Default: the whole globe."
+            "description": "`w,s,e,n` degrees, op=fires only; snapped outward to a 1° grid. Default: the whole globe. op=nri: required."
           },
           {
             "name": "max",
@@ -2378,6 +2423,19 @@
               "default": 5000
             },
             "description": "op=fires: most rows returned; above it the detections are binned (brightest per cell)."
+          },
+          {
+            "name": "level",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "county",
+                "tract"
+              ],
+              "default": "county"
+            },
+            "description": "op=nri: county (attribute rows) or tract (polygons)."
           }
         ],
         "responses": {
@@ -2403,6 +2461,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/HazardsAlertsResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HazardsNriResponse"
                     }
                   ]
                 }
@@ -2450,10 +2511,11 @@
                 "historic",
                 "crithab",
                 "publiclands",
-                "elevation"
+                "elevation",
+                "heritage"
               ]
             },
-            "description": "flood: FEMA NFHL zones. wetlands: USFWS NWI polygons with imagery years. historic: NPS National Register listings (public, non-restricted). crithab: USFWS critical habitat (final and proposed) at lon, lat. publiclands: USGS PAD-US 4.1 units with owners and access. elevation: USGS 3DEP EPQS at lon, lat."
+            "description": "flood: FEMA NFHL zones. wetlands: USFWS NWI polygons with imagery years. historic (nhl=1 for National Historic Landmarks only): NPS National Register listings (public, non-restricted). crithab: USFWS critical habitat (final and proposed) at lon, lat. publiclands: USGS PAD-US 4.1 units with owners and access. elevation: USGS 3DEP EPQS at lon, lat. heritage: national heritage from four NPS services, one kind per call (kind=units | nha | battlefields | whs). units with bbox (at most 2 degrees, snapped to 0.25): NPS's authorised park unit boundaries, simplified to a thousandth of the box; units without bbox: every unit's centroid (437). nha: the 62 National Heritage Areas with NPS's description (shown as served, never embedded) and site link. battlefields with bbox (at most 8 degrees, snapped to 0.5): ABPP study areas and core areas of the Civil War, Revolutionary War and War of 1812 (PotNR and resurvey layers are left out), with `coverage` per layer. whs: World Heritage Sites with an NPS boundary, one feature per inscription. Designations, not ownership (PAD-US is /api/land?op=publiclands); battlefields are survey areas, mostly private land; no owner field is requested."
           },
           {
             "name": "bbox",
@@ -2461,7 +2523,7 @@
             "schema": {
               "$ref": "#/components/schemas/Bbox"
             },
-            "description": "`w,s,e,n` degrees. Required for op=flood, wetlands (clamped to 0.08°), historic (clamped to 0.12°), publiclands (clamped to 2°). The snapped box comes back in `bbox`."
+            "description": "`w,s,e,n` degrees. Required for op=flood, wetlands (clamped to 0.08°), historic (clamped to 0.12°), publiclands (clamped to 2°). The snapped box comes back in `bbox`. op=heritage: kind=units (optional; boundaries in the box, else centroids) and kind=battlefields (required)."
           },
           {
             "name": "polygons",
@@ -2493,6 +2555,31 @@
               "maximum": 90
             },
             "description": "op=elevation, crithab: latitude of the point."
+          },
+          {
+            "name": "nhl",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            },
+            "description": "op=historic: National Historic Landmarks only (NPS's Is_NHL = 'X'), ANDed onto the listed-only and restricted-address exclusions, never replacing them."
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "units",
+                "nha",
+                "battlefields",
+                "whs"
+              ]
+            },
+            "description": "op=heritage: which collection."
           }
         ],
         "responses": {
@@ -2527,6 +2614,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/LandElevationResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/LandHeritageResponse"
                     }
                   ]
                 }
@@ -2574,10 +2664,12 @@
                 "products",
                 "wayback",
                 "topo",
-                "waybackdate"
+                "waybackdate",
+                "naip",
+                "naipmosaic"
               ]
             },
-            "description": "tile: a rendered PNG tile. point: a class or slope at lon, lat. products: the catalog. wayback: Esri World Imagery Wayback's release index. topo: the USGS historical topographic map editions and sheets at lon, lat. waybackdate: when a Wayback release's pixels were captured at lon, lat."
+            "description": "tile: a rendered PNG tile. point: a class or slope at lon, lat. products: the catalog. wayback: Esri World Imagery Wayback's release index. topo: the USGS historical topographic map editions and sheets at lon, lat. waybackdate: when a Wayback release's pixels were captured at lon, lat. naip: USDA NAIP aerial photograph years at a point (lon, lat; snapped to 0.001 degrees), from Microsoft Planetary Computer's STAC search: years [{ year, items: [{ id, date (acquisition, YYYY-MM-DD), gsd (m), state }] }], oldest first; none outside the conterminous US. naipmosaic: registers (or reuses, 24 h) Planetary Computer's mosaic for one year (year=yyyy, 2010 onward; a year the STAC search lists no NAIP item for is a 400, never registered) and answers { year, searchid, tiles (XYZ template on planetarycomputer.microsoft.com), minZoom 11 }; a held id is checked against Planetary Computer at most every 10 minutes and registered again when it is no longer known, at most once a year per 10 minutes (meta.reregisterCooling true while it waits); when the check fails the held id is served (meta.infoChecked false). Tiles load from Planetary Computer directly; below level 11 it answers no content."
           },
           {
             "name": "release",
@@ -2638,7 +2730,7 @@
               "minimum": -180,
               "maximum": 180
             },
-            "description": "op=point, op=topo, op=waybackdate: longitude."
+            "description": "op=point, op=topo, op=waybackdate, op=naip: longitude"
           },
           {
             "name": "lat",
@@ -2648,7 +2740,16 @@
               "minimum": -90,
               "maximum": 90
             },
-            "description": "op=point, op=topo, op=waybackdate: latitude."
+            "description": "op=point, op=topo, op=waybackdate, op=naip: latitude"
+          },
+          {
+            "name": "year",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 2010
+            },
+            "description": "op=naipmosaic: the NAIP year, 2010 to the current year, and only one Planetary Computer lists NAIP items for (else 400)."
           }
         ],
         "responses": {
@@ -2685,6 +2786,12 @@
                     },
                     {
                       "$ref": "#/components/schemas/TerrainWaybackdateResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TerrainNaipResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TerrainNaipmosaicResponse"
                     }
                   ]
                 }
@@ -3810,6 +3917,141 @@
           }
         }
       }
+    },
+    "/api/civic": {
+      "get": {
+        "summary": "Community health estimates (CDC PLACES) by county and tract",
+        "description": "op=health: CDC PLACES, 2025 release (data year 2023; 2022 for five measures), model-based estimates for 40 measures. level=county&measure=: every county's age-adjusted prevalence for one measure from one whole-measure pull (held a week), with national quintile `breaks`; join by `fips` onto county outlines (Connecticut in planning regions). level=tract&measure=&counties=: crude prevalence for every published tract of at most 6 counties, asked by countyfips (never within_box). level=place&fips=: every measure for one county, age-adjusted. A county or tract with no row is not published, never 0. Estimates, not counts of diagnosed people; not for ranking small differences.",
+        "tags": [
+          "civic"
+        ],
+        "parameters": [
+          {
+            "name": "op",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "health"
+              ]
+            },
+            "description": "health: CDC PLACES."
+          },
+          {
+            "name": "level",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "county",
+                "tract",
+                "place"
+              ],
+              "default": "county"
+            },
+            "description": "county (one measure, every county), tract (one measure, up to 6 counties' tracts) or place (every measure, one county)."
+          },
+          {
+            "name": "measure",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ACCESS2",
+                "ARTHRITIS",
+                "BINGE",
+                "BPHIGH",
+                "BPMED",
+                "CANCER",
+                "CASTHMA",
+                "CHD",
+                "CHECKUP",
+                "CHOLSCREEN",
+                "COGNITION",
+                "COLON_SCREEN",
+                "COPD",
+                "CSMOKING",
+                "DENTAL",
+                "DEPRESSION",
+                "DIABETES",
+                "DISABILITY",
+                "EMOTIONSPT",
+                "FOODINSECU",
+                "FOODSTAMP",
+                "GHLTH",
+                "HEARING",
+                "HIGHCHOL",
+                "HOUSINSECU",
+                "INDEPLIVE",
+                "LACKTRPT",
+                "LONELINESS",
+                "LPA",
+                "MAMMOUSE",
+                "MHLTH",
+                "MOBILITY",
+                "OBESITY",
+                "PHLTH",
+                "SELFCARE",
+                "SHUTUTILITY",
+                "SLEEP",
+                "STROKE",
+                "TEETHLOST",
+                "VISION"
+              ]
+            },
+            "description": "CDC's measureid (level=county and level=tract)."
+          },
+          {
+            "name": "counties",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{5}(,\\d{5}){0,5}$"
+            },
+            "description": "level=tract: up to 6 five-digit county FIPS."
+          },
+          {
+            "name": "fips",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{5}$"
+            },
+            "description": "level=place: a five-digit county FIPS."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Envelope for the op.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              },
+              "Access-Control-Allow-Origin": {
+                "$ref": "#/components/headers/Cors"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/CivicHealthResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/Upstream"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3835,7 +4077,7 @@
           "minimum": -180,
           "maximum": 180
         },
-        "description": "op=report: longitude of the point."
+        "description": "op=report, op=reach: longitude of the point."
       },
       "lat": {
         "name": "lat",
@@ -3845,7 +4087,7 @@
           "minimum": -90,
           "maximum": 90
         },
-        "description": "op=report: latitude of the point."
+        "description": "op=report, op=reach: latitude of the point."
       }
     },
     "headers": {
@@ -9476,6 +9718,486 @@
           }
         ],
         "x-op": "conflict"
+      },
+      "WaterReachResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "lon": {
+                    "type": "number"
+                  },
+                  "lat": {
+                    "type": "number"
+                  },
+                  "comid": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "description": "null: NLDI has no NHDPlus V2 catchment at the point"
+                  },
+                  "reach": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "comid": {
+                        "type": "integer"
+                      },
+                      "name": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "description": "GNIS name; null when unnamed"
+                      },
+                      "reachcode": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "ftype": {
+                        "type": [
+                          "integer",
+                          "null"
+                        ]
+                      },
+                      "ftypeWord": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "description": "NHD's word for the FType (558 artificial path, 460 stream/river, ...); an unknown code reads 'NHD FType <n>'"
+                      },
+                      "streamOrder": {
+                        "type": [
+                          "integer",
+                          "null"
+                        ],
+                        "description": "Strahler order; null where NHDPlus assigns none (0 or -9)"
+                      },
+                      "drainageKm2": {
+                        "type": [
+                          "number",
+                          "null"
+                        ],
+                        "description": "TotDASqKm; null where EPA publishes -9999"
+                      },
+                      "flowCfs": {
+                        "type": [
+                          "number",
+                          "null"
+                        ],
+                        "description": "QE_MA, EROM mean annual flow adjusted to gauges, cfs (model output)"
+                      },
+                      "runoffCfs": {
+                        "type": [
+                          "number",
+                          "null"
+                        ],
+                        "description": "QA_MA, EROM runoff-only mean annual flow, cfs (model output)"
+                      },
+                      "lengthKm": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "fdate": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "description": "NHD feature date, YYYY-MM-DD"
+                      }
+                    }
+                  }
+                }
+              },
+              "network": {
+                "type": "string",
+                "enum": [
+                  "NHDPlus V2"
+                ]
+              }
+            }
+          }
+        ],
+        "x-op": "reach"
+      },
+      "WaterTraceResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "description": "GeoJSON FeatureCollection. mode=down: one MultiLineString feature (properties comid, mode, flowlines). mode=gauges: one Point per USGS gauge (properties identifier 'USGS-<site>', siteNo, name as USGS publishes it, comid, uri). mode=basin: one Polygon or MultiPolygon (properties comid, mode, vertices, sentVertices). Empty when NLDI has no such reach."
+              },
+              "comid": {
+                "type": "integer"
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "down",
+                  "basin",
+                  "gauges"
+                ]
+              },
+              "distanceKm": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "description": "km navigated; null for mode=basin"
+              },
+              "count": {
+                "type": "integer"
+              }
+            }
+          }
+        ],
+        "x-op": "trace"
+      },
+      "HazardsNriResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "description": "level=county: { level: 'county', rows: [ { NRI_ID, STATEABBRV, COUNTY, STCOFIPS, POPULATION, BUILDVALUE, RISK_SCORE, RISK_RATNG, EAL_VALT, EAL_RATNG, SOVI_SCORE, SOVI_RATNG, RESL_SCORE, RESL_RATNG, NRI_VER, AVLN_RISKR ... WNTW_RISKR } ] } as FEMA publishes them. level=tract: a GeoJSON FeatureCollection of tract polygons (simplified to 0.0005 degrees) with the same properties plus TRACTFIPS."
+              },
+              "level": {
+                "type": "string",
+                "enum": [
+                  "county",
+                  "tract"
+                ]
+              },
+              "bbox": {
+                "$ref": "#/components/schemas/Bbox"
+              },
+              "count": {
+                "type": "integer"
+              },
+              "capped": {
+                "type": "boolean",
+                "description": "FEMA's answer was still cut at its record limit after the pages asked: ask a smaller box."
+              }
+            }
+          }
+        ],
+        "x-op": "nri"
+      },
+      "TerrainNaipResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "lon": {
+                    "type": "number"
+                  },
+                  "lat": {
+                    "type": "number"
+                  },
+                  "years": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "year": {
+                          "type": "integer"
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "date": {
+                                "type": "string",
+                                "format": "date"
+                              },
+                              "gsd": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "state": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "attribution": {
+                "type": "string"
+              }
+            }
+          }
+        ],
+        "x-op": "naip"
+      },
+      "TerrainNaipmosaicResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "properties": {
+                  "year": {
+                    "type": "integer"
+                  },
+                  "searchid": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{32}$"
+                  },
+                  "tiles": {
+                    "type": "string"
+                  },
+                  "minZoom": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "reregistered": {
+                "type": "boolean",
+                "description": "the held id was unknown to Planetary Computer and was registered again"
+              },
+              "reregisterCooling": {
+                "type": "boolean",
+                "description": "the held id was unknown to Planetary Computer, but this year was registered again under 10 minutes ago, so the held id is served as is"
+              },
+              "yearChecked": {
+                "type": "boolean",
+                "description": "false when the STAC search for the year's items failed; the year was then served or registered unchecked (only a search that answers no item refuses it)"
+              }
+            }
+          }
+        ],
+        "x-op": "naipmosaic"
+      },
+      "LandHeritageResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "description": "GeoJSON FeatureCollection. properties: id (nps-unit:pt|bnd:<UNIT_CODE>, nps-nha:<UNIT>, abpp:<layer>:<SITE>, whs:<inscription>), layer 'heritage', name (the unit, area, battle or inscription as NPS names it), kind (unit | nha | battlefield-study | battlefield-core | whs), details (unit type and code, state, NPS region, boundary edit date, nps.gov link; NHA description and site; ABPP site, war, survey area, acres; WHS inscription, components, UNESCO and site pages), extra { kind, group, boundary, shape }."
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "units",
+                  "nha",
+                  "battlefields",
+                  "whs"
+                ]
+              },
+              "shape": {
+                "type": "string",
+                "enum": [
+                  "point",
+                  "polygon"
+                ]
+              },
+              "count": {
+                "type": "integer"
+              },
+              "coverage": {
+                "type": "array",
+                "description": "kind=battlefields: per ABPP layer, covered | partial | error (count null: unknown, not none).",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "covered",
+                        "partial",
+                        "error"
+                      ]
+                    },
+                    "count": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "heritage"
+      },
+      "CivicHealthResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Envelope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "object",
+                "description": "level=county or tract: { level, measure, rows: [row] }; level=place: { level, fips, values: [ { fips, name, state, measure, value, low, high, year, type, population } ] }.",
+                "properties": {
+                  "level": {
+                    "type": "string"
+                  },
+                  "measure": {
+                    "type": "string"
+                  },
+                  "rows": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "fips": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "state": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "value": {
+                          "type": [
+                            "number",
+                            "null"
+                          ],
+                          "description": "percent as published; null: not published"
+                        },
+                        "low": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "high": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "year": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        },
+                        "population": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "measure": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "CDC's wording"
+                  },
+                  "short": {
+                    "type": "string"
+                  },
+                  "category": {
+                    "type": "string"
+                  },
+                  "year": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "valueType": {
+                "type": "string"
+              },
+              "count": {
+                "type": "integer"
+              },
+              "breaks": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "description": "level=county: the four national quintile cut points of the published values"
+              },
+              "coverage": {
+                "type": "array",
+                "description": "level=tract: per county, covered or error (count null: unknown, not missing)",
+                "items": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        ],
+        "x-op": "health"
       }
     }
   }

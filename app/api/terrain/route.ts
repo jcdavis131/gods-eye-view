@@ -18,6 +18,19 @@
 //        when the pixels of a Wayback release were captured at a point, from
 //        that release's own imagery metadata (every row; the newest release
 //        when release is absent); held 7 days
+//   /api/terrain?op=naip&lon=..&lat=..
+//        NAIP aerial photograph years at a point (USDA FSA via Microsoft Planetary
+//        Computer's STAC search): each year with its acquisition dates, item ids,
+//        resolution and state. Point snapped to 0.001 degrees, held 30 days.
+//   /api/terrain?op=naipmosaic&year=yyyy
+//        Registers (or reuses) Planetary Computer's per-year NAIP mosaic and answers
+//        { year, searchid, tiles }. Only a year the STAC search lists an item for
+//        is registered; any other is a 400. Held 24 hours; a held id is checked against
+//        /mosaic/{id}/info at most every 10 minutes, and one Planetary Computer no
+//        longer knows (its 404 "SearchId ... not found") is registered again, at
+//        most once a year per 10 minutes (reregisterCooling true while it waits).
+//        When the check itself fails the held id is served (infoChecked false).
+//        Nothing here forces a register. Tiles load from Planetary Computer directly.
 //   /api/terrain?op=topo&lon=..&lat=..
 //        USGS historical topographic maps (HTMC, 1879-2006) at a point: the
 //        edition years there with their scales, and each sheet's citation,
@@ -34,7 +47,7 @@
 // so this route resolves IPv4 first (lib/server/net.ts).
 
 import type { NextRequest } from "next/server";
-import { cached } from "@/lib/server/cache";
+import { cacheDelete, cached } from "@/lib/server/cache";
 import { jsonError, polite, UpstreamError, upstreamJson } from "@/lib/server/upstream";
 import { badRequest, CORS, ok, options, withCors } from "@/lib/server/respond";
 import { preferIpv4, retrying } from "@/lib/server/net";
@@ -69,6 +82,7 @@ import {
   waybackTiles,
 } from "@/lib/terrain/wayback";
 import { arcgisRows } from "@/lib/server/arcgis";
+import { isSearchIdNotFound, NAIP_ATTRIBUTION, NAIP_CAVEAT, NAIP_REREGISTER_COOLDOWN_MS, naipTiles, naipUnlistedMessage, naipYearListed, naipYears, parseNaipYear, parseSearchId, PC_MOSAIC, PC_STAC_SEARCH, registerBody, stacBody, stacYearBody } from "@/lib/terrain/naip";
 import { HTMC, HTMC_ATTRIBUTION, HTMC_FIELDS, parseHtmcSheets, TNM_PRODUCTS, tnmFiles, TOPO_CAVEAT, topoTiles, topoYears, withTnmFiles, type TnmFiles } from "@/lib/terrain/topo";
 
 export const maxDuration = 60;
@@ -346,6 +360,118 @@ function opProducts(): Response {
   );
 }
 
+/** One Planetary Computer call through its gate (five a second), retrying a reset or a 5xx once. */
+function pcJson<T>(url: string, body?: unknown): Promise<T> {
+  const init = body === undefined ? { timeoutMs: 20_000 } : { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" }, timeoutMs: 20_000 };
+  return retrying(() => polite("planetary-computer", 200, 30_000, () => upstreamJson<T>("planetary-computer", url, init)), 2);
+}
+
+const NAIP_HELP = "op=naip needs lon and lat, e.g. lon=-93.62&lat=41.59";
+
+/** NAIP years at a point: one STAC search (point snapped to 0.001 degrees), held 30 days. */
+async function opNaip(q: URLSearchParams): Promise<Response> {
+  const lon = numParam(q.get("lon"));
+  const lat = numParam(q.get("lat"));
+  if (lon == null || lat == null || Math.abs(lon) > 180 || Math.abs(lat) > 90) return badRequest(NAIP_HELP);
+  const x = Number(lon.toFixed(3));
+  const y = Number(lat.toFixed(3));
+  const r = await cached(`naip-years:${x},${y}`, 30 * DAY, async () => naipYears(await pcJson<unknown>(PC_STAC_SEARCH, stacBody(x, y))));
+  const years = r.value;
+  const caveats = [NAIP_CAVEAT];
+  if (!years.length) caveats.push("Planetary Computer lists no NAIP photograph at this point: NAIP covers the conterminous United States.");
+  return ok(
+    { lon: x, lat: y, years },
+    {
+      meta: { source: "USDA FSA NAIP via Microsoft Planetary Computer (STAC search)", attribution: NAIP_ATTRIBUTION, cacheAge: r.age },
+      ttlS: 7 * 86_400,
+      provenance: [provenance(source("usda-naip-pc"), { kind: "published", seriesId: "STAC collection naip, items intersecting the point", upstreamUrl: PC_STAC_SEARCH, retrievedAt: new Date(Date.now() - r.age).toISOString(), notes: [`point ${x},${y}`, `${years.length} years`] })],
+      caveats,
+    },
+  );
+}
+
+const NAIPMOSAIC_HELP = "op=naipmosaic needs year=yyyy, 2010 to this year, e.g. year=2023";
+
+/** How long a /mosaic/{id}/info answer is trusted, and the deadlines that keep the op under 60 s. */
+const NAIP_INFO_TTL_MS = 10 * 60_000;
+const NAIP_REGISTER_DEADLINE_MS = 20_000;
+const NAIP_INFO_DEADLINE_MS = 10_000;
+const NAIP_REREGISTER_DEADLINE_MS = 15_000;
+const NAIP_LISTED_DEADLINE_MS = 15_000;
+/** When each year was last registered again after a "not found" (this instance). */
+const naipReregisteredAt = new Map<number, number>();
+
+/**
+ * The per-year NAIP mosaic: Planetary Computer's searchid for the year's cql2 filter, registered
+ * at run time and held 24 hours. A held id is checked (/mosaic/{id}/info, the answer held 10
+ * minutes) and registered again when Planetary Computer answers that it does not know it, at
+ * most once a year per NAIP_REREGISTER_COOLDOWN_MS; inside that the held id is served as is.
+ * A check that fails any other way serves the held id: a timeout or a 5xx is not "forgotten".
+ * Only a year the STAC search lists an item for is registered (asked once, held a day); a year
+ * it lists none for is a 400, so the year this is written in is refused until NAIP publishes it.
+ * A search that fails is not "none": the op goes on as before (meta.yearChecked false).
+ */
+async function opNaipMosaic(q: URLSearchParams): Promise<Response> {
+  const year = parseNaipYear(q.get("year"));
+  if (year == null) return badRequest(NAIPMOSAIC_HELP);
+  // Only a definite "no item" is refused; a search that times out or fails is not "unlisted", so the
+  // held id is served (or the year registered) as before, with meta.yearChecked false.
+  const listed = await cached(`naip-year-listed:${year}`, DAY, async () => naipYearListed(await pcJson<unknown>(PC_STAC_SEARCH, stacYearBody(year)), year), {
+    deadlineMs: NAIP_LISTED_DEADLINE_MS,
+    coolMs: 60_000,
+  }).catch(() => null);
+  if (listed && !listed.value) return badRequest(naipUnlistedMessage(year));
+  const yearChecked = listed != null;
+  const key = `naip-mosaic:${year}`;
+  const register = async () => {
+    const id = parseSearchId(await pcJson<unknown>(`${PC_MOSAIC}/register`, registerBody(year)));
+    if (!id) throw new UpstreamError("planetary-computer", 502, "planetary-computer: register answered no searchid");
+    return id;
+  };
+  let r = await cached(key, DAY, register, { deadlineMs: NAIP_REGISTER_DEADLINE_MS });
+  let reregistered = false;
+  let reregisterCooling = false;
+  let infoChecked = true;
+  if (r.hit) {
+    const infoKey = `naip-mosaic-info:${r.value}`;
+    const known = await cached(
+      infoKey,
+      NAIP_INFO_TTL_MS,
+      async () => {
+        try {
+          await pcJson<unknown>(`${PC_MOSAIC}/${r.value}/info`);
+          return true;
+        } catch (err) {
+          if (err instanceof UpstreamError && isSearchIdNotFound(err.status, { detail: err.message })) return false;
+          throw err;
+        }
+      },
+      { deadlineMs: NAIP_INFO_DEADLINE_MS, coolMs: 60_000 },
+    ).catch(() => null);
+    if (known == null) infoChecked = false;
+    else if (!known.value && Date.now() - (naipReregisteredAt.get(year) ?? -Infinity) < NAIP_REREGISTER_COOLDOWN_MS) {
+      // Registered again moments ago and still "not found": serve the held id rather than loop.
+      reregisterCooling = true;
+    } else if (!known.value) {
+      naipReregisteredAt.set(year, Date.now());
+      cacheDelete(key);
+      r = await cached(key, DAY, register, { deadlineMs: NAIP_REREGISTER_DEADLINE_MS });
+      // The new id (often the same one: Planetary Computer derives it from the body) is checked afresh next time.
+      cacheDelete(infoKey);
+      reregistered = true;
+    }
+  }
+  return ok(
+    { year, searchid: r.value, tiles: naipTiles(r.value), minZoom: 11 },
+    {
+      meta: { source: "USDA FSA NAIP via Microsoft Planetary Computer (mosaic register)", attribution: NAIP_ATTRIBUTION, reregistered, reregisterCooling, infoChecked, yearChecked, cacheAge: r.age },
+      ttlS: 3600,
+      provenance: [provenance(source("usda-naip-pc"), { kind: "published", seriesId: `mosaic/register: collection = naip and naip:year = "${year}"`, upstreamUrl: `${PC_MOSAIC}/register`, retrievedAt: new Date(Date.now() - r.age).toISOString() })],
+      caveats: [NAIP_CAVEAT, "Tiles load from Planetary Computer directly, below level 11 none (it answers 204). The searchid is Planetary Computer's and can change; ask this op again rather than keeping it."],
+    },
+  );
+}
+
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams;
   const op = q.get("op") ?? "";
@@ -363,8 +489,12 @@ export async function GET(req: NextRequest) {
         return await opTopo(q);
       case "waybackdate":
         return await opWaybackDate(q);
+      case "naip":
+        return await opNaip(q);
+      case "naipmosaic":
+        return await opNaipMosaic(q);
       default:
-        return badRequest("unknown op: tile | point | products | wayback | topo | waybackdate");
+        return badRequest("unknown op: tile | point | products | wayback | topo | waybackdate | naip | naipmosaic");
     }
   } catch (err) {
     return withCors(jsonError(err));

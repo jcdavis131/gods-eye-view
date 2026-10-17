@@ -21,6 +21,7 @@ import { useNow } from "@/lib/hooks/useNow";
 import { useStrata } from "@/lib/fabric/strataStore";
 import EmergenceBridge from "./EmergenceBridge";
 import TraceOverlay from "./TraceOverlay";
+import NldiOverlay from "./NldiOverlay";
 import UpstreamOverlay from "./UpstreamOverlay";
 import StrataOverlay from "./StrataOverlay";
 
@@ -32,6 +33,10 @@ const OPTION_KEYS: Partial<Record<LayerDefinition["id"], Array<keyof Prefs>>> = 
   sealevel: ["seaLevelFt"],
   wayback: ["waybackRelease"],
   topo: ["topoYear"],
+  riskindex: ["nriHazard"],
+  historic: ["nhlOnly"],
+  naip: ["naipYear"],
+  health: ["placesMeasure"],
 };
 
 export default function LayerHost() {
@@ -44,6 +49,7 @@ export default function LayerHost() {
       ))}
       <EmergenceBridge />
       <TraceOverlay />
+      <NldiOverlay />
       <UpstreamOverlay />
       <StrataOverlay />
     </>

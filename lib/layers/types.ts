@@ -43,12 +43,17 @@ export type LayerId =
   | "wetlands"
   | "publiclands"
   | "historic"
+  | "heritage"
   | "crithab"
   | "wayback"
   | "topo"
+  | "hydro"
+  | "naip"
   | "impaired"
   | "pfas"
   | "ust"
+  | "riskindex"
+  | "health"
   | "relief"
   | "slope"
   | "contours"
@@ -117,12 +122,17 @@ export const LAYER_IDS: LayerId[] = [
   "wetlands",
   "publiclands",
   "historic",
+  "heritage",
   "crithab",
   "wayback",
   "topo",
+  "hydro",
+  "naip",
   "impaired",
   "pfas",
   "ust",
+  "riskindex",
+  "health",
   "relief",
   "slope",
   "contours",

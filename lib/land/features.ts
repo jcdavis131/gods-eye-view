@@ -404,6 +404,19 @@ export function nwiImagerySummary(sources: NwiSource[]): { years: number[]; proj
 // ---------------------------------------------------------------- NPS National Register
 
 /**
+ * The National Historic Landmarks clause (NPS flags an NHL with Is_NHL = 'X'), ANDed onto the
+ * route's where, never replacing it: the listed-only and restricted-address exclusions stay.
+ * 1,196 listed NHL points on layer 0 and 1,700 boundaries on layer 1 (1,699 after the
+ * restricted-address exclusion), counted 2026-10-16.
+ */
+export const NHL_CLAUSE = "Is_NHL='X'";
+
+/** The where for NRHP listings, narrowed to National Historic Landmarks when asked. */
+export function nrhpWhere(base: string, nhlOnly: boolean): string {
+  return nhlOnly ? `${base} AND ${NHL_CLAUSE}` : base;
+}
+
+/**
  * The fields the route asks NPS's nrhp_locations layers for. Address, Vicinity and every
  * bookkeeping field stay at the source: no street address is ever requested.
  */

@@ -16,7 +16,7 @@ import type { MultiLineString, Point, Polygon } from "geojson";
 import { bboxAround, haversine } from "@/lib/globe/geo";
 import { fmtReading, isStale, qualityIndex, screenReadings, type Reading, type Screen } from "@/lib/water/quality";
 import type { GaugeReading } from "@/app/api/water/route";
-import type { BaseProps, FetchContext, FetchResult, LayerDefinition, LayerFeature } from "./types";
+import type { BaseProps, FetchContext, FetchResult, LayerDefinition, LayerFeature, RefineContext } from "./types";
 import { proxy } from "./aircraft";
 
 export const GAUGE_MAX_HEIGHT_M = 1_500_000;
@@ -421,6 +421,16 @@ async function fetchWater(ctx: FetchContext): Promise<FetchResult> {
   };
 }
 
+/**
+ * While Rivers and streams (NHD) is on it draws the rivers at stream scale, so Natural Earth's
+ * generalised 50 m rivers step aside (lakes, gauges, flood points and reservoirs stay).
+ */
+export function refineWater(result: FetchResult, ctx: RefineContext): FetchResult {
+  if (!ctx.layersOn.hydro) return result;
+  const features = result.collection.features.filter((f) => f.properties.kind !== "river");
+  return features.length === result.collection.features.length ? result : { ...result, collection: { ...result.collection, features } };
+}
+
 export const waterLayer: LayerDefinition = {
   id: "water",
   label: "Surface water",
@@ -431,5 +441,8 @@ export const waterLayer: LayerDefinition = {
   defaultEnabled: true,
   viewDependent: true,
   attribution: "USGS Water Data · NOAA NWPS · TWDB · Natural Earth",
+  // Natural Earth's rivers step aside while the NHD picture is drawing streams.
+  dependsOn: ["hydro"],
   fetch: fetchWater,
+  refine: refineWater,
 };

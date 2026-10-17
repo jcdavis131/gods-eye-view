@@ -24,6 +24,16 @@ import rangesBarton from "@/lib/land/fixtures/ranges-3-barton.json";
 import rangesPecos from "@/lib/land/fixtures/ranges-3-pecos.json";
 import rangesAustin from "@/lib/land/fixtures/ranges-3-austin.json";
 import rangesSeattle from "@/lib/land/fixtures/ranges-3-seattle.json";
+import nhlBoundaries from "@/lib/land/fixtures/nhl-bnd-cambridge.json";
+import abpp0 from "@/lib/land/fixtures/abpp-0-gettysburg.json";
+import abpp1 from "@/lib/land/fixtures/abpp-1-gettysburg.json";
+import abpp5 from "@/lib/land/fixtures/abpp-5-gettysburg.json";
+import abpp6 from "@/lib/land/fixtures/abpp-6-gettysburg.json";
+import abpp8 from "@/lib/land/fixtures/abpp-8-gettysburg.json";
+import whsAll from "@/lib/land/fixtures/nps-whs-all.json";
+import nhlPoints from "@/lib/land/fixtures/nhl-pt-cambridge.json";
+import nhlCountExcl from "@/lib/land/fixtures/nhl-bnd-cambridge-count-excl.json";
+import nhlCountNoExcl from "@/lib/land/fixtures/nhl-bnd-cambridge-count-noexcl.json";
 
 vi.mock("@/lib/server/cache", () => ({
   cached: async <T,>(_k: string, _ttl: number, produce: () => Promise<T>) => ({ value: await produce(), age: 0, hit: false }),
@@ -181,6 +191,40 @@ describe("op=historic", () => {
   });
 });
 
+// NPS answers captured 2026-10-16 for -71.14,42.36,-71.12,42.38 (Cambridge, MA), unmodified: listed
+// NHL boundaries with the restricted-address exclusion (10), and the counts with and without it
+// (10 and 11): in this box, dropping the exclusion would add a row. That row is not committed.
+describe("op=historic&nhl=1 (Landmarks only)", () => {
+  const strict = (u: string) => {
+    const where = param(u, "where") ?? "";
+    // Only the full where is answered: listed, restricted addresses excluded, and the NHL clause.
+    if (!where.startsWith("STATUS='Listed' AND (Address IS NULL OR UPPER(Address) NOT LIKE '%RESTRICT%')") || !where.endsWith(" AND Is_NHL='X'")) return null;
+    if (u.includes("/nrhp_locations/MapServer/0/query")) return json(nhlPoints);
+    if (u.includes("/nrhp_locations/MapServer/1/query")) return json(nhlBoundaries);
+    return null;
+  };
+
+  it("ANDs the NHL clause onto the listed-only and restricted-address exclusions, never replacing them", async () => {
+    expect((nhlCountNoExcl as { count: number }).count - (nhlCountExcl as { count: number }).count).toBe(1);
+    answer = strict;
+    const { status, body } = await get("op=historic&bbox=-71.14,42.36,-71.12,42.38&polygons=1&nhl=1");
+    expect(status).toBe(200);
+    expect(calls).toHaveLength(2);
+    for (const u of calls) expect(param(u, "where")).toBe("STATUS='Listed' AND (Address IS NULL OR UPPER(Address) NOT LIKE '%RESTRICT%') AND Is_NHL='X'");
+    const b = body as unknown as { boundaries: number; nhlOnly: boolean; data: { features: Array<{ properties: { details: Record<string, unknown> } }> } };
+    expect(b.nhlOnly).toBe(true);
+    expect(b.boundaries).toBe((nhlCountExcl as { count: number }).count);
+    for (const f of b.data.features) expect(f.properties.details["national historic landmark"]).toMatch(/^yes/);
+    expect(body.caveats?.join(" ")).toMatch(/National Historic Landmarks only/);
+  });
+
+  it("leaves the where unchanged without nhl=1", async () => {
+    answer = (u) => (u.includes("/nrhp_locations/MapServer/") ? json(nhlPoints) : null);
+    await get("op=historic&bbox=-71.14,42.36,-71.12,42.38");
+    expect(param(calls[0], "where")).toBe("STATUS='Listed' AND (Address IS NULL OR UPPER(Address) NOT LIKE '%RESTRICT%')");
+  });
+});
+
 describe("op=crithab", () => {
   const NOAA = { barton: [nmfsAreaBarton, nmfsLineBarton], pecos: [nmfsAreaPecos, nmfsLinePecos] } as const;
   const fws = (place: "barton" | "pecos") => (u: string) => {
@@ -319,5 +363,44 @@ describe("op=crithab, species ranges", () => {
     expect(status).toBe(200);
     expect((body.data as unknown as { ranges: unknown }).ranges).toBeNull();
     expect(body.caveats?.join(" ")).toMatch(/species range layer did not answer this time \(ranges: null\)/);
+  });
+});
+
+// NPS answers captured 2026-10-16, unmodified (lib/land/fixtures/abpp-*-gettysburg.json, nps-whs-all.json).
+describe("op=heritage", () => {
+  const ABPP = "/ABPP_Battlefield_Boundaries/FeatureServer/";
+  const byLayer: Record<string, unknown> = { 0: abpp0, 1: abpp1, 5: abpp5, 6: abpp6, 8: abpp8 };
+
+  it("asks six ABPP layers in the snapped box, named fields only, and reads a layer that fails as unknown", async () => {
+    answer = (u) => {
+      const m = u.match(/ABPP_Battlefield_Boundaries\/FeatureServer\/(\d+)\/query/);
+      if (!m) return null;
+      return m[1] === "9" ? new Response("upstream down", { status: 400 }) : json(byLayer[m[1]]);
+    };
+    const { status, body } = await get("op=heritage&kind=battlefields&bbox=-77.5,39.5,-77.0,40.0");
+    expect(status).toBe(200);
+    const asked = calls.filter((u) => u.includes(ABPP)).map((u) => u.match(/FeatureServer\/(\d+)\//)![1]).sort();
+    expect(asked).toEqual(["0", "1", "5", "6", "8", "9"]);
+    for (const u of calls) expect(param(u, "outFields")).toBe("SITE,NAME,WAR,STATE,BOUNDARY,Acres");
+    const b = body as unknown as { bbox: number[]; coverage: Array<{ id: string; state: string; count: number | null }>; data: { features: unknown[] } };
+    expect(b.bbox).toEqual([-77.5, 39.5, -77, 40]);
+    expect(b.data.features).toHaveLength(3);
+    expect(b.coverage.find((c) => c.id === "abpp-9")).toMatchObject({ state: "error", count: null });
+    expect(b.coverage.find((c) => c.id === "abpp-5")).toMatchObject({ state: "covered", count: 0 });
+    expect(body.caveats?.join(" ")).toMatch(/unknown, not none/);
+  });
+
+  it("answers the World Heritage Sites nationally, never asking for SiteOwner", async () => {
+    answer = (u) => (u.includes("/World_Heritage_Sites/FeatureServer/0/query") ? json(whsAll) : null);
+    const { status, body } = await get("op=heritage&kind=whs");
+    expect(status).toBe(200);
+    expect(param(calls[0], "outFields")).toBe("RESNAME,UNIT,WHS_Ref,WHS_Link,WebLink");
+    expect((body as unknown as { count: number }).count).toBe(26);
+  });
+
+  it("refuses an unknown kind, and battlefields without a box, without asking", async () => {
+    expect((await get("op=heritage&kind=trails")).status).toBe(400);
+    expect((await get("op=heritage&kind=battlefields")).status).toBe(400);
+    expect(calls).toEqual([]);
   });
 });

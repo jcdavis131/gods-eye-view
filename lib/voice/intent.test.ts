@@ -128,6 +128,52 @@ describe("voice words for contaminated sites", () => {
   });
 });
 
+describe("voice words for community health", () => {
+  it("hears community health and its plain names", () => {
+    expect(layerOf("show community health over travis county")).toMatchObject({ layer: "health", place: "travis county" });
+    expect(layerOf("show diabetes rate")).toMatchObject({ layer: "health" });
+    expect(layerOf("show chronic disease")).toMatchObject({ layer: "health" });
+  });
+});
+
+describe("voice words for national heritage", () => {
+  it("hears parks, battlefields and world heritage", () => {
+    expect(layerOf("show battlefields over virginia")).toMatchObject({ layer: "heritage", place: "virginia" });
+    expect(layerOf("show national parks")).toMatchObject({ layer: "heritage" });
+    expect(layerOf("show unesco sites")).toMatchObject({ layer: "heritage" });
+    // "show world ..." is the home view, before any layer word.
+    expect(parseIntent("show world heritage sites")?.command).toBe("home_view");
+    expect(layerOf("show parks")).toMatchObject({ layer: "publiclands" });
+  });
+});
+
+describe("voice words for NAIP aerial photos", () => {
+  it("hears aerial photos before historic imagery", () => {
+    expect(layerOf("show aerial photos over des moines")).toMatchObject({ layer: "naip", place: "des moines" });
+    expect(layerOf("show naip")).toMatchObject({ layer: "naip" });
+    expect(layerOf("show historic imagery")).toMatchObject({ layer: "wayback" });
+  });
+});
+
+describe("voice words for the National Risk Index", () => {
+  it("hears risk index before hazards", () => {
+    expect(layerOf("show the national risk index over texas")).toMatchObject({ layer: "riskindex", place: "texas" });
+    expect(layerOf("show disaster risk")).toMatchObject({ layer: "riskindex" });
+    expect(layerOf("show hazard risk")).toMatchObject({ layer: "riskindex" });
+    expect(layerOf("show hazards")).toMatchObject({ layer: "hazards" });
+  });
+});
+
+describe("voice words for rivers and streams", () => {
+  it("hears streams and hydrography before rivers", () => {
+    expect(layerOf("show rivers and streams over boise")).toMatchObject({ layer: "hydro", place: "boise" });
+    expect(layerOf("show streams")).toMatchObject({ layer: "hydro" });
+    expect(layerOf("show hydrography")).toMatchObject({ layer: "hydro" });
+    expect(layerOf("show rivers")).toMatchObject({ layer: "water" });
+    expect(layerOf("show stream gauges")).toMatchObject({ layer: "water" });
+  });
+});
+
 describe("voice words for historic imagery", () => {
   it("hears historic imagery before historic places", () => {
     expect(layerOf("show historic imagery")).toMatchObject({ layer: "wayback" });

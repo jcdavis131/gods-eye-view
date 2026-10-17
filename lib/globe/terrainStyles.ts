@@ -34,10 +34,13 @@ import { FLOOD_MAX_HEIGHT_M } from "@/lib/layers/flood";
 import { WETLANDS_MAX_HEIGHT_M } from "@/lib/layers/wetlands";
 import { parseReleaseId, WAYBACK_ATTRIBUTION, WAYBACK_MAX_ZOOM, waybackTiles } from "@/lib/terrain/wayback";
 import { HTMC_ATTRIBUTION, parseTopoYear, TOPO_MAX_ZOOM, TOPO_MIN_ZOOM, topoTiles } from "@/lib/terrain/topo";
+import { HYDRO_ATTRIBUTION, HYDRO_MAX_ZOOM, HYDRO_TILES } from "@/lib/water/nldi";
+import { NAIP_ATTRIBUTION, NAIP_MAX_ZOOM, NAIP_MIN_ZOOM, parseNaipYear, PC_MOSAIC } from "@/lib/terrain/naip";
 
 /** Stacking among pictures, bottom to top: relief under everything, lines on top. */
 export const TILE_Z = {
   wayback: 5,
+  naip: 6,
   topo: 7,
   relief: 10,
   landcover: 20,
@@ -47,6 +50,7 @@ export const TILE_Z = {
   slope: 50,
   sealevel: 60,
   crithab: 65,
+  hydro: 75,
   floodmap: 70,
   contours: 80,
 } as const;
@@ -246,6 +250,48 @@ export const topoStyle = picture("#D6B370", ({ meta }) => {
       alpha: 1,
       z: TILE_Z.topo,
       credit: `USGS topographic map, ${year} edition: ${HTMC_ATTRIBUTION}`,
+    },
+  ];
+});
+
+/**
+ * USGS NHD streams and water bodies (USGSHydroCached): transparent PNG line art, drawn at every
+ * height over the base pictures and under the contours. The cache answers 404 where it holds no
+ * tile, so it is sparse.
+ */
+export const hydroStyle = picture("#38BDF8", () => [
+  {
+    key: "hydro",
+    kind: "xyz",
+    url: HYDRO_TILES,
+    maximumLevel: HYDRO_MAX_ZOOM,
+    sparse: true,
+    alpha: 0.9,
+    z: TILE_Z.hydro,
+    credit: `Streams: ${HYDRO_ATTRIBUTION}`,
+  },
+]);
+
+/**
+ * USDA NAIP aerial photographs for the year the layer's fetch resolved (meta.naipYear), from the
+ * Planetary Computer mosaic the route registered (meta.naipTiles), over Wayback and under the
+ * topo maps. Levels below 11 are drawn empty without asking (Planetary Computer answers no
+ * content there). A template from anywhere but Planetary Computer's mosaic path is refused.
+ */
+export const naipStyle = picture("#A3E635", ({ meta }) => {
+  const year = parseNaipYear(meta?.naipYear);
+  const url = typeof meta?.naipTiles === "string" ? meta.naipTiles : "";
+  if (year == null || !url.startsWith(`${PC_MOSAIC}/`) || !url.includes("/tiles/WebMercatorQuad/{z}/{x}/{y}")) return null;
+  return [
+    {
+      key: `naip:${year}:${url}`,
+      kind: "xyz",
+      url,
+      maximumLevel: NAIP_MAX_ZOOM,
+      floorLevel: NAIP_MIN_ZOOM,
+      alpha: 1,
+      z: TILE_Z.naip,
+      credit: `Aerial photographs ${year}: ${NAIP_ATTRIBUTION}`,
     },
   ];
 });
