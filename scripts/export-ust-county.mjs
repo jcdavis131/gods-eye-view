@@ -30,7 +30,13 @@
 // 0. A 0 the layer publishes is kept as published (zero_vs_missing
 // "as-published") and listed in meta.publishedZeros: the composite is only as
 // complete as each state's records. A field the layer leaves null is null for
-// that county (nullCells, source:null_in_county_layer), never 0.
+// that county (nullCells, source:null_in_county_layer), never 0. The releases
+// layer never publishes a 0 for Open_Count or No_Further_Action_Count, so many
+// of those nulls are probably 0s (a county whose release count equals its
+// no-further-action count has nothing left open); they stay null, and
+// meta.nullPattern gives the evidence so vector-places can decide. Null cells
+// are counted by state in meta.counts.nullCellsByState: the missingness is
+// concentrated, not random.
 //
 // Completeness: rows read must equal each layer's returnCountOnly, the two
 // layers must name the same counties, and places + nullPlaces must be all
@@ -227,6 +233,12 @@ for (const [k, x] of Object.entries(EXPORTS)) {
       }),
     );
   }
+  const stusab = new Map(counties.rows.map((c) => [c.geoid, c.stusab]));
+  // Null cells by feature and state (most-null state first), and published zeros by feature.
+  const nullByState = Object.fromEntries(x.features.map(([f]) => [f, {}]));
+  for (const [g, cells] of Object.entries(nullCells)) for (const f of Object.keys(cells)) nullByState[f][stusab.get(g)] = (nullByState[f][stusab.get(g)] ?? 0) + 1;
+  for (const f of Object.keys(nullByState)) nullByState[f] = Object.fromEntries(Object.entries(nullByState[f]).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])));
+  const zerosByFeature = Object.fromEntries(x.features.map(([f]) => [f, publishedZeros.filter((z) => z.feature === f).length]));
   // A state whose every county is null for a feature reported nothing for it (e.g. release status in Kentucky).
   const stateWide = [];
   for (const [f] of x.features) {
@@ -239,6 +251,74 @@ for (const [k, x] of Object.entries(EXPORTS)) {
       byState.set(st, e);
     }
     for (const [st, e] of byState) if (e.nulls === e.n) stateWide.push({ state: st, feature: f, counties: e.n });
+  }
+  const wholeState = (f) => new Set(stateWide.filter((w) => w.feature === f).map((w) => w.state));
+  let nullPattern = null;
+  let nullCellNote;
+  if (k === "releases") {
+    // Release_Count is never null; Open_Count and No_Further_Action_Count are never 0. Where all three are
+    // published, open + no further action never exceeds the release count, so release == NFA leaves 0 open.
+    const [R, O, N] = [0, 1, 2];
+    const wsOpen = wholeState("ust_open_release_count");
+    const wsNfa = wholeState("ust_nfa_release_count");
+    const e = {
+      openNull: 0,
+      openNullOutsideWholeStateNulls: 0,
+      openNullOutsideWholeStateNullsReleaseEqualsNfa: 0,
+      nfaNull: 0,
+      nfaNullOutsideWholeStateNulls: 0,
+      nfaNullOutsideWholeStateNullsOpenEqualsRelease: 0,
+      bothNull: 0,
+      releaseZeroWithNullStatus: [],
+      allPublished: 0,
+      openPlusNfaEqualsRelease: 0,
+      openPlusNfaBelowRelease: 0,
+      openPlusNfaAboveRelease: 0,
+    };
+    places.forEach((g, i) => {
+      const v = value[i];
+      const st = stusab.get(g);
+      if (v[O] == null) {
+        e.openNull++;
+        if (!wsOpen.has(st)) {
+          e.openNullOutsideWholeStateNulls++;
+          if (v[N] != null && v[N] === v[R]) e.openNullOutsideWholeStateNullsReleaseEqualsNfa++;
+        }
+      }
+      if (v[N] == null) {
+        e.nfaNull++;
+        if (!wsNfa.has(st)) {
+          e.nfaNullOutsideWholeStateNulls++;
+          if (v[O] != null && v[O] === v[R]) e.nfaNullOutsideWholeStateNullsOpenEqualsRelease++;
+        }
+      }
+      if (v[O] == null && v[N] == null) e.bothNull++;
+      if (v[R] === 0 && (v[O] == null || v[N] == null)) e.releaseZeroWithNullStatus.push(g);
+      if (v[R] != null && v[O] != null && v[N] != null) {
+        e.allPublished++;
+        const t = v[O] + v[N];
+        if (t === v[R]) e.openPlusNfaEqualsRelease++;
+        else if (t < v[R]) e.openPlusNfaBelowRelease++;
+        else e.openPlusNfaAboveRelease++;
+      }
+    });
+    nullPattern = { publishedZerosByFeature: zerosByFeature, ...e };
+    const others = (f, skip) => Object.entries(nullByState[f]).filter(([st]) => !skip.has(st));
+    const oOpen = others("ust_open_release_count", wsOpen);
+    const oNfa = others("ust_nfa_release_count", wsNfa);
+    const fmt = (xs) => xs.map(([st, n]) => `${st} ${n}`).join(", ");
+    nullCellNote =
+      `The layer never publishes a 0 for Open_Count or No_Further_Action_Count (${zerosByFeature.ust_open_release_count + zerosByFeature.ust_nfa_release_count} zeros in either field, against ${e.openNull} and ${e.nfaNull} nulls), so a null in these two fields most likely means 0 for many counties. The nulls are kept, not filled: the export does not decide it, and missingness is not random. ` +
+      `Open releases: ${e.openNull} nulls, ${e.openNull - e.openNullOutsideWholeStateNulls} of them every county of ${[...wsOpen].join(", ")} (no open count reported) and ${e.openNullOutsideWholeStateNulls} in ${oOpen.length} other states (${fmt(oOpen)}); in ${e.openNullOutsideWholeStateNullsReleaseEqualsNfa} of those ${e.openNullOutsideWholeStateNulls} the release count equals the no-further-action count, which leaves 0 open. ` +
+      `No further action: ${e.nfaNull} nulls, ${e.nfaNull - e.nfaNullOutsideWholeStateNulls} of them every county of ${[...wsNfa].join(", ")} and ${e.nfaNullOutsideWholeStateNulls} elsewhere (${fmt(oNfa)}); in ${e.nfaNullOutsideWholeStateNullsOpenEqualsRelease} of those the open count equals the release count, which leaves 0 closed with no further action. ` +
+      `Where all three are published (${e.allPublished} counties), open + no further action equals the release count in ${e.openPlusNfaEqualsRelease}, is below it in ${e.openPlusNfaBelowRelease} (releases of another status) and is never above it. ` +
+      `${e.releaseZeroWithNullStatus.length} counties publish 0 releases with a null status count (${e.releaseZeroWithNullStatus.join(", ")}${e.releaseZeroWithNullStatus.includes("15005") ? "; 15005 is Kalawao, HI" : ""}), where the status counts can only be 0. Evidence in nullPattern.`;
+  } else {
+    const fmtState = (f) => Object.entries(nullByState[f]).map(([st, n]) => `${st} ${n}`).join(", ") || "none";
+    const partial = [...new Set(Object.values(nullByState).flatMap((o) => Object.keys(o)))].filter((st) => !stateWide.some((w) => w.state === st)).sort();
+    nullCellNote =
+      `Null cells by feature and state: open tanks ${fmtState("ust_open_tanks")}; closed tanks ${fmtState("ust_closed_tanks")}; temporarily out of service ${fmtState("ust_tos_tanks")}. ` +
+      `Null in every county: ${[...new Set(stateWide.map((w) => w.state))].join(", ") || "none"}; in some counties only: ${partial.join(", ") || "none"} (which counties: nullCells). Kept null, never 0.`;
   }
   const p = pulled[k];
   const out = {
@@ -265,7 +345,8 @@ for (const [k, x] of Object.entries(EXPORTS)) {
       join: "Each county in counties.json is looked up by state and normalised name among the layer's rows (no FIPS in the layer); a name must match exactly one row and a row serves one county. Checked by point: the county's Census internal point must fall in the polygon of the row its name matched.",
       zero_vs_missing: "as-published",
       zeroRule: "Every county has a row, so no 0 is inferred from an absent row. A 0 is the layer's own published 0 (listed in publishedZeros); the composite is only as complete as each state's records, so vector-places may treat a published 0 as observed or mask it.",
-      nullRule: "A county with no UST row is null for every feature (nullPlaces, join:no_source_row): Connecticut's nine planning regions (UST Finder has the eight legacy counties) and Alaska's Chugach and Copper River (UST Finder has their predecessor, Valdez-Cordova, listed in unusedSourceRows). A county whose internal point lands in another row's polygon is null (join:name_point_disagree). A field the layer leaves null is null for that county and feature (nullCells, source:null_in_county_layer), never 0; stateWideNulls lists states where it is null for every county.",
+      nullRule: "A county with no UST row is null for every feature (nullPlaces, join:no_source_row): Connecticut's nine planning regions (UST Finder has the eight legacy counties) and Alaska's Chugach and Copper River (UST Finder has their predecessor, Valdez-Cordova, listed in unusedSourceRows). A county whose internal point lands in another row's polygon is null (join:name_point_disagree). A field the layer leaves null is null for that county and feature (nullCells, source:null_in_county_layer), never 0; stateWideNulls lists states where it is null for every county, counts.nullCellsByState every state with a null cell, and nullCellNote what the nulls most likely mean.",
+      nullCellNote,
       counts: {
         serviceCount: p.expected,
         rowsRead: p.rows.length,
@@ -273,6 +354,7 @@ for (const [k, x] of Object.entries(EXPORTS)) {
         nullPlaces: Object.keys(nullPlaces).length,
         nullCells: Object.values(nullCells).reduce((a, o) => a + Object.keys(o).length, 0),
         nullCellsByFeature: nullByFeature,
+        nullCellsByState: nullByState,
         publishedZeros: publishedZeros.length,
         unusedSourceRows: unusedRows.length,
         internalPointInMatchedRow: pointAgree,
@@ -281,6 +363,7 @@ for (const [k, x] of Object.entries(EXPORTS)) {
       },
       observedShare: Object.fromEntries(x.features.map(([f]) => [f, Number(((places.length - nullByFeature[f]) / counties.rows.length).toFixed(4))])),
       stateWideNulls: stateWide,
+      ...(nullPattern ? { nullPattern } : {}),
       publishedZeros,
       unusedSourceRows: unusedRows,
       pointOutside,

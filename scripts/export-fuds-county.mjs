@@ -24,8 +24,12 @@
 // - the county string places it when it matches one county (USACE's county
 //   field is the property's county); the point is then only checked, and a
 //   point in another county is listed (meta.pointDisagreements), not dropped;
-// - a blank or unmatched string falls back to the point, when it is in
-//   exactly one county of the property's state;
+// - the point decides when it is in exactly one county of the property's
+//   state and the string is blank, names no county, or could name more than
+//   one: a name that is both a county and an independent city (ST LOUIS,
+//   FAIRFAX, RICHMOND, BALTIMORE: e.g. B07MO0988, "ST LOUIS", goes to St.
+//   Louis city, 29510, by its point) or a list of counties, when the point is
+//   in one of the counties named (meta.counts.joinMethod.pointOnlyByNameReason);
 // - otherwise it is not placed, and the counties it could be in are null
 //   (the named ones, or every county of its state when the name says nothing);
 // - a property with a state but no county string and no point is unlocated:
@@ -34,9 +38,15 @@
 // Rico, Palau, Micronesia) are counted and left out.
 //
 // Zero vs missing: the FUDS inventory is USACE's complete list of program
-// properties, so a county with no located property is a true 0, except where
-// an unplaced property could be (nullPlaces). Unlocated properties are listed
-// by state, and the strict alternative's coverage is reported beside it.
+// properties, so a county with no property USACE locates in it is a true 0,
+// except where an unplaced property could be (nullPlaces). Unlocated
+// properties are listed by state, and the strict alternative's coverage is
+// reported beside it (meta.counts.strictRule). This zero rule is pending
+// approval by Cam / vector-places (meta.zeroRuleStatus).
+//
+// counts.placed is every property the join put in a county, including those
+// in a county later nulled by another property (all of Connecticut, the
+// Baltimore and Anne Arundel trio); counts.counted is what propertyIds holds.
 //
 // Completeness: distinct property numbers read must equal the service's
 // returnCountOnly less exact duplicate rows (a duplicate must be identical in
@@ -128,7 +138,7 @@ const placed = new Map(); // geoid -> property ids
 const nulled = new Map(); // geoid -> reason
 const unplaced = [];
 const outside = { count: 0, byState: {} };
-const method = { name: 0, nameAndPointAgree: 0, nameWithPointInOtherCounty: 0, nameWithPointInNoCountyOfState: 0, nameWithoutPoint: 0, pointOnly: 0, nameOneEditAway: 0 };
+const method = { name: 0, nameAndPointAgree: 0, nameWithPointInOtherCounty: 0, nameWithPointInNoCountyOfState: 0, nameWithoutPoint: 0, pointOnly: 0, pointOnlyByNameReason: {}, nameOneEditAway: 0 };
 const nearNames = [];
 const pointDisagreements = [];
 const unlocated = [];
@@ -168,6 +178,7 @@ for (const p of properties) {
   } else if (hits.length === 1 && (n.reason === "no_county" || n.reason === "no_name_match" || (n.candidates ?? []).includes(hits[0]))) {
     g = hits[0];
     method.pointOnly++;
+    method.pointOnlyByNameReason[n.reason] = (method.pointOnlyByNameReason[n.reason] ?? 0) + 1;
   } else if (n.reason === "no_name_match" && hits.length === 0 && nearName(ix, st, p.county)) {
     // A misspelling one edit from exactly one county of the state ("SCHUYKILL"); every use is listed.
     g = nearName(ix, st, p.county);
@@ -210,6 +221,13 @@ const strict = { nullPlaces: strictNull.size, observedShare: Number(((counties.r
 const unlocatedByState = {};
 for (const u of unlocated) (unlocatedByState[u.state] ??= []).push(u.id);
 const placedCount = [...placed.values()].reduce((a, v) => a + v.length, 0);
+const countedCount = Object.values(propertyIds).reduce((a, v) => a + v.length, 0);
+// Placed by the join but in a county another property nulled, so in no county's count.
+const placedThenNulled = {};
+for (const [g, ps] of placed) if (nulled.has(g)) placedThenNulled[g] = ps.length;
+const placedThenNulledByState = {};
+for (const [g, n] of Object.entries(placedThenNulled)) placedThenNulledByState[stateOfGeoid.get(g)] = (placedThenNulledByState[stateOfGeoid.get(g)] ?? 0) + n;
+if (placedCount - countedCount !== Object.values(placedThenNulled).reduce((a, n) => a + n, 0)) throw new Error("placed - counted is not the placed-then-nulled properties");
 const inScope = properties.length - outside.count;
 const t = layerInfo?.editingInfo?.dataLastEditDate;
 
@@ -222,7 +240,7 @@ const out = {
     years: null,
     features: FEATURES,
     featureRule: {
-      fuds_properties: "distinct FUDS property numbers USACE locates in the county (by its county field, or by its point where the field is blank or names no county)",
+      fuds_properties: "distinct FUDS property numbers USACE locates in the county: by its county field, or by its point where the field is blank, names no county, or could name more than one (a county-or-independent-city name such as ST LOUIS, or a list) and the point is in one of them",
       fuds_properties_with_projects: "of those, STATUS 'Properties with projects' or 'Properties with all projects at site closeout'",
       fuds_properties_with_open_projects: "of those, STATUS 'Properties with projects' (not all at site closeout)",
     },
@@ -236,9 +254,10 @@ const out = {
       serviceDataLastEdit: Number.isFinite(t) ? new Date(t).toISOString() : null,
     },
     counties: { file: "lib/places/data/counties.json", source: counties.meta.source, pulled: counties.meta.pulled, count: counties.rows.length },
-    join: "USACE's COUNTY string by name (lib/places/countyJoin.ts, failing closed); where it is blank or names no county, USACE's point in a TIGERweb ACS2023 500K county outline of the property's state; with neither, a single name one edit from exactly one county of the state (a misspelling such as SCHUYKILL; each listed in nearNames); never the nearest county. Where both are given and differ, the name is kept and the pair is listed in pointDisagreements (as NPL keeps and lists far matches): a large property's point can sit in a neighbouring county.",
+    join: "USACE's COUNTY string by name (lib/places/countyJoin.ts, failing closed); where it is blank or names no county, USACE's point in a TIGERweb ACS2023 500K county outline of the property's state; where it could name more than one county (a name that is both a county and an independent city, such as ST LOUIS, FAIRFAX, RICHMOND or BALTIMORE, or a list of counties), the point decides when it is in one of them (e.g. B07MO0988, 'ST LOUIS', to St. Louis city 29510; counts.joinMethod.pointOnlyByNameReason), and otherwise those counties are null; with neither, a single name one edit from exactly one county of the state (a misspelling such as SCHUYKILL; each listed in nearNames); never the nearest county. Where both are given and differ, the name is kept and the pair is listed in pointDisagreements (as NPL keeps and lists far matches): a large property's point can sit in a neighbouring county.",
     zero_vs_missing: "complete-census",
-    zeroRule: "A county in counties.json that is not in `places` and not in `nullPlaces` has 0 for every feature: a true 0 for properties USACE locates, because the FUDS inventory is USACE's complete list of program properties. Properties for which USACE publishes a state but no county string, and no point in a county (no point at all, or a point at sea or on a remote island), are in no county's count; they are listed in `unlocated` by state (counts.unlocated), and a county's 0 does not rule them out.",
+    zeroRule: `A county in counties.json that is not in \`places\` and not in \`nullPlaces\` has 0 for every feature, and that 0 means no property USACE locates in this county: a true 0 for located properties, because the FUDS inventory is USACE's complete list of program properties. Properties for which USACE publishes a state but no county string, and no point in a county (no point at all, or a point at sea or on a remote island), are in no county's count; they are listed in \`unlocated\` by state (${unlocated.length} of ${inScope} in-scope properties, ${((unlocated.length / inScope) * 100).toFixed(1)}%), and a county's 0 does not rule them out. The strict alternative, every county of a state with an unlocated property null, gives an observed share of ${strict.observedShare} instead of this rule's ${Number(((counties.rows.length - nulled.size) / counties.rows.length).toFixed(4))}; it is in counts.strictRule. This rule is pending approval (zeroRuleStatus).`,
+    zeroRuleStatus: "pending: the located-properties zero rule awaits approval by Cam / vector-places; until then vector-places may apply counts.strictRule instead",
     nullRule: "A county an unplaced property could be in is null for every feature (nullPlaces): join:multi_county or join:ambiguous_county_or_city (the counties named, plus the county its point is in when that is another), join:predecessor_county (a county that no longer exists: Census's successors, e.g. Valdez-Cordova to Chugach and Copper River), or join:unplaced_property_in_state (a county string that matches nothing and no point in a county of the state: every county of its state is null). The strict alternative, every county of a state with an unlocated property null too, is reported in counts.strictRule.",
     counts: {
       serviceCount: expected,
@@ -248,6 +267,9 @@ const out = {
       outsideCounties: outside.count,
       inScope,
       placed: placedCount,
+      counted: countedCount,
+      placedThenNulled: placedCount - countedCount,
+      placedThenNulledByState,
       unplaced: unplaced.length,
       unlocated: unlocated.length,
       joinMethod: method,
@@ -266,6 +288,7 @@ const out = {
     unlocated: unlocatedByState,
     pointDisagreements,
     nearNames,
+    placedThenNulled,
     generatedBy: "scripts/export-fuds-county.mjs",
   },
   places,
