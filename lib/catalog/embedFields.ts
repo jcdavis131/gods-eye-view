@@ -93,7 +93,12 @@ export const NAME_FIELDS_ALLOWED: ReadonlySet<string> = new Set([
   "cas_chem_name",
 ]);
 
-/** The words a field is embedded under: static word vectors gain from the field's meaning, not its code. One label per upstream field name. */
+/**
+ * The words a field is embedded under: static word vectors gain from the field's meaning, not its
+ * code. One label per upstream field name, shared by every card that embeds the field, so a field
+ * on more than one card must be a place word or stay within one source's family of cards
+ * (recordText.test.ts checks it).
+ */
 export const FIELD_LABEL: Readonly<Record<string, string>> = {
   // NWI (decoded locally from the Cowardin code)
   WETLAND_TYPE: "wetland type",
