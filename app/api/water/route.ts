@@ -524,7 +524,7 @@ async function traceOp(comid: number, mode: TraceMode, distanceRaw: string | nul
   if (mode === "down") caveats.push(`The NHDPlus V2 main stem downstream for ${km} km (or to the network's end), as NLDI navigates it: a river path, not the watersheds it passes through (those are /api/fabric?op=downstream, by HUC-12).`);
   if (mode === "gauges") caveats.push(`USGS stream gauges NLDI indexes on the network upstream within ${km} km of channel; the count depends on the distance asked, and a gauge listed here may be inactive.`);
   if (mode === "basin") caveats.push(`The drainage basin of reach ${comid} as NLDI publishes it (simplified), at most ${BASIN_MAX_VERTICES.toLocaleString("en-US")} vertices${r.value.cut ? "; cut further here, so its edge is approximate" : ""}.`);
-  if (mode === "basin" && r.value.droppedRings) caveats.push(`${r.value.droppedRings.toLocaleString("en-US")} of NLDI's rings were left out to fit: holes (areas inside the basin that do not drain to it) and islands smaller than about ${r.value.droppedUnderKm2!.toLocaleString("en-US")} km², so the outline covers some ground that does not drain here.`);
+  if (mode === "basin" && r.value.droppedRings) caveats.push(`${r.value.droppedRings.toLocaleString("en-US")} of NLDI's rings were left out to fit: holes (areas inside the basin that do not drain to it) and islands smaller than about ${r.value.droppedUnderKm2!.toLocaleString("en-US")} km². A dropped hole means the outline covers some ground that does not drain here; a dropped island means it leaves out some ground that does.`);
   return {
     data: { type: "FeatureCollection", features: r.value.features },
     meta: { source: "USGS NLDI", comid, mode, distanceKm: km, count: r.value.count, cacheAge: r.age },
