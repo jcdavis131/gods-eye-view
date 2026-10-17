@@ -388,7 +388,7 @@ async function opNaip(q: URLSearchParams): Promise<Response> {
   );
 }
 
-const NAIPMOSAIC_HELP = "op=naipmosaic needs year=yyyy (2010 or later), e.g. year=2023";
+const NAIPMOSAIC_HELP = "op=naipmosaic needs year=yyyy, 2010 to this year, e.g. year=2023";
 
 /** How long a /mosaic/{id}/info answer is trusted, and the deadlines that keep the op under 60 s. */
 const NAIP_INFO_TTL_MS = 10 * 60_000;
