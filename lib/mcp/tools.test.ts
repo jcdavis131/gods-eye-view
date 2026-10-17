@@ -150,7 +150,7 @@ describe("input schemas reject bad input", () => {
   });
 
   it("place_export offers exactly the committed exports", () => {
-    const js = z.toJSONSchema(toolByName("place_export")!.inputSchema) as { properties: { collection: { enum: string[] } } };
+    const js = z.toJSONSchema(toolByName("place_export")!.inputSchema) as unknown as { properties: { collection: { enum: string[] } } };
     expect(js.properties.collection.enum).toEqual([...PLACE_EXPORTS]);
   });
 
