@@ -155,6 +155,9 @@ export function parsePlaces(rows: unknown, level: "county" | "tract"): PlacesVal
   return out;
 }
 
+/** The one shade every published value takes when there are too few to rank. */
+export const UNRANKED_BIN = 2;
+
 /**
  * Quintile breaks of the published values (null values left out): the four cut points between
  * five equal-count bins, as values. Fewer than five values have no breaks.
@@ -165,9 +168,14 @@ export function quintiles(values: ReadonlyArray<number | null>): number[] {
   return [0.2, 0.4, 0.6, 0.8].map((q) => v[Math.min(v.length - 1, Math.floor(q * v.length))]);
 }
 
-/** The bin (0..4) of a value against quintile breaks; null for a value not published. */
+/**
+ * The bin (0..4) of a value against quintile breaks; null only for a value not published. With no
+ * breaks (fewer than five values to rank) a published value takes the middle bin, UNRANKED_BIN:
+ * drawn as published, never as "not published".
+ */
 export function binOf(value: number | null, breaks: readonly number[]): number | null {
-  if (value == null || breaks.length !== 4) return null;
+  if (value == null) return null;
+  if (breaks.length !== 4) return UNRANKED_BIN;
   let b = 0;
   while (b < 4 && value >= breaks[b]) b++;
   return b;

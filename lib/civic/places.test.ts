@@ -67,6 +67,9 @@ describe("county values", () => {
     expect(binOf(1, [2, 3, 4, 5])).toBe(0);
     expect(binOf(5, [2, 3, 4, 5])).toBe(4);
     expect(binOf(null, [2, 3, 4, 5])).toBeNull();
+    // Too few to rank: a published value is still drawn as published (the middle shade), never as not published.
+    expect(binOf(3, [])).toBe(2);
+    expect(binOf(null, [])).toBeNull();
   });
 });
 
@@ -91,6 +94,19 @@ describe("tract values", () => {
     expect(j.features[0].geometry.type).toBe("MultiPolygon");
     // Tracts of counties not asked are counted, not drawn.
     expect(joinHealthTracts(units, rows, "DIABETES", new Set(["09120"])).notAsked).toBe(66);
+  });
+
+  it("draws published tracts as published when fewer than five are, and says they are not ranked", () => {
+    const units = (fabricTracts as unknown as { data: { units: ConstructNode[] } }).data.units;
+    const some = parsePlaces(tracts09110, "tract").filter((r) => units.some((u) => u.code === r.fips)).slice(0, 3);
+    expect(some).toHaveLength(3);
+    const j = joinHealthTracts(units, some, "DIABETES", new Set(["09110"]));
+    expect(j.breaks).toEqual([]);
+    const drawn = j.features.filter((f) => (f.properties.extra as HealthExtra).bin != null);
+    expect(drawn).toHaveLength(3);
+    expect(drawn.every((f) => f.properties.kind === "unranked")).toBe(true);
+    expect(drawn[0].properties.details?.bin).toMatch(/^not ranked/);
+    expect(j.features.filter((f) => f.properties.kind === "not-published")).toHaveLength(66 - 3);
   });
 
   it("turns Esri rings into polygons: a clockwise ring starts one, a counter-clockwise one is its hole", () => {

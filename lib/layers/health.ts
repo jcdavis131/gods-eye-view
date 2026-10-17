@@ -64,14 +64,19 @@ function feature(id: string, name: string, geometry: Polygon | MultiPolygon, ext
       id,
       layer: "health",
       name,
-      kind: extra.bin == null ? "not-published" : `q${extra.bin + 1}`,
+      kind: extra.bin == null ? "not-published" : extra.breaks.length !== 4 ? "unranked" : `q${extra.bin + 1}`,
       source: "CDC PLACES",
       details: {
         measure: `${m.short} (${m.category})`,
         "CDC wording": m.name,
         value: row ? valueText({ value: row.value, low: row.low, high: row.high, year: row.year, type }) : "not published for this measure",
         [extra.level === "county" ? "county fips" : "tract fips"]: extra.fips,
-        bin: extra.bin == null ? "not published" : `quintile ${extra.bin + 1} of 5 (${extra.level === "county" ? "all US counties" : "the tracts in view"})`,
+        bin:
+          extra.bin == null
+            ? "not published"
+            : extra.breaks.length !== 4
+              ? "not ranked: fewer than five published values to make quintiles from"
+              : `quintile ${extra.bin + 1} of 5 (${extra.level === "county" ? "all US counties" : "the tracts in view"})`,
         "what this is": "a model-based estimate, not a count of diagnosed people; not for ranking small differences",
       },
       extra,
@@ -160,7 +165,7 @@ async function fetchHealth(ctx: FetchContext): Promise<FetchResult> {
       ...base,
       source: "CDC PLACES + Census TIGERweb tracts",
       collection: { type: "FeatureCollection", features: j.features as LayerFeature[] },
-      note: `${j.features.length} tracts · ${m.short}, crude prevalence, ${m.year} · quintiles of the tracts in view · dashed grey: not published${j.notAsked ? ` · ${j.notAsked} tracts in counties beyond the ${PLACES_MAX_COUNTIES} asked` : ""} · model-based estimates, not counts`,
+      note: `${j.features.length} tracts · ${m.short}, crude prevalence, ${m.year} · ${j.breaks.length === 4 ? "quintiles of the tracts in view" : "fewer than five published here: one shade, not ranked"} · dashed grey: not published${j.notAsked ? ` · ${j.notAsked} tracts in counties beyond the ${PLACES_MAX_COUNTIES} asked` : ""} · model-based estimates, not counts`,
       meta: { count: j.features.length, level: "tract", measure, counties },
     };
   }
