@@ -34,6 +34,9 @@ import { openHere } from "@/lib/whatshere/here";
 import { queryText } from "@/lib/catalog/recordText";
 import { potionBrowser } from "@/lib/embed/loadBrowser";
 import { RecordIndex, featureKey, type RecordHit } from "@/lib/embed/recordIndex";
+// Minimum cosine for a record to be shown by meaning: 0.4, measured by the records eval (lib/embed/recordTau.ts).
+// The group stays flagged (semanticRecordsOn) until a blind query set passes.
+import { RECORD_TAU } from "@/lib/embed/recordTau";
 
 /** A catalogue card ranked by meaning (/api/catalog?op=search). */
 export interface CardSearchHit {
@@ -59,11 +62,6 @@ export function semanticRecordsOn(): boolean {
   }
 }
 
-/**
- * Minimum cosine for a record to be shown by meaning. Chosen by hand, not measured: no record-level
- * eval exists yet, which is why the group is flagged (semanticRecordsOn).
- */
-export const RECORD_TAU = 0.6;
 /** Rows shown in the By meaning and Collections groups. */
 const RECORD_ROWS = 8;
 const CARD_ROWS = 3;
