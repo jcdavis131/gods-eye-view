@@ -19,6 +19,7 @@ import {
   housingBin,
   housingBoxParams,
   housingPlace,
+  isCtLegacyTract,
   housingPlaceParams,
   hcvRow,
   pickFields,
@@ -136,5 +137,22 @@ describe("the place answer", () => {
     expect(housingPlace(String(nul.GEOID), rows, [])).toMatchObject({ vouchers: null, share: null, status: "suppressed", qct: false });
     expect(housingPlace("48453999999", rows, []).status).toBe("not-in-layer");
     expect(hcvRow({ GEOID: "4845300222" })).toBeNull();
+  });
+
+  it("a Connecticut voucher tract (legacy-county code) has QCT membership unknown, not false; a planning-region code is answered", () => {
+    // hud-hcv-ct-box.json and hud-qct-ct-box.json: the Hartford-area box (2026-10-17). Every voucher
+    // tract is 0900x; every QCT GEOID is in planning-region codes (091x0), so they never meet.
+    const hcv = (hcvCt as { features: Array<{ properties: Record<string, unknown> }> }).features.map((f) => f.properties);
+    const qct = (qctCt as { features: Array<{ properties: Record<string, unknown> }> }).features.map((f) => f.properties);
+    expect(hcv.every((r) => /^090/.test(String(r.GEOID)))).toBe(true);
+    expect(qct.every((r) => /^091[1-9]0/.test(String(r.GEOID)))).toBe(true);
+    const legacy = String(hcv[0].GEOID);
+    expect(isCtLegacyTract(legacy)).toBe(true);
+    expect(housingPlace(legacy, hcv, qct)).toEqual({ geoid: legacy, vouchers: null, share: null, status: "not-published-ct", qct: null });
+    const region = String(qct[0].GEOID);
+    expect(isCtLegacyTract(region)).toBe(false);
+    expect(housingPlace(region, hcv, qct)).toMatchObject({ status: "not-in-layer", qct: true });
+    expect(isCtLegacyTract("09016000100")).toBe(false);
+    expect(isCtLegacyTract("48453002220")).toBe(false);
   });
 });

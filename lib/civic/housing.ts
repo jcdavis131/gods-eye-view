@@ -129,6 +129,8 @@ export function hcvRow(a: Readonly<Record<string, unknown>>): HcvRow | null {
 }
 
 export const isCtTract = (geoid: string) => geoid.startsWith("09");
+/** A Connecticut tract GEOID in a legacy county (09001-09015), the code HUD files vouchers under; the QCT list uses planning-region codes (091x0). */
+export const isCtLegacyTract = (geoid: string) => /^090(0[1-9]|1[0-5])\d{6}$/.test(geoid);
 
 export type HousingStatus = "published" | "suppressed" | "not-published-ct";
 export function hcvStatus(r: HcvRow): HousingStatus {
@@ -279,12 +281,17 @@ export interface HousingPlace {
   vouchers: number | null;
   share: number | null;
   status: HousingStatus | "not-in-layer";
-  qct: boolean;
+  /** In HUD's QCT list; null (unknown) for a Connecticut legacy-county GEOID, which that list never uses. */
+  qct: boolean | null;
 }
 
-/** One tract's answer: its voucher row (or none) and whether it is in the QCT list. */
+/**
+ * One tract's answer: its voucher row (or none) and whether it is in the QCT list. HUD's QCT list
+ * files Connecticut under planning-region codes, so a legacy-county GEOID (every Connecticut voucher
+ * tract) can never match it: qct is null, unknown, not false.
+ */
 export function housingPlace(geoid: string, hcvRows: ReadonlyArray<Record<string, unknown>>, qctRows: ReadonlyArray<Record<string, unknown>>): HousingPlace {
   const r = hcvRows.map((a) => hcvRow(a)).find((x): x is HcvRow => x != null && x.geoid === geoid) ?? null;
-  const qct = qctRows.some((a) => str(a.GEOID) === geoid);
+  const qct = isCtLegacyTract(geoid) ? null : qctRows.some((a) => str(a.GEOID) === geoid);
   return { geoid, vouchers: r?.vouchers ?? null, share: r?.vouchers == null ? null : (r?.share ?? null), status: r ? hcvStatus(r) : "not-in-layer", qct };
 }

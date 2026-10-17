@@ -8,6 +8,7 @@ import hcvAustin from "@/lib/civic/fixtures/hud-hcv-austin.json";
 import qctAustin from "@/lib/civic/fixtures/hud-qct-austin.json";
 import hcvPlace from "@/lib/civic/fixtures/hud-hcv-place-48453002220.json";
 import qctPlace from "@/lib/civic/fixtures/hud-qct-place-48453002220.json";
+import hcvCtBox from "@/lib/civic/fixtures/hud-hcv-ct-box.json";
 import { HCV_LAYER, QCT_LAYER } from "@/lib/civic/housing";
 
 vi.mock("@/lib/server/cache", () => ({
@@ -74,6 +75,24 @@ describe("op=housing", () => {
     expect(status).toBe(200);
     expect(body.data).toMatchObject({ geoid: "48453002220", vouchers: 166, share: 20.1, status: "published", qct: true });
     for (const c of calls) expect(new URL(c).searchParams.get("where")).toBe("GEOID='48453002220'");
+  });
+
+  it("level=place for a Connecticut voucher tract: qct is null (unknown), never false", async () => {
+    // The voucher row is the first tract of hud-hcv-ct-box.json (2026-10-17), wrapped as the
+    // attributes-only answer the place query gets; HUD's QCT list has no 0900x GEOID, so it answers none.
+    const row = (hcvCtBox as { features: Array<{ properties: Record<string, unknown> }> }).features[0].properties;
+    answer = (u) => (u.startsWith(`${HCV_LAYER}/query?`) ? { features: [{ attributes: row }] } : u.startsWith(`${QCT_LAYER}/query?`) ? { features: [] } : null);
+    const { status, body } = await get(`op=housing&level=place&fips=${row.GEOID}`);
+    expect(status).toBe(200);
+    expect(body.data).toMatchObject({ geoid: row.GEOID, vouchers: null, status: "not-published-ct", qct: null });
+    expect(body.caveats.join(" ")).toMatch(/qct null means unknown/);
+  });
+
+  it("a Connecticut legacy-county code with no voucher row is a 404 that says QCT membership is unknown", async () => {
+    answer = () => ({ features: [] });
+    const { status, body } = await get("op=housing&level=place&fips=09003999999");
+    expect(status).toBe(404);
+    expect(body.error).toMatch(/QCT membership is unknown/);
   });
 
   it("a tract in neither layer is a 404", async () => {

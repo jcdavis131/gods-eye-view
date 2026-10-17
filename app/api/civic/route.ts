@@ -597,6 +597,7 @@ async function housingPlaceOp(geoid: string) {
     { deadlineMs: 25_000 },
   );
   const p = r.value;
+  if (p.status === "not-in-layer" && p.qct === null) return notFound(`no voucher row for tract ${geoid}; QCT membership is unknown for a Connecticut legacy-county code (HUD's QCT list uses planning-region codes)`);
   if (p.status === "not-in-layer" && !p.qct) return notFound(`not in either HUD layer: no voucher row and no QCT row for tract ${geoid}`);
   return ok(
     { level: "tract", ...p },
@@ -607,7 +608,7 @@ async function housingPlaceOp(geoid: string) {
         hudProv(HCV_LAYER, `Housing_Choice_Vouchers_by_Tract FeatureServer layer 0, GEOID='${geoid}', attributes`, "through 12/2025 (last updated 01/2026)", r.age),
         hudProv(QCT_LAYER, `QUALIFIED_CENSUS_TRACTS_2026 FeatureServer layer 0, GEOID='${geoid}'`, "titled 2026 by HUD", r.age),
       ],
-      caveats: [...HOUSING_CAVEATS, "vouchers null with status 'suppressed' means 10 or fewer, or none (HUD omits them); 'not-published-ct' means HUD publishes no Connecticut count; share is HUD's HCV_PUBLIC_PCT rounded to one decimal."],
+      caveats: [...HOUSING_CAVEATS, "vouchers null with status 'suppressed' means 10 or fewer, or none (HUD omits them); 'not-published-ct' means HUD publishes no Connecticut count; share is HUD's HCV_PUBLIC_PCT rounded to one decimal; qct null means unknown: a Connecticut legacy-county tract code, which HUD's QCT list (in planning-region codes) never uses."],
     },
   );
 }
