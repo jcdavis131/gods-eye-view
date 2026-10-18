@@ -1,0 +1,44 @@
+# Weekly check that every upstream service the app hard-codes still answers
+# (scripts/endpoint-sweep.mjs). It reads the checked-out source, so a new
+# layer is covered the week it merges. Read-only and keyless: it needs no
+# secrets and writes nothing, so its token is read-only too.
+#
+# The run fails only on an upstream that is newly dead (a dead answer seen
+# twice, not listed in scripts/endpoint-sweep.known.json). GitHub emails a
+# failed scheduled run to the repository owner. The table is in the run's
+# summary either way.
+name: endpoint-sweep
+
+on:
+  schedule:
+    # Mondays 14:41 UTC, off the top of the hour.
+    - cron: "41 14 * * 1"
+  workflow_dispatch:
+  # Also when the sweep itself changes, so a pull request shows a real run.
+  pull_request:
+    paths:
+      - "scripts/endpoint-sweep*"
+      - ".github/workflows/endpoint-sweep.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: endpoint-sweep
+  cancel-in-progress: true
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Plain Node, no dependencies: the script uses only node: built-ins and fetch.
+      - run: node scripts/endpoint-sweep.mjs
