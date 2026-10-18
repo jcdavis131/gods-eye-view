@@ -192,6 +192,8 @@ export interface BaseProps {
   layer: LayerId;
   /** Display name: callsign, vessel name, satellite name, place string, ... */
   name: string;
+  /** true: the name is a label only, never matched by search (palette or voice); the feature is found by its id and allowlisted fields (lib/search/allowlist.ts). */
+  nameNotSearchable?: true;
   /** Sub-type used for icon / colour choice: aircraft type, ship class, sat group, ... */
   kind?: string;
   /** Degrees true. Leave undefined when the upstream says "unknown" (never invent one). */

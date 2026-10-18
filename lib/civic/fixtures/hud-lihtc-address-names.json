@@ -347,6 +347,68 @@
     "CURCNTY": "131",
     "LVL2KX": "R"
    }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -90.6711770002984,
+     42.5033019997047
+    ]
+   },
+   "properties": {
+    "HUD_ID": "IAA19950010",
+    "PROJECT": "REHABILITATION OF 243-247 W 11TH ST",
+    "PROJ_ADD": "243 W 11TH ST",
+    "PROJ_CTY": "DUBUQUE",
+    "PROJ_ST": "IA",
+    "PROJ_ZIP": "52001",
+    "N_UNITS": 10,
+    "LI_UNITS": 10,
+    "YR_PIS": "1995",
+    "YR_ALLOC": "1995",
+    "NON_PROF": "2",
+    "CREDIT": "2",
+    "TYPE": "2",
+    "TRGT_POP": "1",
+    "BOND": "2",
+    "DDA": null,
+    "QCT": "2",
+    "CURCNTY": "61",
+    "LVL2KX": "R"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -73.924632999644,
+     40.6700770000326
+    ]
+   },
+   "properties": {
+    "HUD_ID": "NYA19940020",
+    "PROJECT": "1610 ASSOC",
+    "PROJ_ADD": "1610 ST JOHNS PL",
+    "PROJ_CTY": "BROOKLYN",
+    "PROJ_ST": "NY",
+    "PROJ_ZIP": "11233",
+    "N_UNITS": 33,
+    "LI_UNITS": 32,
+    "YR_PIS": "1994",
+    "YR_ALLOC": "1992",
+    "NON_PROF": null,
+    "CREDIT": "2",
+    "TYPE": "2",
+    "TRGT_POP": "1",
+    "BOND": "2",
+    "DDA": null,
+    "QCT": "2",
+    "CURCNTY": "47",
+    "LVL2KX": "R"
+   }
   }
  ]
 }

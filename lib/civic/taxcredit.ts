@@ -159,133 +159,19 @@ export function lihtcBin(n: number): number {
   return b;
 }
 
-// A LIHTC project's PROJECT is searchable (it is the feature's label), and HUD sometimes files
-// the street address as the project's name, or inside it (the round-8 verifier counted 128 with
-// PROJECT equal to PROJ_ADD nationally, and 14 drawn names carrying their whole PROJ_ADD, e.g.
-// "JEFFERSON CLUSTER (116 JEFFERSON AVE)"). Both sides are folded first: every character that is
-// not a letter or digit becomes a space, case is folded and street words abbreviated (STREET ->
-// ST, WEST -> W), so "803-28TH ST" is "803 28TH ST" and "407 + 409 SYKES AVE" is "407 409 SYKES
-// AVE": a run of house numbers joined by '-', '/', '&', '+' or AND is a range. The label is
-// "LIHTC project · HUD id <HUD_ID>" when the name (1) equals PROJ_ADD; (2) begins with a house
-// number or range, then up to five words ending in a street type ("2301 FIRST AVE", "125-145 ELM
-// ST REHAB": what follows the street type does not make it less an address); or (3) begins with
-// PROJ_ADD's own house number and the next word ("99 RUTGERS 608" at 99 RUTGERS AVE). (4)
-// Otherwise, where the name contains PROJ_ADD's house number plus street (each number of a range,
-// then the words up to the street type: "400 W 59TH" for 400 WEST 59TH STREET), that span is cut
-// from the label, with the street type and whatever else of PROJ_ADD follows it word for word,
-// any range numbers before it, and the brackets or dashes it leaves. If what remains is still a
-// name (a word of two or more letters that is not a joiner such as AT or FORMERLY, and not an
-// address by 1-3) it is the label ("VILLAGE AT", "JEFFERSON CLUSTER"); else the HUD id label is.
-// A name that only carries a number ("1610 ASSOC", "2021 APTS") or a street without a house
-// number ("76TH ST APTS") keeps its name. What this guarantees: no drawn label equals its own
-// PROJ_ADD or contains its own PROJ_ADD's house number plus street (round8/lihtc-oracle.mjs runs
-// every live row through buildLihtc). Not caught: another address inside a name ("79-95
-// WOODRUFF" at 91 WOODRUFF AVE), or a street named without its house number.
-const LIHTC_ADDR_WORDS: Record<string, string> = { NORTH: "N", SOUTH: "S", EAST: "E", WEST: "W", NORTHEAST: "NE", NORTHWEST: "NW", SOUTHEAST: "SE", SOUTHWEST: "SW", STREET: "ST", STR: "ST", AVENUE: "AVE", AV: "AVE", ROAD: "RD", DRIVE: "DR", BOULEVARD: "BLVD", LANE: "LN", COURT: "CT", PLACE: "PL", PARKWAY: "PKWY", PKY: "PKWY", HIGHWAY: "HWY", CIRCLE: "CIR", TERRACE: "TER", TRAIL: "TRL", SQUARE: "SQ", ALLEY: "ALY" };
-const LIHTC_STREET_TYPES = "ST|AVE|RD|DR|BLVD|LN|CT|PL|WAY|PKWY|HWY|CIR|TER|TRL|LOOP|PIKE|SQ|ROW|ALY";
-const LIHTC_STREET_TYPE_SET = new Set(LIHTC_STREET_TYPES.split("|"));
-/** A house number or a range of them, on folded text (the joiners are spaces by then, or AND). */
-const LIHTC_HOUSE_NUMBERS = String.raw`\d+[A-Z]?(?:\s(?:AND\s)?\d+[A-Z]?(?=\s|$))*`;
-const LIHTC_ADDRESS_START = new RegExp(String.raw`^${LIHTC_HOUSE_NUMBERS}\s(?:[NSEW]{1,2}\s)?(?:[A-Z0-9]+\s){0,4}(?:${LIHTC_STREET_TYPES})(?:\s|$)`);
-const LIHTC_LEAD = new RegExp(String.raw`^(\d+)[A-Z]?(?:\s(?:AND\s)?\d+[A-Z]?(?=\s|$))*\s([A-Z0-9]+)`);
-/** Words that do not make what is left of a name a name ("VILLAGE AT" is one; "AT" alone is not). */
-const LIHTC_JOINERS = new Set(["A", "AN", "AND", "AT", "OF", "ON", "IN", "THE", "AKA", "FKA", "FORMERLY"]);
-const LIHTC_CUT_SEP = String.raw`[-,;:/&+·–—]`;
+// No LIHTC project name or address is searchable. HUD sometimes files the street address as a
+// project's name, or inside it ("803-28TH ST", "REHABILITATION OF 243-247 W 11TH ST"), and
+// LIHTC projects are public records of rental buildings of five or more units whose address is
+// shown on click by design; the concern is only that an address is never searchable. So the
+// guarantee is structural, not a name filter: every LIHTC point carries nameNotSearchable, so the
+// ⌘K palette and voice never match its label (lib/search/allowlist.ts matchScore), PROJ_ADD is
+// never a searchable key, and the only way search reaches a project is its HUD id ("HUD id" is on
+// SEARCHABLE_DETAILS). The label is HUD's published PROJECT unchanged; only a project with no
+// PROJECT is labelled "LIHTC project · HUD id <HUD_ID>".
 
-type AddrTok = { w: string; start: number; end: number };
-/** The folded words of a name or address, with where each sits in the original text. */
-const addrToks = (s: string): AddrTok[] =>
-  Array.from(s.matchAll(/[A-Za-z0-9]+/g), (m) => {
-    const w = m[0].toUpperCase();
-    return { w: LIHTC_ADDR_WORDS[w] ?? w, start: m.index, end: m.index + m[0].length };
-  });
-const addrFold = (s: string): string => addrToks(s).map((t) => t.w).join(" ");
-const isHouseNumber = (w: string | undefined): boolean => !!w && /^\d+[A-Z]?$/.test(w);
-
-const addrLead = (folded: string): string | null => {
-  const m = LIHTC_LEAD.exec(folded);
-  return m ? `${m[1]} ${m[2]}` : null;
-};
-
-/** PROJ_ADD's house number plus street, once per number of a range: [["400", "W", "59TH"]]; none without a house number or a street word. */
-export function lihtcAddressKeys(address: string | null): string[][] {
-  const t = address ? addrToks(address).map((x) => x.w) : [];
-  const nums: string[] = [];
-  let i = 0;
-  for (; i < t.length; i++) {
-    if (isHouseNumber(t[i])) nums.push(t[i]);
-    else if (!(t[i] === "AND" && nums.length && isHouseNumber(t[i + 1]))) break;
-  }
-  const street: string[] = [];
-  for (; i < t.length && !LIHTC_STREET_TYPE_SET.has(t[i]); i++) street.push(t[i]);
-  return nums.length && street.length ? nums.map((n) => [n, ...street]) : [];
-}
-
-/** Whether a LIHTC PROJECT name reads as a street address (rules 1-3: its own PROJ_ADD, or a house number plus street at its start). */
-export function lihtcNameIsAddress(project: string, address: string | null): boolean {
-  const p = addrFold(project);
-  if (!p) return false;
-  const a = address ? addrFold(address) : "";
-  if (a && p === a) return true;
-  if (LIHTC_ADDRESS_START.test(p)) return true;
-  const lead = a ? addrLead(a) : null;
-  return lead != null && addrLead(p) === lead;
-}
-
-/** What is left after a cut, tidied: empty brackets, doubled or dangling dashes and slashes, a dangling FORMERLY go. */
-const tidyCut = (s: string): string => {
-  let t = s;
-  for (let i = 0; i < 3; i++) {
-    t = t
-      .replace(/\(\s*(?:(?:formerly|aka|fka|a\/k\/a|f\/k\/a)\s*)*\)|\[\s*\]/gi, " ")
-      .replace(new RegExp(`(${LIHTC_CUT_SEP})(?:\\s*${LIHTC_CUT_SEP})+`, "g"), "$1")
-      .replace(/\s+/g, " ")
-      .replace(new RegExp(`^(?:\\s|\\)|${LIHTC_CUT_SEP})+|(?:\\s|\\(|${LIHTC_CUT_SEP})+$`, "g"), "")
-      .replace(/\s+(?:formerly|aka|fka|a\/k\/a|f\/k\/a)$/i, "");
-  }
-  return t.trim();
-};
-
-/** Rule 4: the name with every copy of PROJ_ADD's house number plus street cut out, or null when it carries none. */
-export function lihtcStripAddress(project: string, address: string | null): string | null {
-  const keys = lihtcAddressKeys(address);
-  if (!keys.length || !address) return null;
-  const at = addrToks(address).map((x) => x.w);
-  // where PROJ_ADD's street words end (the key's last word), to follow the rest of it word for word
-  let after = 0;
-  while (after < at.length && (isHouseNumber(at[after]) || at[after] === "AND")) after++;
-  after += keys[0].length - 1;
-  let s = project;
-  let cut = false;
-  for (let guard = 0; guard < 8; guard++) {
-    const nt = addrToks(s);
-    let span: [number, number] | null = null;
-    for (let i = 0; i < nt.length && !span; i++) {
-      const k = keys.find((key) => i + key.length <= nt.length && key.every((w, j) => nt[i + j].w === w));
-      if (!k) continue;
-      let end = i + k.length;
-      for (let ai = after; ai < at.length && end < nt.length && nt[end].w === at[ai]; ai++) end++;
-      let start = i;
-      while (start > 0 && (isHouseNumber(nt[start - 1].w) || (nt[start - 1].w === "AND" && start > 1 && isHouseNumber(nt[start - 2].w)))) start--;
-      span = [nt[start].start, nt[end - 1].end];
-    }
-    if (!span) break;
-    s = `${s.slice(0, span[0])} ${s.slice(span[1])}`;
-    cut = true;
-  }
-  return cut ? tidyCut(s) : null;
-}
-
-/** Whether a cut name is still a name: a word of two or more letters that is not a joiner, and not an address by rules 1-3. */
-const isName = (s: string, address: string | null): boolean => addrToks(s).some((t) => /^[A-Z]{2,}$/.test(t.w) && !LIHTC_JOINERS.has(t.w)) && !lihtcNameIsAddress(s, address);
-
-/** The feature's label: HUD's project name with its own address cut out (rule 4), or the HUD id when the name is missing or reads as an address. */
-export function lihtcLabel(hudId: string, project: string | null, address: string | null): string {
-  const fallback = `LIHTC project · HUD id ${hudId}`;
-  if (!project || lihtcNameIsAddress(project, address)) return fallback;
-  const cut = lihtcStripAddress(project, address);
-  if (cut == null) return project;
-  return isName(cut, address) ? cut : fallback;
+/** The feature's label: HUD's published PROJECT unchanged, or the HUD id where PROJECT is empty. A label only: never searched. */
+export function lihtcLabel(hudId: string, project: string | null): string {
+  return project?.trim() || `LIHTC project · HUD id ${hudId}`;
 }
 
 /**
@@ -342,9 +228,10 @@ export function buildLihtc(rows: readonly Raw[]): { features: LayerFeature<Point
       properties: {
         id: `housing:lihtc:${hudId}`,
         layer: "housing",
-        // A tax-credit property's published name (an apartment complex's), never a person's: projects under five units are never asked for.
-        // Never its address either: a name that reads as one is replaced (lihtcLabel).
-        name: lihtcLabel(hudId, str(p.PROJECT), str(p.PROJ_ADD)),
+        // A tax-credit property's name as HUD publishes it (it can be the street address), never a person's home: projects under five
+        // units are never asked for. A label only: never searched (nameNotSearchable); search finds the project by its HUD id.
+        name: lihtcLabel(hudId, str(p.PROJECT)),
+        nameNotSearchable: true,
         kind: "lihtc",
         source: "HUD LIHTC properties",
         details: Object.fromEntries(Object.entries(details).filter(([, v]) => v != null)) as Record<string, string>,

@@ -488,7 +488,8 @@ export const COMMANDS: CommandDef[] = [
         const p = f.properties;
         // The outline of a land layer's loaded box is not something to find.
         if (p.kind === "loaded-box") continue;
-        const name = p.name.toLowerCase().replace(/\s+/g, "");
+        // A label-only name (a LIHTC project's) is never matched: "" equals, starts and contains no query.
+        const name = p.nameNotSearchable ? "" : p.name.toLowerCase().replace(/\s+/g, "");
         const id = p.id.toLowerCase();
         let score = 0;
         if (name === q || id === q) score = 3;
