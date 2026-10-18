@@ -14,6 +14,7 @@ import { SVI_BIN_COLORS, SVI_NO_RANK_EDGE, type SviExtra } from "@/lib/civic/svi
 import { BROADBAND_BIN_COLORS, BROADBAND_NO_DATA_EDGE, type BroadbandExtra } from "@/lib/civic/broadband";
 import { WRC_BIN_COLORS, WRC_NO_RANK_EDGE, type WrcExtra } from "@/lib/hazards/wrc";
 import { HOUSING_BIN_COLORS, HOUSING_NO_DATA_EDGE, HOUSING_SUPPRESSED_FILL, QCT_EDGE, type HousingExtra } from "@/lib/civic/housing";
+import { DDA_EDGE, LIHTC_COLOR, LIHTC_POINT_SIZES, type DdaExtra, type LihtcExtra } from "@/lib/civic/taxcredit";
 
 export function riskColor(f: LayerFeature): string {
   const x = f.properties.extra as NriExtra | undefined;
@@ -123,9 +124,11 @@ export const wildfireriskStyle: LayerStyle = {
 
 /** A published tract's bin colour; a suppressed tract's grey (never a scale colour); Connecticut's no-data edge. */
 export function housingColor(f: LayerFeature): string {
-  const x = f.properties.extra as HousingExtra | undefined;
+  const x = f.properties.extra as HousingExtra | DdaExtra | LihtcExtra | undefined;
   if (!x) return HOUSING_NO_DATA_EDGE;
   if (x.kind === "qct") return QCT_EDGE;
+  if (x.kind === "dda") return DDA_EDGE;
+  if (x.kind === "lihtc") return LIHTC_COLOR;
   if (x.bin != null) return HOUSING_BIN_COLORS[x.bin];
   return x.status === "suppressed" ? HOUSING_SUPPRESSED_FILL : HOUSING_NO_DATA_EDGE;
 }
@@ -136,11 +139,15 @@ export const housingStyle: LayerStyle = {
   colorFor: (f) => (isLoadedBox(f) ? "#E5E7EB" : housingColor(f)),
   label: (f) => f.properties.name,
   labelMax: 0,
-  // Tracts are named by GEOID only; nothing is labelled on the globe.
+  // Tracts are named by GEOID only and DDAs by ZIP or county; nothing is labelled on the globe but a hovered or picked LIHTC property.
   labelWhen: () => false,
+  pointSize: (f) => {
+    const x = f.properties.extra as LihtcExtra | undefined;
+    return x?.kind === "lihtc" ? LIHTC_POINT_SIZES[x.bin] : 6;
+  },
   polygons: (f) => {
-    const x = f.properties.extra as HousingExtra | undefined;
-    if (!x || x.kind === "qct") return null;
+    const x = f.properties.extra as HousingExtra | DdaExtra | LihtcExtra | undefined;
+    if (!x || x.kind === "qct" || x.kind === "dda" || x.kind === "lihtc") return null;
     if (x.bin != null) return polyFills(f, housingColor(f), 0.55);
     // Suppressed: a grey that is on no scale, lighter than any bin, so it reads as "few or none", not as low.
     if (x.status === "suppressed") return polyFills(f, HOUSING_SUPPRESSED_FILL, 0.3);
@@ -148,8 +155,10 @@ export const housingStyle: LayerStyle = {
   },
   lines: (f) => {
     if (isLoadedBox(f)) return polyOutlines(f, "#E5E7EB", 0.7, 1.5, true);
-    const x = f.properties.extra as HousingExtra | undefined;
+    const x = f.properties.extra as HousingExtra | DdaExtra | LihtcExtra | undefined;
     if (x?.kind === "qct") return polyOutlines(f, QCT_EDGE, 0.95, 2, true);
+    if (x?.kind === "dda") return polyOutlines(f, DDA_EDGE, 0.95, 2, true);
+    if (x?.kind === "lihtc") return null;
     const drawn = x?.bin != null;
     return polyOutlines(f, drawn ? "#1F2937" : HOUSING_NO_DATA_EDGE, drawn ? 0.3 : 0.85, 1, !drawn);
   },

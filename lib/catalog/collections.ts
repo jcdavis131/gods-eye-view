@@ -39,6 +39,7 @@ import { FEMA_CREDIT, HISTORY_CAVEAT, USDM_CREDIT } from "@/lib/hazards/history"
 import { CT_HOUSING_NOTE, HOUSING_CAVEAT, QCT_YEAR_NOTE } from "@/lib/civic/housing";
 import { LANDSLIDE_SUSC_CAVEAT } from "@/lib/terrain/products";
 import { STORM_EVENTS_CAVEAT, STORM_GATE_NOTE } from "@/lib/hazards/storms";
+import { CT_TAX_CREDIT_NOTE, DDA_YEAR_NOTE, HOUSING_TAX_CREDIT_CAVEAT, LIHTC_CODE_NOTE } from "@/lib/civic/taxcredit";
 import { DENY_FIELD, EMBED_TEXT } from "./embedFields";
 
 export interface Exclusion {
@@ -1317,7 +1318,7 @@ export const COLLECTIONS: readonly Collection[] = [
     freshness: { statement: "Layer data last edited 2026-07-21; description: 'Date of Coverage: Up to 12/2025, Last Updated: 01/2026'.", readFrom: "FeatureServer layer 0 editingInfo.dataLastEditDate (1784657444163) and the layer description", recordedOn: R7 },
     excluded: [
       { what: "EANAME (HUD's entitlement-area name)", why: "a place name not needed for the count; never fetched" },
-      { what: "LIHTC properties", why: "the layer carries contact names and phone numbers (CONTACT, CO_TEL); never fetched" },
+      { what: "LIHTC properties' contact block", why: "the layer carries contact names and phone numbers (CONTACT, CO_TEL); never fetched. The properties themselves are the hud-lihtc card (round 8), from an allow-list" },
       { what: "Public Housing Developments", why: "near-personal shares at small developments; held" },
       { what: "a county roll-up or place tower", why: "56 % of tracts are suppressed or unpublished, so a sum would be a floor dressed as a total" },
       { what: "Connecticut as suppression", why: "HUD has a count for none of its 881 tracts, which is not the 10-or-fewer rule; drawn 'not published'" },
@@ -1344,7 +1345,7 @@ export const COLLECTIONS: readonly Collection[] = [
     freshness: { statement: `Layer data last edited 2025-09-22. ${QCT_YEAR_NOTE}`, readFrom: "FeatureServer layer 0 editingInfo.dataLastEditDate (1758570469600); the service name, the item snippet and description, and the layer description", recordedOn: R7 },
     excluded: [
       { what: "the QCT 2025 service (15,727 tracts)", why: "superseded by the list HUD titles 2026" },
-      { what: "Difficult Development Areas 2026 (2,902)", why: "a second designation for a later phase (D7-2)" },
+      { what: "Difficult Development Areas 2026 (2,902)", why: "a second designation: the hud-dda card (round 8), drawn by the same layer" },
       { what: "NAME (\"Census Tract 6.08\")", why: "a tract label; the GEOID is shown" },
     ],
     caveats: [QCT_YEAR_NOTE],
@@ -1409,6 +1410,60 @@ export const COLLECTIONS: readonly Collection[] = [
     embedText: EMBED_TEXT["ncei-storm-events-county"],
     ops: ["hazards?op=history"],
     sensitivity: "Counts of county-coded event reports per year; no narrative, casualty, damage or source text is carried.",
+    round: 8,
+  },
+  {
+    id: "hud-dda",
+    title: "Difficult Development Areas (HUD, titled 2026)",
+    layer: "housing",
+    sources: ["hud-egis"],
+    what: "HUD's Difficult Development Areas for the Low-Income Housing Tax Credit, from the Difficult_Development_Areas_2026 service: metro ZIP code areas (ZCTAs) and non-metro counties, drawn as violet dashed outlines over the voucher tracts when the 'Tax-credit areas (DDA)' chip is on; a click says which kind it is and names it as HUD does.",
+    recordIs: "An area HUD designates for the tax credit because construction, land and utility costs are high relative to area median income, so a project there can claim a larger basis: a designation, not a measure of conditions.",
+    coverage: {
+      spatial: "The 50 states, DC, Puerto Rico and the territories HUD lists; metro areas by ZCTA, non-metro areas by county (Connecticut's by planning region, NCNTY09160 and others); drawn below 100 km in a box of at most 0.3 degrees",
+      temporal: "the designation year HUD titles 2026",
+      count: { value: 2902, of: "areas in Difficult_Development_Areas_2026 layer 0 (returnCountOnly): 2,615 metro ZCTAs (DDA_TYPE SA) and 287 non-metro counties (NM); the older Difficult_Development_Areas service holds 2,958", countedOn: R8 },
+    },
+    freshness: { statement: `Layer data last edited 2025-09-22. ${DDA_YEAR_NOTE}`, readFrom: "FeatureServer layer 0 editingInfo.dataLastEditDate (2025-09-22) and the layer description (read 2026-10-17)", recordedOn: R8 },
+    excluded: [
+      { what: "the older Difficult_Development_Areas service (2,958)", why: "superseded by the list HUD titles 2026" },
+      { what: "a county place tower", why: "metro DDAs are ZIP code areas, so a county flag would mean different things in metro and non-metro counties" },
+    ],
+    caveats: [DDA_YEAR_NOTE, CT_TAX_CREDIT_NOTE],
+    searchable: ["ZCTA5", "DDA_CODE"],
+    embedText: EMBED_TEXT["hud-dda"],
+    ops: ["civic?op=housing"],
+    sensitivity: "Published designations of ZIP code areas and counties; no person data.",
+    round: 8,
+  },
+  {
+    id: "hud-lihtc",
+    title: "Low-Income Housing Tax Credit properties (HUD)",
+    layer: "housing",
+    sources: ["hud-egis"],
+    what: "HUD's national database of LIHTC projects, drawn as teal points sized by low-income units when the 'Tax-credit properties (LIHTC)' chip is on: projects of five or more units at the address the state allocating agency reported, with the project's name, address, units, years placed in service and allocated, and HUD's coded fields (nonprofit sponsor, credit type, construction type, target population, tax-exempt bond, DDA and QCT flags) shown as HUD's codes.",
+    recordIs: "A tax-credit rental project as the state agency reported it to HUD, located at the building with the most units. Not a vacancy or rent listing, and not a statement that the project is still in its compliance period.",
+    coverage: {
+      spatial: "The 50 states, DC, Puerto Rico and the territories HUD lists; drawn below 100 km in a box of at most 0.3 degrees; only projects HUD geocoded to a rooftop (R) or a ZIP+4 centroid (4) are drawn, as HUD's layer description asks",
+      temporal: "allocated through 2021, placed in service through 2022 (YR_ALLOC and YR_PIS maxima; 8888 and 9999 are HUD's codes, not years)",
+      count: { value: 50566, of: "projects in the LIHTC layer 0 (returnCountOnly): 45,765 with five or more units, of which 40,239 are geocoded R or 4 (drawn) and the rest to a block group, tract or ZIP centroid or not at all (counted, not drawn); 4,211 with one to four units (2,221 with one) and 590 with no unit count are never asked for; 2,367 have no coordinates", countedOn: R8 },
+    },
+    freshness: { statement: "Layer data last edited 2024-12-09; the newest YR_ALLOC is 2021 and the newest YR_PIS 2022.", readFrom: "FeatureServer layer 0 editingInfo.dataLastEditDate; YR_ALLOC and YR_PIS outStatistics (read 2026-10-17)", recordedOn: R8 },
+    excluded: [
+      { what: "CONTACT, COMPANY, CO_ADD, CO_CTY, CO_ST, CO_ZIP and CO_TEL", why: "the owner company, its contact person, their address and telephone: never requested (an allow-list, and a test denies them)" },
+      { what: "the geocoder bookkeeping (STD_*, DPV*, C1P*, MSG*, APT_*)", why: "not needed; never requested" },
+      { what: "projects of fewer than five units (4,211) and projects with no unit count (590)", why: "a small project is a household's home, so its point and address would say where a private person lives; the rule is in the upstream where (N_UNITS >= 5), and no answer counts withheld projects (Cam's decision, pending)" },
+      { what: "projects HUD located only to a block group, tract or ZIP centroid", why: "HUD's layer description says to map only R and 4; they are counted in the layer's note, not drawn at a centroid" },
+      { what: "meanings of HUD's codes", why: "HUD's LIHTC data dictionary is on huduser.gov, which did not answer keyless (2026-10-17), and the layer has no coded-value domains" },
+      { what: "HUD's Public Housing Developments and Multifamily Assisted properties", why: "contact fields and per-development resident race, income and disability shares; held (D8-6)" },
+      { what: "record vectors", why: "records-eval is pinned on 18 cards and would need re-measuring (D8-2)" },
+    ],
+    caveats: [HOUSING_TAX_CREDIT_CAVEAT, LIHTC_CODE_NOTE, CT_TAX_CREDIT_NOTE],
+    searchable: ["HUD_ID"],
+    embedText: EMBED_TEXT["hud-lihtc"],
+    ops: ["civic?op=housing"],
+    sensitivity:
+      "Tax-credit rental properties as state agencies reported them to HUD. Owner company, contact person, their address and telephone are never requested. A project of fewer than five units is a household's home and is not drawn; its row never reaches the server. PROJECT is a property's name; it labels the point and is matched letter by letter (flagged for review, fallback HUD_ID), and PROJ_ADD is shown on click only, never searched or embedded.",
     round: 8,
   },
 ];

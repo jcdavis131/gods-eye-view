@@ -445,3 +445,29 @@ describe("the housing measure in the share link", () => {
     useGlobe.getState().setLayer("housing", false);
   });
 });
+
+describe("the housing tax-credit chips in the share link (round 8)", () => {
+  it("round-trips hp=dda,lihtc in a fixed order and drops unknown parts", () => {
+    const s: ShareState = { layers: ["housing"], hp: "dda,lihtc" };
+    const q = shareQuery(s);
+    expect(q).toContain("hp=dda%2Clihtc");
+    expect(parseShare(q)).toEqual(s);
+    expect(parseShare("?hp=lihtc,dda").hp).toBe("dda,lihtc");
+    for (const bad of ["?hp=hcv", "?hp=", "?hp=qct"]) expect(parseShare(bad).hp, bad).toBeUndefined();
+  });
+
+  it("is written only while the layer is on and a chip is on", async () => {
+    const { currentShare } = await import("./share");
+    const { useGlobe } = await import("@/lib/store/globe");
+    const { useSettings } = await import("@/lib/store/settings");
+    const set = useSettings.getState().setPref;
+    set("housingParts", "lihtc");
+    useGlobe.getState().setLayer("housing", false);
+    expect(currentShare().hp).toBeUndefined();
+    useGlobe.getState().setLayer("housing", true);
+    expect(currentShare().hp).toBe("lihtc");
+    set("housingParts", "");
+    expect(currentShare().hp).toBeUndefined();
+    useGlobe.getState().setLayer("housing", false);
+  });
+});

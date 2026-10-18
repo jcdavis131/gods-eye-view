@@ -99,6 +99,10 @@ export const SEARCHABLE_DETAILS: ReadonlySet<string> = new Set([
   "assessment unit id",
   // trust land: BIA's land area id (the feature is labelled by BIA's land area name, a place's)
   "lar id",
+  // housing tax credits (round 8): HUD's LIHTC project id and HUD's DDA code. Never a LIHTC
+  // property's address; the property is labelled by its published project name
+  "hud id",
+  "hud dda code",
   // PFAS in drinking water: EPA's public water system id. Never the system's name (some
   // are apartment complexes, nursing homes or rental parks)
   "pwsid",

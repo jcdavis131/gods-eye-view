@@ -76,6 +76,8 @@ export const EMBED_TEXT = {
   "hud-qct": [],
   "usgs-landslide-susc": [],
   "ncei-storm-events-county": [],
+  "hud-dda": [],
+  "hud-lihtc": [],
 } satisfies Record<string, string[]>;
 
 export type CollectionId = keyof typeof EMBED_TEXT;
@@ -375,6 +377,8 @@ export const NO_RECORD_VECTORS: Readonly<Record<string, string>> = {
   "hud-qct": "tract numbers only; no record text",
   "usgs-landslide-susc": "picture layer; county shares are dossier numbers",
   "ncei-storm-events-county": "dossier series baked from NCEI's files; one county's counts, no record text",
+  "hud-dda": "a designation outline; names and codes only",
+  "hud-lihtc": "record vectors deferred: records-eval is pinned on 18 cards and would need re-measuring (D8-2)",
 };
 
 /** Fields that must never be embedded whatever a card says: the deny list, the dossier's "published name", and any *name field not reviewed. */

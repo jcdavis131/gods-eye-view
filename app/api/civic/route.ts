@@ -52,6 +52,11 @@
 //        none), never 0; every Connecticut tract is null, which is "not published".
 //   /api/civic?op=housing&level=place&fips=48453002220
 //        One tract (11 digits): its voucher row and whether it is in the QCT list.
+//   /api/civic?op=housing&bbox=w,s,e,n&part=dda,lihtc   (either or both; round 8)
+//        Adds HUD's Difficult Development Areas titled 2026 (ZCTA5, DDA_CODE, DDA_TYPE,
+//        DDA_NAME) and HUD's LIHTC properties (an allow-list of 19 fields, never the owner or
+//        contact block; where N_UNITS >= 5, so a project of fewer than five units never reaches
+//        the server) in the same box, page and gate, as { dda, lihtc } beside { hcv, qct }.
 //
 // All through the civic gate (one request a second to data.cdc.gov, one every 500 ms
 // to an ArcGIS organisation; a 429 or 503 closes it for ten minutes). A county or
@@ -109,6 +114,7 @@ import {
   QCT_LAYER,
   QCT_YEAR_NOTE,
 } from "@/lib/civic/housing";
+import { CT_TAX_CREDIT_NOTE, DDA_FIELDS, DDA_LAYER, DDA_YEAR_NOTE, HOUSING_TAX_CREDIT_CAVEAT, LIHTC_CODE_NOTE, LIHTC_FIELDS, LIHTC_LAYER, LIHTC_WHERE, parseHousingParts, type HousingPart } from "@/lib/civic/taxcredit";
 import { buildSchools, NCES_MAX_PAGES, NCES_PAGE, NCES_SCHOOLS, SCHOOL_FIELDS, SCHOOLS_ATTRIBUTION, SCHOOLS_CAVEAT } from "@/lib/civic/schools";
 import type { LayerFeature } from "@/lib/layers/types";
 import {
@@ -536,13 +542,31 @@ async function broadbandPlace(fips: string) {
 
 // ---------------------------------------------------------------- housing (HUD vouchers by tract, QCT titled 2026)
 
-const HOUSING_HELP = "op=housing needs bbox=w,s,e,n (at most 0.3 degrees a side) or level=place&fips=<11-digit tract GEOID>";
+const HOUSING_HELP = "op=housing needs bbox=w,s,e,n (at most 0.3 degrees a side), optionally part=dda,lihtc (either or both), or level=place&fips=<11-digit tract GEOID>";
 const HOUSING_CAVEATS = [HOUSING_CAVEAT, QCT_YEAR_NOTE, CT_HOUSING_NOTE];
 
 const hudProv = (layer: string, seriesId: string, period: string, age: number, notes?: string[]) =>
   provenance(source("hud-egis"), { kind: "published", seriesId, upstreamUrl: layer, period, retrievedAt: at(age), notes });
 
-async function housingBox(b: Bbox) {
+/** One round-8 part in a box (DDA outlines or LIHTC points), held a week per box, allow-listed fields only. */
+async function housingPartBox(b: Bbox, part: HousingPart) {
+  const layer = part === "dda" ? DDA_LAYER : LIHTC_LAYER;
+  const fields = part === "dda" ? DDA_FIELDS : LIHTC_FIELDS;
+  const params = housingBoxParams(b, fields);
+  if (part === "lihtc") params.where = LIHTC_WHERE;
+  return cached(
+    `housing:${part}:bbox:${b.join(",")}`,
+    WEEK_MS,
+    async () => {
+      const res = await runRows("hud-egis", { kind: "arcgis", layer, params }, 25_000);
+      return { fc: pickFields(res.features, fields), cut: res.truncated || res.features.length >= HOUSING_PAGE };
+    },
+    { deadlineMs: 35_000 },
+  );
+}
+
+async function housingBox(b: Bbox, parts: HousingPart[] = []) {
+  const extra = await Promise.all(parts.map((p) => housingPartBox(b, p)));
   const r = await cached(
     `housing:bbox:${b.join(",")}`,
     WEEK_MS,
@@ -566,14 +590,34 @@ async function housingBox(b: Bbox) {
   const caveats = [...HOUSING_CAVEATS, `HUD: "${HCV_SUPPRESSION_QUOTE}"; "${HCV_DENOMINATOR_QUOTE}".`];
   if (v.hcvCut) caveats.push(`The voucher answer for this box was cut at ${HOUSING_PAGE} tracts: ask a smaller box for every tract.`);
   if (v.qctCut) caveats.push(`The QCT answer for this box was cut at ${HOUSING_PAGE} tracts: ask a smaller box for every tract.`);
+  const partData: Record<string, unknown> = {};
+  const partMeta: Record<string, unknown> = {};
+  const partProv: ReturnType<typeof hudProv>[] = [];
+  let partCut = false;
+  parts.forEach((p, i) => {
+    const x = extra[i];
+    partData[p] = { type: "FeatureCollection", features: x.value.fc };
+    partMeta[`${p}Count`] = x.value.fc.length;
+    if (x.value.cut) {
+      partCut = true;
+      caveats.push(`The ${p === "dda" ? "DDA" : "LIHTC"} answer for this box was cut at ${HOUSING_PAGE}: ask a smaller box for every ${p === "dda" ? "area" : "property"}.`);
+    }
+    partProv.push(
+      p === "dda"
+        ? hudProv(DDA_LAYER, "Difficult_Development_Areas_2026 FeatureServer layer 0, areas in the box", "titled 2026 by HUD", x.age, [`bbox ${b.join(",")}`])
+        : hudProv(LIHTC_LAYER, `LIHTC FeatureServer layer 0 (Low_Income_Housing_Tax_Credit_Properties), ${LIHTC_WHERE}, properties in the box`, "allocated through 2021, placed in service through 2022 (data edited 2024-12-09)", x.age, [`bbox ${b.join(",")}`]),
+    );
+  });
+  if (parts.length) caveats.push(HOUSING_TAX_CREDIT_CAVEAT, ...(parts.includes("dda") ? [DDA_YEAR_NOTE] : []), ...(parts.includes("lihtc") ? [LIHTC_CODE_NOTE] : []), CT_TAX_CREDIT_NOTE);
   return ok(
-    { hcv: { type: "FeatureCollection", features: v.hcv }, qct: { type: "FeatureCollection", features: v.qct } },
+    { hcv: { type: "FeatureCollection", features: v.hcv }, qct: { type: "FeatureCollection", features: v.qct }, ...partData },
     {
-      meta: { source: HOUSING_ATTRIBUTION, bbox: b, count: v.hcv.length, qctCount: v.qct.length, suppressed, connecticutNotPublished: ct, capped: v.hcvCut || v.qctCut, shareBreaks: [...HOUSING_SHARE_BREAKS], countBreaks: [...HOUSING_COUNT_BREAKS], cacheAge: r.age },
+      meta: { source: HOUSING_ATTRIBUTION, bbox: b, count: v.hcv.length, qctCount: v.qct.length, suppressed, connecticutNotPublished: ct, capped: v.hcvCut || v.qctCut || partCut, shareBreaks: [...HOUSING_SHARE_BREAKS], countBreaks: [...HOUSING_COUNT_BREAKS], parts, ...partMeta, cacheAge: r.age },
       ttlS: 86_400,
       provenance: [
         hudProv(HCV_LAYER, "Housing_Choice_Vouchers_by_Tract FeatureServer layer 0, tracts in the box", "through 12/2025 (last updated 01/2026)", r.age, [`bbox ${b.join(",")}`]),
         hudProv(QCT_LAYER, "QUALIFIED_CENSUS_TRACTS_2026 FeatureServer layer 0, tracts in the box", "titled 2026 by HUD", r.age, [`bbox ${b.join(",")}`]),
+        ...partProv,
       ],
       caveats,
     },
@@ -672,8 +716,10 @@ export async function GET(req: NextRequest) {
           return /^\d{11}$/.test(fips) ? await housingPlaceOp(fips) : badRequest(HOUSING_HELP);
         }
         if (level != null) return badRequest(HOUSING_HELP);
+        const parts = parseHousingParts(q.get("part"));
+        if (parts === "bad") return badRequest(HOUSING_HELP);
         const b = gridBbox(q.get("bbox"), HOUSING_BOX_DEG, HOUSING_GRID);
-        return b ? await housingBox(b) : badRequest(HOUSING_HELP);
+        return b ? await housingBox(b, parts ?? []) : badRequest(HOUSING_HELP);
       }
       default:
         return badRequest("unknown op: health | svi | schools | broadband | housing");

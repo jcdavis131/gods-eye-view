@@ -150,6 +150,8 @@ export interface Prefs {
   broadbandMeasure: string;
   /** Housing assistance: the measure drawn, "0" HUD's share of renter units, "1" voucher households. */
   housingMeasure: string;
+  /** Housing assistance: the tax-credit chips on, comma-joined ("dda", "lihtc"); "" none (round 8). */
+  housingParts: string;
   /** Wildfire risk ranks: the WRC rank family drawn, "0" RISK, "1" BP, "2" WHP, "3" EA_HURISK. */
   wrcMeasure: string;
   /** Wildfire risk ranks: national or state rank. */
@@ -191,6 +193,7 @@ export const DEFAULT_PREFS: Prefs = {
   sviTheme: "0",
   broadbandMeasure: "0",
   housingMeasure: "0",
+  housingParts: "",
   wrcMeasure: "0",
   wrcScope: "national",
   hospitalStatus: "open",
