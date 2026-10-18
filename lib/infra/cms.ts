@@ -7,11 +7,14 @@
 // address and ZIP code, exactly, after a fixed normalisation, and only where
 // exactly one CMS row and exactly one HIFLD row (any status) share the key.
 // A key two hospitals share (a long-term-care unit inside a general hospital)
-// is never attached, so no tenant ever shows its host's rating. A tenant HIFLD
-// lists alone at its host's address (the host is keyed elsewhere) is refused
-// too, by tenantConflict: on the 2026-10-18 audit, 8 of 4,050 one-to-one
-// matches paired a long-term acute care unit, a psychiatric distinct part or a
-// later occupant of the building with another facility's CMS record.
+// is never attached. A tenant HIFLD lists alone at its host's address (the
+// host is keyed elsewhere) is refused too, by tenantConflict, when its name or
+// type marks it as one: on the 2026-10-18 audit it refused 7 of 4,050
+// one-to-one matches, six that paired a long-term acute care hospital, or a
+// closed or moved hospital HIFLD still lists at a building another facility now
+// occupies, with another facility's CMS record, and one rename (a known cost).
+// A distinct part (D/P) is kept: it is a unit under its host's own CCN. Rows
+// still unattached get a second pass on mailFreeKey, which refuses the same way.
 //
 // Pure and import-free with only erasable TypeScript (node runs it by type
 // stripping for scripts/bake-cms-hospitals.mjs; vitest and the infra route
@@ -30,7 +33,10 @@ export const CMS_PROPERTIES = ["facility_id", "facility_name", "address", "zip_c
 export const CMS_DENY = /telephone|countyparish/;
 
 export const HIFLD_JOIN_URL = "https://services.arcgis.com/XG15cJAlne2vxtgt/arcgis/rest/services/Hospitals_RAPT/FeatureServer/6";
-/** NAME and TYPE are read for tenantConflict only, never stored. */
+/**
+ * NAME and TYPE are read for tenantConflict only. Neither is stored in a row; a refused pair's reason in
+ * meta.refusedTenant names the tenant marker word (LTAC, KINDRED, ...) or both publishers' types.
+ */
 export const HIFLD_JOIN_FIELDS = ["ID", "ADDRESS", "ZIP", "STATUS", "NAME", "TYPE"] as const;
 
 /** One page of the CMS datastore query, the named columns only. */
@@ -90,14 +96,16 @@ const ORDINAL_WORDS: Readonly<Record<string, string>> = {
 };
 
 /**
- * The second-pass key: the join key without a PO box or drawer (mail, not the building), with "U S" as
+ * The second-pass key: the join key without a PO box or drawer (PO, P O or POB before it: mail, not the building), with "U S" as
  * "US" and ordinal street words as numbers (NINETEENTH to 19TH). Suites, floors and buildings are kept:
  * they tell co-located facilities apart. Null when the address or ZIP is empty.
  */
 export function mailFreeKey(address: unknown, zip: unknown): string | null {
+  // Only a box or drawer marked as mail (PO, P O, POB): a bare BOX n is kept, so RR 2 BOX 100 and
+  // RR 2 BOX 300 (rural-route boxes, often the only address a rural hospital has) stay apart.
   const a = normAddress(address)
     .replace(/\b(P O|PO) (BOX|DRAWER|DRWR) \S+/g, " ")
-    .replace(/\b(POB|BOX|DRAWER) \d+\S*/g, " ")
+    .replace(/\bPOB \d+\S*/g, " ")
     .replace(/\bU S\b/g, "US")
     .split(" ")
     .map((w) => ORDINAL_WORDS[w] ?? w)
@@ -154,12 +162,23 @@ const s = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.
 /**
  * A HIFLD name that marks a separately certified hospital living in another hospital's building (CMS's
  * Provider of Services file gives each its own CCN, e.g. Infirmary LTAC 012006 at Mobile Infirmary's
- * address). Not D/P or "distinct part": a distinct part is a unit under its host's own CCN, so the
- * host's rating covers it.
+ * address). Matched after nameUpper, so LONG-TERM ACUTE reads LONG TERM ACUTE. Not D/P or "distinct
+ * part": see DISTINCT_PART.
  */
 export const TENANT_MARKER = /\b(LTAC|LTACH|LONG TERM ACUTE|SELECT SPECIALTY|KINDRED|VIBRA)\b/;
+/**
+ * A HIFLD name marking a distinct part: a unit under its host's own CCN (CMS's Provider of Services file
+ * lists no separate one), so the host's rating covers it and the types-differ test never refuses it.
+ */
+export const DISTINCT_PART = /(^|\s)(D\/P|DISTINCT PART)(\s|$)/;
 const NAME_STOP = new Set("THE OF AND AT FOR INC LLC CORP HOSPITAL HOSPITALS MEDICAL CENTER CENTRE CTR HEALTH HEALTHCARE SYSTEM SYSTEMS REGIONAL COMMUNITY MEMORIAL CAMPUS CARE SERVICES".split(" "));
-const nameUpper = (v: unknown): string => (s(v) ?? "").toUpperCase().replace(/\bHOSP\b/g, "HOSPITAL").replace(/\bCTR\b/g, "CENTER");
+const nameUpper = (v: unknown): string =>
+  (s(v) ?? "")
+    .toUpperCase()
+    .replace(/-/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/\bHOSP\b/g, "HOSPITAL")
+    .replace(/\bCTR\b/g, "CENTER");
 const nameTokens = (v: unknown): string[] => nameUpper(v).replace(/[^A-Z0-9/ ]/g, " ").split(/\s+/).filter((t) => t.length > 1 && !NAME_STOP.has(t));
 function oneEdit(a: string, b: string): boolean {
   if (Math.abs(a.length - b.length) > 1) return false;
@@ -168,11 +187,14 @@ function oneEdit(a: string, b: string): boolean {
   for (let i = 0; i < y.length; i++) if (y.slice(0, i) + y.slice(i + 1) === x) return true;
   return false;
 }
-/** Share of the shorter name's words found in the other (a word of 5+ letters may differ by one edit). */
+/**
+ * Share of the shorter name's words found in the other (a word of 5+ letters may differ by one edit).
+ * A name with no word left once the stop words go (HOSPITAL, MEDICAL CENTER) agrees with nothing: 0.
+ */
 export function nameOverlap(a: unknown, b: unknown): number {
   const ta = nameTokens(a);
   const tb = nameTokens(b);
-  if (!ta.length || !tb.length) return 1;
+  if (!ta.length || !tb.length) return 0;
   const [x, y] = ta.length <= tb.length ? [ta, tb] : [tb, ta];
   return x.filter((t) => y.some((u) => t === u || (t.length >= 5 && oneEdit(t, u)))).length / x.length;
 }
@@ -185,15 +207,19 @@ function typeConflict(hType: string | null, cType: string | null): boolean {
 }
 /**
  * Why a one-to-one address match pairs two different facilities, or null. Either the HIFLD name marks
- * a tenant (LTAC, Kindred, a distinct part, ...) the CMS name does not, or the two publishers' types
- * conflict and fewer than half the shorter name's words agree. Missing names or types never refuse.
+ * a tenant (LTAC, Kindred, ...) the CMS name does not, and CMS does not type its own row Long-term (a
+ * standalone LTACH matched to its own record); or the two publishers' types conflict, the HIFLD name
+ * does not mark a distinct part, and fewer than half the shorter name's words agree (a name that is
+ * all stop words agrees with nothing). Missing names never refuse; missing types skip the type test.
  * Refusing costs a rating line ("no unambiguous CMS match"); attaching wrongly shows another
  * facility's stars, so the rule leans to refusing.
  */
 export function tenantConflict(hName: unknown, hType: unknown, cName: unknown, cType: unknown): string | null {
   if (!s(hName) || !s(cName)) return null;
-  const hm = nameUpper(hName).match(TENANT_MARKER);
-  if (hm && !TENANT_MARKER.test(nameUpper(cName))) return `HIFLD names a tenant (${hm[1]}) the CMS name does not`;
+  const hu = nameUpper(hName);
+  const hm = hu.match(TENANT_MARKER);
+  if (hm && s(cType) !== "Long-term" && !TENANT_MARKER.test(nameUpper(cName))) return `HIFLD names a tenant (${hm[1]}) the CMS name does not`;
+  if (DISTINCT_PART.test(hu)) return null;
   if (s(hType) && s(cType) && typeConflict(s(hType), s(cType)) && nameOverlap(hName, cName) < 0.5) return `types differ (HIFLD ${s(hType)}, CMS ${s(cType)}) and the names do not agree`;
   return null;
 }
@@ -312,7 +338,7 @@ export function bakeCms(
       cmsModified: info.cmsModified,
       hifldUrl: HIFLD_JOIN_URL,
       hifldDataLastEdit: info.hifldDataLastEdit,
-      joinRule: "key = address upper-cased, every non-alphanumeric to a space, words abbreviated by ADDRESS_WORDS (STREET to ST, NORTH to N, ...), then '|' and the first five digits of the ZIP; attached only where exactly one CMS row and exactly one HIFLD row (any status) share the key; a house-number-only key is not used; rows still unattached then get a second pass on mailFreeKey (no PO box or drawer, U S as US, ordinal street words as numbers), attached only where that key is unique across all rows and neither row is already attached or refused; a one-to-one match is refused when tenantConflict finds a tenant marker in the HIFLD name only, or conflicting types with names that do not agree (names and types are read, never stored)",
+      joinRule: "key = address upper-cased, every non-alphanumeric to a space, words abbreviated by ADDRESS_WORDS (STREET to ST, NORTH to N, ...), then '|' and the first five digits of the ZIP; attached only where exactly one CMS row and exactly one HIFLD row (any status) share the key; a house-number-only key is not used; rows still unattached then get a second pass on mailFreeKey (a box or drawer after PO, P O or POB removed, a bare BOX kept, U S as US, ordinal street words as numbers), attached only where that key is unique across all rows and neither row is already attached or refused; a one-to-one match is refused when tenantConflict finds a tenant marker in the HIFLD name only (and CMS does not type its own row Long-term), or conflicting types with names that do not agree (a distinct part, D/P, is never refused on types); facility names and types are read for that test only: no row stores either, and meta.refusedTenant stores, per refused pair, the HIFLD ID, the CCN and a reason naming the tenant marker word or the HIFLD TYPE and CMS hospital_type, never a facility name",
       cmsRows: cms.length,
       cmsDistinctCcn: new Set(cms.map((c) => String(c.facility_id ?? ""))).size,
       hifldRows: hifld.length,
@@ -335,7 +361,7 @@ export function bakeCms(
 }
 
 export const CMS_RATINGS_CAVEAT =
-  "CMS's overall hospital star rating as Care Compare published it (dataset modified 2026-07-22), joined to HIFLD's hospital by street address and ZIP code (exactly, or once a PO box or drawer is set aside) because HIFLD carries no CMS certification number; about one CMS hospital in five could not be matched that way, hospitals sharing an address are never matched, and a separately certified tenant never gets its host's rating. CMS rates acute-care and critical-access hospitals that report enough measures; many are not rated. A rating summarizes reported measures; it is not a measure of a hospital's emergency capacity.";
+  "CMS's overall hospital star rating as Care Compare published it (dataset modified 2026-07-22), joined to HIFLD's hospital by street address and ZIP code (exactly, or once a PO box or drawer is set aside, ordinal street words are read as numbers and U S as US) because HIFLD carries no CMS certification number; about one CMS hospital in five could not be matched that way, hospitals sharing an address are never matched, and a match whose HIFLD name or type marks a tenant of another hospital is refused. CMS rates acute-care and critical-access hospitals that report enough measures; many are not rated. A rating summarizes reported measures; it is not a measure of a hospital's emergency capacity.";
 
 export interface CmsExtra {
   ccn: string;

@@ -14,7 +14,7 @@ import cmsSlice from "./fixtures/cms-tx.json";
 import raptSlice from "./fixtures/rapt-tx.slice.json";
 import committed from "./data/cms-hospitals.json";
 import box from "./fixtures/hosp-box-austin.json";
-import { bakeCms, cmsDetails, cmsExtra, cmsPageUrl, cmsRating, CMS_DENY, CMS_PROPERTIES, joinKey, mailFreeKey, normAddress, tenantConflict, type CmsBake, type CmsRow, type HifldJoinRow } from "./cms";
+import { bakeCms, cmsDetails, cmsExtra, cmsPageUrl, cmsRating, CMS_DENY, CMS_PROPERTIES, joinKey, mailFreeKey, nameOverlap, normAddress, tenantConflict, type CmsBake, type CmsRow, type HifldJoinRow } from "./cms";
 import { buildHospitals } from "./hospitals";
 
 const cms = (cmsSlice as { results: CmsRow[] }).results;
@@ -55,6 +55,30 @@ describe("tenantConflict", () => {
   });
   it("keeps a distinct part: a unit under its host's own CCN, so the host's rating covers it (CMS POS lists no separate CCN)", () => {
     expect(tenantConflict("PALOMAR MEDICAL CENTER D/P APH", "PSYCHIATRIC", "PALOMAR HEALTH DOWNTOWN CAMPUS", "Acute Care Hospitals")).toBeNull();
+    // By rule, not by overlap: Glendale's names agree on 1 word of 3 (GLENDALE; CMS abbreviates MEM, HLTH),
+    // well under the 0.5 the types-differ test needs. Both from the 2026-10-18 capture, same address.
+    expect(nameOverlap("GLENDALE MEMORIAL HOSPITAL AND HEALTH CTR D/P APH", "GLENDALE MEM HOSPITAL & HLTH CENTER")).toBeLessThan(0.5);
+    expect(tenantConflict("GLENDALE MEMORIAL HOSPITAL AND HEALTH CTR D/P APH", "PSYCHIATRIC", "GLENDALE MEM HOSPITAL & HLTH CENTER", "Acute Care Hospitals")).toBeNull();
+    // Constructed pairings: HIFLD's spelled-out DISTINCT PART name against an unrelated real CMS name (overlap 0).
+    expect(tenantConflict("OREGON STATE HOSPITAL DISTINCT PART", "PSYCHIATRIC", "PALOMAR HEALTH DOWNTOWN CAMPUS", "Acute Care Hospitals")).toBeNull();
+    // The exemption is from the types test only: a marked tenant is still refused (constructed name).
+    expect(tenantConflict("KINDRED HOSPITAL D/P", "LONG TERM CARE", "NEXUS CHILDRENS HOSPITAL DALLAS", "Childrens")).toMatch(/tenant \(KINDRED\)/);
+  });
+  it("reads a hyphenated marker (LONG - TERM ACUTE) and spares a standalone LTACH matched to its own Long-term CMS record", () => {
+    // HIFLD's own name, St. Joseph MO (2026-10-18 capture), against the CMS hospital at that address.
+    expect(tenantConflict("LONG - TERM ACUTE CARE HOSPITAL - MOSAIC", "LONG TERM CARE", "MOSAIC LIFE CARE AT ST JOSEPH", "Acute Care Hospitals")).toMatch(/tenant \(LONG TERM ACUTE\)/);
+    // Constructed spelling (no record spells it so): the marker survives a bare hyphen too.
+    expect(tenantConflict("LONG-TERM ACUTE CARE HOSPITAL - MOSAIC", "LONG TERM CARE", "MOSAIC LIFE CARE AT ST JOSEPH", "Acute Care Hospitals")).toMatch(/tenant \(LONG TERM ACUTE\)/);
+    // Constructed pairing of two real names: CMS types its row Long-term, so the HIFLD LTACH is that hospital, not a tenant.
+    expect(tenantConflict("COLUMBUS HOSPITAL LTACH", "LONG TERM CARE", "SAGE SPECIALTY HOSPITAL", "Long-term")).toBeNull();
+    expect(tenantConflict("COLUMBUS HOSPITAL LTACH", "LONG TERM CARE", "SAGE SPECIALTY HOSPITAL", "Acute Care Hospitals")).toMatch(/tenant \(LTACH\)/);
+  });
+  it("counts a name of stop words only as not agreeing, so the type test still runs", () => {
+    // HIFLD 0196784671 and CMS 230121 (2026-10-18 capture): every word is a stop word.
+    expect(nameOverlap("MEMORIAL HEALTHCARE", "MEMORIAL HEALTHCARE")).toBe(0);
+    expect(tenantConflict("MEMORIAL HEALTHCARE", "PSYCHIATRIC", "MEMORIAL HEALTHCARE", "Acute Care Hospitals")).toMatch(/types differ/);
+    // Types that agree never refuse, stop words or not (HIFLD 0009262226, CMS 140185).
+    expect(tenantConflict("MEMORIAL HOSPITAL", "GENERAL ACUTE CARE", "MEMORIAL HOSPITAL", "Acute Care Hospitals")).toBeNull();
   });
   it("refuses a closed or moved tenant HIFLD still lists at a building another facility now occupies (POS: terminated or elsewhere)", () => {
     expect(tenantConflict("VIBRA HOSPITAL OF BOISE", "GENERAL ACUTE CARE", "COTTONWOOD CREEK BEHAVIORAL HOSPITAL", "Psychiatric")).toMatch(/tenant \(VIBRA\)/);
@@ -159,6 +183,16 @@ describe("the second pass (mailFreeKey)", () => {
     expect(mailFreeKey("619 SOUTH NINETEENTH STREET", "35233")).toBe(joinKey("619 S 19th St", "35233"));
     expect(mailFreeKey("2505 U S HWY 431 N", "35976")).toBe("2505 US HWY 431 N|35976");
   });
+  it("drops a box only when PO, P O or POB marks it as mail; a bare BOX n is kept", () => {
+    expect(mailFreeKey("501 WEST 14TH STREET, POB 1668", "19899")).toBe("501 W 14TH ST|19899");  // HIFLD 0196785384
+    // CMS 110190's own address (2026-10-18): no PO, so BOX 770 stays and it no longer meets HIFLD's
+    // "509 SUMTER STREET, PO BOX 770"; one of 13 same-name matches this rule gives up.
+    expect(mailFreeKey("509 SUMTER STREET, BOX 770", "31063")).toBe("509 SUMTER ST BOX 770|31063");
+    expect(mailFreeKey("509 SUMTER STREET, PO BOX 770", "31063")).toBe("509 SUMTER ST|31063");
+    // Constructed rural-route pair: two boxes on one route are two places, never one key.
+    expect(mailFreeKey("RR 2 BOX 100", "68001")).not.toBe(mailFreeKey("RR 2 BOX 300", "68001"));
+    expect(mailFreeKey("ROUTE 7 BOX R50", "39350")).toBe("ROUTE 7 BOX R50|39350");  // CMS 250127: a route box with no number, kept as it was
+  });
   it("keeps suites, floors and buildings: they tell co-located facilities apart", () => {
     expect(mailFreeKey("2250 SOQUEL AVE STE 150", "95062")).toBe("2250 SOQUEL AVE STE 150|95062");
     expect(mailFreeKey("101 BODIN CIR BLDG 777", "94535")).toBe("101 BODIN CIR BLDG 777|94535");
@@ -191,14 +225,19 @@ describe("the second pass (mailFreeKey)", () => {
 
 describe("the committed bake (2026-10-17, re-baked 2026-10-18 with tenantConflict)", () => {
   const m = (committed as unknown as CmsBake).meta;
-  it("reproduces the design's join figures, less the seven refused tenants", () => {
+  it("reproduces the design's join figures, less the nine refused tenants and the bare-BOX matches", () => {
     expect([m.cmsRows, m.cmsDistinctCcn, m.hifldRows]).toEqual([5419, 5419, 8514]);
     // 4,050 one-to-one matches on 2026-10-17; 7 refused on 2026-10-18 (CMS Provider of Services: a separately
     // certified LTAC at its host's address, Kindred Dallas terminated 2020, U.T. Bowld closed 2004, Vibra Boise
     // certified elsewhere, SageCrest absent; Select Specialty St. Louis; and the Doctors to Ascentist rename, a known cost).
     // 2026-10-18 second pass (mailFreeKey): +221 rows the exact key missed, none removed or changed; 213 of
     // them sit at the same street in CMS's Provider of Services register, and its tenant check refused 2 more.
-    expect([m.attached, m.attachedOpen, m.attachedOpenRated, m.attachedClosed, m.sharedKeys, m.attachedByMailFreeKey]).toEqual([4264, 4256, 2544, 8, 224, 221]);
+    // 2026-10-18 review: a bare BOX n (no PO, P O or POB) is no longer dropped, so rural-route boxes stay
+    // apart; 13 of the 221 needed it and are now unattached (all same-name pairs; no rural-route box was
+    // among them). 208 remain: 150 by a PO box or drawer alone, 54 by the
+    // ordinal / U S rewrite alone, 4 by both. The distinct-part, hyphen, Long-term and stop-word fixes
+    // to tenantConflict changed no national row. Same CMS and HIFLD answers as the 10-18 bake (sha256).
+    expect([m.attached, m.attachedOpen, m.attachedOpenRated, m.attachedClosed, m.sharedKeys, m.attachedByMailFreeKey]).toEqual([4251, 4243, 2535, 8, 224, 208]);
     expect(m.refusedTenant.map((r) => r[0])).toEqual(["0003067801", "0003136607", "0004667005", "0006166211", "0011163301", "0014275243", "0022776051", "0155783642", "0196784817"]);
     expect(m.cmsModified).toBe("2026-07-22");
     expect(m.hifldDataLastEdit).toBe("2026-04-22");

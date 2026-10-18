@@ -57,7 +57,7 @@ describe("op=hospitals", () => {
     expect(body.caveats.join(" ")).toContain("last public copy");
     // An open-only answer holds no closed rows to count, so its caveat carries no closed count.
     expect(body.caveats.join(" ")).toContain("ask status=all for the hospitals HIFLD lists as closed too");
-    expect(body.caveats.join(" ")).not.toMatch(/374/);
+    expect(body.caveats.join(" ")).not.toMatch(/\b374\b/);
   });
 
   it("a box (round 8): CMS's star rating rides in extra.cms only for the hospitals the bake attached, with CMS provenance", async () => {
@@ -69,8 +69,9 @@ describe("op=hospitals", () => {
     expect(feats.filter((f) => f.properties.extra.cms === null)).toHaveLength(11);
     for (const f of feats) expect(f.properties.details["CMS star rating"]).toBeDefined();
     expect(body.provenance.map((p) => p.source.id)).toEqual(["hifld-hospitals", "cms-provider-data"]);
-    expect(body.caveats.join(" ")).toMatch(/joined to HIFLD's hospital by street address and ZIP code \(exactly, or once a PO box or drawer is set aside\)/);
-    expect(body.caveats.join(" ")).toMatch(/a separately certified tenant never gets its host's rating/);
+    expect(body.caveats.join(" ")).toMatch(/joined to HIFLD's hospital by street address and ZIP code \(exactly, or once a PO box or drawer is set aside, ordinal street words are read as numbers and U S as US\)/);
+    expect(body.caveats.join(" ")).toMatch(/a match whose HIFLD name or type marks a tenant of another hospital is refused/);
+    expect(body.caveats.join(" ")).not.toMatch(/never gets its host's rating/);
     expect(calls).toHaveLength(1);
   });
 
