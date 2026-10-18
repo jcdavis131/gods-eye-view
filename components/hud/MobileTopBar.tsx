@@ -8,6 +8,7 @@ import { useGlobe } from "@/lib/store/globe";
 import { useReleases } from "@/lib/releases/store";
 import { isLive } from "@/lib/globe/clock";
 import VoiceControl from "./VoiceControl";
+import ThemeToggle from "./ThemeToggle";
 import { useLens } from "@/lib/personas/store";
 import { PERSONA_BY_ID } from "@/lib/personas/registry";
 
@@ -53,6 +54,7 @@ export default function MobileTopBar() {
         </button>
         <div className="flex shrink-0 items-center justify-end">
           <VoiceControl compact />
+          <ThemeToggle className="flex" />
           <button
             type="button"
             onClick={() => setSearchOpen(true)}
