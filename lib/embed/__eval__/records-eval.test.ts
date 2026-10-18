@@ -112,9 +112,8 @@ const BARS = { P: 0.65, R: 0.45, empty: 0.3 };
  */
 const KNOWN_CONTROL_LEAKS: Record<string, { card: string; decision: string }> = {
   n30: { card: "bia-lar", decision: "Cam, 2026-10-17: \"Cutoff 0.50\" (run 4: n30 \"Alaska Native corporation lands\" on bia-lar at 0.506)" },
-  // NOT yet accepted by Cam: B0's head "Wildfire risk to communities" lifts v2's adjacent control n03 from
-  // 0.495 to 0.547 on WRC (8 rows). Flagged for review on the B0 PR; drop B0 or raise tau if refused.
-  n03: { card: "wrc-communities", decision: "PENDING Cam's review (B0 PR, 2026-10-18): n03 \"wildfire perimeters\" on wrc-communities at 0.547" },
+  // B0's head "Wildfire risk to communities" lifts v2's adjacent control n03 from 0.495 to 0.547 on WRC (8 rows).
+  n03: { card: "wrc-communities", decision: "Cam, 2026-10-18: \"Accept the leak, merge\" (B0 PR #96: n03 \"wildfire perimeters\" on wrc-communities at 0.547)" },
 };
 
 describe("records by meaning (hand-written eval, labelled as such)", () => {
