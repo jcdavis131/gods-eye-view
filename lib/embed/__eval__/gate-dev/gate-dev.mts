@@ -216,7 +216,8 @@ const table = arms.map((a) => {
 // those, most blind bars 1-3 passed; then lowest blind empty + blind shows-on-Q0; then highest mean
 // nDCG over the two sets; then the simpler rule (list, per-hit, both; terms, idf).
 //
-// Selection rule v2 (2026-10-18, after v1's pick, still dev only and before set C exists). v1 picked
+// Selection rule v2 (2026-10-18, after v1's pick, still dev only; before the set C pool was built and before
+// the builder saw any set C query; writer 1's queries already existed, unread, per the verifier). v1 picked
 // list terms t0.45 c0.6, which passes hand empty by 0.004 (0.146 against 0.15), and its tie-break
 // paid 0.09 of blind empty for blind Q0 rows that are mostly not true negatives: blind Q0 is 17
 // negatives plus 17 collection queries whose specific item the raters found missing, and t0.45 and
