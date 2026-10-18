@@ -8,7 +8,6 @@ import { issLayer } from "./iss";
 import { shipsLayer } from "./ships";
 import { earthquakesLayer } from "./earthquakes";
 import { camerasLayer } from "./cameras";
-import { trafficLayer } from "./traffic";
 import { launchesLayer } from "./launches";
 import { waterLayer } from "./water";
 import { groundwaterLayer } from "./groundwater";
@@ -77,7 +76,8 @@ export const LAYERS: LayerDefinition[] = [
   issLayer,
   earthquakesLayer,
   camerasLayer,
-  trafficLayer,
+  // Traffic (sim) is not offered: its vehicles are simulated, not a public
+  // record. lib/layers/traffic.ts stays for the vehicle styling it exports.
   launchesLayer,
   waterLayer,
   groundwaterLayer,

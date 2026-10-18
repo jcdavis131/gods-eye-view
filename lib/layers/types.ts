@@ -104,7 +104,9 @@ export const LAYER_IDS: LayerId[] = [
   "iss",
   "earthquakes",
   "cameras",
-  "traffic",
+  // "traffic" stays in the LayerId union for its module and old fixtures, but
+  // not here: it is simulated, so it is not offered, and a share link that
+  // names it (?layers=traffic) drops it as an unknown layer.
   "launches",
   "water",
   "groundwater",

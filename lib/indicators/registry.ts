@@ -244,7 +244,6 @@ export const INDICATORS: readonly Indicator[] = [
       { level: "alert", op: ">=", value: 5, label: "above $5.00 a gallon, within 15 % of the 2022 record (convention)", citation: "EIA weekly retail diesel; record $5.81 on 2022-06-20, " + CONVENTION },
     ],
     fetch: btsFetch("bts-diesel"),
-    relatedLayers: ["traffic"],
   },
 
   // ---------------------------------------------------------------- energy
