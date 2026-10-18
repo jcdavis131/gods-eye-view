@@ -170,7 +170,7 @@ export const TENANT_MARKER = /\b(LTAC|LTACH|LONG TERM ACUTE|SELECT SPECIALTY|KIN
  * A HIFLD name marking a distinct part: a unit under its host's own CCN (CMS's Provider of Services file
  * lists no separate one), so the host's rating covers it and the types-differ test never refuses it.
  */
-export const DISTINCT_PART = /(^|\s)(D\/P|DISTINCT PART)(\s|$)/;
+export const DISTINCT_PART = /\bD\/P\b|\bDISTINCT PART\b/;
 const NAME_STOP = new Set("THE OF AND AT FOR INC LLC CORP HOSPITAL HOSPITALS MEDICAL CENTER CENTRE CTR HEALTH HEALTHCARE SYSTEM SYSTEMS REGIONAL COMMUNITY MEMORIAL CAMPUS CARE SERVICES".split(" "));
 const nameUpper = (v: unknown): string =>
   (s(v) ?? "")

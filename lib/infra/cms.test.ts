@@ -61,6 +61,8 @@ describe("tenantConflict", () => {
     expect(tenantConflict("GLENDALE MEMORIAL HOSPITAL AND HEALTH CTR D/P APH", "PSYCHIATRIC", "GLENDALE MEM HOSPITAL & HLTH CENTER", "Acute Care Hospitals")).toBeNull();
     // Constructed pairings: HIFLD's spelled-out DISTINCT PART name against an unrelated real CMS name (overlap 0).
     expect(tenantConflict("OREGON STATE HOSPITAL DISTINCT PART", "PSYCHIATRIC", "PALOMAR HEALTH DOWNTOWN CAMPUS", "Acute Care Hospitals")).toBeNull();
+    // HIFLD 0196785277 writes it in brackets, "(D/P)".
+    expect(tenantConflict("CALIFORNIA PACIFIC MEDICAL CENTER - DAVIES CAMPUS (D/P) APH", "PSYCHIATRIC", "PALOMAR HEALTH DOWNTOWN CAMPUS", "Acute Care Hospitals")).toBeNull();
     // The exemption is from the types test only: a marked tenant is still refused (constructed name).
     expect(tenantConflict("KINDRED HOSPITAL D/P", "LONG TERM CARE", "NEXUS CHILDRENS HOSPITAL DALLAS", "Childrens")).toMatch(/tenant \(KINDRED\)/);
   });
