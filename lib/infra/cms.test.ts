@@ -14,7 +14,7 @@ import cmsSlice from "./fixtures/cms-tx.json";
 import raptSlice from "./fixtures/rapt-tx.slice.json";
 import committed from "./data/cms-hospitals.json";
 import box from "./fixtures/hosp-box-austin.json";
-import { bakeCms, cmsDetails, cmsExtra, cmsPageUrl, cmsRating, CMS_DENY, CMS_PROPERTIES, joinKey, normAddress, tenantConflict, type CmsBake, type CmsRow, type HifldJoinRow } from "./cms";
+import { bakeCms, cmsDetails, cmsExtra, cmsPageUrl, cmsRating, CMS_DENY, CMS_PROPERTIES, joinKey, mailFreeKey, normAddress, tenantConflict, type CmsBake, type CmsRow, type HifldJoinRow } from "./cms";
 import { buildHospitals } from "./hospitals";
 
 const cms = (cmsSlice as { results: CmsRow[] }).results;
@@ -151,6 +151,44 @@ describe("buildHospitals with the CMS join", () => {
   });
 });
 
+// Real address pairs from the 2026-10-18 error analysis of the unattached CMS hospitals.
+describe("the second pass (mailFreeKey)", () => {
+  it("drops a PO box or drawer, writes U S as US and ordinal street words as numbers", () => {
+    expect(mailFreeKey("1108 ROSS CLARK CIRCLE, PO BOX 6987", "36301")).toBe(joinKey("1108 Ross Clark Circle", "36301"));
+    expect(mailFreeKey("750 MORPHY AVENUE, P.O. DRAWER 929", "36532")).toBe("750 MORPHY AVE|36532");
+    expect(mailFreeKey("619 SOUTH NINETEENTH STREET", "35233")).toBe(joinKey("619 S 19th St", "35233"));
+    expect(mailFreeKey("2505 U S HWY 431 N", "35976")).toBe("2505 US HWY 431 N|35976");
+  });
+  it("keeps suites, floors and buildings: they tell co-located facilities apart", () => {
+    expect(mailFreeKey("2250 SOQUEL AVE STE 150", "95062")).toBe("2250 SOQUEL AVE STE 150|95062");
+    expect(mailFreeKey("101 BODIN CIR BLDG 777", "94535")).toBe("101 BODIN CIR BLDG 777|94535");
+  });
+  const C = (id: string, address: string, name: string): CmsRow => ({ facility_id: id, facility_name: name, address, zip_code: "36301", hospital_type: "Acute Care Hospitals", hospital_overall_rating: "3" });
+  const H = (id: string, address: string, name: string): HifldJoinRow => ({ ID: id, ADDRESS: address, ZIP: "36301", STATUS: "OPEN", NAME: name, TYPE: "GENERAL ACUTE CARE" });
+  it("attaches a row the exact key missed, and counts it", () => {
+    const b = bakeCms([C("010001", "1108 ROSS CLARK CIR", "SOUTHEAST HEALTH MEDICAL CENTER")], [H("0000010001", "1108 ROSS CLARK CIRCLE PO BOX 6987", "SOUTHEAST HEALTH MEDICAL CENTER")], info);
+    expect(Object.keys(b.rows)).toEqual(["0000010001"]);
+    expect(b.meta.attachedByMailFreeKey).toBe(1);
+  });
+  it("never undoes an exact match, and never attaches where the mail-free key is shared", () => {
+    // Two HIFLD rows differ only by a PO box: the exact match stands; the other stays unattached.
+    const b = bakeCms(
+      [C("010001", "1108 ROSS CLARK CIR", "SOUTHEAST HEALTH MEDICAL CENTER")],
+      [H("A", "1108 ROSS CLARK CIR", "SOUTHEAST HEALTH MEDICAL CENTER"), H("B", "1108 ROSS CLARK CIR PO BOX 6987", "SOUTHEAST HEALTH MEDICAL CENTER")],
+      info,
+    );
+    expect(Object.keys(b.rows)).toEqual(["A"]);
+    expect(b.meta.attachedByMailFreeKey).toBe(0);
+    // Neither side matches exactly and the mail-free key is shared by two HIFLD rows: nothing attaches.
+    const s2 = bakeCms(
+      [C("010001", "1108 ROSS CLARK CIR", "SOUTHEAST HEALTH MEDICAL CENTER")],
+      [H("A", "1108 ROSS CLARK CIR PO BOX 1", "SOUTHEAST HEALTH MEDICAL CENTER"), H("B", "1108 ROSS CLARK CIR PO BOX 2", "SOUTHEAST HEALTH BEHAVIORAL")],
+      info,
+    );
+    expect(s2.rows).toEqual({});
+  });
+});
+
 describe("the committed bake (2026-10-17, re-baked 2026-10-18 with tenantConflict)", () => {
   const m = (committed as unknown as CmsBake).meta;
   it("reproduces the design's join figures, less the seven refused tenants", () => {
@@ -158,8 +196,10 @@ describe("the committed bake (2026-10-17, re-baked 2026-10-18 with tenantConflic
     // 4,050 one-to-one matches on 2026-10-17; 7 refused on 2026-10-18 (CMS Provider of Services: a separately
     // certified LTAC at its host's address, Kindred Dallas terminated 2020, U.T. Bowld closed 2004, Vibra Boise
     // certified elsewhere, SageCrest absent; Select Specialty St. Louis; and the Doctors to Ascentist rename, a known cost).
-    expect([m.attached, m.attachedOpen, m.attachedOpenRated, m.attachedClosed, m.sharedKeys]).toEqual([4043, 4035, 2427, 8, 224]);
-    expect(m.refusedTenant.map((r) => r[0])).toEqual(["0003136607", "0006166211", "0011163301", "0014275243", "0022776051", "0155783642", "0196784817"]);
+    // 2026-10-18 second pass (mailFreeKey): +221 rows the exact key missed, none removed or changed; 213 of
+    // them sit at the same street in CMS's Provider of Services register, and its tenant check refused 2 more.
+    expect([m.attached, m.attachedOpen, m.attachedOpenRated, m.attachedClosed, m.sharedKeys, m.attachedByMailFreeKey]).toEqual([4264, 4256, 2544, 8, 224, 221]);
+    expect(m.refusedTenant.map((r) => r[0])).toEqual(["0003067801", "0003136607", "0004667005", "0006166211", "0011163301", "0014275243", "0022776051", "0155783642", "0196784817"]);
     expect(m.cmsModified).toBe("2026-07-22");
     expect(m.hifldDataLastEdit).toBe("2026-04-22");
     expect(m.sha256.cms).toMatch(/^[0-9a-f]{64}$/);

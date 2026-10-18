@@ -84,6 +84,29 @@ export function joinKey(address: unknown, zip: unknown): string | null {
   return a && /^\d{5}$/.test(z) ? `${a}|${z}` : null;
 }
 
+const ORDINAL_WORDS: Readonly<Record<string, string>> = {
+  FIRST: "1ST", SECOND: "2ND", THIRD: "3RD", FOURTH: "4TH", FIFTH: "5TH", SIXTH: "6TH", SEVENTH: "7TH", EIGHTH: "8TH", NINTH: "9TH", TENTH: "10TH",
+  ELEVENTH: "11TH", TWELFTH: "12TH", THIRTEENTH: "13TH", FOURTEENTH: "14TH", FIFTEENTH: "15TH", SIXTEENTH: "16TH", SEVENTEENTH: "17TH", EIGHTEENTH: "18TH", NINETEENTH: "19TH", TWENTIETH: "20TH",
+};
+
+/**
+ * The second-pass key: the join key without a PO box or drawer (mail, not the building), with "U S" as
+ * "US" and ordinal street words as numbers (NINETEENTH to 19TH). Suites, floors and buildings are kept:
+ * they tell co-located facilities apart. Null when the address or ZIP is empty.
+ */
+export function mailFreeKey(address: unknown, zip: unknown): string | null {
+  const a = normAddress(address)
+    .replace(/\b(P O|PO) (BOX|DRAWER|DRWR) \S+/g, " ")
+    .replace(/\b(POB|BOX|DRAWER) \d+\S*/g, " ")
+    .replace(/\bU S\b/g, "US")
+    .split(" ")
+    .map((w) => ORDINAL_WORDS[w] ?? w)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return joinKey(a, zip);
+}
+
 export type CmsRow = { [K in (typeof CMS_PROPERTIES)[number]]?: unknown };
 export type HifldJoinRow = { ID?: unknown; ADDRESS?: unknown; ZIP?: unknown; STATUS?: unknown; NAME?: unknown; TYPE?: unknown };
 
@@ -111,6 +134,8 @@ export interface CmsBake {
     attachedOpenRated: number;
     attachedClosed: number;
     sharedKeys: number;
+    /** Of attached, how many the second pass (mailFreeKey) matched. */
+    attachedByMailFreeKey: number;
     /** One-to-one matches refused by tenantConflict: [HIFLD ID, CCN, why]; never attached. */
     refusedTenant: Array<[string, string, string]>;
     /** Keys shared by more than one row on either side: [key, CMS CCNs, HIFLD IDs]; never attached. */
@@ -210,9 +235,30 @@ export function bakeCms(
   const shared: Array<[string, string[], string[]]> = [];
   const attachedCcn = new Set<string>();
   const refused: Array<[string, string, string]> = [];
+  const refusedHid = new Set<string>();
   let open = 0;
   let openRated = 0;
   let closed = 0;
+  /** Attach one CMS row to one HIFLD row unless tenantConflict refuses the pair; true when attached. */
+  const attach = (c: CmsRow, h: HifldJoinRow): boolean => {
+    const ccn = s(c.facility_id);
+    if (!ccn) return false;
+    const hid = String(h.ID).trim();
+    const why = tenantConflict(h.NAME, h.TYPE, c.facility_name, c.hospital_type);
+    if (why) {
+      refused.push([hid, ccn, why]);
+      refusedHid.add(hid);
+      return false;
+    }
+    const rating = cmsRating(c.hospital_overall_rating);
+    rows[hid] = [ccn, rating, rating == null ? s(c.hospital_overall_rating_footnote) : null, s(c.hospital_type), s(c.hospital_ownership), s(c.emergency_services), s(c.meets_criteria_for_birthing_friendly_designation)];
+    attachedCcn.add(ccn);
+    if (s(h.STATUS) === "OPEN") {
+      open++;
+      if (rating != null) openRated++;
+    } else closed++;
+    return true;
+  };
   for (const [k, cs] of ci) {
     const hs = hi.get(k);
     if (!hs) continue;
@@ -220,22 +266,28 @@ export function bakeCms(
       shared.push([k, cs.map((c) => String(c.facility_id ?? "")).sort(), hs.map((h) => String(h.ID ?? "")).sort()]);
       continue;
     }
-    const c = cs[0];
-    const h = hs[0];
-    const ccn = s(c.facility_id);
-    if (!ccn) continue;
-    const why = tenantConflict(h.NAME, h.TYPE, c.facility_name, c.hospital_type);
-    if (why) {
-      refused.push([String(h.ID).trim(), ccn, why]);
-      continue;
-    }
-    const rating = cmsRating(c.hospital_overall_rating);
-    rows[String(h.ID).trim()] = [ccn, rating, rating == null ? s(c.hospital_overall_rating_footnote) : null, s(c.hospital_type), s(c.hospital_ownership), s(c.emergency_services), s(c.meets_criteria_for_birthing_friendly_designation)];
-    attachedCcn.add(ccn);
-    if (s(h.STATUS) === "OPEN") {
-      open++;
-      if (rating != null) openRated++;
-    } else closed++;
+    attach(cs[0], hs[0]);
+  }
+  // Pass 2: rows the exact key left unattached get one more chance on mailFreeKey, only where that key
+  // is unique across ALL rows on both sides and neither row is attached or refused. Pass 1 is never undone.
+  const ci2 = new Map<string, CmsRow[]>();
+  const hi2 = new Map<string, HifldJoinRow[]>();
+  for (const r of cms) {
+    const k = mailFreeKey(r.address, r.zip_code);
+    if (k) ci2.set(k, [...(ci2.get(k) ?? []), r]);
+  }
+  for (const r of hifld) {
+    const k = mailFreeKey(r.ADDRESS, r.ZIP);
+    if (k && s(r.ID)) hi2.set(k, [...(hi2.get(k) ?? []), r]);
+  }
+  let viaMailFree = 0;
+  for (const [k, cs] of ci2) {
+    const hs = hi2.get(k);
+    if (!hs || cs.length !== 1 || hs.length !== 1) continue;
+    const ccn = s(cs[0].facility_id);
+    const hid = String(hs[0].ID).trim();
+    if (!ccn || attachedCcn.has(ccn) || hid in rows || refusedHid.has(hid)) continue;
+    if (attach(cs[0], hs[0])) viaMailFree++;
   }
   const unattached: Record<string, number> = {};
   const ratings: Record<string, number> = {};
@@ -260,7 +312,7 @@ export function bakeCms(
       cmsModified: info.cmsModified,
       hifldUrl: HIFLD_JOIN_URL,
       hifldDataLastEdit: info.hifldDataLastEdit,
-      joinRule: "key = address upper-cased, every non-alphanumeric to a space, words abbreviated by ADDRESS_WORDS (STREET to ST, NORTH to N, ...), then '|' and the first five digits of the ZIP; attached only where exactly one CMS row and exactly one HIFLD row (any status) share the key; a house-number-only key is not used; a one-to-one match is refused when tenantConflict finds a tenant marker in the HIFLD name only, or conflicting types with names that do not agree (names and types are read, never stored)",
+      joinRule: "key = address upper-cased, every non-alphanumeric to a space, words abbreviated by ADDRESS_WORDS (STREET to ST, NORTH to N, ...), then '|' and the first five digits of the ZIP; attached only where exactly one CMS row and exactly one HIFLD row (any status) share the key; a house-number-only key is not used; rows still unattached then get a second pass on mailFreeKey (no PO box or drawer, U S as US, ordinal street words as numbers), attached only where that key is unique across all rows and neither row is already attached or refused; a one-to-one match is refused when tenantConflict finds a tenant marker in the HIFLD name only, or conflicting types with names that do not agree (names and types are read, never stored)",
       cmsRows: cms.length,
       cmsDistinctCcn: new Set(cms.map((c) => String(c.facility_id ?? ""))).size,
       hifldRows: hifld.length,
@@ -269,6 +321,7 @@ export function bakeCms(
       attachedOpenRated: openRated,
       attachedClosed: closed,
       sharedKeys: shared.length,
+      attachedByMailFreeKey: viaMailFree,
       sharedAddress: shared,
       refusedTenant: refused.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)),
       unattachedByCmsType: sortKeys(unattached),
@@ -282,7 +335,7 @@ export function bakeCms(
 }
 
 export const CMS_RATINGS_CAVEAT =
-  "CMS's overall hospital star rating as Care Compare published it (dataset modified 2026-07-22), joined to HIFLD's hospital by exact street address and ZIP code because HIFLD carries no CMS certification number; about one CMS hospital in four could not be matched that way, and hospitals sharing an address are never matched. CMS rates acute-care and critical-access hospitals that report enough measures; many are not rated. A rating summarizes reported measures; it is not a measure of a hospital's emergency capacity.";
+  "CMS's overall hospital star rating as Care Compare published it (dataset modified 2026-07-22), joined to HIFLD's hospital by street address and ZIP code (exactly, or once a PO box or drawer is set aside) because HIFLD carries no CMS certification number; about one CMS hospital in five could not be matched that way, hospitals sharing an address are never matched, and a separately certified tenant never gets its host's rating. CMS rates acute-care and critical-access hospitals that report enough measures; many are not rated. A rating summarizes reported measures; it is not a measure of a hospital's emergency capacity.";
 
 export interface CmsExtra {
   ccn: string;
