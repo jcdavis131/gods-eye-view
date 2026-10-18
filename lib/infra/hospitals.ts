@@ -20,6 +20,7 @@
 
 import type { LayerFeature } from "@/lib/layers/types";
 import { recordText, withEmbedText } from "@/lib/catalog/recordText";
+import { cmsDetails, cmsExtra, type CmsEntry, type CmsExtra } from "./cms";
 
 export const HOSPITALS_URL = "https://services.arcgis.com/XG15cJAlne2vxtgt/arcgis/rest/services/Hospitals_RAPT/FeatureServer/6";
 /** The layer's maxRecordCount (read 2026-10-16). */
@@ -109,10 +110,22 @@ export interface HospitalExtra {
   trauma: string | null;
   /** The national tier's short record: the full one loads below 300 km. */
   short: boolean;
+  /** CMS's row joined by street address and ZIP (round 8; box tier only): null when there is no unambiguous match. */
+  cms?: CmsExtra | null;
 }
 
-/** HIFLD rows (f=geojson) as point features. `short` rows carry only the national fields. */
-export function buildHospitals(rows: readonly Row[], short = false): LayerFeature[] {
+/** The CMS join the box tier reads (lib/infra/data/cms-hospitals.json): a row per HIFLD ID, and the CMS dataset's modified date. */
+export interface CmsLookup {
+  rows: Readonly<Record<string, CmsEntry>>;
+  modified: string | null;
+}
+
+/**
+ * HIFLD rows (f=geojson) as point features. `short` rows carry only the national fields. With `cms`
+ * (the box tier), each full record gets CMS's star rating lines and extra.cms; the record text that is
+ * embedded (TYPE, TRAUMA, HELIPAD, STATE) never changes with it.
+ */
+export function buildHospitals(rows: readonly Row[], short = false, cms?: CmsLookup): LayerFeature[] {
   const out: LayerFeature[] = [];
   const seen = new Set<string>();
   for (const r of rows) {
@@ -140,7 +153,7 @@ export function buildHospitals(rows: readonly Row[], short = false): LayerFeatur
       county: str(p.COUNTYFIPS) ? `FIPS ${str(p.COUNTYFIPS)}` : null,
       place: [city, state].filter(Boolean).join(", ") || null,
     };
-    if (short) details["full record"] = "descend below 300 km for the address, owner type, helipad, source and dates";
+    if (short) details["full record"] = "descend below 300 km for the address, owner type, helipad, source, dates and CMS star rating";
     else {
       const source = str(p.SOURCE);
       const sourceDate = day(p.SOURCEDATE);
@@ -154,7 +167,10 @@ export function buildHospitals(rows: readonly Row[], short = false): LayerFeatur
         website: isLink(str(p.WEBSITE)) ? str(p.WEBSITE) : null,
       });
     }
-    const extra: HospitalExtra = { type, typeClass, status, beds, trauma, short };
+    const cmsRow = !short && cms ? cms.rows[id] : undefined;
+    const cx = !short && cms ? (cmsRow ? cmsExtra(cmsRow) : null) : undefined;
+    if (cx !== undefined && cms) Object.assign(details, cmsDetails(cx, status, cms.modified));
+    const extra: HospitalExtra = { type, typeClass, status, beds, trauma, short, ...(cx !== undefined ? { cms: cx } : {}) };
     out.push({
       type: "Feature",
       geometry: { type: "Point", coordinates: [lon, lat, 0] },

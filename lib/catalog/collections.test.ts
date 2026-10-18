@@ -76,6 +76,7 @@ describe("the catalogue", () => {
       "ncei-storm-events-county",
       "hud-dda",
       "hud-lihtc",
+      "cms-hospital-ratings",
     ]);
     const ids = COLLECTIONS.map((c) => c.id);
     expect(new Set(ids).size).toBe(ids.length);

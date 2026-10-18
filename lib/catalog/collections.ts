@@ -40,6 +40,7 @@ import { CT_HOUSING_NOTE, HOUSING_CAVEAT, QCT_YEAR_NOTE } from "@/lib/civic/hous
 import { LANDSLIDE_SUSC_CAVEAT } from "@/lib/terrain/products";
 import { STORM_EVENTS_CAVEAT, STORM_GATE_NOTE } from "@/lib/hazards/storms";
 import { CT_TAX_CREDIT_NOTE, DDA_YEAR_NOTE, HOUSING_TAX_CREDIT_CAVEAT, LIHTC_CODE_NOTE } from "@/lib/civic/taxcredit";
+import { CMS_RATINGS_CAVEAT } from "@/lib/infra/cms";
 import { DENY_FIELD, EMBED_TEXT } from "./embedFields";
 
 export interface Exclusion {
@@ -1024,7 +1025,7 @@ export const COLLECTIONS: readonly Collection[] = [
     freshness: { statement: "FEMA last edited the layer's data on 2026-04-22. HIFLD Open's own hospital service no longer exists, so this copy is not refreshed from it; each row carries the date its source published it.", readFrom: "FeatureServer layer 6 editingInfo.dataLastEditDate; SOURCEDATE min and max (outStatistics, 2026-10-16)", recordedOn: R5 },
     excluded: [
       { what: "TELEPHONE, TTL_STAFF, ALT_NAME and VAL_METHOD", why: "never requested: a contact field, a staff count and bookkeeping" },
-      { what: "CMS Hospital General Information (star ratings)", why: "no shared key, no coordinates and no CORS (re-probed 2026-10-16); an exact address match is deferred (D5-8)" },
+      { what: "CMS Hospital General Information (star ratings)", why: "not part of this record: the cms-hospital-ratings card (round 8) joins CMS's rows to these hospitals by exact address and ZIP in the box tier's click; this card's embedded record text is unchanged by it" },
       { what: "closed hospitals, by default", why: "374 rows are CLOSED; a 'Closed too' chip draws them grey" },
     ],
     caveats: [HOSPITALS_CAVEAT],
@@ -1464,6 +1465,33 @@ export const COLLECTIONS: readonly Collection[] = [
     ops: ["civic?op=housing"],
     sensitivity:
       "Tax-credit rental properties as state agencies reported them to HUD. Owner company, contact person, their address and telephone are never requested. A project of fewer than five units is a household's home and is not drawn; its row never reaches the server. PROJECT is a property's name; it labels the point and is matched letter by letter (flagged for review, fallback HUD_ID), and PROJ_ADD is shown on click only, never searched or embedded.",
+    round: 8,
+  },
+  {
+    id: "cms-hospital-ratings",
+    title: "Hospital star ratings (CMS Care Compare), on the HIFLD hospital click",
+    layer: "hospitals",
+    sources: ["cms-provider-data"],
+    what: "CMS's Hospital General Information (Care Compare): each hospital's overall star rating (1-5) or CMS's 'Not Available' with its footnote, with CMS's hospital type, ownership, emergency services and birthing-friendly designation, baked into a join file (lib/infra/data/cms-hospitals.json, scripts/bake-cms-hospitals.mjs) and shown in the HIFLD hospital's full record below 300 km.",
+    recordIs: "CMS's overall rating as Care Compare published it, matched to a HIFLD hospital by exact street address and ZIP code because HIFLD carries no CMS certification number. A rating summarizes measures a hospital reported; it is not a measure of emergency capacity, and 'not rated' is not 'no match'.",
+    coverage: {
+      spatial: "The CMS hospitals that match one HIFLD hospital one to one by address and ZIP, in the 50 states, DC and the territories CMS lists",
+      temporal: null,
+      count: { value: 5419, of: "rows in Hospital General Information (5,419 CCNs; datastore count): 4,050 attached to a HIFLD hospital one to one (4,038 open, 2,429 of them rated; 12 to HIFLD rows not open), 224 address keys shared by more than one hospital on either side refused, and 2,245 'Not Available' ratings nationally", countedOn: R8 },
+    },
+    freshness: { statement: "CMS's metastore says the dataset was modified 2026-07-22 and states no update cadence; the bake records that date, and the click prints it.", readFrom: "metastore schemas/dataset/items/xubh-q36u modified and accrualPeriodicity (read 2026-10-17)", recordedOn: R8 },
+    excluded: [
+      { what: "telephone_number, facility_name and countyparish", why: "never requested: a contact field, and HIFLD's own record already labels and places the hospital" },
+      { what: "a match on house number and ZIP alone", why: "it attaches more (Texas: 450 against 338) but 29 of Texas's 450 attach the wrong hospital (a long-term-care unit to the general hospital around it)" },
+      { what: "addresses shared by two or more hospitals on either side (224 keys)", why: "a tenant unit would show its host's rating; listed in the bake's meta.sharedAddress, never attached" },
+      { what: "the measure groups (mortality, safety, readmission, patient experience, timeliness counts)", why: "not needed for the rating line; a later round may add them" },
+      { what: "a county place tower", why: "ratings cover 2,429 of 8,140 open hospitals and are skewed by type, so a county mean would mostly measure which hospitals CMS rates" },
+    ],
+    caveats: [CMS_RATINGS_CAVEAT],
+    searchable: ["facility_id"],
+    embedText: EMBED_TEXT["cms-hospital-ratings"],
+    ops: ["infra?op=hospitals"],
+    sensitivity: "Institutions' published quality ratings; no patient, staff or contact data. CMS's telephone column is never carried.",
     round: 8,
   },
 ];
