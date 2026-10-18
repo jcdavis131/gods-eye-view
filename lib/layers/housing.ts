@@ -52,11 +52,14 @@ async function fetchHousing(ctx: FetchContext): Promise<FetchResult> {
   if (ctx.view.height > HOUSING_MAX_M) {
     return { ...base, collection: { type: "FeatureCollection", features: [] }, note: `descend below ${HOUSING_MAX_M / 1000} km for HUD housing vouchers and Qualified Census Tracts by tract`, meta: { count: 0, measure: m } };
   }
-  const env = await proxy<{ hcv: Fc; qct: Fc; dda?: Fc; lihtc?: Fc }>(housingRequest(ctx), ctx);
+  const env = await proxy<{ hcv: Fc; qct: Fc; dda?: Fc | null; lihtc?: Fc | null }>(housingRequest(ctx), ctx);
   const built = buildHousing(env.data.hcv?.features ?? [], env.data.qct?.features ?? [], m);
   const parts = housingPartsPref(ctx.options.housingParts);
   const dda = parts.includes("dda") ? buildDda(env.data.dda?.features ?? []) : [];
   const lihtc = parts.includes("lihtc") ? buildLihtc(env.data.lihtc?.features ?? []) : null;
+  // A part the route could not get in time is null: unknown, so the note never says 0 of it.
+  const ddaLate = parts.includes("dda") && env.data.dda === null;
+  const lihtcLate = parts.includes("lihtc") && env.data.lihtc === null;
   const { capped, bbox } = env as unknown as { capped?: boolean; bbox?: [number, number, number, number] };
   const box = Array.isArray(bbox) && bbox.length === 4 ? [civicLoadedBox("housing", bbox, "HUD tracts")] : [];
   return {
@@ -67,11 +70,11 @@ async function fetchHousing(ctx: FetchContext): Promise<FetchResult> {
       ` · ${built.suppressed} grey: ${SUPPRESSED_LEGEND}` +
       (built.ctNotPublished ? ` · ${built.ctNotPublished} Connecticut tracts dashed: not published for Connecticut` : "") +
       ` · ${built.qct} Qualified Census Tracts (amber outline, titled 2026 by HUD)` +
-      (parts.includes("dda") ? ` · ${dda.length} Difficult Development Areas (violet dashes, titled 2026 by HUD)` : "") +
-      (lihtc ? ` · ${lihtc.features.length} LIHTC properties of ${LIHTC_MIN_UNITS} or more units${lihtc.centroid ? ` (${lihtc.centroid} more HUD located only to a ZIP, tract or block-group centroid: counted, not drawn)` : ""}; smaller projects are never drawn` : "") +
+      (ddaLate ? " · Difficult Development Areas did not arrive in time: unknown, not none; pan or ask again" : parts.includes("dda") ? ` · ${dda.length} Difficult Development Areas (violet dashes, titled 2026 by HUD)` : "") +
+      (lihtcLate ? " · LIHTC properties did not arrive in time: unknown, not none; pan or ask again" : lihtc ? ` · ${lihtc.features.length} LIHTC properties of ${LIHTC_MIN_UNITS} or more units${lihtc.centroid ? ` (${lihtc.centroid} more HUD located only to a ZIP, tract or block-group centroid: counted, not drawn)` : ""}; smaller projects are never drawn` : "") +
       ` · tracts within ${HOUSING_BOX_DEG / 2} degrees of the view's centre; outside that box is not loaded, not "no data"` +
       (capped ? " · cut at 2,000 rows: zoom in for every tract or property" : ""),
-    meta: { count: built.features.length + dda.length + (lihtc?.features.length ?? 0), measure: m, suppressed: built.suppressed, qct: built.qct, parts, dda: dda.length, lihtc: lihtc?.features.length ?? 0, lihtcCentroid: lihtc?.centroid ?? 0 },
+    meta: { count: built.features.length + dda.length + (lihtc?.features.length ?? 0), measure: m, suppressed: built.suppressed, qct: built.qct, parts, dda: ddaLate ? null : dda.length, lihtc: lihtcLate ? null : (lihtc?.features.length ?? 0), lihtcCentroid: lihtcLate ? null : (lihtc?.centroid ?? 0) },
   };
 }
 

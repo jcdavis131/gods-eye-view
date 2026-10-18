@@ -63,7 +63,7 @@
 // tract with no row is not published, never 0.
 
 import type { NextRequest } from "next/server";
-import { cached } from "@/lib/server/cache";
+import { cached, DeadlineError } from "@/lib/server/cache";
 import { jsonError } from "@/lib/server/upstream";
 import { badRequest, notFound, ok, options, withCors } from "@/lib/server/respond";
 import { preferIpv4 } from "@/lib/server/net";
@@ -548,6 +548,9 @@ const HOUSING_CAVEATS = [HOUSING_CAVEAT, QCT_YEAR_NOTE, CT_HOUSING_NOTE];
 const hudProv = (layer: string, seriesId: string, period: string, age: number, notes?: string[]) =>
   provenance(source("hud-egis"), { kind: "published", seriesId, upstreamUrl: layer, period, retrievedAt: at(age), notes });
 
+/** Each round-8 part's deadline, and the vouchers and QCT answer's: they run at once (housingBox). */
+const HOUSING_PART_DEADLINE_S = 35;
+
 /** One round-8 part in a box (DDA outlines or LIHTC points), held a week per box, allow-listed fields only. */
 async function housingPartBox(b: Bbox, part: HousingPart) {
   const layer = part === "dda" ? DDA_LAYER : LIHTC_LAYER;
@@ -561,13 +564,16 @@ async function housingPartBox(b: Bbox, part: HousingPart) {
       const res = await runRows("hud-egis", { kind: "arcgis", layer, params }, 25_000);
       return { fc: pickFields(res.features, fields), cut: res.truncated || res.features.length >= HOUSING_PAGE };
     },
-    { deadlineMs: 35_000 },
+    { deadlineMs: HOUSING_PART_DEADLINE_S * 1000 },
   );
 }
 
 async function housingBox(b: Bbox, parts: HousingPart[] = []) {
-  const extra = await Promise.all(parts.map((p) => housingPartBox(b, p)));
-  const r = await cached(
+  // The parts and the vouchers/QCT answer are asked at once, each under its own 35 s deadline,
+  // so a box with parts waits about 35 s at worst (plus HUD's 500 ms gate), not 35 s twice,
+  // inside maxDuration 60. A part that misses its deadline is null with a caveat, never 0.
+  const partsP = Promise.allSettled(parts.map((p) => housingPartBox(b, p)));
+  const mainP = cached(
     `housing:bbox:${b.join(",")}`,
     WEEK_MS,
     async () => {
@@ -582,8 +588,9 @@ async function housingBox(b: Bbox, parts: HousingPart[] = []) {
         qctCut: qct.truncated || qct.features.length >= HOUSING_PAGE,
       };
     },
-    { deadlineMs: 35_000 },
+    { deadlineMs: HOUSING_PART_DEADLINE_S * 1000 },
   );
+  const [r, extra] = await Promise.all([mainP, partsP]);
   const v = r.value;
   const suppressed = v.hcv.filter((f) => f.properties.HCV_PUBLIC == null && !String(f.properties.GEOID ?? "").startsWith("09")).length;
   const ct = v.hcv.filter((f) => String(f.properties.GEOID ?? "").startsWith("09")).length;
@@ -594,8 +601,18 @@ async function housingBox(b: Bbox, parts: HousingPart[] = []) {
   const partMeta: Record<string, unknown> = {};
   const partProv: ReturnType<typeof hudProv>[] = [];
   let partCut = false;
+  let partLate = false;
   parts.forEach((p, i) => {
-    const x = extra[i];
+    const settled = extra[i];
+    if (settled.status === "rejected") {
+      if (!(settled.reason instanceof DeadlineError)) throw settled.reason;
+      partLate = true;
+      partData[p] = null;
+      partMeta[`${p}Count`] = null;
+      caveats.push(`The ${p === "dda" ? "DDA" : "LIHTC"} answer did not arrive within ${HOUSING_PART_DEADLINE_S} s, so ${p} is null (unknown), not 0 and not empty: ask again.`);
+      return;
+    }
+    const x = settled.value;
     partData[p] = { type: "FeatureCollection", features: x.value.fc };
     partMeta[`${p}Count`] = x.value.fc.length;
     if (x.value.cut) {
@@ -613,7 +630,8 @@ async function housingBox(b: Bbox, parts: HousingPart[] = []) {
     { hcv: { type: "FeatureCollection", features: v.hcv }, qct: { type: "FeatureCollection", features: v.qct }, ...partData },
     {
       meta: { source: HOUSING_ATTRIBUTION, bbox: b, count: v.hcv.length, qctCount: v.qct.length, suppressed, connecticutNotPublished: ct, capped: v.hcvCut || v.qctCut || partCut, shareBreaks: [...HOUSING_SHARE_BREAKS], countBreaks: [...HOUSING_COUNT_BREAKS], parts, ...partMeta, cacheAge: r.age },
-      ttlS: 86_400,
+      // A late part is never held at the edge: the next ask may get it.
+      ttlS: partLate ? 0 : 86_400,
       provenance: [
         hudProv(HCV_LAYER, "Housing_Choice_Vouchers_by_Tract FeatureServer layer 0, tracts in the box", "through 12/2025 (last updated 01/2026)", r.age, [`bbox ${b.join(",")}`]),
         hudProv(QCT_LAYER, "QUALIFIED_CENSUS_TRACTS_2026 FeatureServer layer 0, tracts in the box", "titled 2026 by HUD", r.age, [`bbox ${b.join(",")}`]),
