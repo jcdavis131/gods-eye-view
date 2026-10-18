@@ -185,15 +185,15 @@ describe("the second pass (mailFreeKey)", () => {
     expect(mailFreeKey("619 SOUTH NINETEENTH STREET", "35233")).toBe(joinKey("619 S 19th St", "35233"));
     expect(mailFreeKey("2505 U S HWY 431 N", "35976")).toBe("2505 US HWY 431 N|35976");
   });
-  it("drops a box only when PO, P O or POB marks it as mail; a bare BOX n is kept", () => {
+  it("drops a mail box after a street, and keeps a rural-route box, which is the address itself", () => {
     expect(mailFreeKey("501 WEST 14TH STREET, POB 1668", "19899")).toBe("501 W 14TH ST|19899");  // HIFLD 0196785384
-    // CMS 110190's own address (2026-10-18): no PO, so BOX 770 stays and it no longer meets HIFLD's
-    // "509 SUMTER STREET, PO BOX 770"; one of 13 same-name matches this rule gives up.
-    expect(mailFreeKey("509 SUMTER STREET, BOX 770", "31063")).toBe("509 SUMTER ST BOX 770|31063");
+    // CMS 110190's own address (2026-10-18) and HIFLD's: a bare BOX after the street is mail, so both meet.
+    expect(mailFreeKey("509 SUMTER STREET, BOX 770", "31063")).toBe("509 SUMTER ST|31063");
     expect(mailFreeKey("509 SUMTER STREET, PO BOX 770", "31063")).toBe("509 SUMTER ST|31063");
-    // Constructed rural-route pair: two boxes on one route are two places, never one key.
+    // Constructed rural-route inputs: a box on a route is a place, so two boxes on one route never share a key.
     expect(mailFreeKey("RR 2 BOX 100", "68001")).not.toBe(mailFreeKey("RR 2 BOX 300", "68001"));
-    expect(mailFreeKey("ROUTE 7 BOX R50", "39350")).toBe("ROUTE 7 BOX R50|39350");  // CMS 250127: a route box with no number, kept as it was
+    expect(mailFreeKey("HC 1 BOX 5", "68001")).toBe("HC 1 BOX 5|68001");
+    expect(mailFreeKey("ROUTE 7 BOX R50", "39350")).toBe("ROUTE 7 BOX R50|39350");  // CMS 250127
   });
   it("keeps suites, floors and buildings: they tell co-located facilities apart", () => {
     expect(mailFreeKey("2250 SOQUEL AVE STE 150", "95062")).toBe("2250 SOQUEL AVE STE 150|95062");
@@ -234,12 +234,10 @@ describe("the committed bake (2026-10-17, re-baked 2026-10-18 with tenantConflic
     // certified elsewhere, SageCrest absent; Select Specialty St. Louis; and the Doctors to Ascentist rename, a known cost).
     // 2026-10-18 second pass (mailFreeKey): +221 rows the exact key missed, none removed or changed; 213 of
     // them sit at the same street in CMS's Provider of Services register, and its tenant check refused 2 more.
-    // 2026-10-18 review: a bare BOX n (no PO, P O or POB) is no longer dropped, so rural-route boxes stay
-    // apart; 13 of the 221 needed it and are now unattached (all same-name pairs; no rural-route box was
-    // among them). 208 remain: 150 by a PO box or drawer alone, 54 by the
-    // ordinal / U S rewrite alone, 4 by both. The distinct-part, hyphen, Long-term and stop-word fixes
-    // to tenantConflict changed no national row. Same CMS and HIFLD answers as the 10-18 bake (sha256).
-    expect([m.attached, m.attachedOpen, m.attachedOpenRated, m.attachedClosed, m.sharedKeys, m.attachedByMailFreeKey]).toEqual([4251, 4243, 2535, 8, 224, 208]);
+    // 2026-10-18 review: rural-route boxes (RR / HC / ROUTE n BOX m) are kept, a bare BOX after a street is
+    // still mail; the distinct-part, hyphen, Long-term and stop-word fixes to tenantConflict changed no
+    // national row. Same CMS and HIFLD answers as the 10-18 bake (sha256), and the same rows as #90.
+    expect([m.attached, m.attachedOpen, m.attachedOpenRated, m.attachedClosed, m.sharedKeys, m.attachedByMailFreeKey]).toEqual([4264, 4256, 2544, 8, 224, 221]);
     expect(m.refusedTenant.map((r) => r[0])).toEqual(["0003067801", "0003136607", "0004667005", "0006166211", "0011163301", "0014275243", "0022776051", "0155783642", "0196784817"]);
     expect(m.cmsModified).toBe("2026-07-22");
     expect(m.hifldDataLastEdit).toBe("2026-04-22");

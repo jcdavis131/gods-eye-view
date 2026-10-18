@@ -1477,7 +1477,7 @@ export const COLLECTIONS: readonly Collection[] = [
     coverage: {
       spatial: "The CMS hospitals that match one HIFLD hospital one to one by address and ZIP, in the 50 states, DC and the territories CMS lists",
       temporal: null,
-      count: { value: 5419, of: "rows in Hospital General Information (5,419 CCNs; datastore count): 4,251 attached to a HIFLD hospital one to one (4,243 open, 2,535 of them rated; 8 to HIFLD rows not open; 208 of the 4,251 by the second pass), 224 address keys shared by more than one hospital on either side refused, 9 one-to-one matches refused as a tenant and another facility, and 2,245 'Not Available' ratings nationally", countedOn: R8 },
+      count: { value: 5419, of: "rows in Hospital General Information (5,419 CCNs; datastore count): 4,264 attached to a HIFLD hospital one to one (4,256 open, 2,544 of them rated; 8 to HIFLD rows not open; 221 of the 4,264 by the second pass), 224 address keys shared by more than one hospital on either side refused, 9 one-to-one matches refused as a tenant and another facility, and 2,245 'Not Available' ratings nationally", countedOn: R8 },
     },
     freshness: { statement: "CMS's metastore says the dataset was modified 2026-07-22 and states no update cadence; the bake records that date, and the click prints it.", readFrom: "metastore schemas/dataset/items/xubh-q36u modified and accrualPeriodicity (read 2026-10-17)", recordedOn: R8 },
     excluded: [
@@ -1486,7 +1486,7 @@ export const COLLECTIONS: readonly Collection[] = [
       { what: "a match on house number and ZIP alone", why: "it attaches more (Texas: 450 against 338) but 29 of Texas's 450 attach the wrong hospital (a long-term-care unit to the general hospital around it)" },
       { what: "addresses shared by two or more hospitals on either side (224 keys)", why: "a tenant unit would show its host's rating; listed in the bake's meta.sharedAddress, never attached" },
       { what: "the measure groups (mortality, safety, readmission, patient experience, timeliness counts)", why: "not needed for the rating line; a later round may add them" },
-      { what: "a county place tower", why: "ratings cover 2,535 of 8,140 open hospitals and are skewed by type, so a county mean would mostly measure which hospitals CMS rates" },
+      { what: "a county place tower", why: "ratings cover 2,544 of 8,140 open hospitals and are skewed by type, so a county mean would mostly measure which hospitals CMS rates" },
     ],
     caveats: [CMS_RATINGS_CAVEAT],
     searchable: ["facility_id"],

@@ -101,11 +101,13 @@ const ORDINAL_WORDS: Readonly<Record<string, string>> = {
  * they tell co-located facilities apart. Null when the address or ZIP is empty.
  */
 export function mailFreeKey(address: unknown, zip: unknown): string | null {
-  // Only a box or drawer marked as mail (PO, P O, POB): a bare BOX n is kept, so RR 2 BOX 100 and
-  // RR 2 BOX 300 (rural-route boxes, often the only address a rural hospital has) stay apart.
+  // A box or drawer marked as mail (PO, P O, POB) goes; so does a bare BOX or DRAWER n after a street
+  // ("1653 TEMPLE AVE N BOX 710": 13 same-hospital matches on 2026-10-18 need it). A rural-route box
+  // (RR 2 BOX 100, HC 1 BOX 5, ROUTE 3 BOX 9) is the address itself, so it is kept and stays apart.
   const a = normAddress(address)
     .replace(/\b(P O|PO) (BOX|DRAWER|DRWR) \S+/g, " ")
     .replace(/\bPOB \d+\S*/g, " ")
+    .replace(/(?<!\b(?:RR|HC|RT|RTE|ROUTE|RURAL ROUTE|STAR ROUTE) \d+\S* )\b(BOX|DRAWER) \d+\S*/g, " ")
     .replace(/\bU S\b/g, "US")
     .split(" ")
     .map((w) => ORDINAL_WORDS[w] ?? w)
