@@ -108,7 +108,9 @@ interface GlobeState {
   settingsOpen: boolean;
   setSettingsOpen: (open: boolean) => void;
   searchOpen: boolean;
-  setSearchOpen: (open: boolean) => void;
+  /** `seed` prefills the palette, e.g. with what was typed in the home page's search field. */
+  setSearchOpen: (open: boolean, seed?: string) => void;
+  searchSeed: string;
   waterReportOpen: boolean;
   setWaterReportOpen: (open: boolean) => void;
   marketReportOpen: boolean;
@@ -189,7 +191,8 @@ export const useGlobe = create<GlobeState>()((set) => ({
   settingsOpen: false,
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   searchOpen: false,
-  setSearchOpen: (searchOpen) => set({ searchOpen }),
+  setSearchOpen: (searchOpen, seed) => set({ searchOpen, searchSeed: seed ?? "" }),
+  searchSeed: "",
   waterReportOpen: false,
   setWaterReportOpen: (waterReportOpen) => set({ waterReportOpen }),
   marketReportOpen: false,

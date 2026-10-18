@@ -22,6 +22,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import VoiceControl from "./VoiceControl";
 import { useTeleport } from "@/lib/live/teleportStore";
 import AboutButton from "./AboutDialog";
+import { SiteSearch, CatalogLink } from "./FrontDoor";
 
 export function fmtUtc(ms: number): string {
   if (!ms) return "—";
@@ -123,7 +124,13 @@ export default function TopBar() {
       <div className="hud-panel pointer-events-auto col-start-1 flex h-12 min-w-0 items-center justify-self-start overflow-x-auto [scrollbar-width:none]">
         <div className="flex shrink-0 items-center gap-3 pl-4 pr-4">
           <span className={ready ? "hud-lamp" : "hud-lamp hud-lamp-off blink"} role="img" aria-label={ready ? "Globe online" : "Globe starting"} />
-          <div className="hud-display whitespace-nowrap text-[13px] leading-none tracking-[0.3em] text-[var(--bright)]">Embedding Atlas</div>
+          <h1 className="hud-display whitespace-nowrap text-[13px] leading-none tracking-[0.3em] text-[var(--bright)]">Embedding Atlas</h1>
+        </div>
+        <div className="hud-rule" />
+        {/* The one action the library exists for, at a 44 px target, and the catalogue beside it. */}
+        <div className="flex shrink-0 items-center gap-1 px-1">
+          <SiteSearch className="w-44 lg:w-56 xl:w-64" />
+          <CatalogLink />
         </div>
         <div className="hud-rule" />
         <div className="flex shrink-0 items-center px-1">
@@ -192,10 +199,6 @@ export default function TopBar() {
       {/* right: panels and utilities */}
       <div className="hud-panel pointer-events-auto col-start-3 flex h-12 min-w-0 max-w-full items-center justify-self-end overflow-x-auto whitespace-nowrap px-1 [scrollbar-width:none]">
         <VoiceControl />
-        <button type="button" onClick={() => setSearchOpen(true)} className={`${btn} hidden md:inline-flex`} title="Search flights, ships, satellites, places (Ctrl+K)">
-          <Search className="size-3.5" />
-          <span className="sr-only">Search</span>
-        </button>
         <div className="hud-rule mx-1 my-3" />
         <button type="button" onClick={toggleWater} data-on={waterOpen} className={`${btn} hidden md:inline-flex`} title="Community water report for the current view">
           <Droplets className="size-3.5" />

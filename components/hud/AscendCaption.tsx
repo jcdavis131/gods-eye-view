@@ -79,7 +79,7 @@ export default function AscendCaption() {
       data-ascend-controls
       role="status"
       aria-live="polite"
-      className="pointer-events-auto absolute inset-x-2 top-[calc(max(8px,env(safe-area-inset-top))_+_52px)] z-30 md:inset-x-auto md:bottom-[104px] md:left-1/2 md:top-auto md:w-[480px] md:-translate-x-1/2"
+      className="pointer-events-auto absolute inset-x-2 top-[calc(max(8px,env(safe-area-inset-top))_+_102px)] z-30 md:inset-x-auto md:bottom-[104px] md:left-1/2 md:top-auto md:w-[480px] md:-translate-x-1/2"
     >
       <div className="hud-panel hud-panel-lit hud-enter" key={id}>
         <div className="flex h-9 items-center justify-between border-b border-border px-3">
