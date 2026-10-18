@@ -55,10 +55,10 @@ describe("direct sources", () => {
     expect(decodeURIComponent(WHP_TEMPLATE)).toContain('{"rasterFunction":"WHP_CLS_2023_8bit"}');
   });
 
-  it("ask NWI's raster v5 for the tile's projected box with 0 as NoData, so unmapped land draws clear", () => {
+  it("ask NWI's raster (Wetlands_Raster; v5 was retired) for the tile's projected box with 0 as NoData, so unmapped land draws clear", () => {
     for (const tag of ["{westProjected}", "{southProjected}", "{eastProjected}", "{northProjected}"]) expect(NWI_RASTER_TEMPLATE).toContain(tag);
     const u = new URL(NWI_RASTER_TEMPLATE.replace(/\{\w+\}/g, "0"));
-    expect(u.pathname).toBe("/wetlandsmapservice/rest/services/Wetlands_Raster_v5/ImageServer/exportImage");
+    expect(u.pathname).toBe("/wetlandsmapservice/rest/services/Wetlands_Raster/ImageServer/exportImage");
     expect(u.searchParams.get("noData")).toBe("0");
     expect(u.searchParams.get("bboxSR")).toBe("3857");
     expect(DIRECT_SOURCES.find((d) => d.id === "wetlands")).toMatchObject({ host: "fwspublicservices.wim.usgs.gov", source: "usfws-nwi" });

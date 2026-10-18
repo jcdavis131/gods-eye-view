@@ -49,7 +49,7 @@ export const LANDSLIDE_SUSC_CAVEAT =
   "USGS's 2024 slope-relief model of where terrain is steep and high enough for landslides, at 90 m, for the 50 states and Puerto Rico. Susceptible terrain is not a forecast, not a hazard rating and not a record of landslides. The tile service does not say which of the release's two models it draws. County shares are USGS's, on 2010 counties, so Connecticut's planning regions and six counties whose boundaries changed since 2010 (Chugach, Copper River, Petersburg Borough, Hoonah-Angoon and Prince of Wales-Hyder in Alaska, and Bedford County, Virginia) have none.";
 
 /** USFWS NWI national wetlands raster, version 5 (pinned: a new version is a new service name). */
-export const NWI_RASTER = "https://fwspublicservices.wim.usgs.gov/wetlandsmapservice/rest/services/Wetlands_Raster_v5/ImageServer";
+export const NWI_RASTER = "https://fwspublicservices.wim.usgs.gov/wetlandsmapservice/rest/services/Wetlands_Raster/ImageServer";
 /**
  * One Web Mercator tile of the NWI raster: exportImage for the tile's projected box. NWI's
  * PNG keys 253,253,253 as transparent and paints NoData black, so `noData=0` is asked for
