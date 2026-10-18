@@ -48,7 +48,11 @@ export const LANDSLIDE_SUSC_LEGEND = "Classes 1-5 as USGS's tile service draws t
 export const LANDSLIDE_SUSC_CAVEAT =
   "USGS's 2024 slope-relief model of where terrain is steep and high enough for landslides, at 90 m, for the 50 states and Puerto Rico. Susceptible terrain is not a forecast, not a hazard rating and not a record of landslides. The tile service does not say which of the release's two models it draws. County shares are USGS's, on 2010 counties, so Connecticut's planning regions and six counties whose boundaries changed since 2010 (Chugach, Copper River, Petersburg Borough, Hoonah-Angoon and Prince of Wales-Hyder in Alaska, and Bedford County, Virginia) have none.";
 
-/** USFWS NWI national wetlands raster, version 5 (pinned: a new version is a new service name). */
+/**
+ * USFWS NWI national wetlands raster, Wetlands_Raster. The name carries no version (it replaced the
+ * retired Wetlands_Raster_v5), so USFWS can change what it serves in place; the weekly endpoint sweep
+ * (scripts/endpoint-sweep.mjs) checks that it still answers, not that its classes are unchanged.
+ */
 export const NWI_RASTER = "https://fwspublicservices.wim.usgs.gov/wetlandsmapservice/rest/services/Wetlands_Raster/ImageServer";
 /**
  * One Web Mercator tile of the NWI raster: exportImage for the tile's projected box. NWI's
@@ -248,7 +252,7 @@ export const DIRECT_SOURCES: DirectSource[] = [
   },
   {
     id: "wetlands",
-    title: "NWI wetlands, national raster v5 (USFWS, ImageServer exportImage)",
+    title: "NWI wetlands, national raster Wetlands_Raster (USFWS, ImageServer exportImage)",
     source: "usfws-nwi",
     host: "fwspublicservices.wim.usgs.gov",
     template: NWI_RASTER_TEMPLATE,

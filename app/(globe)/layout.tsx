@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "../globals.css";
 import { Providers } from "../providers";
+import EyeAnalytics from "@/components/analytics/EyeAnalytics";
 import { BASE_METADATA, BASE_DESCRIPTION } from "@/lib/seo/base";
 
 const mono = Geist_Mono({
@@ -54,6 +55,7 @@ export default function GlobeLayout({ children }: { children: React.ReactNode })
       </head>
       <body className="h-full overflow-hidden bg-background text-foreground">
         <Providers>{children}</Providers>
+        <EyeAnalytics />
       </body>
     </html>
   );

@@ -71,8 +71,6 @@ const LAYER_ALIASES: Record<string, LayerId> = {
   cameras: "cameras",
   webcams: "cameras",
   cctv: "cameras",
-  traffic: "traffic",
-  cars: "traffic",
   launches: "launches",
   rockets: "launches",
   rocket: "launches",

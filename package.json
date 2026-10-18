@@ -31,6 +31,7 @@
     "@resvg/resvg-wasm": "2.6.2",
     "@tanstack/react-query": "^5.102.8",
     "@vapi-ai/web": "^2.7.0",
+    "@vercel/analytics": "2.0.1",
     "cesium": "^1.145.0",
     "class-variance-authority": "^0.7.1",
     "cmdk": "^1.1.1",
@@ -59,7 +60,7 @@
     "typescript": "^5",
     "vitest": "^3.2.7"
   },
-  "description": "A spy satellite simulator in your browser, except the data is real.",
+  "description": "Ask eye about a US place and get a cited, dated public record: where it comes from, when it was read, and what it leaves out.",
   "license": "MIT",
   "repository": {
     "type": "git",

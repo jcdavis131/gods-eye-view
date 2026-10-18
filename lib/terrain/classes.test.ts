@@ -17,7 +17,7 @@ import slopeNw from "./fixtures/slope-identify-nw.json";
 import { classFor, NLCD_CLASSES, NWI_RASTER_CLASSES, parseNlcdFeatureInfo, parseSlopeIdentify, parseWhpIdentify, SLR_LEGEND, WHP_CLASSES } from "./classes";
 
 describe("class tables match what each service's own legend serves", () => {
-  it("NWI raster: eight wetland types with the colours of the ImageServer's raster attribute table (captured 2026-10-12)", () => {
+  it("NWI raster: eight wetland types with the colours of the ImageServer's raster attribute table (Wetlands_Raster, captured 2026-10-18)", () => {
     const rows = nwiRat.features.map((f) => f.attributes);
     expect(NWI_RASTER_CLASSES.map((c) => c.code)).toEqual(rows.map((r) => r.Value));
     expect(NWI_RASTER_CLASSES.map((c) => c.label)).toEqual(rows.map((r) => r.WETLAND_TYPE));

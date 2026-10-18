@@ -9,6 +9,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useGlobe } from "@/lib/store/globe";
+import { PROMISE } from "@/lib/seo/base";
 
 export const GLOBE_ERROR_EVENT = "atlas:globe-error";
 
@@ -65,7 +66,7 @@ export default function TitleCard() {
       </div>
       <div className="absolute inset-x-0 top-[calc(50%+64px)] flex flex-col items-center px-6 text-center">
         <p className="tc-3 max-w-[46ch] text-[12px] leading-relaxed text-foreground/80 sm:text-[13px]">
-          A spy satellite simulator in your browser, except the data is real.
+          {PROMISE}
         </p>
         <div className="tc-4 hud-label mt-8 flex items-center gap-3 text-[9px]">
           {error ? (

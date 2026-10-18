@@ -40,6 +40,11 @@ describe("parseShare / shareQuery", () => {
     expect(back).toEqual({ hd: 5, layers: ["water"], report: true });
     expect(shareQuery({})).toBe("");
   });
+
+  it("drops Traffic (sim) from an old link: it is simulated and no longer offered", () => {
+    expect(parseShare("layers=traffic,water").layers).toEqual(["water"]);
+    expect(parseShare("layers=traffic").layers).toEqual([]);
+  });
 });
 
 describe("releases store", () => {

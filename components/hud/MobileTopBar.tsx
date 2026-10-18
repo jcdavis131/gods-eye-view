@@ -1,9 +1,10 @@
 "use client";
-// Phone header: one row with the brand, the online dot, the clock state, and
-// the two actions that must stay reachable without opening a sheet (search,
-// settings). Everything else lives in MobileNav at the bottom of the screen.
+// Phone header: one row with the brand (the page's h1), the online dot, the
+// clock state and settings, then the search field and the catalogue link.
+// Everything else lives in MobileNav at the bottom of the screen.
 
-import { Search, Settings2 } from "lucide-react";
+import { Settings2 } from "lucide-react";
+import { SiteSearch, CatalogLink } from "./FrontDoor";
 import { useGlobe } from "@/lib/store/globe";
 import { useReleases } from "@/lib/releases/store";
 import { isLive } from "@/lib/globe/clock";
@@ -15,7 +16,6 @@ import { PERSONA_BY_ID } from "@/lib/personas/registry";
 export default function MobileTopBar() {
   const ready = useGlobe((s) => s.ready);
   const clock = useGlobe((s) => s.clock);
-  const setSearchOpen = useGlobe((s) => s.setSearchOpen);
   const setSettingsOpen = useGlobe((s) => s.setSettingsOpen);
   const vintage = useReleases((s) => s.vintage);
   const personaId = useLens((s) => s.personaId);
@@ -37,32 +37,26 @@ export default function MobileTopBar() {
           </span>
           {vintage && <span className="truncate text-[9px] tracking-[0.12em] text-warn">V {vintage}</span>}
         </div>
-        <button
-          type="button"
-          onClick={() => setPickerOpen(true)}
-          className="flex min-w-0 flex-col items-center"
-          aria-label={persona ? `Embedding Atlas. Lens: ${persona.title}. Change lens` : "Embedding Atlas. Choose a lens"}
-        >
-          <span className="hud-display truncate text-[11px] leading-none tracking-[0.28em] text-[var(--bright)]" style={{ marginRight: "-0.28em" }}>
-            Embedding Atlas
-          </span>
-          {persona && (
-            <span className="mt-1 truncate text-[8px] uppercase leading-none tracking-[0.22em]" style={{ color: persona.color }}>
-              {persona.short}
+        <h1 className="min-w-0">
+          <button
+            type="button"
+            onClick={() => setPickerOpen(true)}
+            className="flex min-w-0 flex-col items-center"
+            aria-label={persona ? `Embedding Atlas. Lens: ${persona.title}. Change lens` : "Embedding Atlas. Choose a lens"}
+          >
+            <span className="hud-display truncate text-[12px] leading-none tracking-[0.28em] text-[var(--bright)]" style={{ marginRight: "-0.28em" }}>
+              Embedding Atlas
             </span>
-          )}
-        </button>
+            {persona && (
+              <span className="mt-1 truncate text-[8px] uppercase leading-none tracking-[0.22em]" style={{ color: persona.color }}>
+                {persona.short}
+              </span>
+            )}
+          </button>
+        </h1>
         <div className="flex shrink-0 items-center justify-end">
           <VoiceControl compact />
           <ThemeToggle className="flex" />
-          <button
-            type="button"
-            onClick={() => setSearchOpen(true)}
-            className="flex size-9 items-center justify-center text-foreground/80 hover:text-primary"
-            aria-label="Search"
-          >
-            <Search className="size-4" />
-          </button>
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
@@ -72,6 +66,12 @@ export default function MobileTopBar() {
             <Settings2 className="size-4" />
           </button>
         </div>
+      </div>
+      {/* Search is the one action the library exists for: a full-width field
+          at a 44 px target, and the catalogue a tap away. */}
+      <div className="pointer-events-auto mt-1.5 flex items-center gap-1.5">
+        <SiteSearch className="flex-1" />
+        <CatalogLink className="hud-panel" />
       </div>
     </header>
   );

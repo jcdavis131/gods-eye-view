@@ -5,7 +5,7 @@
 module.exports = {
   version: "3.0",
   title: "Embedding Atlas",
-  description: "A spy satellite simulator in your browser, except the data is real. No API keys needed.",
+  description: "Ask eye about a US place and get a cited, dated public record: where it comes from, when it was read, and what it leaves out. No API keys needed.",
   menu: async (kernel, info) => {
     const installed = info.exists("node_modules");
     const running = {

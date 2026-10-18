@@ -71,6 +71,11 @@ describe("groupLayers", () => {
       expect(g.primary.length + g.more.length).toBe(LAYERS.length);
     }
   });
+
+  it("offers no simulated layer on the globe (Traffic (sim) is off the list)", () => {
+    expect(LAYERS.filter((l) => l.simulated).map((l) => l.id)).toEqual([]);
+    expect(LAYERS.map((l) => l.id)).not.toContain("traffic");
+  });
 });
 
 describe("erroringLayers", () => {
