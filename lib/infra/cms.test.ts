@@ -95,9 +95,9 @@ describe("buildHospitals with the CMS join", () => {
     const fs = buildHospitals(rows, false, lookup);
     const attached = fs.filter((f) => (f.properties.extra as { cms?: unknown }).cms);
     expect(attached).toHaveLength(6);
-    for (const f of fs) expect(f.properties.details["CMS star rating"]).toBeDefined();
+    for (const f of fs) expect(f.properties.details!["CMS star rating"]).toBeDefined();
     const short = buildHospitals(rows, true, lookup);
-    expect(short.every((f) => !("cms" in (f.properties.extra as object)) && !f.properties.details["CMS star rating"])).toBe(true);
+    expect(short.every((f) => !("cms" in (f.properties.extra as object)) && !f.properties.details!["CMS star rating"])).toBe(true);
   });
   it("leaves the embedded record text byte-identical with and without the CMS attachment", () => {
     const plain = buildHospitals(rows, false);

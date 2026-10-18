@@ -48,16 +48,16 @@ describe("buildDda", () => {
     expect(d).toHaveLength(8);
     expect(new Set(f(ddaAustin).map((x) => x.properties?.DDA_CODE)).size).toBe(1);
     const z = d.find((x) => x.properties.name === "DDA ZIP 78701")!;
-    expect(z.properties.details.area).toBe("metro ZIP code area 78701 (Austin-Round Rock-San Marcos, TX MSA)");
-    expect(z.properties.details.designation).toBe("Difficult Development Area, titled 2026 by HUD");
+    expect(z.properties.details!.area).toBe("metro ZIP code area 78701 (Austin-Round Rock-San Marcos, TX MSA)");
+    expect(z.properties.details!.designation).toBe("Difficult Development Area, titled 2026 by HUD");
   });
   it("names a non-metro county DDA as HUD does, and draws Connecticut's planning-region DDA", () => {
     const sx = buildDda(f(ddaSussex));
-    expect(sx[0].properties.details.area).toBe("non-metro county or county equivalent: Sussex County");
+    expect(sx[0].properties.details!.area).toBe("non-metro county or county equivalent: Sussex County");
     const ct = buildDda(f(ddaCt));
     const nw = ct.find((x) => (x.properties.extra as { code: string }).code === "NCNTY09160N09160")!;
-    expect(nw.properties.details.area).toBe("non-metro county or county equivalent: Northwest Hills Planning Region");
-    expect(nw.properties.details.connecticut).toMatch(/planning regions/);
+    expect(nw.properties.details!.area).toBe("non-metro county or county equivalent: Northwest Hills Planning Region");
+    expect(nw.properties.details!.connecticut).toMatch(/planning regions/);
   });
 });
 
@@ -80,10 +80,10 @@ describe("buildLihtc", () => {
     expect(lihtcYear("9999")).toBe("HUD code 9999 (HUD's code, not a year)");
     const b = buildLihtc(f(lihtcAustin));
     const coded = b.features.find((x) => f(lihtcAustin).some((r) => r.properties?.HUD_ID === (x.properties.extra as { hudId: string }).hudId && r.properties?.YR_PIS === "8888"))!;
-    expect(coded.properties.details["placed in service"]).toBe("HUD code 8888 (HUD's code, not a year)");
+    expect(coded.properties.details!["placed in service"]).toBe("HUD code 8888 (HUD's code, not a year)");
     for (const x of b.features) {
-      expect(x.properties.details["placed in service"]).not.toBe("8888");
-      expect(x.properties.details["nonprofit sponsor (NON_PROF)"] ?? "HUD code").toMatch(/^HUD code/);
+      expect(x.properties.details!["placed in service"]).not.toBe("8888");
+      expect(x.properties.details!["nonprofit sponsor (NON_PROF)"] ?? "HUD code").toMatch(/^HUD code/);
     }
   });
   it("sizes points by low-income units on fixed bins", () => {
