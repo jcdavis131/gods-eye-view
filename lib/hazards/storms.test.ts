@@ -8,7 +8,8 @@ import { describe, expect, it } from "vitest";
 import metaJson from "./data/storm-events/meta.json";
 import shardTx from "./data/storm-events/48.json";
 import type { StormMeta, StormShard } from "./stormBake";
-import { STORM_MAIN_TYPES, STORM_ZONE_SHARE_MAX, stormAsSeries, stormGate, stormSeries, stormSeriesId } from "./storms";
+import { STORM_EVENTS_CAVEAT, STORM_MAIN_TYPES, STORM_ZONE_SHARE_MAX, stormAsSeries, stormGate, stormSeries, stormSeriesId } from "./storms";
+import { toolByName } from "@/lib/mcp/tools";
 import { loadStormShard, STORM_LOADERS } from "./stormShards";
 import { assembleStorms } from "./history";
 
@@ -18,7 +19,14 @@ const geo = { kind: "county" as const, id: "48453", name: "Travis County, TX" };
 
 describe("the zone-share gate", () => {
   it("is 10 % (Cam's decision 3, pending)", () => expect(STORM_ZONE_SHARE_MAX).toBe(0.1));
-  it("blanks 1996 Flood (mostly zone-coded) and draws 1996 Hail", () => {
+  it("is said as the gate is: 10 % or more zone-coded, never 'mostly' (the caveat and the MCP hazards description)", () => {
+    const desc = toolByName("county_history")!.description;
+    for (const text of [STORM_EVENTS_CAVEAT, desc]) {
+      expect(text).toContain(`${Math.round(STORM_ZONE_SHARE_MAX * 100)} % or more`);
+      expect(text).not.toMatch(/mostly zone-coded|most of its rows/);
+    }
+  });
+  it("blanks 1996 Flood (10 % or more zone-coded) and draws 1996 Hail", () => {
     expect(stormGate(meta, 1996, "Flood")).toMatchObject({ drawn: false, reason: "zone-coded" });
     expect(stormGate(meta, 1996, "Hail")).toMatchObject({ drawn: true });
   });

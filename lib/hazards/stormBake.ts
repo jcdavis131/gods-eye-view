@@ -19,7 +19,7 @@
 // the county (see stormCountyOf). Zone-coded rows (CZ_TYPE Z) are never
 // attached, because forecast zones cross county lines and NWS publishes its
 // zone-county table only for 2025-2026; they are tallied per year and type so
-// the route can blank a type's year when most of its rows were zone-coded.
+// the route can blank a type's year when STORM_ZONE_SHARE_MAX (10 %) or more of its rows were zone-coded.
 // The output is a pure function of the input bytes: no clock, sorted keys.
 
 export interface StormCountyRef {
