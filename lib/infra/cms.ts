@@ -7,7 +7,11 @@
 // address and ZIP code, exactly, after a fixed normalisation, and only where
 // exactly one CMS row and exactly one HIFLD row (any status) share the key.
 // A key two hospitals share (a long-term-care unit inside a general hospital)
-// is never attached, so no tenant ever shows its host's rating.
+// is never attached, so no tenant ever shows its host's rating. A tenant HIFLD
+// lists alone at its host's address (the host is keyed elsewhere) is refused
+// too, by tenantConflict: on the 2026-10-18 audit, 8 of 4,050 one-to-one
+// matches paired a long-term acute care unit, a psychiatric distinct part or a
+// later occupant of the building with another facility's CMS record.
 //
 // Pure and import-free with only erasable TypeScript (node runs it by type
 // stripping for scripts/bake-cms-hospitals.mjs; vitest and the infra route
@@ -17,12 +21,17 @@ export const CMS_DATASET = "xubh-q36u";
 export const CMS_QUERY = `https://data.cms.gov/provider-data/api/1/datastore/query/${CMS_DATASET}/0`;
 export const CMS_METASTORE = `https://data.cms.gov/provider-data/api/1/metastore/schemas/dataset/items/${CMS_DATASET}?show-reference-ids=false`;
 export const CMS_PAGE = 1500;
-/** The only CMS columns asked for: never facility_name (HIFLD labels the hospital), telephone_number (a contact) or countyparish. */
-export const CMS_PROPERTIES = ["facility_id", "address", "zip_code", "state", "hospital_type", "hospital_ownership", "emergency_services", "meets_criteria_for_birthing_friendly_designation", "hospital_overall_rating", "hospital_overall_rating_footnote"] as const;
-export const CMS_DENY = /telephone|facility_name|countyparish/;
+/**
+ * The only CMS columns asked for: never telephone_number (a contact) or countyparish. facility_name
+ * is read in the bake only, to refuse a tenant match (tenantConflict); it is never stored in a row or
+ * shown (HIFLD labels the hospital).
+ */
+export const CMS_PROPERTIES = ["facility_id", "facility_name", "address", "zip_code", "state", "hospital_type", "hospital_ownership", "emergency_services", "meets_criteria_for_birthing_friendly_designation", "hospital_overall_rating", "hospital_overall_rating_footnote"] as const;
+export const CMS_DENY = /telephone|countyparish/;
 
 export const HIFLD_JOIN_URL = "https://services.arcgis.com/XG15cJAlne2vxtgt/arcgis/rest/services/Hospitals_RAPT/FeatureServer/6";
-export const HIFLD_JOIN_FIELDS = ["ID", "ADDRESS", "ZIP", "STATUS"] as const;
+/** NAME and TYPE are read for tenantConflict only, never stored. */
+export const HIFLD_JOIN_FIELDS = ["ID", "ADDRESS", "ZIP", "STATUS", "NAME", "TYPE"] as const;
 
 /** One page of the CMS datastore query, the named columns only. */
 export function cmsPageUrl(offset: number): string {
@@ -76,7 +85,7 @@ export function joinKey(address: unknown, zip: unknown): string | null {
 }
 
 export type CmsRow = { [K in (typeof CMS_PROPERTIES)[number]]?: unknown };
-export type HifldJoinRow = { ID?: unknown; ADDRESS?: unknown; ZIP?: unknown; STATUS?: unknown };
+export type HifldJoinRow = { ID?: unknown; ADDRESS?: unknown; ZIP?: unknown; STATUS?: unknown; NAME?: unknown; TYPE?: unknown };
 
 /** [ccn, rating 1-5 or null, rating footnote or null, CMS hospital type, ownership, emergency services, birthing-friendly] */
 export type CmsEntry = [string, number | null, string | null, string | null, string | null, string | null, string | null];
@@ -102,6 +111,8 @@ export interface CmsBake {
     attachedOpenRated: number;
     attachedClosed: number;
     sharedKeys: number;
+    /** One-to-one matches refused by tenantConflict: [HIFLD ID, CCN, why]; never attached. */
+    refusedTenant: Array<[string, string, string]>;
     /** Keys shared by more than one row on either side: [key, CMS CCNs, HIFLD IDs]; never attached. */
     sharedAddress: Array<[string, string[], string[]]>;
     unattachedByCmsType: Record<string, number>;
@@ -114,6 +125,53 @@ export interface CmsBake {
 }
 
 const s = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
+
+/**
+ * A HIFLD name that marks a separately certified hospital living in another hospital's building (CMS's
+ * Provider of Services file gives each its own CCN, e.g. Infirmary LTAC 012006 at Mobile Infirmary's
+ * address). Not D/P or "distinct part": a distinct part is a unit under its host's own CCN, so the
+ * host's rating covers it.
+ */
+export const TENANT_MARKER = /\b(LTAC|LTACH|LONG TERM ACUTE|SELECT SPECIALTY|KINDRED|VIBRA)\b/;
+const NAME_STOP = new Set("THE OF AND AT FOR INC LLC CORP HOSPITAL HOSPITALS MEDICAL CENTER CENTRE CTR HEALTH HEALTHCARE SYSTEM SYSTEMS REGIONAL COMMUNITY MEMORIAL CAMPUS CARE SERVICES".split(" "));
+const nameUpper = (v: unknown): string => (s(v) ?? "").toUpperCase().replace(/\bHOSP\b/g, "HOSPITAL").replace(/\bCTR\b/g, "CENTER");
+const nameTokens = (v: unknown): string[] => nameUpper(v).replace(/[^A-Z0-9/ ]/g, " ").split(/\s+/).filter((t) => t.length > 1 && !NAME_STOP.has(t));
+function oneEdit(a: string, b: string): boolean {
+  if (Math.abs(a.length - b.length) > 1) return false;
+  if (a.length === b.length) return [...a].filter((c, i) => c !== b[i]).length <= 1;
+  const [x, y] = a.length < b.length ? [a, b] : [b, a];
+  for (let i = 0; i < y.length; i++) if (y.slice(0, i) + y.slice(i + 1) === x) return true;
+  return false;
+}
+/** Share of the shorter name's words found in the other (a word of 5+ letters may differ by one edit). */
+export function nameOverlap(a: unknown, b: unknown): number {
+  const ta = nameTokens(a);
+  const tb = nameTokens(b);
+  if (!ta.length || !tb.length) return 1;
+  const [x, y] = ta.length <= tb.length ? [ta, tb] : [tb, ta];
+  return x.filter((t) => y.some((u) => t === u || (t.length >= 5 && oneEdit(t, u)))).length / x.length;
+}
+function typeConflict(hType: string | null, cType: string | null): boolean {
+  const h = (hType ?? "").toUpperCase();
+  if ((h === "LONG TERM CARE" || h === "REHABILITATION" || h === "CHRONIC DISEASE") && cType !== "Long-term") return true;
+  if ((h === "PSYCHIATRIC") !== (cType === "Psychiatric")) return true;
+  if (cType === "Childrens" && h !== "CHILDREN" && h !== "GENERAL ACUTE CARE") return true;
+  return false;
+}
+/**
+ * Why a one-to-one address match pairs two different facilities, or null. Either the HIFLD name marks
+ * a tenant (LTAC, Kindred, a distinct part, ...) the CMS name does not, or the two publishers' types
+ * conflict and fewer than half the shorter name's words agree. Missing names or types never refuse.
+ * Refusing costs a rating line ("no unambiguous CMS match"); attaching wrongly shows another
+ * facility's stars, so the rule leans to refusing.
+ */
+export function tenantConflict(hName: unknown, hType: unknown, cName: unknown, cType: unknown): string | null {
+  if (!s(hName) || !s(cName)) return null;
+  const hm = nameUpper(hName).match(TENANT_MARKER);
+  if (hm && !TENANT_MARKER.test(nameUpper(cName))) return `HIFLD names a tenant (${hm[1]}) the CMS name does not`;
+  if (s(hType) && s(cType) && typeConflict(s(hType), s(cType)) && nameOverlap(hName, cName) < 0.5) return `types differ (HIFLD ${s(hType)}, CMS ${s(cType)}) and the names do not agree`;
+  return null;
+}
 const sortKeys = <V>(o: Record<string, V>): Record<string, V> => Object.fromEntries(Object.keys(o).sort().map((k) => [k, o[k]]));
 
 /** CMS's overall rating: 1-5, or null for "Not Available" (CMS's own word) and anything else. */
@@ -151,6 +209,7 @@ export function bakeCms(
   const rows: Record<string, CmsEntry> = {};
   const shared: Array<[string, string[], string[]]> = [];
   const attachedCcn = new Set<string>();
+  const refused: Array<[string, string, string]> = [];
   let open = 0;
   let openRated = 0;
   let closed = 0;
@@ -165,6 +224,11 @@ export function bakeCms(
     const h = hs[0];
     const ccn = s(c.facility_id);
     if (!ccn) continue;
+    const why = tenantConflict(h.NAME, h.TYPE, c.facility_name, c.hospital_type);
+    if (why) {
+      refused.push([String(h.ID).trim(), ccn, why]);
+      continue;
+    }
     const rating = cmsRating(c.hospital_overall_rating);
     rows[String(h.ID).trim()] = [ccn, rating, rating == null ? s(c.hospital_overall_rating_footnote) : null, s(c.hospital_type), s(c.hospital_ownership), s(c.emergency_services), s(c.meets_criteria_for_birthing_friendly_designation)];
     attachedCcn.add(ccn);
@@ -187,7 +251,7 @@ export function bakeCms(
   shared.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
   return {
     meta: {
-      what: "A derivation, not an upstream file: CMS Hospital General Information joined to HIFLD's hospitals (FEMA RAPT copy) by exact normalised street address + 5-digit ZIP, attached only where exactly one row on each side shares the key. Keyed by HIFLD ID.",
+      what: "A derivation, not an upstream file: CMS Hospital General Information joined to HIFLD's hospitals (FEMA RAPT copy) by exact normalised street address + 5-digit ZIP, attached only where exactly one row on each side shares the key and the two are not a tenant and another facility (refusedTenant). Keyed by HIFLD ID.",
       source: "Centers for Medicare & Medicaid Services, Hospital General Information (Provider Data Catalog xubh-q36u); HIFLD hospitals via FEMA RAPT",
       credit: "Centers for Medicare & Medicaid Services, Care Compare (Hospital General Information)",
       licence: "no licence stated (metastore license: null); US federal work",
@@ -196,7 +260,7 @@ export function bakeCms(
       cmsModified: info.cmsModified,
       hifldUrl: HIFLD_JOIN_URL,
       hifldDataLastEdit: info.hifldDataLastEdit,
-      joinRule: "key = address upper-cased, every non-alphanumeric to a space, words abbreviated by ADDRESS_WORDS (STREET to ST, NORTH to N, ...), then '|' and the first five digits of the ZIP; attached only where exactly one CMS row and exactly one HIFLD row (any status) share the key; a house-number-only key is not used",
+      joinRule: "key = address upper-cased, every non-alphanumeric to a space, words abbreviated by ADDRESS_WORDS (STREET to ST, NORTH to N, ...), then '|' and the first five digits of the ZIP; attached only where exactly one CMS row and exactly one HIFLD row (any status) share the key; a house-number-only key is not used; a one-to-one match is refused when tenantConflict finds a tenant marker in the HIFLD name only, or conflicting types with names that do not agree (names and types are read, never stored)",
       cmsRows: cms.length,
       cmsDistinctCcn: new Set(cms.map((c) => String(c.facility_id ?? ""))).size,
       hifldRows: hifld.length,
@@ -206,6 +270,7 @@ export function bakeCms(
       attachedClosed: closed,
       sharedKeys: shared.length,
       sharedAddress: shared,
+      refusedTenant: refused.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)),
       unattachedByCmsType: sortKeys(unattached),
       ratings: sortKeys(ratings),
       sha256: info.sha256 ?? { cms: null, hifld: null },

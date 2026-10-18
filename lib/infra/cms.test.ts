@@ -14,7 +14,7 @@ import cmsSlice from "./fixtures/cms-tx.json";
 import raptSlice from "./fixtures/rapt-tx.slice.json";
 import committed from "./data/cms-hospitals.json";
 import box from "./fixtures/hosp-box-austin.json";
-import { bakeCms, cmsDetails, cmsExtra, cmsPageUrl, cmsRating, CMS_DENY, CMS_PROPERTIES, joinKey, normAddress, type CmsBake, type CmsRow, type HifldJoinRow } from "./cms";
+import { bakeCms, cmsDetails, cmsExtra, cmsPageUrl, cmsRating, CMS_DENY, CMS_PROPERTIES, joinKey, normAddress, tenantConflict, type CmsBake, type CmsRow, type HifldJoinRow } from "./cms";
 import { buildHospitals } from "./hospitals";
 
 const cms = (cmsSlice as { results: CmsRow[] }).results;
@@ -23,10 +23,53 @@ const info = { cmsModified: "2026-07-22", hifldDataLastEdit: "2026-04-22" };
 const bake = bakeCms(cms, hifld, info);
 
 describe("the CMS query", () => {
-  it("names its columns and never the telephone, the facility name or the county", () => {
+  it("names its columns and never the telephone or the county", () => {
     expect(CMS_PROPERTIES.filter((p) => CMS_DENY.test(p))).toEqual([]);
-    expect(cmsPageUrl(1500)).not.toMatch(/telephone|facility_name|countyparish/);
+    expect(cmsPageUrl(1500)).not.toMatch(/telephone|countyparish/);
     for (const r of cms) expect(Object.keys(r).filter((k) => CMS_DENY.test(k))).toEqual([]);
+  });
+  it("never stores a facility name: no committed row holds the CMS or HIFLD name", () => {
+    const rows = Object.values((committed as unknown as CmsBake).rows);
+    expect(rows.every((r) => r.length === 7)).toBe(true);
+    const text = JSON.stringify(rows);
+    for (const name of ["MOBILE INFIRMARY MEDICAL CENTER", "HAYS MEDICAL CENTER", "THE QUEENS MEDICAL CENTER"]) expect(text).not.toContain(name);
+  });
+});
+
+// Real pairs from the 2026-10-18 national audit (HIFLD NAME/TYPE, CMS facility_name/hospital_type, one
+// shared address each). The first five attached wrongly under the address rule alone.
+describe("tenantConflict", () => {
+  it("refuses a tenant listed alone at its host's address", () => {
+    expect(tenantConflict("INFIRMARY LTAC HOSPITAL", "LONG TERM CARE", "MOBILE INFIRMARY MEDICAL CENTER", "Acute Care Hospitals")).toMatch(/tenant \(LTAC\)/);
+    expect(tenantConflict("SELECT SPECIALTY HOSPITAL - ST. LOUIS", "LONG TERM CARE", "SSM ST JOSEPH HEALTH CENTER", "Acute Care Hospitals")).toMatch(/tenant/);
+    expect(tenantConflict("KINDRED HOSPITAL - DALLAS", "LONG TERM CARE", "NEXUS CHILDRENS HOSPITAL DALLAS", "Childrens")).toMatch(/tenant/);
+    expect(tenantConflict("SAGECREST HOSPITAL GRAPEVINE", "LONG TERM CARE", "LEGENT ORTHOPEDIC HOSPITAL", "Acute Care Hospitals")).toMatch(/types differ/);
+  });
+  it("keeps a rebrand, a mis-typed acute hospital, a typo and a specialty hospital CMS abbreviates", () => {
+    expect(tenantConflict("NORTH SUBURBAN MEDICAL CENTER", "GENERAL ACUTE CARE", "HCA HEALTHONE MOUNTAIN RIDGE", "Acute Care Hospitals")).toBeNull();
+    expect(tenantConflict("HAYS MEDICAL CENTER INC", "LONG TERM CARE", "HAYS MEDICAL CENTER", "Acute Care Hospitals")).toBeNull();
+    expect(tenantConflict("ADVENTHEALTH OTAWA", "LONG TERM CARE", "ADVENTHEALTH OTTAWA", "Acute Care Hospitals")).toBeNull();
+    expect(tenantConflict("THE CORE INSTITUTE SPECIALTY HOSPITAL", "GENERAL ACUTE CARE", "THE CORE INSTITUTE SPECIALTY HOSP", "Acute Care Hospitals")).toBeNull();
+    expect(tenantConflict("MISSISSIPPI METHODIST REHABILITATION CENTER", "REHABILITATION", "MISSISSIPPI METHODIST REHAB CTR", "Acute Care Hospitals")).toBeNull();
+    expect(tenantConflict("MEMORIAL HERMANN SPECIALTY HOSPITAL KINGWOOD LLC", "LONG TERM CARE", "MEMORIAL HERMANN SURGICAL HOSPITAL KINGWOOD", "Acute Care Hospitals")).toBeNull();
+  });
+  it("keeps a distinct part: a unit under its host's own CCN, so the host's rating covers it (CMS POS lists no separate CCN)", () => {
+    expect(tenantConflict("PALOMAR MEDICAL CENTER D/P APH", "PSYCHIATRIC", "PALOMAR HEALTH DOWNTOWN CAMPUS", "Acute Care Hospitals")).toBeNull();
+  });
+  it("refuses a closed or moved tenant HIFLD still lists at a building another facility now occupies (POS: terminated or elsewhere)", () => {
+    expect(tenantConflict("VIBRA HOSPITAL OF BOISE", "GENERAL ACUTE CARE", "COTTONWOOD CREEK BEHAVIORAL HOSPITAL", "Psychiatric")).toMatch(/tenant \(VIBRA\)/);
+    expect(tenantConflict("METHODIST HEALTHCARE MEMPHIS HOSPITALS - U.T. BOWLD", "GENERAL ACUTE CARE", "MEMPHIS MENTAL HEALTH INSTITUTE", "Psychiatric")).toMatch(/types differ/);
+  });
+  it("never refuses without both names", () => {
+    expect(tenantConflict(null, "LONG TERM CARE", "ANY", "Acute Care Hospitals")).toBeNull();
+    expect(tenantConflict("INFIRMARY LTAC HOSPITAL", "LONG TERM CARE", undefined, "Acute Care Hospitals")).toBeNull();
+  });
+  it("lists a refused pair in the bake and does not attach it", () => {
+    const c: CmsRow = { facility_id: "010113", facility_name: "MOBILE INFIRMARY MEDICAL CENTER", address: "5 MOBILE INFIRMARY CIR", zip_code: "36607", hospital_type: "Acute Care Hospitals", hospital_overall_rating: "3" };
+    const h: HifldJoinRow = { ID: "0003136607", ADDRESS: "5 MOBILE INFIRMARY CIRCLE", ZIP: "36607", STATUS: "OPEN", NAME: "INFIRMARY LTAC HOSPITAL", TYPE: "LONG TERM CARE" };
+    const b = bakeCms([c], [h], info);
+    expect(b.rows).toEqual({});
+    expect(b.meta.refusedTenant).toEqual([["0003136607", "010113", expect.stringMatching(/tenant \(LTAC\)/)]]);
   });
 });
 
@@ -108,11 +151,15 @@ describe("buildHospitals with the CMS join", () => {
   });
 });
 
-describe("the committed bake (2026-10-17)", () => {
+describe("the committed bake (2026-10-17, re-baked 2026-10-18 with tenantConflict)", () => {
   const m = (committed as unknown as CmsBake).meta;
-  it("reproduces the design's join figures", () => {
+  it("reproduces the design's join figures, less the seven refused tenants", () => {
     expect([m.cmsRows, m.cmsDistinctCcn, m.hifldRows]).toEqual([5419, 5419, 8514]);
-    expect([m.attached, m.attachedOpen, m.attachedOpenRated, m.attachedClosed, m.sharedKeys]).toEqual([4050, 4038, 2429, 12, 224]);
+    // 4,050 one-to-one matches on 2026-10-17; 7 refused on 2026-10-18 (CMS Provider of Services: a separately
+    // certified LTAC at its host's address, Kindred Dallas terminated 2020, U.T. Bowld closed 2004, Vibra Boise
+    // certified elsewhere, SageCrest absent; Select Specialty St. Louis; and the Doctors to Ascentist rename, a known cost).
+    expect([m.attached, m.attachedOpen, m.attachedOpenRated, m.attachedClosed, m.sharedKeys]).toEqual([4043, 4035, 2427, 8, 224]);
+    expect(m.refusedTenant.map((r) => r[0])).toEqual(["0003136607", "0006166211", "0011163301", "0014275243", "0022776051", "0155783642", "0196784817"]);
     expect(m.cmsModified).toBe("2026-07-22");
     expect(m.hifldDataLastEdit).toBe("2026-04-22");
     expect(m.sha256.cms).toMatch(/^[0-9a-f]{64}$/);
