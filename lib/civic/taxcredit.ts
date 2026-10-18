@@ -159,6 +159,55 @@ export function lihtcBin(n: number): number {
   return b;
 }
 
+// A LIHTC project's PROJECT is searchable (it is the feature's label), and HUD sometimes files
+// the street address as the project's name (the round-8 verifier counted 128 with PROJECT equal to
+// PROJ_ADD nationally; 99 of 2,000 in a New York City box, folded). Such a name would make the address searchable, so
+// it is replaced by "LIHTC project · HUD id <HUD_ID>" and the address stays in the dossier only.
+// A name reads as an address when, case, punctuation and whitespace folded and street words
+// abbreviated (STREET -> ST, WEST -> W): (1) it equals PROJ_ADD; (2) it begins with a house
+// number, or a range of them ("26 & 30", "1764-68"), then up to five words ending in a street
+// type ("2301 FIRST AVE", "125-145 ELM ST REHAB": what follows the street type does not make it
+// less an address); or (3) it begins with PROJ_ADD's own house number and the next word
+// ("99 RUTGERS 608" at 99 RUTGERS AVE). A name that only carries a number ("1610 ASSOC",
+// "2021 APTS") or a street without a house number ("76TH ST APTS") keeps its name. Errs toward
+// replacing: a replaced name costs a label, a kept address costs the rule.
+const LIHTC_ADDR_WORDS: Record<string, string> = { NORTH: "N", SOUTH: "S", EAST: "E", WEST: "W", STREET: "ST", AVENUE: "AVE", AV: "AVE", ROAD: "RD", DRIVE: "DR", BOULEVARD: "BLVD", LANE: "LN", COURT: "CT", PLACE: "PL", PARKWAY: "PKWY", PKY: "PKWY", HIGHWAY: "HWY", CIRCLE: "CIR", TERRACE: "TER", TRAIL: "TRL", SQUARE: "SQ", ALLEY: "ALY" };
+const LIHTC_STREET_TYPES = "ST|AVE|RD|DR|BLVD|LN|CT|PL|WAY|PKWY|HWY|CIR|TER|TRL|LOOP|PIKE|SQ|ROW|ALY";
+const LIHTC_HOUSE_NUMBERS = String.raw`\d+[A-Z]?(?:\s*(?:-|&|AND|/)\s*\d+[A-Z]?)*`;
+const LIHTC_ADDRESS_START = new RegExp(String.raw`^${LIHTC_HOUSE_NUMBERS}\s+(?:[NSEW]{1,2}\s+)?(?:[A-Z0-9'-]+\s+){0,4}(?:${LIHTC_STREET_TYPES})(?:\s|$)`);
+const LIHTC_LEAD = new RegExp(String.raw`^(\d+)[A-Z]?(?:\s*(?:-|&|AND|/)\s*\d+[A-Z]?)*\s+([A-Z0-9'-]+)`);
+
+const addrFold = (s: string): string =>
+  s
+    .toUpperCase()
+    .replace(/[.,#]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .map((w) => LIHTC_ADDR_WORDS[w] ?? w)
+    .join(" ");
+
+const addrLead = (folded: string): string | null => {
+  const m = LIHTC_LEAD.exec(folded);
+  return m ? `${m[1]} ${m[2]}` : null;
+};
+
+/** Whether a LIHTC PROJECT name reads as a street address (its own PROJ_ADD or any house-number-plus-street). */
+export function lihtcNameIsAddress(project: string, address: string | null): boolean {
+  const p = addrFold(project);
+  if (!p) return false;
+  const a = address ? addrFold(address) : "";
+  if (a && p === a) return true;
+  if (LIHTC_ADDRESS_START.test(p)) return true;
+  const lead = a ? addrLead(a) : null;
+  return lead != null && addrLead(p) === lead;
+}
+
+/** The feature's label: HUD's project name, unless it is missing or reads as an address. */
+export function lihtcLabel(hudId: string, project: string | null, address: string | null): string {
+  return project && !lihtcNameIsAddress(project, address) ? project : `LIHTC project · HUD id ${hudId}`;
+}
+
 /**
  * LIHTC points from the answer. A row is drawn only when it has a point, a HUD_ID, at least
  * LIHTC_MIN_UNITS units (the where already says so; a row that slips through anyway is dropped) and
@@ -214,7 +263,8 @@ export function buildLihtc(rows: readonly Raw[]): { features: LayerFeature<Point
         id: `housing:lihtc:${hudId}`,
         layer: "housing",
         // A tax-credit property's published name (an apartment complex's), never a person's: projects under five units are never asked for.
-        name: str(p.PROJECT) ?? `LIHTC ${hudId}`,
+        // Never its address either: a name that reads as one is replaced (lihtcLabel).
+        name: lihtcLabel(hudId, str(p.PROJECT), str(p.PROJ_ADD)),
         kind: "lihtc",
         source: "HUD LIHTC properties",
         details: Object.fromEntries(Object.entries(details).filter(([, v]) => v != null)) as Record<string, string>,

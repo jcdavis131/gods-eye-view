@@ -1464,7 +1464,7 @@ export const COLLECTIONS: readonly Collection[] = [
     embedText: EMBED_TEXT["hud-lihtc"],
     ops: ["civic?op=housing"],
     sensitivity:
-      "Tax-credit rental properties as state agencies reported them to HUD. Owner company, contact person, their address and telephone are never requested. A project of fewer than five units is a household's home and is not drawn; its row never reaches the server. PROJECT is a property's name; it labels the point and is matched letter by letter (flagged for review, fallback HUD_ID), and PROJ_ADD is shown on click only, never searched or embedded.",
+      "Tax-credit rental properties as state agencies reported them to HUD. Owner company, contact person, their address and telephone are never requested. A project of fewer than five units is a household's home and is not drawn; its row never reaches the server. PROJECT is a property's name; it labels the point and is matched letter by letter (flagged for review, fallback HUD_ID), except where it reads as a street address (HUD files some projects under their address as the name): that point is labelled \"LIHTC project · HUD id <HUD_ID>\" instead, so the address is never searchable. PROJ_ADD is shown on click only, never searched or embedded.",
     round: 8,
   },
   {

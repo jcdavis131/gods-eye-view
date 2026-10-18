@@ -13,7 +13,7 @@ import ddaSussex from "./fixtures/hud-dda-sussex-box.json";
 import lihtcAustin from "./fixtures/hud-lihtc-austin.json";
 import lihtcCt from "./fixtures/hud-lihtc-ct-box.json";
 import sentinel from "./fixtures/hud-lihtc-small.sentinel.json";
-import { buildDda, buildLihtc, housingPartsPref, LIHTC_DENY, LIHTC_FIELDS, LIHTC_MIN_UNITS, LIHTC_WHERE, lihtcBin, lihtcYear, parseHousingParts } from "./taxcredit";
+import { buildDda, buildLihtc, housingPartsPref, LIHTC_DENY, LIHTC_FIELDS, LIHTC_MIN_UNITS, LIHTC_WHERE, lihtcBin, lihtcLabel, lihtcNameIsAddress, lihtcYear, parseHousingParts } from "./taxcredit";
 
 type Fc = { features: Array<{ geometry: GeoJSON.Geometry | null; properties: Record<string, unknown> | null }> };
 const f = (x: unknown) => (x as Fc).features;
@@ -106,5 +106,56 @@ describe("the palette", () => {
     const d = buildDda(f(ddaAustin)).find((y) => y.properties.name === "DDA ZIP 78701")!;
     expect(matchScore(d.properties, "78701")).toBeGreaterThan(0);
     expect(matchScore(d.properties, "metro12420m12420")).toBeGreaterThan(0);
+  });
+});
+
+describe("a LIHTC project HUD named by its street address", () => {
+  // Real rows: TXA19890030 in the Austin capture has PROJECT "1220 E 52ND ST" equal to its PROJ_ADD;
+  // CTA19880015 in the Connecticut capture is "26 & 30 MAUD STREET" at PROJ_ADD "26 MAUD ST".
+  const byId = (fc: unknown, id: string) => buildLihtc(f(fc)).features.find((x) => (x.properties.extra as { hudId: string }).hudId === id)!;
+  const rowOf = (fc: unknown, id: string) => f(fc).find((r) => r.properties?.HUD_ID === id)!.properties!;
+
+  it("is labelled by its HUD id, and its address is not found by the palette", async () => {
+    const { matchScore } = await import("@/lib/search/allowlist");
+    const row = rowOf(lihtcAustin, "TXA19890030");
+    expect(row.PROJECT).toBe(row.PROJ_ADD);
+    const x = byId(lihtcAustin, "TXA19890030");
+    expect(x.properties.name).toBe("LIHTC project · HUD id TXA19890030");
+    for (const q of ["1220 e 52nd st", "1220", "52nd st"]) expect(matchScore(x.properties, q), q).toBe(0);
+    expect(matchScore(x.properties, "txa19890030")).toBeGreaterThan(0);
+    // the address stays in the dossier, shown on click, never searched
+    expect(x.properties.details?.address).toMatch(/^1220 E 52ND ST, /);
+  });
+
+  it("catches a house-number range plus street that is not the address verbatim", async () => {
+    const { matchScore } = await import("@/lib/search/allowlist");
+    const row = rowOf(lihtcCt, "CTA19880015");
+    expect([row.PROJECT, row.PROJ_ADD]).toEqual(["26 & 30 MAUD STREET", "26 MAUD ST"]);
+    const x = byId(lihtcCt, "CTA19880015");
+    expect(x.properties.name).toBe("LIHTC project · HUD id CTA19880015");
+    expect(matchScore(x.properties, "maud")).toBe(0);
+  });
+
+  it("keeps every other published name in both captures", () => {
+    for (const fc of [lihtcAustin, lihtcCt]) {
+      for (const x of buildLihtc(f(fc)).features) {
+        const id = (x.properties.extra as { hudId: string }).hudId;
+        if (id === "TXA19890030" || id === "CTA19880015") continue;
+        expect(x.properties.name, id).toBe(String(rowOf(fc, id).PROJECT).trim());
+      }
+    }
+    expect(byId(lihtcAustin, "TXA0000X064").properties.name).toBe("PATHWAYS AT MANCHACA VILLAGE");
+  });
+
+  it("folds case, punctuation, whitespace and street words; a number or a street alone is a name", () => {
+    expect(lihtcNameIsAddress("  1220  e. 52nd street ", "1220 E 52ND ST")).toBe(true);
+    expect(lihtcNameIsAddress("524-526 WEST 159TH STREET", "524 W 159TH ST")).toBe(true);
+    expect(lihtcNameIsAddress("99 RUTGERS 608", "99 RUTGERS AVE")).toBe(true);
+    expect(lihtcNameIsAddress("2301 FIRST AVENUE", "335 E 118TH ST")).toBe(true);
+    expect(lihtcNameIsAddress("1610 ASSOC", "1610 ST JOHNS PL")).toBe(false);
+    expect(lihtcNameIsAddress("2021 APTS", "312 W 121ST ST")).toBe(false);
+    expect(lihtcNameIsAddress("76TH ST APTS", "417 E 76TH ST")).toBe(false);
+    expect(lihtcNameIsAddress("PATHWAYS AT NORTH LOOP", "2300 W. NORTH LOOP BLVD.")).toBe(false);
+    expect(lihtcLabel("X1", null, "1 MAIN ST")).toBe("LIHTC project · HUD id X1");
   });
 });
