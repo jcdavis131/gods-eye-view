@@ -325,6 +325,7 @@ function propertyFeature(r: Row, i: number, shape: "point" | "property", project
         recordText("fuds-properties", {
           STATUS: status ? STATUS_TEXT[status] : str(p.STATUS),
           ELIGIBILITY: str(p.ELIGIBILITY),
+          CLOSESTCITY: str(p.CLOSESTCITY),
           COUNTY: str(p.COUNTY),
           STATE: str(p.STATE)?.toUpperCase(),
           USACEDISTRICT: str(p.USACEDISTRICT)?.toUpperCase(),

@@ -106,7 +106,10 @@ describe("features", () => {
     for (const f of built) {
       const t = receivedRecordText(f.properties);
       const region = (f.properties.extra as TribalExtra).region;
-      expect(t).toBe(`BIA land area: ${f.properties.name}${region ? `; BIA trust land area, BIA region: ${region}` : ""}`);
+      // B0 (2026-10-18): the card's head comes first.
+      expect(t).toBe(
+        `collection: Trust land, Land Area Representation; agency: Bureau of Indian Affairs (BIA); BIA land area: ${f.properties.name}${region ? `; BIA trust land area, BIA region: ${region}` : ""}`,
+      );
       expect(t).not.toMatch(/NPS region/);
     }
   });

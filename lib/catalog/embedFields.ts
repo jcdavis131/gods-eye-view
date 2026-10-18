@@ -7,9 +7,13 @@
 // lib/water and lib/infra can import recordText without a cycle through
 // collections.ts, which imports their caveats.
 //
-// Rules that apply to every card (embeddings round 1, 2026-10-16):
-//   names are never embedded, of anything (they stay with the palette's
-//     letter-by-letter match, which owns the label-by-id rules);
+// Rules that apply to every card (embeddings round 1, 2026-10-16; B0 2026-10-18):
+//   a record's text starts with its card's head (RECORD_HEAD: short title and
+//     agency), then its public name where PUBLIC_NAME_RULE allows one, then its
+//     place (PLACE_FIELD_RANK), then the card's other fields (B0);
+//   no other name is embedded: a name that can be a person's or a business's
+//     never is, and a private holding labelled by id never is (the palette's
+//     letter-by-letter match owns the label-by-id rules);
 //   ids are matched by letters, never embedded (NRIS_Refnum, ATTAINS unit ids,
 //     CAS numbers, DFIRM_ID, NMFS UNIT, EMEF program and registry ids, FR citations);
 //   free text is not embedded (USGS Citation, Wayback NICE_DESC);
@@ -33,16 +37,16 @@ export const EMBED_TEXT = {
   "emef-rcra": ["pgm_sys_acrnm"],
   "emef-acres": ["pgm_sys_acrnm"],
   "tri-releases": ["cas_chem_name", "environmental_medium", "unit_of_measure", "reporting_year"],
-  "npl-boundaries": ["NPL_STATUS_CODE", "FEDERAL_FACILITY_DETER_CODE", "EPA_PROGRAM", "SITE_FEATURE_TYPE", "COUNTY", "STATE_CODE"],
+  "npl-boundaries": ["NPL_STATUS_CODE", "FEDERAL_FACILITY_DETER_CODE", "EPA_PROGRAM", "SITE_FEATURE_TYPE", "CITY_NAME", "COUNTY", "STATE_CODE"],
   "npl-status": ["Status", "Proposed_Date", "Listing_Date", "Construction_Completion_Date", "Deletion_Date"],
-  "fuds-properties": ["STATUS", "ELIGIBILITY", "COUNTY", "STATE", "USACEDISTRICT", "FISCALYEAR"],
+  "fuds-properties": ["STATUS", "ELIGIBILITY", "CLOSESTCITY", "COUNTY", "STATE", "USACEDISTRICT", "FISCALYEAR"],
   "fuds-projects": ["ENVRESTORATIONCATEGORY", "DERPPROGRAM", "PROJECTSTATUS", "RISKVALUEMRSPP", "OVERLAPPINGFEDERALLANDAGENCY"],
   "fuds-mrs": ["PROJECTSTATUS", "DERPPROGRAM", "RELATIVEPRIORITY"],
   "ust-releases-county": ["County", "State"],
   "ust-facilities-county": ["State"],
   "fema-nfhl-zones": ["FLD_ZONE", "ZONE_SUBTY", "SFHA_TF", "STUDY_TYP"],
   "padus-units": ["Category", "Own_Type", "Mang_Type", "Des_Tp", "State_Nm", "Pub_Access", "GAP_Sts", "IUCN_Cat"],
-  "nid-dams": ["PRIMARY_PURPOSE", "PRIMARY_DAM_TYPE", "HAZARD_POTENTIAL", "CONDITION_ASSESSMENT", "STATE", "YEAR_COMPLETED"],
+  "nid-dams": ["PRIMARY_PURPOSE", "PRIMARY_DAM_TYPE", "HAZARD_POTENTIAL", "CONDITION_ASSESSMENT", "COUNTYSTATE", "STATE", "YEAR_COMPLETED"],
   "esri-wayback": [],
   "wayback-capture": ["SRC_DATE", "NICE_NAME"],
   "usgs-htmc": ["Map_Name", "Map_Scale", "DateCurrent", "Imprint_Year", "Survey_Year"],
@@ -61,8 +65,8 @@ export const EMBED_TEXT = {
   "places-tract": ["category", "measure", "year", "data_value_type"],
   "svi-counties": ["COUNTY", "STATE"],
   "svi-tracts": ["STATE", "COUNTY"],
-  "hifld-hospitals": ["TYPE", "TRAUMA", "HELIPAD", "STATE"],
-  "nces-public-schools": ["SCHOOL_LEVEL", "SCHOOL_TYPE_TEXT", "CHARTER_TEXT", "VIRTUAL", "SY_STATUS_TEXT", "ULOCALE", "GSLO", "GSHI", "LSTATE"],
+  "hifld-hospitals": ["TYPE", "TRAUMA", "HELIPAD", "CITY", "STATE"],
+  "nces-public-schools": ["SCHOOL_LEVEL", "SCHOOL_TYPE_TEXT", "CHARTER_TEXT", "VIRTUAL", "SY_STATUS_TEXT", "ULOCALE", "GSLO", "GSHI", "LCITY", "NMCNTY", "LSTATE"],
   "fcc-bdc-counties": ["StateAbbr"],
   "fcc-bdc-hex": [],
   "wrc-counties": ["STUSPS"],
@@ -110,7 +114,76 @@ export const NAME_FIELDS_ALLOWED: ReadonlySet<string> = new Set([
   // BIA LAR land area names: all 335 read (reservations, rancherias, pueblos, communities; none a
   // person's). Embedded on Cam's call, 2026-10-17; the one *name field that is also a feature's name.
   "LARNAME",
+  // EPA Superfund boundaries' city: a place name (the site's city as EPA publishes it), never a person's (B0, 2026-10-18).
+  "CITY_NAME",
 ]);
+
+/**
+ * Place fields, embedded right after the record's head and public name (B0, 2026-10-18), city before
+ * county before state. Every one is also in its card's EMBED_TEXT; recordText only moves them forward.
+ */
+export const PLACE_FIELD_RANK: Readonly<Record<string, number>> = {
+  City: 0,
+  CITY: 0,
+  LCITY: 0,
+  CITY_NAME: 0,
+  CLOSESTCITY: 0,
+  County: 1,
+  COUNTY: 1,
+  NMCNTY: 1,
+  COUNTYSTATE: 1,
+  State: 2,
+  STATE: 2,
+  state: 2,
+  STATE_CODE: 2,
+  LSTATE: 2,
+  State_Nm: 2,
+  STUSPS: 2,
+  STATEABBRV: 2,
+};
+
+/**
+ * The head of every record text (B0, 2026-10-18): the card's short title and the agency that
+ * publishes it, in plain words a person searches with. Each word comes from the card's own title,
+ * what-text or its source's name and publisher (recordText.test.ts checks that), so the head says
+ * nothing the catalogue does not. Same for every record of a card.
+ */
+export const RECORD_HEAD: Readonly<Record<string, { collection: string; agency: string }>> = {
+  "nwi-wetlands": { collection: "Wetlands, National Wetlands Inventory", agency: "U.S. Fish and Wildlife Service" },
+  "nrhp-listed": { collection: "National Register of Historic Places", agency: "National Park Service" },
+  "attains-impaired": { collection: "Impaired waters, 303(d)", agency: "EPA ATTAINS" },
+  "emef-sems": { collection: "Superfund sites (SEMS)", agency: "EPA" },
+  "emef-tri": { collection: "Toxics Release Inventory reporters", agency: "EPA" },
+  "emef-rcra": { collection: "RCRA hazardous-waste handlers", agency: "EPA RCRAInfo" },
+  "emef-acres": { collection: "Brownfields properties (ACRES)", agency: "EPA" },
+  "npl-boundaries": { collection: "Superfund site boundaries, NPL", agency: "EPA" },
+  "fuds-properties": { collection: "Formerly Used Defense Sites, properties", agency: "U.S. Army Corps of Engineers FUDS" },
+  "fuds-mrs": { collection: "Formerly Used Defense Sites, munitions response sites", agency: "U.S. Army Corps of Engineers FUDS" },
+  "ust-releases-county": { collection: "Leaking underground storage tank releases by county", agency: "EPA UST Finder" },
+  "fema-nfhl-zones": { collection: "Flood hazard zones, National Flood Hazard Layer", agency: "FEMA" },
+  "padus-units": { collection: "Protected areas and public lands (PAD-US)", agency: "U.S. Geological Survey" },
+  "nid-dams": { collection: "Dams, National Inventory of Dams", agency: "U.S. Army Corps of Engineers" },
+  "hifld-hospitals": { collection: "Hospitals (HIFLD)", agency: "Homeland Infrastructure Foundation-Level Data, FEMA" },
+  "nces-public-schools": { collection: "Public schools", agency: "National Center for Education Statistics (NCES)" },
+  "wrc-communities": { collection: "Wildfire risk to communities", agency: "USDA Forest Service" },
+  "bia-lar": { collection: "Trust land, Land Area Representation", agency: "Bureau of Indian Affairs (BIA)" },
+};
+
+/**
+ * Cards whose record text may carry the record's own published name (B0, 2026-10-18), and the rule
+ * the builder applies before passing it to recordText as `publicName`. Only cards whose sensitivity
+ * line lets the name be searched as an institution's or a public holding's; each builder passes the
+ * name it already shows as the feature's label, never a name it labels by id. Cards whose name can
+ * be a person's or a business's stay out: NRHP RESNAME, EMEF primary_name, Superfund SITE_NAME, FUDS
+ * FEATURENAME, and the WRC Census place name (an exclusion on its card). BIA land areas carry their
+ * name as LARNAME, an embedText field, not through this door.
+ */
+export const PUBLIC_NAME_RULE: Readonly<Record<string, string>> = {
+  "hifld-hospitals": "the licensed hospital's published name (an institution's), as its label",
+  "nces-public-schools": "the public school's published name (an institution's), as its label",
+  "nid-dams": "a dam's published name only when NID publishes an owner type and it is not Private (a private dam is labelled by NID id; a missing owner type is unknown, not public)",
+  "padus-units": "a unit's published name only on federal or state land (Own_Type FED or STAT) and never an easement: local, district, joint and NGO units are often acquisitions named for a former owner",
+};
 
 /**
  * The words a field is embedded under: static word vectors gain from the field's meaning, not its
@@ -216,6 +289,13 @@ export const FIELD_LABEL: Readonly<Record<string, string>> = {
   HAZARD_POTENTIAL: "hazard potential",
   CONDITION_ASSESSMENT: "condition assessment",
   YEAR_COMPLETED: "year completed",
+  COUNTYSTATE: "county",
+  // Places added in B0 (2026-10-18): a hospital's and a school's city and county, a Superfund boundary's city, a FUDS property's closest city
+  CITY: "city",
+  LCITY: "city",
+  NMCNTY: "county",
+  CITY_NAME: "city",
+  CLOSESTCITY: "closest city",
   // Wayback capture metadata (click answer)
   SRC_DATE: "capture date",
   NICE_NAME: "imagery collection",

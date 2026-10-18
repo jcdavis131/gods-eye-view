@@ -47,10 +47,12 @@ describe("hospital features", () => {
     expect(arise.properties.details!.website).toBeUndefined();
   });
 
-  it("attaches record text from the card's fields only: no name, address or owner", () => {
+  it("attaches record text from the card's fields, its published name and city only: no address or owner", () => {
     const t = receivedRecordText(fs[0].properties)!;
     expect(t).toContain("hospital type: GENERAL ACUTE CARE");
-    expect(t).not.toMatch(/AUSTIN MEDICAL|BEE CAVE|PROPRIETARY|78746/);
+    // B0 (2026-10-18): the licensed hospital's published name, its label, rides once as the "name" segment.
+    expect(t).toContain(`name: ${fs[0].properties.name}`);
+    expect(t.split("; ").filter((s) => !s.startsWith("name: ")).join("; ")).not.toMatch(/AUSTIN MEDICAL|BEE CAVE|PROPRIETARY|78746/);
   });
 
   it("shows BEDS = -999 as not published, at the base size, never 0", () => {

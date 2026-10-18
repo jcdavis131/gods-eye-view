@@ -8,12 +8,16 @@
 //                         editing it after seeing scores fails the test.
 //   records-corpus.json   record text only ({card, embedText, source, retrievedAt, n}): 4,067
 //                         real records from the 18 record-vector cards, the captured fixtures
-//                         plus the 2026-10-17 keyless pulls, as 1,145 rows with a count (one row
-//                         per card, text, source and retrieval time; 1,132 distinct card and text
-//                         pairs). No ids or vectors, and no person's name. One reviewed name field
-//                         is embedded: bia-lar's LARNAME (BIA land area names, never a person's;
-//                         Cam's call, 2026-10-17), beside its BIA region under a card-scoped
-//                         label (DESIGN 7.3a, run 4).
+//                         plus the 2026-10-17 keyless pulls, as 1,513 rows with a count (one row
+//                         per card, text, source and retrieval time; 1,500 distinct card and text
+//                         pairs). No ids or vectors, and no person's name. Since B0 (2026-10-18,
+//                         run 5) every text starts with its card's short title and agency, then the
+//                         record's published name on the four PUBLIC_NAME_RULE cards (hospitals,
+//                         public schools, non-private dams, federal and state PAD-US units), then its place. The
+//                         same 4,067 records were rebuilt through the builders, the live ones from
+//                         the logged URLs; each matched its run-4 text once B0's segments were taken
+//                         out (writeups/panel-2026-10-18b/b0/run5). bia-lar's LARNAME stays embedded
+//                         (Cam's call, 2026-10-17), beside its BIA region (DESIGN 7.3a, run 4).
 //   records-results.json  the per-query output of the run these numbers come from.
 //
 // This is a regression guard, not the evidence for lifting ?semantic=1: the same agent wrote the
@@ -82,25 +86,24 @@ function grade(q: Query, r: Row): number {
   return g;
 }
 
-// Measured 2026-10-17 on the files above (DESIGN "Run 4 (7.3a)": run 3's corpus with the bia-lar
-// and wrc-communities record text rebuilt from the same rows). P is precision over the
-// queries that showed anything, R is recall@8 (relevant shown / min(8, relevant)) over all 89 real
-// queries, empty is the share of real queries that showed nothing. A deliberate change to tau, the
-// weights or the record text updates this table.
+// Measured 2026-10-18 on the files above (B0, run 5: the run-4 records with the B0 record text). P is
+// precision over the queries that showed anything, R is recall@8 (relevant shown / min(8, relevant))
+// over all 89 real queries, empty is the share of real queries that showed nothing. A deliberate
+// change to tau, the weights or the record text updates this table. Run 4 (before B0) was
+// 0.4: 0.758 / 0.647 / 0.157; 0.5: 0.847 / 0.459 / 0.404; 0.6: 0.863 / 0.222 / 0.652.
 const MEASURED: Record<string, { P: number; R: number; empty: number }> = {
-  "0.4": { P: 0.758, R: 0.647, empty: 0.157 },
-  "0.5": { P: 0.847, R: 0.459, empty: 0.404 },
-  "0.6": { P: 0.863, R: 0.222, empty: 0.652 },
+  "0.4": { P: 0.763, R: 0.669, empty: 0.112 },
+  "0.5": { P: 0.876, R: 0.511, empty: 0.292 },
+  "0.6": { P: 0.843, R: 0.264, empty: 0.64 },
 };
 const TOL = 0.02;
 
 /**
  * DESIGN 7.2 bars that RECORD_TAU misses, each accepted by Cam and keyed to the measured value:
  * the run may not be worse than the value accepted (plus TOL), so a worse rate still fails.
+ * Empty (0.404 in run 4, accepted by Cam 2026-10-17) meets its 0.30 bar since B0 (0.292), so it is no longer an exception.
  */
-const ACCEPTED_BAR_MISSES: Record<string, { bar: number; accepted: number; decision: string }> = {
-  empty: { bar: 0.3, accepted: 0.404, decision: "Cam, 2026-10-17: \"Cutoff 0.50\" (run 4 at 0.5: empty 0.404 against the 0.30 bar)" },
-};
+const ACCEPTED_BAR_MISSES: Record<string, { bar: number; accepted: number; decision: string }> = {};
 const BARS = { P: 0.65, R: 0.45, empty: 0.3 };
 
 /**
@@ -109,6 +112,8 @@ const BARS = { P: 0.65, R: 0.45, empty: 0.3 };
  */
 const KNOWN_CONTROL_LEAKS: Record<string, { card: string; decision: string }> = {
   n30: { card: "bia-lar", decision: "Cam, 2026-10-17: \"Cutoff 0.50\" (run 4: n30 \"Alaska Native corporation lands\" on bia-lar at 0.506)" },
+  // B0's head "Wildfire risk to communities" lifts v2's adjacent control n03 from 0.495 to 0.547 on WRC (8 rows).
+  n03: { card: "wrc-communities", decision: "Cam, 2026-10-18: \"Accept the leak, merge\" (B0 PR #96: n03 \"wildfire perimeters\" on wrc-communities at 0.547)" },
 };
 
 describe("records by meaning (hand-written eval, labelled as such)", () => {
