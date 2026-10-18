@@ -57,6 +57,9 @@
 //                                         not a 500. Connecticut's planning regions get drought
 //                                         only (the others publish legacy counties). part=landslide
 //                                         answers the baked landslide row alone, with no upstream.
+//                                         NCEI Storm Events reports per year by type since 1996
+//                                         (county-coded rows, tornadoes left to SPC; one baked
+//                                         state shard, lazily loaded); part=storms answers that alone.
 //
 // FIRMS confidence stays on each instrument's own scale: VIIRS low / nominal /
 // high, MODIS 0–100 %. Nothing here merges or rescales them.
@@ -131,8 +134,12 @@ import { countyByFips } from "@/lib/places/registry";
 import type { LandslideBake, SpcBake } from "@/lib/hazards/bake";
 import spcBakeJson from "@/lib/hazards/data/spc-tornado-county.json";
 import landslideBakeJson from "@/lib/hazards/data/landslide-county.json";
+import stormMetaJson from "@/lib/hazards/data/storm-events/meta.json";
+import type { StormMeta } from "@/lib/hazards/stormBake";
+import { loadStormShard, STORM_LOADERS } from "@/lib/hazards/stormShards";
 import {
   assembleHistory,
+  assembleStorms,
   BAKED_ON,
   BOUNDARY_CHANGED_SINCE_2010,
   cagUrl,
@@ -627,13 +634,14 @@ async function opWrcFips(fips: string): Promise<OpResult | null> {
 
 const SPC_BAKE = spcBakeJson as unknown as SpcBake;
 const LANDSLIDE_BAKE = landslideBakeJson as unknown as LandslideBake;
+const STORM_META = stormMetaJson as unknown as StormMeta;
 const DAY_MS = 24 * 3600_000;
 /** One request every 300 ms to FEMA and to NCEI, 500 ms to USDM; a 429 or 503 closes the gate for ten minutes. */
 const FEMA_GATE = { gate: "fema-openfema", minIntervalMs: 300 };
 const USDM_GATE = { gate: "usdm", minIntervalMs: 500 };
 const CAG_GATE = { gate: "noaa-cag", minIntervalMs: 300 };
 const HISTORY_HELP =
-  "op=history needs fips=<5-digit county FIPS> or lon=&lat= (exactly one); optional years=1..131 (the last N calendar years; default all), declarations=0..1000 (how many declarations to list; default 1000) and part=landslide (the baked landslide row only)";
+  "op=history needs fips=<5-digit county FIPS> or lon=&lat= (exactly one); optional years=1..131 (the last N calendar years; default all), declarations=0..1000 (how many declarations to list; default 1000) and part=landslide | storms (the baked landslide row, or the baked NCEI Storm Events series, alone)";
 
 function gatedJson(name: string, g: { gate: string; minIntervalMs: number }, url: string, timeoutMs = 20_000): Promise<unknown> {
   return polite(g.gate, g.minIntervalMs, 600_000, () => upstreamJson(name, url, { timeoutMs }), [429, 503]);
@@ -652,9 +660,34 @@ async function part<T>(key: string, ttlMs: number, url: string, load: () => Prom
 
 const skipPart = <T,>(reason: MissingReason): Part<T> => ({ skip: reason });
 
-async function opHistory(fips: string, years: number | null, declarationsCap: number, landslideOnly: boolean): Promise<OpResult> {
+/** The county's storm-events shard: no fetch, a lazy per-state import. Alaska has no shard (its rows are NCEI's own areas); a load failure is an error part, never zeros. */
+async function stormsPart(fips: string): Promise<Part<{ meta: StormMeta; shard: Awaited<ReturnType<typeof loadStormShard>> }>> {
+  const st = fips.slice(0, 2);
+  if (CT_REGION.test(fips)) return { skip: "join:legacy_ct_counties" };
+  if (st === "02") return { skip: "join:ncei_areas_not_counties" };
+  try {
+    return { value: { meta: STORM_META, shard: await loadStormShard(st, STORM_LOADERS) }, retrievedAt: `${BAKED_ON}T00:00:00.000Z`, url: STORM_META.dir };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err), url: STORM_META.dir };
+  }
+}
+
+type HistoryPart = "landslide" | "storms" | null;
+
+async function opHistory(fips: string, years: number | null, declarationsCap: number, only: HistoryPart): Promise<OpResult> {
   const c = countyByFips(fips)!;
-  if (landslideOnly) {
+  if (only === "storms") {
+    const now = Date.now();
+    const st = assembleStorms({ fips, now, years, storms: await stormsPart(fips) }, { kind: "county", id: fips, name: `${c.name}, ${c.stusab}` });
+    return {
+      data: { fips, name: c.name, state: c.stusab, series: st.series, storms: st.storms, missing: st.missing },
+      meta: { source: "NOAA NCEI Storm Events Database, county-coded rows 1996 onward, baked in lib/hazards/data/storm-events", part: "storms", years, zeroFill: st.storms?.zeroFill ?? null, asOf: { storms: st.asOf } },
+      ttlS: 86_400,
+      provenance: st.provenance,
+      caveats: [...st.caveats, ...(CT_REGION.test(fips) ? [CT_HISTORY_LINE] : [])],
+    };
+  }
+  if (only === "landslide") {
     const ls = landslideLine(LANDSLIDE_BAKE, fips);
     return {
       data: { fips, name: c.name, state: c.stusab, landslide: ls.line, missing: ls.reason ? [{ source: "USGS landslide susceptibility", reason: ls.reason, detail: BOUNDARY_CHANGED_SINCE_2010[fips] }] : [] },
@@ -679,17 +712,18 @@ async function opHistory(fips: string, years: number | null, declarationsCap: nu
   const femaU = femaUrl(fips);
   const dsciU = usdmDsciUrl(fips, now);
   const catU = usdmCategoryUrl(fips, now);
-  const [fema, dsci, droughtNow, tavg, pcp] = await Promise.all([
+  const [fema, dsci, droughtNow, tavg, pcp, storms] = await Promise.all([
     sk.fema ? Promise.resolve(skipPart<ReturnType<typeof parseFema>>(sk.fema)) : part(`history:fema:${fips}`, DAY_MS, femaU, async () => parseFema(await gatedJson("fema-openfema", FEMA_GATE, femaU))),
     part(`history:usdm:dsci:${fips}`, DAY_MS, dsciU, async () => parseDsci(await gatedJson("usdm", USDM_GATE, dsciU, 25_000))),
     part(`history:usdm:now:${fips}`, DAY_MS, catU, async () => parseDroughtNow(await gatedJson("usdm", USDM_GATE, catU))),
     cag("tavg"),
     cag("pcp"),
+    stormsPart(fips),
   ]);
-  const a = assembleHistory({ fips, name: c.name, stusab: c.stusab, now, years, declarationsCap, fema, dsci, droughtNow, tavg, pcp, spc: SPC_BAKE, landslide: LANDSLIDE_BAKE });
+  const a = assembleHistory({ fips, name: c.name, stusab: c.stusab, now, years, declarationsCap, fema, dsci, droughtNow, tavg, pcp, spc: SPC_BAKE, landslide: LANDSLIDE_BAKE, storms });
   return {
     data: a.data,
-    meta: { source: "FEMA OpenFEMA, U.S. Drought Monitor, NOAA NCEI Climate at a Glance, NOAA SPC, USGS", ...a.meta, count: a.data.series.length, declarationsListed: a.data.declarations.length },
+    meta: { source: "FEMA OpenFEMA, U.S. Drought Monitor, NOAA NCEI Climate at a Glance, NOAA SPC, USGS, NOAA NCEI Storm Events", ...a.meta, count: a.data.series.length, declarationsListed: a.data.declarations.length },
     ttlS: 3600,
     provenance: a.provenance,
     caveats: a.caveats,
@@ -754,7 +788,7 @@ export async function GET(req: NextRequest) {
         const declQ = q.get("declarations");
         const partQ = q.get("part");
         if ((fipsQ != null) === (lonQ != null || latQ != null)) return badRequest(HISTORY_HELP);
-        if (partQ != null && partQ !== "landslide") return badRequest(HISTORY_HELP);
+        if (partQ != null && partQ !== "landslide" && partQ !== "storms") return badRequest(HISTORY_HELP);
         const years = yearsQ == null ? null : Number(yearsQ);
         if (years != null && !(Number.isInteger(years) && years >= 1 && years <= 131)) return badRequest(HISTORY_HELP);
         const decl = declQ == null ? FEMA_MAX : Number(declQ);
@@ -770,7 +804,7 @@ export async function GET(req: NextRequest) {
         }
         if (!/^\d{5}$/.test(fips)) return badRequest(HISTORY_HELP);
         if (!countyByFips(fips)) return notFound(`not a current county: ${fips} is not one of the 3,222 county equivalents in Census's 2023 geography (Connecticut in planning regions 09110-09190)`);
-        return respond(await opHistory(fips, years, decl, partQ === "landslide"));
+        return respond(await opHistory(fips, years, decl, partQ === "landslide" || partQ === "storms" ? partQ : null));
       }
       default:
         return badRequest(`unknown op: wildfire | fires | alerts | nri | wrc | history (FIRMS files: ${FIRMS_FILES.map((f) => f.id).join(", ")})`);

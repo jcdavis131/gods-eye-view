@@ -2,7 +2,8 @@
 // The county Hazard history click answer, under a county-level click of FEMA's
 // National Risk Index, Social vulnerability or Wildfire risk ranks:
 // /api/hazards?op=history&fips= (FEMA declarations, USDM drought, NOAA climate,
-// SPC tornadoes, USGS landslide susceptibility). Asked once when the dossier
+// SPC tornadoes, USGS landslide susceptibility, NCEI Storm Events by county
+// since 1996). Asked once when the dossier
 // opens (a click, never a pan). Every number is published or a count of
 // published rows; the two drawn derivations (the highest weekly DSCI in each
 // year, the 1901-2000 mean) are labelled as computed. Connecticut's planning
@@ -11,11 +12,24 @@
 import { useEffect, useState } from "react";
 import type { Series } from "@/lib/series/types";
 import { centuryMean, CT_HISTORY_LINE, dsciYearlyMax, yearRows, type HistoryData } from "@/lib/hazards/history";
+import { STORM_ALASKA_LINE, STORM_CT_LINE, STORM_MAIN_TYPES, STORM_ZONE_SHARE_MAX } from "@/lib/hazards/storms";
 import SeriesChart from "./SeriesChart";
 
 type State = { data?: HistoryData; caveats?: string[]; error?: string };
 
 const SHADES = { dr: "#B45309", em: "#D97706", fm: "#FBBF24" } as const;
+const STORM_SHADES: Record<string, string> = { Hail: "#0E7490", "Thunderstorm Wind": "#4338CA", "Flash Flood": "#1D4ED8" };
+/** "1996, 1998-2001": a list of years as runs. */
+const runs = (ys: number[]) => {
+  const out: string[] = [];
+  for (let i = 0; i < ys.length; ) {
+    let j = i;
+    while (j + 1 < ys.length && ys[j + 1] === ys[j] + 1) j++;
+    out.push(i === j ? String(ys[i]) : `${ys[i]}-${ys[j]}`);
+    i = j + 1;
+  }
+  return out.join(", ");
+};
 const pct = (v: number | null | undefined) => (v == null ? "not published" : `${v.toFixed(1)} %`);
 
 export default function HazardHistoryAside({ fips }: { fips: string }) {
@@ -54,6 +68,10 @@ export default function HazardHistoryAside({ fips }: { fips: string }) {
   const pMean = pcp ? centuryMean(pcp.points) : null;
   const ls = d.landslide;
   const now = d.droughtNow;
+  const storms = d.storms ?? null;
+  const stormMiss = miss("NCEI Storm Events");
+  const stormMain = storms ? STORM_MAIN_TYPES.map((t) => storms.types.find((x) => x.type === t)).filter((x): x is NonNullable<typeof x> => !!x) : [];
+  const stormOther = storms ? storms.types.filter((x) => !(STORM_MAIN_TYPES as readonly string[]).includes(x.type) && x.total > 0).sort((a, b) => b.total - a.total) : [];
 
   return (
     <div className="border-t border-border" aria-label="Hazard history">
@@ -139,6 +157,36 @@ export default function HazardHistoryAside({ fips }: { fips: string }) {
         )}
       </section>
       {torn && <SeriesChart title="Tornadoes per year (NOAA SPC)" rows={yearRows(torn.points)} bars color="#7C3AED" fmt={(v) => String(Math.round(v))} note="SPC undercounts weak tornadoes before the 1990s radar network. Years with none are not drawn while the zero rule is pending." />}
+
+      <section className="px-3 pt-2" aria-label="Storm events">
+        <div className="hud-label">Storm events (NCEI)</div>
+        {stormMiss ? (
+          <div className="text-[10px] text-muted-foreground">{stormMiss.reason === "join:legacy_ct_counties" ? STORM_CT_LINE : stormMiss.reason === "join:ncei_areas_not_counties" ? STORM_ALASKA_LINE : "NCEI Storm Events could not be read (unknown, not none)"}</div>
+        ) : storms ? (
+          <>
+            <div className="text-[10px] tabular-nums">
+              {stormMain.map((t) => `${t.total.toLocaleString("en-US")} ${t.type.toLowerCase()}`).join(" · ")} reports since {storms.years?.[0] ?? 1996} (county-coded; tornadoes are SPC&apos;s, above)
+            </div>
+            {stormOther.length > 0 && (
+              <div className="text-[10px] leading-snug text-muted-foreground">
+                +{stormOther.reduce((a, x) => a + x.total, 0).toLocaleString("en-US")} other county-coded reports: {stormOther.map((x) => `${x.type.toLowerCase()} ${x.total}`).join(", ")}
+              </div>
+            )}
+            {storms.break && <div className="text-[9px] text-muted-foreground">series break in {storms.break.year}: {storms.break.what}</div>}
+          </>
+        ) : null}
+      </section>
+      {stormMain.map((t) => (
+        <SeriesChart
+          key={t.type}
+          title={`${t.type} reports per year (NOAA NCEI Storm Events)`}
+          rows={t.points.map(([y, n]) => [String(y), n] as [string, number])}
+          bars
+          color={STORM_SHADES[t.type] ?? "#0E7490"}
+          fmt={(v) => String(Math.round(v))}
+          note={`${t.blank.length ? `Blank, not 0: ${runs(t.blank.map(([y]) => y))} (${Math.round(STORM_ZONE_SHARE_MAX * 100)} % or more of the type's reports nationally were by forecast zone). ` : ""}Years with none are not drawn while the zero rule is pending. Counts are reports, which grew with spotter networks.`}
+        />
+      ))}
 
       {st.caveats && st.caveats.length > 0 && <p className="px-3 py-2 text-[9px] leading-snug text-muted-foreground">{st.caveats[0]}</p>}
     </div>

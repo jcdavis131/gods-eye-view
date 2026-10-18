@@ -38,6 +38,7 @@ import { TRIBAL_CAVEAT, TRIBAL_REFERENCE_ONLY } from "@/lib/land/tribal";
 import { FEMA_CREDIT, HISTORY_CAVEAT, USDM_CREDIT } from "@/lib/hazards/history";
 import { CT_HOUSING_NOTE, HOUSING_CAVEAT, QCT_YEAR_NOTE } from "@/lib/civic/housing";
 import { LANDSLIDE_SUSC_CAVEAT } from "@/lib/terrain/products";
+import { STORM_EVENTS_CAVEAT, STORM_GATE_NOTE } from "@/lib/hazards/storms";
 import { DENY_FIELD, EMBED_TEXT } from "./embedFields";
 
 export interface Exclusion {
@@ -88,7 +89,7 @@ export interface Collection {
   /** Sensitive-location and personal-data handling. */
   sensitivity: string;
   /** Curation round it entered. */
-  round: 1 | 2 | 3 | 4 | 5 | 6 | 7;
+  round: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 }
 
 /** Which shelf a layer's collections sit on (the /catalog page's grouping). */
@@ -112,6 +113,7 @@ const R4 = "2026-10-16";
 const R5 = "2026-10-16";
 const R6 = "2026-10-17";
 const R7 = "2026-10-17";
+const R8 = "2026-10-17";
 
 export const COLLECTIONS: readonly Collection[] = [
   // ------------------------------------------------------------ round 1: land and heritage
@@ -1288,7 +1290,7 @@ export const COLLECTIONS: readonly Collection[] = [
     freshness: { statement: "Annual; SPC publishes the year's final file in spring. The file read was last modified 2026-04-24.", readFrom: "Last-Modified header of 1950-2025_all_tornadoes.csv (2026-10-17)", recordedOn: R7 },
     excluded: [
       { what: "injury, fatality and loss columns", why: "not needed for a count; the counts are not a casualty record" },
-      { what: "NCEI Storm Events as the storms line", why: "42 % of its 2025 rows are forecast zones, not counties, and its scope changes in 1955 and 1996 (D7-1)" },
+      { what: "NCEI Storm Events' Tornado rows", why: "Storm Events files one row per county segment of a tornado; SPC's distinct tornadoes are the count here, and the ncei-storm-events-county card (round 8) leaves Tornado out" },
       { what: "the whole-track summary rows of multi-state tornadoes (670)", why: "the tornado's state segments name its counties; counting both would count it twice" },
       { what: "tornadoes with no county recorded (11 tornado-state records)", why: "counted in the bake's meta.noCounty, never placed" },
       { what: "codes that name no current county", why: "Connecticut's legacy counties and 16 others are listed by code in meta; only Census-documented renames (Dade to Miami-Dade, Shannon to Oglala Lakota) are mapped" },
@@ -1378,6 +1380,36 @@ export const COLLECTIONS: readonly Collection[] = [
     ops: ["hazards?op=history"],
     sensitivity: "A modelled terrain surface and county shares; no property, person or site data. CC0 1.0.",
     round: 7,
+  },
+  // ------------------------------------------------------------ round 8: county storm events, housing tax credits, hospital star ratings
+  {
+    id: "ncei-storm-events-county",
+    title: "Storm events per county per year (NOAA NCEI Storm Events, county-coded rows, 1996 onward)",
+    layer: "riskindex",
+    sources: ["ncei-storm-events"],
+    what: "NCEI's Storm Events Database, baked into event reports per county per year per event type (lib/hazards/data/storm-events/<state>.json, scripts/bake-storm-events.mjs) from the 31 yearly details files 1996-2026: hail, thunderstorm wind, flash floods and every other type NWS logs by county, with tornadoes left to SPC's record. In the county's hazard history, as three bar series (hail, thunderstorm wind, flash floods) and a line naming the other types.",
+    recordIs: "How many reports of an event type NCEI files under the county in a year. A count of reports, not of storms: one thunderstorm makes many wind and hail reports, and reporting grew with population and spotter networks. Not a casualty or damage record.",
+    coverage: {
+      spatial: "The 50 states except Alaska, DC and Puerto Rico, by county; 3,182 current counties have at least one report; Connecticut's eight legacy counties are kept under their own codes and its planning regions get none; Alaska gets none, because every county-coded Alaska row (596) is under NCEI's own areas",
+      temporal: "1996 to 2026-06 (the newest compiled month of the c20260918 file)",
+      count: { value: 1035369, of: "county-coded, non-tornado rows in the 31 details files 1996-2026 (1,819,792 rows in all; 733,143 zone-coded and 43,765 county-coded Tornado rows are not attached); 1,032,287 attached to 3,190 county codes; 1,039 refused because the county code's name disagrees with CZ_NAME, 1,184 under codes that name no current county, 859 in American Samoa, Guam and the Virgin Islands", countedOn: R8 },
+    },
+    freshness: { statement: "NCEI recompiles the files on its own schedule (c stamps 20260323 for most years, 20260519 for 2017, 20260625 for 2022, 20260728 for 2024, 20260819 for 2025, 20260918 for 2026); the bake is per round, not monthly.", readFrom: "the c stamps in NCEI's csvfiles directory listing; meta.json records each file's name and sha256", recordedOn: R8 },
+    excluded: [
+      { what: "forecast-zone rows (CZ_TYPE Z, 733,143)", why: "zones cross county lines, and NWS publishes its zone-county table only for 2025 and 2026 (bp18mr25, bp16ap26); zone rows are tallied per year and type and never attached (D8-1)" },
+      { what: "1950-1995", why: "NCEI's scope before 1996 is tornado, hail and thunderstorm wind only, so a 1995-to-1996 jump would be the database's, not the weather's" },
+      { what: "Tornado rows", why: "SPC's tornado record (spc-tornado-county) owns tornadoes; Storm Events files a row per county segment, so two tornado counts would disagree" },
+      { what: "EPISODE_NARRATIVE and EVENT_NARRATIVE", why: "free text; never read" },
+      { what: "INJURIES_*, DEATHS_* and DAMAGE_*", why: "not needed for a count; the counts are not a casualty or loss record" },
+      { what: "the fatalities and locations files", why: "not needed for a county count" },
+      { what: "rows whose county code and CZ_NAME disagree", why: "Puerto Rico's multi-municipio areas (1996-2008), Oklahoma's 1996 and Georgia's 2025 rows filed under forecast-zone numbers: listed by year in meta.nameMismatch, never attached" },
+    ],
+    caveats: [STORM_EVENTS_CAVEAT, STORM_GATE_NOTE],
+    searchable: ["fips"],
+    embedText: EMBED_TEXT["ncei-storm-events-county"],
+    ops: ["hazards?op=history"],
+    sensitivity: "Counts of county-coded event reports per year; no narrative, casualty, damage or source text is carried.",
+    round: 8,
   },
 ];
 
