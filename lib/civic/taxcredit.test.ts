@@ -213,7 +213,7 @@ describe("a LIHTC project whose name carries its own street address (rule 4)", (
       for (const k of keys) expect(words(x.properties.name), id).not.toContain(` ${k[0]} `);
       expect(matchScore(x.properties, String(r.PROJ_ADD).toLowerCase()), id).toBe(0);
       expect(matchScore(x.properties, keys[0].join(" ").toLowerCase()), id).toBe(0);
-      expect(x.properties.details?.address?.startsWith(`${String(r.PROJ_ADD).trim()}, `), id).toBe(true);
+      expect(String(x.properties.details?.address ?? "").startsWith(`${String(r.PROJ_ADD).trim()}, `), id).toBe(true);
     }
   });
 
