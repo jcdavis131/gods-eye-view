@@ -1,12 +1,15 @@
-# Weekly check that every upstream service the app hard-codes still answers
-# (scripts/endpoint-sweep.mjs). It reads the checked-out source, so a new
-# layer is covered the week it merges. Read-only and keyless: it needs no
-# secrets and writes nothing, so its token is read-only too.
+# Weekly check that the ArcGIS services and map-tile templates the app
+# hard-codes still answer (scripts/endpoint-sweep.mjs). It covers those two
+# kinds only, including ones built on a string constant (`${WFIGS}/...`); the
+# JSON APIs and file downloads are not probed. It reads the checked-out
+# source, so a new layer is covered the week it merges. Read-only and keyless:
+# it needs no secrets and writes nothing, so its token is read-only too.
 #
-# The run fails only on an upstream that is newly dead (a dead answer seen
-# twice, not listed in scripts/endpoint-sweep.known.json). GitHub emails a
-# failed scheduled run to the repository owner. The table is in the run's
-# summary either way.
+# The run fails only on an upstream that is newly failing: a dead, unreachable
+# or wrong-content answer (DEAD, ERR or ODD) on both tries 20 s apart, not
+# listed in scripts/endpoint-sweep.known.json. GitHub emails a failed scheduled
+# run to the repository owner. The table, and what was not probed and why, are
+# in the run's summary either way.
 name: endpoint-sweep
 
 on:
@@ -23,8 +26,10 @@ on:
 permissions:
   contents: read
 
+# One group per trigger and ref, so a pull request run never cancels the
+# weekly one.
 concurrency:
-  group: endpoint-sweep
+  group: endpoint-sweep-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
