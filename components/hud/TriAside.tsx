@@ -38,7 +38,7 @@ export default function TriAside({ feature }: { feature: LayerFeature }) {
     <section className="border-t border-border/60 px-3 py-2 text-[10px] leading-snug">
       <div className="hud-label mb-1">Reported releases (TRI)</div>
       {!asked ? (
-        <button type="button" onClick={() => setAsked(true)} className="border border-border px-2 py-0.5 text-foreground hover:bg-white/5">
+        <button type="button" onClick={() => setAsked(true)} className="border border-border px-2 py-0.5 text-foreground hover:bg-accent">
           Show what this facility reported releasing
         </button>
       ) : q.isPending ? (

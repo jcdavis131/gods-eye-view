@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, Settings2, Crosshair, Home, Droplets, Compass, Link2, Landmark, Menu, Activity, CalendarDays, Bell, Table2, Aperture, Zap, Sun, Ruler, Sparkles } from "lucide-react";
+import { Search, Settings2, Crosshair, Home, Droplets, Compass, Link2, Landmark, Menu, Activity, CalendarDays, Bell, Table2, Aperture, Zap, Sun, Moon, Ruler, Sparkles } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { useIndicators } from "@/lib/indicators/store";
@@ -8,6 +8,7 @@ import { useReleases } from "@/lib/releases/store";
 import { useWatchlists } from "@/lib/watch/store";
 import { useScreener } from "@/lib/screener/store";
 import DeskToggle from "./DeskToggle";
+import ThemeToggle, { applyTheme, currentTheme } from "./ThemeToggle";
 import { useLens } from "@/lib/personas/store";
 import { PERSONA_BY_ID } from "@/lib/personas/registry";
 import { copyShareLink } from "@/lib/globe/share";
@@ -250,6 +251,7 @@ export default function TopBar() {
           <Settings2 className="size-3.5" />
           <span className="sr-only">Settings and keys</span>
         </button>
+        <ThemeToggle />
         <span className="hidden md:contents">
           <AboutButton />
         </span>
@@ -269,6 +271,12 @@ export default function TopBar() {
               <MenuItem icon={Home} label="Home view" onClick={closeMenu(() => homeView())} />
               <MenuItem icon={Crosshair} label="Clear selection" onClick={closeMenu(() => useGlobe.getState().select(null))} />
               <MenuItem icon={Settings2} label="Settings & keys" onClick={closeMenu(() => setSettingsOpen(true))} />
+              <MenuItem
+                icon={Moon}
+                label="Toggle night-board"
+                onClick={closeMenu(() => applyTheme(currentTheme() === "dark" ? "light" : "dark"))}
+                active={false}
+              />
               <div className="mt-1 border-t border-border/60 pt-1">
                 <AboutButton compact />
               </div>
