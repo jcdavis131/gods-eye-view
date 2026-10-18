@@ -117,13 +117,13 @@ describe("communities", () => {
     expect(x.noRank).toBe("not ranked by USFS: no people (pop = 0)");
     expect(l.properties.details?.["not ranked because"]).toBe("no people (pop = 0);");
     expect(receivedRecordText(l.properties)).toBe(
-      "state: CO; wildfire risk community, national risk rank: not ranked by USFS; wildfire likelihood (burn probability), national rank: not ranked by USFS; not ranked by USFS because: no people (pop = 0);",
+      "collection: Wildfire risk to communities; agency: USDA Forest Service; state: CO; wildfire risk community, national risk rank: not ranked by USFS; wildfire likelihood (burn probability), national rank: not ranked by USFS; not ranked by USFS because: no people (pop = 0);",
     );
   });
 
   it("embeds the RISK and BP national ranks as the layer's bins, whatever measure and scope draw it", () => {
     const b = built.find((f) => f.properties.name === "Boulder city, CO")!;
-    const text = "state: CO; wildfire risk community, national risk rank: 95 or more percentile; wildfire likelihood (burn probability), national rank: 95 or more percentile";
+    const text = "collection: Wildfire risk to communities; agency: USDA Forest Service; state: CO; wildfire risk community, national risk rank: 95 or more percentile; wildfire likelihood (burn probability), national rank: 95 or more percentile";
     expect(receivedRecordText(b.properties)).toBe(text);
     const other = buildWrcPlaces((places as unknown as { features: never[] }).features, 2, "state");
     expect(other.map((f) => receivedRecordText(f.properties))).toEqual(built.map((f) => receivedRecordText(f.properties)));
@@ -144,7 +144,8 @@ describe("communities", () => {
   it("embeds the state and the exclude reason, never the community's name", () => {
     for (const f of built) {
       const t = receivedRecordText(f.properties) ?? "";
-      expect(t).toMatch(/^state: CO/);
+      // B0 (2026-10-18): the card's head, then the state; the Census place name stays out (an exclusion on the card).
+      expect(t).toMatch(/^collection: Wildfire risk to communities; agency: USDA Forest Service; state: CO/);
       expect(t).not.toContain(f.properties.name.replace(/, CO$/, ""));
     }
   });

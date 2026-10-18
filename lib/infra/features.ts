@@ -444,10 +444,15 @@ export function buildDams(rows: Row[]): LayerFeature[] {
           "operational status": str(p.OPERATIONAL_STATUS),
           "NID record updated": isoDay(p.DATA_UPDATED),
         },
-        // Record text: never NAME (private or not), never the NID id (matched by letters), never a height or storage (measured).
+        // Record text: the published name only when the dam is not private (B0; a private dam's name never),
+        // never the NID id (matched by letters), never a height or storage (measured).
         extra: withEmbedText(
           { hazard, condition, heightFt, storageAcFt } satisfies DamExtra,
-          recordText("nid-dams", { PRIMARY_PURPOSE: str(p.PRIMARY_PURPOSE), PRIMARY_DAM_TYPE: str(p.PRIMARY_DAM_TYPE), HAZARD_POTENTIAL: hazard, CONDITION_ASSESSMENT: condition, STATE: str(p.STATE), YEAR_COMPLETED: year }),
+          recordText(
+            "nid-dams",
+            { PRIMARY_PURPOSE: str(p.PRIMARY_PURPOSE), PRIMARY_DAM_TYPE: str(p.PRIMARY_DAM_TYPE), HAZARD_POTENTIAL: hazard, CONDITION_ASSESSMENT: condition, COUNTYSTATE: str(p.COUNTYSTATE), STATE: str(p.STATE), YEAR_COMPLETED: year },
+            isPrivate ? null : damName,
+          ),
         ),
       },
     });

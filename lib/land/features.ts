@@ -907,7 +907,7 @@ export function buildPublicLands(
             Pub_Access: x.access === "unknown" ? undefined : label("Pub_Access", accessCode),
             GAP_Sts: label("GAP_Sts", p.GAP_Sts),
             IUCN_Cat: label("IUCN_Cat", p.IUCN_Cat),
-          }),
+          }, isPrivate || easement ? null : unit),
         ),
       },
     });

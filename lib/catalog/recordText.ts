@@ -13,13 +13,18 @@
 // recordText reads only the card's embedText fields from the row a builder
 // hands it (the builder passes its decoded values under the upstream field
 // names, e.g. PAD-US Own_Type "Private" for "PVT"), and re-checks each field
-// against DENY_FIELD at run time. A feature's name is never embedded, public
-// or not: names stay with the palette's letter-by-letter match, which owns
-// the label-by-id rules. Ids are matched by letters too, never embedded.
+// against DENY_FIELD at run time. Since B0 (2026-10-18) the text starts with
+// the card's short title and agency (RECORD_HEAD) and its place, and a card on
+// PUBLIC_NAME_RULE (hospitals, public schools, public dams, public PAD-US
+// units) may add the record's published name, which its builder passes only
+// when it labels the feature by that name. No other name is embedded: a name
+// that can be a person's or a business's, or a private holding labelled by id,
+// stays with the palette's letter-by-letter match, which owns the label-by-id
+// rules. Ids are matched by letters, never embedded.
 
 import type { EmbedInput } from "@/lib/embed/types";
 import type { BaseProps } from "@/lib/layers/types";
-import { EMBED_TEXT, embeddableField, fieldLabel, type CollectionId } from "./embedFields";
+import { EMBED_TEXT, PLACE_FIELD_RANK, PUBLIC_NAME_RULE, RECORD_HEAD, embeddableField, fieldLabel, type CollectionId } from "./embedFields";
 
 const MAX_VALUE_CHARS = 160;
 
@@ -33,22 +38,44 @@ function value(v: unknown): string | null {
 }
 
 /**
- * A record's embeddable text: "<label>: <value>" for each of its card's embedText fields that
- * has a value, joined by "; ". Null when none has one (absent, never "null" or 0). Throws for an
- * unknown card or a field that is not embeddable (the catalogue test keeps that from shipping).
+ * A record's embeddable text (B0, 2026-10-18), "; "-joined labelled segments in this order:
+ *   "collection: <card short title>; agency: <publisher>"  (RECORD_HEAD, the same for every record of a card)
+ *   "name: <published name>"                               (only for a PUBLIC_NAME_RULE card, when its builder passes one)
+ *   its place fields, city then county then state          (PLACE_FIELD_RANK)
+ *   the card's other embedText fields, in EMBED_TEXT order
+ * Null when no field has a value (absent, never "null" or 0): a head alone is not a record. Throws for
+ * an unknown card, a field that is not embeddable, or a public name on a card whose rule allows none.
  */
-export function recordText(cardId: CollectionId, row: Readonly<Record<string, unknown>>): EmbedInput | null {
+export function recordText(
+  cardId: CollectionId,
+  row: Readonly<Record<string, unknown>>,
+  publicName?: string | null,
+): EmbedInput | null {
   const fields: readonly string[] | undefined = EMBED_TEXT[cardId];
   if (!fields) throw new Error(`no collection "${cardId}"`);
-  const parts: string[] = [];
-  for (const f of fields) {
+  if (publicName != null && !(cardId in PUBLIC_NAME_RULE)) throw new Error(`${cardId}: no public name may be embedded`);
+  const place: Array<[number, number, string]> = [];
+  const rest: string[] = [];
+  fields.forEach((f, i) => {
     if (!embeddableField(f)) throw new Error(`${cardId}: field ${f} may not be embedded`);
     const label = fieldLabel(cardId, f);
     if (!label) throw new Error(`${cardId}: no label for ${f}`);
     const v = value(row[f]);
-    if (v != null) parts.push(`${label}: ${v}`);
-  }
-  return parts.length ? (parts.join("; ") as EmbedInput) : null;
+    if (v == null) return;
+    const rank = PLACE_FIELD_RANK[f];
+    if (rank != null) place.push([rank, i, `${label}: ${v}`]);
+    else rest.push(`${label}: ${v}`);
+  });
+  if (!place.length && !rest.length) return null;
+  const head = RECORD_HEAD[cardId];
+  const name = value(publicName);
+  const parts = [
+    ...(head ? [`collection: ${head.collection}`, `agency: ${head.agency}`] : []),
+    ...(name ? [`name: ${name}`] : []),
+    ...place.sort((a, b) => a[0] - b[0] || a[1] - b[1]).map((p) => p[2]),
+    ...rest,
+  ];
+  return parts.join("; ") as EmbedInput;
 }
 
 /** What a builder adds to a feature's extra. */

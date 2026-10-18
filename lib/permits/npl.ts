@@ -368,6 +368,7 @@ export function buildNplBoundaries(rows: Row[], domains: NplDomains | null, look
             FEDERAL_FACILITY_DETER_CODE: ff ? decode(domains?.federal, ff) : null,
             EPA_PROGRAM: cleanLabel(p.EPA_PROGRAM),
             SITE_FEATURE_TYPE: type,
+            CITY_NAME: cleanLabel(p.CITY_NAME),
             COUNTY: cleanLabel(p.COUNTY),
             STATE_CODE: cleanLabel(p.STATE_CODE),
           }),

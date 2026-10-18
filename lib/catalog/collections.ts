@@ -608,7 +608,7 @@ export const COLLECTIONS: readonly Collection[] = [
     searchable: ["Unit_Nm", "Loc_Nm"], // not on privately owned units (Own_Type PVT)
     embedText: EMBED_TEXT["padus-units"],
     ops: ["land?op=publiclands"],
-    sensitivity: "Ownership is shown as PAD-US publishes it (a federal inventory); what stays out is the search from an owner or easement holder to its holdings. A privately owned unit (Own_Type PVT) is often named for a family, so it is labelled by PAD-US id and its published name is shown in the record but never searched.",
+    sensitivity: "Ownership is shown as PAD-US publishes it (a federal inventory); what stays out is the search from an owner or easement holder to its holdings. A privately owned unit (Own_Type PVT) is often named for a family, so it is labelled by PAD-US id and its published name is shown in the record but never searched or embedded. A unit that is neither privately owned nor an easement has its Unit_Nm embedded as the record text's name segment (B0, 2026-10-18).",
     round: 3,
   },
   {
@@ -631,7 +631,7 @@ export const COLLECTIONS: readonly Collection[] = [
     searchable: ["NIDID"],
     embedText: EMBED_TEXT["nid-dams"],
     ops: ["infra?op=dams"],
-    sensitivity: "Public infrastructure records; no owner or representative name is requested. NAME is not embedded. A privately owned dam can be named for its owner ('<Surname> Pond Dam'), so it is labelled by NID id and its published name is shown in the record but never searched; other dams keep their name as the label.",
+    sensitivity: "Public infrastructure records; no owner or representative name is requested. NAME is embedded in the record text only for a dam that is not privately owned (B0, 2026-10-18), the same name it is labelled by. A privately owned dam can be named for its owner ('<Surname> Pond Dam'), so it is labelled by NID id and its published name is shown in the record but never searched; other dams keep their name as the label.",
     round: 3,
   },
   // ------------------------------------------------------------ round 1: imagery
@@ -1036,7 +1036,7 @@ export const COLLECTIONS: readonly Collection[] = [
     embedText: EMBED_TEXT["hifld-hospitals"],
     ops: ["infra?op=hospitals"],
     sensitivity:
-      "Institutions as their licensing agency published them; no staff, patient or contact data. A hospital is labelled by its published name, an institution's (as a public dam keeps its name), so the palette's letter match finds it by name; NAME as a field is on the deny list and is never embedded. Whether institution names may be searched is flagged for review; the fallback labels by HIFLD id. ADDRESS, WEBSITE and SOURCE are shown on click and never searched or embedded; OWNER (a category: non-profit, proprietary, government) is shown on click only, because the deny list matches the field name.",
+      "Institutions as their licensing agency published them; no staff, patient or contact data. A hospital is labelled by its published name, an institution's (as a public dam keeps its name), so the palette's letter match finds it by name; NAME as a field stays on the deny list, and the same published name is embedded once as the record text's name segment (B0, 2026-10-18), with its CITY. Whether institution names may be searched is flagged for review; the fallback labels by HIFLD id. ADDRESS, WEBSITE and SOURCE are shown on click and never searched or embedded; OWNER (a category: non-profit, proprietary, government) is shown on click only, because the deny list matches the field name.",
     round: 5,
   },
   // ------------------------------------------------------------ round 5: public schools
@@ -1061,7 +1061,7 @@ export const COLLECTIONS: readonly Collection[] = [
     embedText: EMBED_TEXT["nces-public-schools"],
     ops: ["civic?op=schools"],
     sensitivity:
-      "Public institutions' directory data as NCES publishes it; school-level race and sex counts are deliberately not read. SCH_NAME and LEA_NAME end in NAME and are never embedded; SCH_NAME is searchable (a public school's name is an institution's, flagged for review; the fallback is NCESSCH only). LSTREET1 is shown on click and never searched or embedded. Free or reduced-price lunch is shown as NCES publishes it, with no added suppression threshold for very small schools (flagged for review).",
+      "Public institutions' directory data as NCES publishes it; school-level race and sex counts are deliberately not read. LEA_NAME is never embedded; SCH_NAME, the school's label, is embedded once as the record text's name segment with LCITY and NMCNTY (B0, 2026-10-18), and is searchable (a public school's name is an institution's, flagged for review; the fallback is NCESSCH only). LSTREET1 is shown on click and never searched or embedded. Free or reduced-price lunch is shown as NCES publishes it, with no added suppression threshold for very small schools (flagged for review).",
     round: 5,
   },
   // ------------------------------------------------------------ round 6: broadband, wildfire risk ranks, trust land

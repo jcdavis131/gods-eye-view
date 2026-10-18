@@ -11,7 +11,7 @@ import dams from "@/lib/infra/fixtures/dams-sanantonio.json";
 import { recordFixtures } from "@/lib/embed/__fixtures__/records";
 import { COLLECTIONS } from "./collections";
 import { allCardTexts, cardText } from "./cardText";
-import { CARD_FIELD_LABEL, DENY_FIELD, EMBED_TEXT, FIELD_LABEL, NAME_FIELDS_ALLOWED, NO_RECORD_VECTORS, RECORD_VECTOR_CARDS, embeddableField, fieldLabel, type CollectionId } from "./embedFields";
+import { CARD_FIELD_LABEL, DENY_FIELD, EMBED_TEXT, FIELD_LABEL, NAME_FIELDS_ALLOWED, NO_RECORD_VECTORS, PUBLIC_NAME_RULE, RECORD_VECTOR_CARDS, embeddableField, fieldLabel, type CollectionId } from "./embedFields";
 import { buildWrcPlaces } from "@/lib/hazards/wrc";
 import wrcBoulder from "@/lib/hazards/fixtures/wrc-place-boulder-box.json";
 import { queryText, receivedRecordText, recordText, withEmbedText } from "./recordText";
@@ -36,6 +36,9 @@ const markRow = <R extends { properties: Record<string, unknown> }>(r: R): R => 
  */
 const NAMED_BY_EMBEDDED_PLACE_FIELD: Record<string, string> = { "bia-lar": "LARNAME" };
 
+/** A record text without its "name: " segment (B0's public-name door, checked on its own below). */
+const withoutPublicName = (t: string) => t.split("; ").filter((s) => !s.startsWith("name: ")).join("; ");
+
 describe("record text", () => {
   it("never carries a marked name, owner, address, contact, free-text or id field into a record vector", () => {
     let checked = 0;
@@ -45,10 +48,33 @@ describe("record text", () => {
         const t = receivedRecordText(f.properties);
         if (t == null) continue;
         checked++;
-        expect(t.toUpperCase(), `${card} ${f.properties.id}`).not.toContain(MARK);
+        // Only a PUBLIC_NAME_RULE card may carry a marked name, and only in its "name: " segment.
+        const rest = card in PUBLIC_NAME_RULE ? withoutPublicName(t) : t;
+        expect(rest.toUpperCase(), `${card} ${f.properties.id}`).not.toContain(MARK);
       }
     }
     expect(checked).toBeGreaterThan(40);
+  });
+
+  it("embeds a public name only as the feature's own label, once, and only on a PUBLIC_NAME_RULE card (B0)", () => {
+    let named = 0;
+    for (const { card, features } of recordFixtures()) {
+      for (const f of features) {
+        const t = receivedRecordText(f.properties);
+        if (!t) continue;
+        const names = t.split("; ").filter((s) => s.startsWith("name: "));
+        if (!(card in PUBLIC_NAME_RULE)) {
+          expect(names, `${card} ${f.properties.id}`).toEqual([]);
+          continue;
+        }
+        expect(names.length, `${card} ${f.properties.id}`).toBeLessThanOrEqual(1);
+        if (names.length) {
+          named++;
+          expect(names[0], `${card} ${f.properties.id}`).toBe(`name: ${f.properties.name}`);
+        }
+      }
+    }
+    expect(named).toBeGreaterThan(20);
   });
 
   it("gives every record-vector card's features record text from real fixtures, and never a feature's name", () => {
@@ -58,7 +84,9 @@ describe("record text", () => {
       expect(texts.some((t) => t != null), card).toBe(true);
       const field = NAMED_BY_EMBEDDED_PLACE_FIELD[card];
       for (const f of features) {
-        const t = receivedRecordText(f.properties);
+        const full = receivedRecordText(f.properties);
+        // A PUBLIC_NAME_RULE card's "name: " segment is checked in its own test above; nowhere else.
+        const t = full && card in PUBLIC_NAME_RULE ? withoutPublicName(full) : full;
         if (!t || f.properties.name.length <= 4) continue;
         if (!field) {
           expect(t, card).not.toContain(f.properties.name);
@@ -96,16 +124,26 @@ describe("record text", () => {
     }
   });
 
-  it("keeps a private dam's and a private PAD-US unit's published name out, and every dam's name", () => {
+  it("keeps a private dam's and a private PAD-US unit's published name out; a public dam's name only as its label", () => {
     const rows = (dams as { features: Array<{ properties: Record<string, unknown> }> }).features;
     const built = buildDams(rows as never);
     const blueWing = built.find((f) => f.properties.details?.["published name"] === "Blue Wing Lake Dam");
     expect(blueWing).toBeDefined();
     expect(receivedRecordText(blueWing!.properties)).not.toMatch(/blue wing/i);
+    let privates = 0;
     for (const [i, f] of built.entries()) {
-      const name = String(rows.find((r) => `nid:${r.properties.NIDID}` === f.properties.id)?.properties.NAME ?? `no name ${i}`);
-      expect(receivedRecordText(f.properties) ?? "", name).not.toContain(name);
+      const row = rows.find((r) => `nid:${r.properties.NIDID}` === f.properties.id)!.properties;
+      const name = String(row.NAME ?? `no name ${i}`);
+      const t = receivedRecordText(f.properties) ?? "";
+      if (String(row.PRIMARY_OWNER_TYPE).toLowerCase() === "private") {
+        privates++;
+        expect(t, name).not.toContain(name);
+      } else {
+        expect(withoutPublicName(t), name).not.toContain(name);
+        expect(t, name).toContain(`name: ${name}`);
+      }
     }
+    expect(privates).toBe(2);
     const padus = recordFixtures().find((r) => r.card === "padus-units")!.features[0];
     expect(padus.properties.details?.["published name"]).toBe("Smith Family Farm");
     expect(receivedRecordText(padus.properties)).not.toMatch(/smith/i);
@@ -125,19 +163,25 @@ describe("record text", () => {
   it("says what a BIA land area and a WRC community are in their record text (DESIGN 7.3a)", () => {
     const lar = recordFixtures().find((r) => r.card === "bia-lar")!.features;
     const wind = lar.find((f) => f.properties.name === "Wind River");
-    expect(receivedRecordText(wind!.properties)).toBe("BIA land area: Wind River; BIA trust land area, BIA region: Rocky Mountain");
+    expect(receivedRecordText(wind!.properties)).toBe(
+      "collection: Trust land, Land Area Representation; agency: Bureau of Indian Affairs (BIA); BIA land area: Wind River; BIA trust land area, BIA region: Rocky Mountain",
+    );
     const wrc = buildWrcPlaces((wrcBoulder as unknown as { features: never[] }).features, 0, "national");
     const texts = new Set(wrc.map((f) => receivedRecordText(f.properties)));
-    expect(texts).toContain("state: CO; wildfire risk community, national risk rank: 95 or more percentile; wildfire likelihood (burn probability), national rank: 95 or more percentile");
+    const head = "collection: Wildfire risk to communities; agency: USDA Forest Service; ";
+    expect(texts).toContain(`${head}state: CO; wildfire risk community, national risk rank: 95 or more percentile; wildfire likelihood (burn probability), national rank: 95 or more percentile`);
     // The excluded community: not ranked, never low, with USFS's reason.
-    expect(texts).toContain("state: CO; wildfire risk community, national risk rank: not ranked by USFS; wildfire likelihood (burn probability), national rank: not ranked by USFS; not ranked by USFS because: no people (pop = 0);");
+    expect(texts).toContain(`${head}state: CO; wildfire risk community, national risk rank: not ranked by USFS; wildfire likelihood (burn probability), national rank: not ranked by USFS; not ranked by USFS because: no people (pop = 0);`);
     for (const f of wrc) expect(receivedRecordText(f.properties) ?? "", f.properties.id).not.toMatch(/\d+\.\d+%/);
   });
 
   it("is null when no field has a value, and labels each value", () => {
     expect(recordText("nid-dams", {})).toBeNull();
-    expect(recordText("nid-dams", { HAZARD_POTENTIAL: "High", NAME: "Somebody Pond Dam", NID_HEIGHT: 40 })).toBe("hazard potential: High");
-    expect(recordText("nid-dams", { YEAR_COMPLETED: 0 })).toBe("year completed: 0");
+    const head = "collection: Dams, National Inventory of Dams; agency: U.S. Army Corps of Engineers; ";
+    // A NAME in the row is never read: only the publicName argument, which the builder passes for a public dam.
+    expect(recordText("nid-dams", { HAZARD_POTENTIAL: "High", NAME: "Somebody Pond Dam", NID_HEIGHT: 40 })).toBe(`${head}hazard potential: High`);
+    expect(recordText("nid-dams", { YEAR_COMPLETED: 0 })).toBe(`${head}year completed: 0`);
+    expect(recordText("nid-dams", {}, "Victor Braunig Dam")).toBeNull();
     expect(withEmbedText({ a: 1 }, null)).toEqual({ a: 1 });
   });
 

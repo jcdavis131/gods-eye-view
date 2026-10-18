@@ -65,10 +65,13 @@ describe("school features", () => {
     expect(levelClass(null)).toBe("other");
   });
 
-  it("attaches record text from published categories only: no name, street or count", () => {
+  it("attaches record text from published categories, the school's name and its place only: no street or count", () => {
     const t = receivedRecordText(features[0].properties)!;
     expect(t).toContain("school level: Other");
-    expect(t).not.toMatch(/DEAF|CONGRESS|500|253/);
+    // B0 (2026-10-18): the public school's published name, its label, rides once as the "name" segment.
+    expect(t).toContain(`name: ${features[0].properties.name}`);
+    expect(t).toContain("city: AUSTIN");
+    expect(t.split("; ").filter((s) => !s.startsWith("name: ")).join("; ")).not.toMatch(/DEAF|CONGRESS|500|253/);
   });
 
   it("reads Connecticut counties as planning regions, the TIGER-current regime a county tower joins", () => {

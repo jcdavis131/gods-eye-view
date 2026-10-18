@@ -273,7 +273,10 @@ describe("public and protected lands", () => {
     // Plus the record text (lib/catalog/recordText.ts): decoded categories only, never the unit's name or the holder.
     expect(Object.keys(f.properties.extra as PublicLandExtra).sort()).toEqual(["access", "acres", "category", "embedText"]);
     const text = (f.properties.extra as { embedText: string }).embedText;
-    expect(text).toBe("protected area category: Easement; owner type: Regional Agency Special District; public access: Open Access");
+    // B0 (2026-10-18): the card's head comes first; an easement never carries its unit name, even with a public owner.
+    expect(text).toBe(
+      "collection: Protected areas and public lands (PAD-US); agency: U.S. Geological Survey; protected area category: Easement; owner type: Regional Agency Special District; public access: Open Access",
+    );
     expect(text).not.toMatch(/Palo Alto|Alamo/);
   });
 

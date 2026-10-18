@@ -176,8 +176,10 @@ export function buildSchools(rows: readonly Row[]): { features: LayerFeature[]; 
             ULOCALE: str(p.ULOCALE),
             GSLO: lo,
             GSHI: hi,
+            LCITY: str(p.LCITY),
+            NMCNTY: str(p.NMCNTY),
             LSTATE: state,
-          }),
+          }, str(p.SCH_NAME)),
         ),
       },
     });
