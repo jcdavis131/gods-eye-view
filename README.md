@@ -871,10 +871,10 @@ If you build on this, keep the list above intact. It is the point.
 
 One number: searches in a week that open a cited record. It is counted with Vercel Web Analytics, which sets no cookies, and it is **off until Web Analytics is enabled for the project in the Vercel dashboard**; until then the script is not served and nothing is sent.
 
-- Page views carry the path only. eye keeps its state (layers, the view box, a selection) in the query string and the fragment, and both are stripped before anything leaves the browser (`stripUrl` in `lib/analytics/events.ts`).
+- Page views carry the path only. eye keeps its state (layers, the view box, a selection) in the query string and the fragment, and both are stripped before anything leaves the browser (`stripUrl` in `lib/analytics/events.ts`). Vercel's script also reports the referrer, the outside page a visitor came from, as that page sent it; eye does not alter it.
 - `search`, once each time the ⌘K palette closes after a query: `results`, a bucket (`0`, `1-3`, `4-8`, `9+`), and `kind`, which result groups showed (`objects`, `meaning`, `catalog`, `plss`, `place`, joined by `+`, or `none`).
 - `result_open`, when a palette row is opened: `group`, the layer id from eye's own list or `catalog`, `plss`, `place`, `other`; and `source`, always `palette`.
-- `record_open`, when a record's dossier opens: `layer`, a layer id from eye's own list, and `via`, `search` (a palette result or a catalogue card from it) or `map` (a click on the globe: an object, a parcel, a zoning district). `catalog` is reserved; the catalogue page sends nothing of its own.
+- `record_open`, when a record's dossier opens: `layer`, a layer id from eye's own list, and `via`, `search` (a palette result or a catalogue card from it) or `map` (a click on the globe: an object, a parcel, a zoning district). A parcel or zoning click counts when it is made, even if nothing is found under it, and records opened from the side panels (screener, watchlist, area, reports) are not counted, so `map` is approximate. `catalog` is reserved; the catalogue page sends nothing of its own.
 
 No query text, no query length, no coordinates and no record ids are sent, ever. Every event goes through one typed wrapper that drops anything off those lists, and a test feeds an address-shaped query through every helper and checks it never reaches a payload.
 
