@@ -13,12 +13,16 @@
 // Rules for filling `licenseId` in sources.ts:
 // - Only when the source's own string maps to an entry with confidence. Leave it
 //   out otherwise; the lint lists every source without one.
-// - The id names the terms on what we actually fetch. Where a federal dataset is
-//   served from an Esri-hosted item whose licenceInfo states the Esri Master
-//   License Agreement, the id is `esri-mla` and the string keeps the rest.
+// - The id names the terms on what we actually fetch. `esri-mla` is for items Esri
+//   authored or summarised (World Imagery Wayback, Esri's FCC summary layer). A
+//   government dataset that an Esri-hosted item merely re-serves under the MLA gets
+//   no id: the government string and the MLA disagree, so the string carries both.
 // - `us-gov-work` is for works of the U.S. federal government, which 17 U.S.C. 105
 //   leaves outside copyright. It is not for state, county or city data, even when
-//   the publisher calls that data public.
+//   the publisher calls that data public, and not for federal compilations of
+//   records that others wrote or submitted (EDGAR filings, the National Address
+//   Database, PAD-US, the National Inventory of Dams, landslide and fault
+//   inventories built from state surveys, EONET's relayed events).
 
 export type LicenceKind = "spdx" | "named";
 
