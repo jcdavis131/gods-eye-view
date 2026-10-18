@@ -19,8 +19,15 @@ export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://eye.jcamd.c
 
 export const SITE_NAME = "Embedding Atlas";
 
-export const BASE_DESCRIPTION =
-  "A spy satellite simulator in your browser, except the data is real: live aircraft, ships, satellites, earthquakes, launches, and the water that sustains communities. Rivers, reservoirs, aquifers, drought and Sentinel-2 turbidity, no API keys.";
+/**
+ * The promise: what eye is for, in one sentence. It is the meta, Open Graph,
+ * Twitter and manifest description, the title card's line and the home page's
+ * search label, so a stranger and a crawler read the same thing.
+ */
+export const PROMISE =
+  "Ask eye about a US place and get a cited, dated public record: where it comes from, when it was read, and what it leaves out.";
+
+export const BASE_DESCRIPTION = PROMISE;
 
 /**
  * Join SITE_URL with a site-relative path. Accepts a path with or without the

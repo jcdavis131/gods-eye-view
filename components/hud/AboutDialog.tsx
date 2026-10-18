@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { LAYERS } from "@/lib/layers";
 import DataTerms from "./DataTerms";
 import { TERRARIUM_ATTRIBUTION } from "@/lib/terrain/products";
+import { PROMISE } from "@/lib/seo/base";
 
 export default function AboutButton({ compact = false }: { compact?: boolean }) {
   const [open, setOpen] = useState(false);
@@ -31,7 +32,7 @@ export default function AboutButton({ compact = false }: { compact?: boolean }) 
           <DialogHeader className="border-b border-border px-5 py-4">
             <DialogTitle className="hud-display text-lg text-primary">Embedding Atlas</DialogTitle>
             <DialogDescription className="text-[11px] text-muted-foreground">
-              A spy satellite simulator in your browser, except the data is real. Open source, MIT.
+              {PROMISE} Open source, MIT.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 px-5 py-4 text-[11px] leading-relaxed">
