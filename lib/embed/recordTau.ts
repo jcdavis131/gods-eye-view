@@ -1,6 +1,8 @@
 // The palette's "By meaning" threshold, kept outside the client component so the
 // records eval (lib/embed/__eval__/records-eval.test.ts) can pin it without
-// importing React.
+// importing React. Since 2026-10-18 the palette ranks by the gated hybrid
+// (lib/embed/gateConfig.ts) instead; this stays as the "shipped" arm the blind
+// evals compare against, and as the records eval's regression guard.
 
 /**
  * Minimum cosine for a loaded record to be shown by meaning. Measured, not picked by hand: the

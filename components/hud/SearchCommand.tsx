@@ -8,8 +8,10 @@
 // cards for the query through /api/catalog?op=search (the server embeds the
 // query; no weights in the browser for it), and, behind ?semantic=1, a "By
 // meaning" group ranks loaded records by their record text (never names or
-// ids) with potion-base-8M loaded on first use. Letter-by-letter matches
-// always come first and are never repeated below.
+// ids): the gated hybrid (lib/embed/gatedHybrid.ts), BM25 and potion-base-8M
+// cosine fused, shown only when the frozen gate (lib/embed/gateConfig.ts)
+// says something relevant is loaded. The model loads on first use.
+// Letter-by-letter matches always come first and are never repeated below.
 
 import { useEffect, useMemo, useState } from "react";
 import { Grid3x3, Library, MapPin, Radar, Sparkles, Terminal } from "lucide-react";
@@ -34,9 +36,9 @@ import { openHere } from "@/lib/whatshere/here";
 import { queryText } from "@/lib/catalog/recordText";
 import { potionBrowser } from "@/lib/embed/loadBrowser";
 import { RecordIndex, featureKey, type RecordHit } from "@/lib/embed/recordIndex";
-// Minimum cosine for a record to be shown by meaning: 0.5, Cam's call on the records eval's run 4 (lib/embed/recordTau.ts).
+// The gate for the By meaning group, frozen on dev data before blind set C (writeups/panel-2026-10-18b/gate/PREREG.md).
 // The group stays flagged (semanticRecordsOn) until a blind query set passes.
-import { RECORD_TAU } from "@/lib/embed/recordTau";
+import { GATE_CONFIG } from "@/lib/embed/gateConfig";
 import { trackRecordOpen, trackResultOpen, trackSearch } from "@/lib/analytics/events";
 
 /** A catalogue card ranked by meaning (/api/catalog?op=search). */
@@ -69,7 +71,10 @@ const CARD_ROWS = 3;
 
 let recordIndex: RecordIndex | null = null;
 
-/** Loaded records ranked by meaning for a query, skipping those already matched by letters. Loads the embedder on first use. */
+/**
+ * Loaded records for a query by the gated hybrid (one row per distinct record text, score = cosine),
+ * skipping those already matched by letters. Loads the embedder on first use.
+ */
 export async function searchRecordsByMeaning(q: string, exclude: ReadonlySet<string>): Promise<RecordHit[]> {
   const text = queryText(q);
   if (!text) return [];
@@ -77,7 +82,7 @@ export async function searchRecordsByMeaning(q: string, exclude: ReadonlySet<str
   recordIndex ??= new RecordIndex(model);
   recordIndex.sync(allFeatures());
   const v = model.embed(text);
-  return v ? recordIndex.search(v, RECORD_ROWS, RECORD_TAU, exclude) : [];
+  return v ? recordIndex.searchGated(text, v, GATE_CONFIG, RECORD_ROWS, exclude) : [];
 }
 
 export interface GeocodeHit {
