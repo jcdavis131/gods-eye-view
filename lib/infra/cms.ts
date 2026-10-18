@@ -335,7 +335,7 @@ export function bakeCms(
 }
 
 export const CMS_RATINGS_CAVEAT =
-  "CMS's overall hospital star rating as Care Compare published it (dataset modified 2026-07-22), joined to HIFLD's hospital by exact street address and ZIP code because HIFLD carries no CMS certification number; about one CMS hospital in four could not be matched that way, and hospitals sharing an address are never matched. CMS rates acute-care and critical-access hospitals that report enough measures; many are not rated. A rating summarizes reported measures; it is not a measure of a hospital's emergency capacity.";
+  "CMS's overall hospital star rating as Care Compare published it (dataset modified 2026-07-22), joined to HIFLD's hospital by street address and ZIP code (exactly, or once a PO box or drawer is set aside) because HIFLD carries no CMS certification number; about one CMS hospital in five could not be matched that way, hospitals sharing an address are never matched, and a separately certified tenant never gets its host's rating. CMS rates acute-care and critical-access hospitals that report enough measures; many are not rated. A rating summarizes reported measures; it is not a measure of a hospital's emergency capacity.";
 
 export interface CmsExtra {
   ccn: string;

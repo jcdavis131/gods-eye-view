@@ -1473,7 +1473,7 @@ export const COLLECTIONS: readonly Collection[] = [
     layer: "hospitals",
     sources: ["cms-provider-data"],
     what: "CMS's Hospital General Information (Care Compare): each hospital's overall star rating (1-5) or CMS's 'Not Available' with its footnote, with CMS's hospital type, ownership, emergency services and birthing-friendly designation, baked into a join file (lib/infra/data/cms-hospitals.json, scripts/bake-cms-hospitals.mjs) and shown in the HIFLD hospital's full record below 300 km.",
-    recordIs: "CMS's overall rating as Care Compare published it, matched to a HIFLD hospital by exact street address and ZIP code because HIFLD carries no CMS certification number. A rating summarizes measures a hospital reported; it is not a measure of emergency capacity, and 'not rated' is not 'no match'.",
+    recordIs: "CMS's overall rating as Care Compare published it, matched to a HIFLD hospital by street address and ZIP code (exactly, or once a PO box or drawer is set aside) because HIFLD carries no CMS certification number; a separately certified tenant never gets its host's rating. A rating summarizes measures a hospital reported; it is not a measure of emergency capacity, and 'not rated' is not 'no match'.",
     coverage: {
       spatial: "The CMS hospitals that match one HIFLD hospital one to one by address and ZIP, in the 50 states, DC and the territories CMS lists",
       temporal: null,

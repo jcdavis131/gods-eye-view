@@ -69,7 +69,8 @@ describe("op=hospitals", () => {
     expect(feats.filter((f) => f.properties.extra.cms === null)).toHaveLength(11);
     for (const f of feats) expect(f.properties.details["CMS star rating"]).toBeDefined();
     expect(body.provenance.map((p) => p.source.id)).toEqual(["hifld-hospitals", "cms-provider-data"]);
-    expect(body.caveats.join(" ")).toMatch(/joined to HIFLD's hospital by exact street address and ZIP code/);
+    expect(body.caveats.join(" ")).toMatch(/joined to HIFLD's hospital by street address and ZIP code \(exactly, or once a PO box or drawer is set aside\)/);
+    expect(body.caveats.join(" ")).toMatch(/a separately certified tenant never gets its host's rating/);
     expect(calls).toHaveLength(1);
   });
 
