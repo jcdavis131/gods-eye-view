@@ -128,7 +128,17 @@ export default function SearchCommand() {
   const open = useGlobe((s) => s.searchOpen);
   const setOpen = useGlobe((s) => s.setSearchOpen);
   const setLayer = useGlobe((s) => s.setLayer);
+  const seed = useGlobe((s) => s.searchSeed);
   const [q, setQ] = useState("");
+  // What was typed in the home page's search field carries into the palette
+  // once per opening (adjusted during render, not in an effect).
+  const [seeded, setSeeded] = useState(false);
+  if (open && seed && !seeded) {
+    setSeeded(true);
+    setQ(seed);
+  } else if (!open && seeded) {
+    setSeeded(false);
+  }
   const [placeHits, setPlaceHits] = useState<{ q: string; hits: GeocodeHit[] }>({ q: "", hits: [] });
   const [plssHits, setPlssHits] = useState<{ q: string; hits: PlssCandidate[] }>({ q: "", hits: [] });
   const [cardHits, setCardHits] = useState<{ q: string; hits: CardSearchHit[] }>({ q: "", hits: [] });

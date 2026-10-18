@@ -49,7 +49,7 @@ export default function TeleportCaption() {
   const btn = "flex flex-1 items-center justify-center gap-2 border border-border h-8 px-3 text-[10px] uppercase tracking-[0.22em] text-foreground/80 hover:bg-accent hover:text-primary";
 
   return (
-    <div data-teleport-controls className="pointer-events-auto absolute inset-x-2 top-[calc(max(8px,env(safe-area-inset-top))_+_52px)] z-30 md:inset-x-auto md:bottom-[104px] md:left-1/2 md:top-auto md:w-[440px] md:-translate-x-1/2">
+    <div data-teleport-controls className="pointer-events-auto absolute inset-x-2 top-[calc(max(8px,env(safe-area-inset-top))_+_102px)] z-30 md:inset-x-auto md:bottom-[104px] md:left-1/2 md:top-auto md:w-[440px] md:-translate-x-1/2">
       <div className="hud-panel hud-panel-lit hud-enter">
         <div className="flex h-9 items-center justify-between border-b border-border px-3">
           <span className="hud-label text-signal">

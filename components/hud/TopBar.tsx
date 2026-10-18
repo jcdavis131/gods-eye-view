@@ -22,6 +22,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import VoiceControl from "./VoiceControl";
 import { useTeleport } from "@/lib/live/teleportStore";
 import AboutButton from "./AboutDialog";
+import { SiteSearch, CatalogLink } from "./FrontDoor";
 
 export function fmtUtc(ms: number): string {
   if (!ms) return "—";
@@ -123,7 +124,7 @@ export default function TopBar() {
       <div className="hud-panel pointer-events-auto col-start-1 flex h-12 min-w-0 items-center justify-self-start overflow-x-auto [scrollbar-width:none]">
         <div className="flex shrink-0 items-center gap-3 pl-4 pr-4">
           <span className={ready ? "hud-lamp" : "hud-lamp hud-lamp-off blink"} role="img" aria-label={ready ? "Globe online" : "Globe starting"} />
-          <div className="hud-display whitespace-nowrap text-[13px] leading-none tracking-[0.3em] text-[var(--bright)]">Embedding Atlas</div>
+          <h1 className="hud-display whitespace-nowrap text-[13px] leading-none tracking-[0.3em] text-[var(--bright)]">Embedding Atlas</h1>
         </div>
         <div className="hud-rule" />
         <div className="flex shrink-0 items-center px-1">
@@ -159,6 +160,15 @@ export default function TopBar() {
             <Zap className="size-3.5" />
             <span className="sr-only">Teleport</span>
           </button>
+        </div>
+        <div className="hud-rule" />
+        {/* The one action the library exists for, at a 44 px target, and the
+            catalogue beside it. Last in the panel, so on a narrow desktop it is
+            what scrolls, not the travel buttons; the right panel keeps its
+            search glyph for those widths. */}
+        <div className="flex shrink-0 items-center gap-1 px-1">
+          <SiteSearch className="w-40 2xl:w-56" />
+          <CatalogLink />
         </div>
       </div>
 
