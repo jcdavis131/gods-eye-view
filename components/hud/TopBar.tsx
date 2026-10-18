@@ -127,12 +127,6 @@ export default function TopBar() {
           <h1 className="hud-display whitespace-nowrap text-[13px] leading-none tracking-[0.3em] text-[var(--bright)]">Embedding Atlas</h1>
         </div>
         <div className="hud-rule" />
-        {/* The one action the library exists for, at a 44 px target, and the catalogue beside it. */}
-        <div className="flex shrink-0 items-center gap-1 px-1">
-          <SiteSearch className="w-44 lg:w-56 xl:w-64" />
-          <CatalogLink />
-        </div>
-        <div className="hud-rule" />
         <div className="flex shrink-0 items-center px-1">
           <button type="button" onClick={() => setPickerOpen(true)} className={btn} title="Lens: who is looking (real estate, economist, trader, water, supply chain, public finance, civic, explorer)">
             <Aperture className="size-3.5" />
@@ -167,6 +161,15 @@ export default function TopBar() {
             <span className="sr-only">Teleport</span>
           </button>
         </div>
+        <div className="hud-rule" />
+        {/* The one action the library exists for, at a 44 px target, and the
+            catalogue beside it. Last in the panel, so on a narrow desktop it is
+            what scrolls, not the travel buttons; the right panel keeps its
+            search glyph for those widths. */}
+        <div className="flex shrink-0 items-center gap-1 px-1">
+          <SiteSearch className="w-40 2xl:w-56" />
+          <CatalogLink />
+        </div>
       </div>
 
       {/* centre: the instrument readout, symmetric about the axis */}
@@ -199,6 +202,10 @@ export default function TopBar() {
       {/* right: panels and utilities */}
       <div className="hud-panel pointer-events-auto col-start-3 flex h-12 min-w-0 max-w-full items-center justify-self-end overflow-x-auto whitespace-nowrap px-1 [scrollbar-width:none]">
         <VoiceControl />
+        <button type="button" onClick={() => setSearchOpen(true)} className={`${btn} hidden md:inline-flex`} title="Search flights, ships, satellites, places (Ctrl+K)">
+          <Search className="size-3.5" />
+          <span className="sr-only">Search</span>
+        </button>
         <div className="hud-rule mx-1 my-3" />
         <button type="button" onClick={toggleWater} data-on={waterOpen} className={`${btn} hidden md:inline-flex`} title="Community water report for the current view">
           <Droplets className="size-3.5" />
