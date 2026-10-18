@@ -1,0 +1,80 @@
+# Runs the checks on every pull request and every push to master, so no test
+# run has to happen on a laptop: the collections freeze check first (plain
+# Node, no install, a second), then tsc --noEmit, vitest and eslint on the
+# files the pull request changed.
+#
+# Install is npm ci --ignore-scripts, then only the half of postinstall the
+# tests read: scripts/patch-knockout-csp.mjs, which security-headers.test.ts
+# checks. scripts/copy-cesium.mjs fills public/cesium for the browser and no
+# test needs it.
+#
+# The freeze check (scripts/freeze-check.mjs) fails while FREEZE.json's date
+# has not passed and lib/catalog/collections.ts holds more collections than
+# its cap. It binds a merge only once the check is marked required in branch
+# protection. Read-only: it needs no secrets and writes nothing.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+# One run per ref; a new push to a pull request cancels its older run, a push
+# to master never cancels.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  freeze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: node scripts/freeze-check.mjs
+
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Enough history to diff a pull request against its base for eslint.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci --ignore-scripts
+
+      - run: node scripts/patch-knockout-csp.mjs
+
+      - name: tsc
+        run: npx tsc --noEmit
+
+      - name: vitest
+        run: npx vitest run
+
+      # Changed files only: the repo has a lint script but no record of a clean
+      # full run, so this holds new code to it without failing on old code.
+      - name: eslint (changed files)
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          files=$(git diff --name-only --diff-filter=ACMR "$BASE" HEAD -- '*.ts' '*.tsx' '*.js' '*.jsx' '*.mjs' | grep -v '^public/' || true)
+          if [ -z "$files" ]; then echo "No changed source files to lint."; exit 0; fi
+          echo "$files"
+          echo "$files" | xargs npx eslint
