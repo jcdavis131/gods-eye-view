@@ -135,7 +135,8 @@ describe("the bake on the 1996 and 2026 slices", () => {
     const { meta, shards } = bake([{ year: 1996, name: "se-1996.slice.csv" }]);
     expect(meta.nameMismatch["1996"].map((x) => [x[0], x[1]])).toEqual([["72017", "FAJARDO RIO GRANDE"]]);
     expect(shards["72"]).toBeUndefined();
-    // Texas 1996 floods: mostly zone-coded, which is what the route's gate reads.
+    // Texas 1996 floods: the slice has more zone-coded rows than county-coded ones; the route's gate
+    // reads the national zone share of a type-year (10 % or more, STORM_ZONE_SHARE_MAX), from zoneRows.
     expect(meta.zoneRows["1996"].Flood).toBeGreaterThan(meta.countyRows["1996"].Flood);
   });
   it("puts the two CZ_TYPE '5' rows of 2026 under otherCzType", () => {

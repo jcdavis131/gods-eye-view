@@ -100,8 +100,10 @@ export const SEARCHABLE_DETAILS: ReadonlySet<string> = new Set([
   // trust land: BIA's land area id (the feature is labelled by BIA's land area name, a place's)
   "lar id",
   // housing tax credits (round 8): HUD's LIHTC project id and HUD's DDA code. Never a LIHTC
-  // property's address; the property is labelled by its published project name, or by
-  // "LIHTC project · HUD id <HUD_ID>" where that name reads as an address (lihtcLabel)
+  // property's PROJ_ADD; the property is labelled by its published project name, with its own
+  // PROJ_ADD's house number plus street cut out, or by "LIHTC project · HUD id <HUD_ID>" where the
+  // name is or begins with an address (lihtcLabel). No drawn label contains its own PROJ_ADD's
+  // house number plus street; another address inside a name is not caught
   "hud id",
   "hud dda code",
   // PFAS in drinking water: EPA's public water system id. Never the system's name (some

@@ -6,14 +6,18 @@
 //   hud-lihtc-austin.json    LIHTC in the Austin box, where N_UNITS >= 5 (134 rows: 118 R, 1 '4', 15 T)
 //   hud-lihtc-ct-box.json    LIHTC in the Connecticut box (10 rows)
 // and one labelled mutation, hud-lihtc-small.sentinel.json (an Austin row with N_UNITS set to 1).
+//   hud-lihtc-address-names.json  11 whole rows picked by HUD_ID from the national pull of
+//     2026-10-17 (where N_UNITS >= 5, LIHTC_FIELDS, f=geojson; round8/lihtc-oracle.mjs), the rows unmodified, the wrapper's exceededTransferLimit dropped:
+//     names that are, or carry, their own PROJ_ADD
 import { describe, expect, it } from "vitest";
 import ddaAustin from "./fixtures/hud-dda-austin.json";
 import ddaCt from "./fixtures/hud-dda-ct-box.json";
 import ddaSussex from "./fixtures/hud-dda-sussex-box.json";
 import lihtcAustin from "./fixtures/hud-lihtc-austin.json";
 import lihtcCt from "./fixtures/hud-lihtc-ct-box.json";
+import lihtcAddressNames from "./fixtures/hud-lihtc-address-names.json";
 import sentinel from "./fixtures/hud-lihtc-small.sentinel.json";
-import { buildDda, buildLihtc, housingPartsPref, LIHTC_DENY, LIHTC_FIELDS, LIHTC_MIN_UNITS, LIHTC_WHERE, lihtcBin, lihtcLabel, lihtcNameIsAddress, lihtcYear, parseHousingParts } from "./taxcredit";
+import { buildDda, buildLihtc, housingPartsPref, LIHTC_DENY, LIHTC_FIELDS, LIHTC_MIN_UNITS, LIHTC_WHERE, lihtcBin, lihtcAddressKeys, lihtcLabel, lihtcNameIsAddress, lihtcStripAddress, lihtcYear, parseHousingParts } from "./taxcredit";
 
 type Fc = { features: Array<{ geometry: GeoJSON.Geometry | null; properties: Record<string, unknown> | null }> };
 const f = (x: unknown) => (x as Fc).features;
@@ -157,5 +161,66 @@ describe("a LIHTC project HUD named by its street address", () => {
     expect(lihtcNameIsAddress("76TH ST APTS", "417 E 76TH ST")).toBe(false);
     expect(lihtcNameIsAddress("PATHWAYS AT NORTH LOOP", "2300 W. NORTH LOOP BLVD.")).toBe(false);
     expect(lihtcLabel("X1", null, "1 MAIN ST")).toBe("LIHTC project · HUD id X1");
+  });
+
+  it("folds every non-alphanumeric character, and '+', '&', AND, '-' and '/' join a range", () => {
+    expect(lihtcNameIsAddress("803-28TH ST", "803 28TH ST")).toBe(true);
+    expect(lihtcNameIsAddress("407 + 409 SYKES AVE", "407 409 SYKES AVE")).toBe(true);
+    expect(lihtcNameIsAddress("12 and 14 Elm St.", "12 ELM ST")).toBe(true);
+    expect(lihtcNameIsAddress("12/14 ELM STREET", null)).toBe(true);
+    expect(lihtcNameIsAddress("51ST + KING DRIVE APARTMENTS", "5049 S KING DR")).toBe(false);
+    expect(lihtcAddressKeys("400 WEST 59TH STREET")).toEqual([["400", "W", "59TH"]]);
+    expect(lihtcAddressKeys("407-409 SYKES AVE")).toEqual([["407", "SYKES"], ["409", "SYKES"]]);
+    expect(lihtcAddressKeys("CENTRE STREET")).toEqual([]);
+  });
+});
+
+describe("a LIHTC project whose name carries its own street address (rule 4)", () => {
+  // Real rows from the national pull: every one keeps its PROJECT verbatim in the fixture.
+  const rows = f(lihtcAddressNames);
+  const built = buildLihtc(rows).features;
+  const label = (id: string) => built.find((x) => (x.properties.extra as { hudId: string }).hudId === id)?.properties.name;
+  const row = (id: string) => rows.find((r) => r.properties?.HUD_ID === id)!.properties!;
+
+  it("cuts the address out where a name is left, and labels by HUD id where none is", () => {
+    expect(Object.fromEntries(built.map((x) => [(x.properties.extra as { hudId: string }).hudId, x.properties.name]))).toEqual({
+      WAA00000117: "LIHTC project · HUD id WAA00000117", // "803-28TH ST" at "803 28TH ST"
+      MAB20100065: "VILLAGE AT", // "VILLAGE AT 815 MAIN ST"
+      NYC20030105: "JEFFERSON CLUSTER", // "JEFFERSON CLUSTER (116 JEFFERSON AVE)"
+      NYC19979002: "ONE COLUMBUS PLACE", // "ONE COLUMBUS PLACE (400 WEST 59TH STREET)"
+      NYA19940325: "WEST SALT SPRINGS", // "WEST SALT SPRINGS 1540 E GENESEE ST"
+      LAA20130017: "THE CORONA", // "THE CORONA (FORMERLY 1854 NORTH STREET)"
+      NYC20171047: "PP TC RS, LLC", // "PP 38 SIXTH AVENUE TC RS, LLC"
+      CAA20200065: "UPTOWN NEWPORT I (NORTH)", // "UPTOWN NEWPORT I (NORTH) - 4301 JAMBOREE" at 4301 JAMBOREE ROAD
+      NYA19940160: "GFI", // "GFI/ 74 WARBURTON" at 74 WARBURTON AVE
+      MNA19929002: "LIHTC project · HUD id MNA19929002", // "2 RIVERS APARTMENTS (FKA PARK AVE APTS)": rule 2 errs toward replacing
+    });
+    // NCA19919005 "407 + 409 SYKES AVE" is at a tract centroid (not drawn); its label would be the HUD id
+    expect(row("NCA19919005").LVL2KX).toBe("T");
+    expect(label("NCA19919005")).toBeUndefined();
+    expect(lihtcLabel("NCA19919005", String(row("NCA19919005").PROJECT), String(row("NCA19919005").PROJ_ADD))).toBe("LIHTC project · HUD id NCA19919005");
+  });
+
+  it("leaves no drawn label containing its PROJ_ADD's house number plus street, and the palette never finds it", async () => {
+    const { matchScore } = await import("@/lib/search/allowlist");
+    const words = (s: unknown) => ` ${String(s ?? "").toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim()} `;
+    for (const x of built) {
+      const id = (x.properties.extra as { hudId: string }).hudId;
+      const r = row(id);
+      const keys = lihtcAddressKeys(String(r.PROJ_ADD));
+      expect(keys.length, id).toBeGreaterThan(0);
+      // not even the house number survives in these labels (the HUD id label carries only the id)
+      for (const k of keys) expect(words(x.properties.name), id).not.toContain(` ${k[0]} `);
+      expect(matchScore(x.properties, String(r.PROJ_ADD).toLowerCase()), id).toBe(0);
+      expect(matchScore(x.properties, keys[0].join(" ").toLowerCase()), id).toBe(0);
+      expect(x.properties.details?.address?.startsWith(`${String(r.PROJ_ADD).trim()}, `), id).toBe(true);
+    }
+  });
+
+  it("keeps a name with no address in it, and cuts a range with its numbers", () => {
+    expect(lihtcStripAddress("PATHWAYS AT MANCHACA VILLAGE", "3000 MANCHACA RD")).toBeNull();
+    expect(lihtcLabel("X", "SYKES HOMES 407 + 409 SYKES AVE", "407-409 SYKES AVE")).toBe("SYKES HOMES");
+    expect(lihtcLabel("X", "AT 12 MAIN ST", "12 MAIN ST")).toBe("LIHTC project · HUD id X");
+    expect(lihtcLabel("X", "MAIN ST LOFTS (12 MAIN ST)", "12 MAIN ST")).toBe("MAIN ST LOFTS");
   });
 });
