@@ -55,7 +55,7 @@ export const NLCD_CLASSES: ClassEntry[] = [
 ];
 
 /**
- * USFWS NWI national wetlands raster (Wetlands_Raster_v5), eight wetland types, as the
+ * USFWS NWI national wetlands raster (Wetlands_Raster; Wetlands_Raster_v5 retired by 2026-10-18), eight wetland types, as the
  * ImageServer's own rasterAttributeTable lists them (value, WETLAND_TYPE, Red/Green/Blue).
  * Pixel value 0 is not a class: the tiles ask for it as NoData, so it draws clear.
  */
