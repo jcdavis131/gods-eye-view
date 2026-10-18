@@ -147,7 +147,7 @@ export const COLLECTIONS: readonly Collection[] = [
     what: "NWI's national generalised raster, about 100 m pixels in eight wetland types, drawn above 10 km where the polygons are not loaded. The legend is the raster's own attribute table.",
     recordIs: "A pixel class at about 100 m: a picture of where NWI maps wetland types at that scale.",
     coverage: { spatial: "United States and territories; above 10 km camera height", temporal: null, count: null },
-    freshness: { statement: "Pinned to service version v5 by name.", readFrom: "service name Wetlands_Raster_v5", recordedOn: R1 },
+    freshness: { statement: "Pinned to the service by name. USFWS retired Wetlands_Raster_v5 (Service not found); its successor Wetlands_Raster has the same eight classes and colours in its rasterAttributeTable.", readFrom: "service name Wetlands_Raster; rasterAttributeTable", recordedOn: "2026-10-18" },
     excluded: [
       { what: "small wetlands", why: "lost at 100 m pixels" },
       { what: "a click answer on the raster", why: "raster identify is deferred; below 10 km the polygons answer" },
