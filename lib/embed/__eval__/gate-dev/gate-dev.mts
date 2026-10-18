@@ -24,7 +24,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { queryText } from "@/lib/catalog/recordText";
 import { potionNode } from "@/lib/embed/loadNode";
-import { RecordIndex, featureKey } from "@/lib/embed/recordIndex";
+import { RecordIndex } from "@/lib/embed/recordIndex";
 import { RECORD_TAU } from "@/lib/embed/recordTau";
 import { applyGate, rankHybrid, type GateConfig, type HybridRanking } from "@/lib/embed/gatedHybrid";
 import { distinctDocs, docId, retrievers } from "@/lib/embed/__eval__/retrievers";
