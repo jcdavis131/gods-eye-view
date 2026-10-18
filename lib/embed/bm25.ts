@@ -138,6 +138,19 @@ export class Bm25Index {
       .map(([e, v]) => ({ id: e.id, score: v.s, matched: v.m, terms: terms.length }));
   }
 
+  /** A term's idf now; a term in no document gets the largest idf possible (df 0). */
+  idf(term: string): number {
+    const N = this.entries.size;
+    const df = this.postings.get(term)?.size ?? 0;
+    return Math.log(1 + (N - df + 0.5) / (df + 0.5));
+  }
+
+  /** The query terms a document contains (empty for an unknown id). */
+  matchedTerms(id: string, terms: ReadonlyArray<string>): string[] {
+    const e = this.entries.get(id);
+    return e ? terms.filter((t) => e.tf.has(t)) : [];
+  }
+
   /** How many of the query's distinct terms a document contains (0 for an unknown id). */
   matched(id: string, terms: ReadonlyArray<string>): number {
     const e = this.entries.get(id);
