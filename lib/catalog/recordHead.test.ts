@@ -15,7 +15,9 @@ import lihtcAustin from "@/lib/civic/fixtures/hud-lihtc-austin.json";
 import wrcBoulder from "@/lib/hazards/fixtures/wrc-place-boulder-box.json";
 import { buildWrcPlaces } from "@/lib/hazards/wrc";
 import nrhpPoints from "@/lib/land/fixtures/nrhp-points-dc.json";
-import { buildHistoric } from "@/lib/land/features";
+import { PADUS_NAMED_OWNERS, buildHistoric } from "@/lib/land/features";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 const card = (id: string) => COLLECTIONS.find((c) => c.id === id)!;
 const words = (s: string) => s.toLowerCase().match(/[a-z0-9]{4,}/g) ?? [];
@@ -68,6 +70,22 @@ describe("public names in record text (B0 privacy rule)", () => {
       const c = card(id);
       expect(`${c.sensitivity} ${c.excluded.map((x) => `${x.what} ${x.why}`).join(" ")}`, id).toMatch(/never (searched or )?embedded|not embedded|names are never embedded|on the label only|neither the name[^.]*is embedded/i);
     }
+  });
+
+  it("names PAD-US units only on federal or state land, never an easement, in the real records corpus", () => {
+    expect([...PADUS_NAMED_OWNERS].sort()).toEqual(["FED", "STAT"]);
+    const corpus: Array<{ card: string; embedText: string; n: number }> = JSON.parse(readFileSync(path.join(process.cwd(), "lib/embed/__eval__/records-corpus.json"), "utf8"));
+    const padus = corpus.filter((r) => r.card === "padus-units");
+    const named = padus.filter((r) => r.embedText.includes("; name: "));
+    expect(named.length).toBeGreaterThan(0);
+    for (const r of named) {
+      expect(r.embedText, r.embedText).toMatch(/; owner type: (Federal|State);/);
+      expect(r.embedText).not.toMatch(/protected area category: Easement/);
+    }
+    // Local, district, joint, NGO, designation and private units carry no name.
+    for (const r of padus.filter((x) => !/; owner type: (Federal|State);/.test(x.embedText))) expect(r.embedText).not.toContain("; name: ");
+    // Every named dam has a published, non-private owner type in its builder (checked on the fixture above); no dam text names a private dam.
+    for (const r of corpus.filter((x) => x.card === "nid-dams")) expect(r.embedText).not.toMatch(/Blue Wing|Riley Lake/i);
   });
 
   it("refuses a public name on any card outside PUBLIC_NAME_RULE", () => {

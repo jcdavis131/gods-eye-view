@@ -8,12 +8,12 @@
 //                         editing it after seeing scores fails the test.
 //   records-corpus.json   record text only ({card, embedText, source, retrievedAt, n}): 4,067
 //                         real records from the 18 record-vector cards, the captured fixtures
-//                         plus the 2026-10-17 keyless pulls, as 1,664 rows with a count (one row
-//                         per card, text, source and retrieval time; 1,651 distinct card and text
+//                         plus the 2026-10-17 keyless pulls, as 1,513 rows with a count (one row
+//                         per card, text, source and retrieval time; 1,500 distinct card and text
 //                         pairs). No ids or vectors, and no person's name. Since B0 (2026-10-18,
 //                         run 5) every text starts with its card's short title and agency, then the
 //                         record's published name on the four PUBLIC_NAME_RULE cards (hospitals,
-//                         public schools, public dams, public PAD-US units), then its place. The
+//                         public schools, non-private dams, federal and state PAD-US units), then its place. The
 //                         same 4,067 records were rebuilt through the builders, the live ones from
 //                         the logged URLs; each matched its run-4 text once B0's segments were taken
 //                         out (writeups/panel-2026-10-18b/b0/run5). bia-lar's LARNAME stays embedded
@@ -92,7 +92,7 @@ function grade(q: Query, r: Row): number {
 // change to tau, the weights or the record text updates this table. Run 4 (before B0) was
 // 0.4: 0.758 / 0.647 / 0.157; 0.5: 0.847 / 0.459 / 0.404; 0.6: 0.863 / 0.222 / 0.652.
 const MEASURED: Record<string, { P: number; R: number; empty: number }> = {
-  "0.4": { P: 0.765, R: 0.673, empty: 0.112 },
+  "0.4": { P: 0.763, R: 0.669, empty: 0.112 },
   "0.5": { P: 0.876, R: 0.511, empty: 0.292 },
   "0.6": { P: 0.843, R: 0.264, empty: 0.64 },
 };

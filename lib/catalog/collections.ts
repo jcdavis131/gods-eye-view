@@ -608,7 +608,7 @@ export const COLLECTIONS: readonly Collection[] = [
     searchable: ["Unit_Nm", "Loc_Nm"], // not on privately owned units (Own_Type PVT)
     embedText: EMBED_TEXT["padus-units"],
     ops: ["land?op=publiclands"],
-    sensitivity: "Ownership is shown as PAD-US publishes it (a federal inventory); what stays out is the search from an owner or easement holder to its holdings. A privately owned unit (Own_Type PVT) is often named for a family, so it is labelled by PAD-US id and its published name is shown in the record but never searched or embedded. A unit that is neither privately owned nor an easement has its Unit_Nm embedded as the record text's name segment (B0, 2026-10-18).",
+    sensitivity: "Ownership is shown as PAD-US publishes it (a federal inventory); what stays out is the search from an owner or easement holder to its holdings. A privately owned unit (Own_Type PVT) is often named for a family, so it is labelled by PAD-US id and its published name is shown in the record but never searched or embedded. A unit on federal or state land (Own_Type FED or STAT) that is not an easement has its Unit_Nm embedded as the record text's name segment (B0, 2026-10-18); local, district, joint and NGO units are not, since many are acquisitions named for a former owner.",
     round: 3,
   },
   {
@@ -631,7 +631,7 @@ export const COLLECTIONS: readonly Collection[] = [
     searchable: ["NIDID"],
     embedText: EMBED_TEXT["nid-dams"],
     ops: ["infra?op=dams"],
-    sensitivity: "Public infrastructure records; no owner or representative name is requested. NAME is embedded in the record text only for a dam that is not privately owned (B0, 2026-10-18), the same name it is labelled by. A privately owned dam can be named for its owner ('<Surname> Pond Dam'), so it is labelled by NID id and its published name is shown in the record but never searched; other dams keep their name as the label.",
+    sensitivity: "Public infrastructure records; no owner or representative name is requested. NAME is embedded in the record text only for a dam whose published owner type is not Private (B0, 2026-10-18), the same name it is labelled by; a dam with no owner type published is not named. A privately owned dam can be named for its owner ('<Surname> Pond Dam'), so it is labelled by NID id and its published name is shown in the record but never searched; other dams keep their name as the label.",
     round: 3,
   },
   // ------------------------------------------------------------ round 1: imagery

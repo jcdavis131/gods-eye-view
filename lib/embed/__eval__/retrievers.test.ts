@@ -83,8 +83,8 @@ describe("the three arms on the records corpus (smoke)", () => {
 
   it("covers every loaded record once per distinct text", () => {
     expect(docs.reduce((s, d) => s + d.n, 0)).toBe(4067);
-    // 1,651 since B0 (2026-10-18): public names and places split texts that were shared (1,132 before).
-    expect(docs.length).toBe(1651);
+    // 1,500 since B0 (2026-10-18): public names and places split texts that were shared (1,132 before).
+    expect(docs.length).toBe(1500);
   });
 
   it("each arm returns at most n distinct docs, and the pool is their union", () => {

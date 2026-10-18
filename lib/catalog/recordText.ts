@@ -15,9 +15,10 @@
 // names, e.g. PAD-US Own_Type "Private" for "PVT"), and re-checks each field
 // against DENY_FIELD at run time. Since B0 (2026-10-18) the text starts with
 // the card's short title and agency (RECORD_HEAD) and its place, and a card on
-// PUBLIC_NAME_RULE (hospitals, public schools, public dams, public PAD-US
-// units) may add the record's published name, which its builder passes only
-// when it labels the feature by that name. No other name is embedded: a name
+// PUBLIC_NAME_RULE (hospitals, public schools, dams with a published
+// non-private owner, federal and state PAD-US units) may add the record's
+// published name, which its builder passes only under that card's rule (always
+// the name the feature is labelled by). No other name is embedded: a name
 // that can be a person's or a business's, or a private holding labelled by id,
 // stays with the palette's letter-by-letter match, which owns the label-by-id
 // rules. Ids are matched by letters, never embedded.

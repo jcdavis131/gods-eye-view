@@ -812,6 +812,9 @@ export function trimParts(g: Poly, box: [number, number, number, number], minDeg
   return dropped ? { geometry: { type: "MultiPolygon", coordinates: kept }, dropped } : { geometry: g, dropped: 0 };
 }
 
+/** PAD-US owner types (Own_Type codes) whose unit name may be embedded in record text (B0): federal and state land only. */
+export const PADUS_NAMED_OWNERS: ReadonlySet<string> = new Set(["FED", "STAT"]);
+
 export function buildPublicLands(
   rows: Array<{ id?: number | string; geometry: GeoJSON.Geometry | null; properties: Record<string, unknown> }>,
   domains: Map<string, Map<string, string>>,
@@ -907,7 +910,9 @@ export function buildPublicLands(
             Pub_Access: x.access === "unknown" ? undefined : label("Pub_Access", accessCode),
             GAP_Sts: label("GAP_Sts", p.GAP_Sts),
             IUCN_Cat: label("IUCN_Cat", p.IUCN_Cat),
-          }, isPrivate || easement ? null : unit),
+          // B0: the unit's name only for federal and state land (a national forest, park or refuge). Local,
+          // district, joint and NGO units are often acquisitions named for the former owner ("<Surname> Ranch").
+          }, !easement && PADUS_NAMED_OWNERS.has(str(p.Own_Type) ?? "") ? unit : null),
         ),
       },
     });

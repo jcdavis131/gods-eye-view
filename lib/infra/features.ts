@@ -451,7 +451,8 @@ export function buildDams(rows: Row[]): LayerFeature[] {
           recordText(
             "nid-dams",
             { PRIMARY_PURPOSE: str(p.PRIMARY_PURPOSE), PRIMARY_DAM_TYPE: str(p.PRIMARY_DAM_TYPE), HAZARD_POTENTIAL: hazard, CONDITION_ASSESSMENT: condition, COUNTYSTATE: str(p.COUNTYSTATE), STATE: str(p.STATE), YEAR_COMPLETED: year },
-            isPrivate ? null : damName,
+            // A missing owner type is unknown, not public: named only when a non-private owner type is published.
+            isPrivate || !str(p.PRIMARY_OWNER_TYPE) ? null : damName,
           ),
         ),
       },

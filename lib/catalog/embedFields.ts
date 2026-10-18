@@ -181,8 +181,8 @@ export const RECORD_HEAD: Readonly<Record<string, { collection: string; agency: 
 export const PUBLIC_NAME_RULE: Readonly<Record<string, string>> = {
   "hifld-hospitals": "the licensed hospital's published name (an institution's), as its label",
   "nces-public-schools": "the public school's published name (an institution's), as its label",
-  "nid-dams": "a dam's published name only when its owner type is not Private (a private dam is labelled by NID id)",
-  "padus-units": "a unit's published name only when it is not privately owned (Own_Type PVT) and not an easement",
+  "nid-dams": "a dam's published name only when NID publishes an owner type and it is not Private (a private dam is labelled by NID id; a missing owner type is unknown, not public)",
+  "padus-units": "a unit's published name only on federal or state land (Own_Type FED or STAT) and never an easement: local, district, joint and NGO units are often acquisitions named for a former owner",
 };
 
 /**
