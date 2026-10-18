@@ -12,8 +12,10 @@
 // Keyless. It reads CMS's metastore (for the dataset's modified date), the
 // datastore in pages of 1,500 with the named columns only (never the
 // telephone), HIFLD's layer 6 description (dataLastEditDate) and HIFLD's rows
-// (ID, ADDRESS, ZIP, STATUS; every status) in pages of 2,000. The output depends
-// only on those answers, so a rerun on a saved set is byte-identical.
+// (ID, ADDRESS, ZIP, STATUS, NAME, TYPE; every status) in pages of 2,000. The
+// two names and types are read only for tenantConflict and no row stores them.
+// The output depends only on those answers, so a rerun on a saved set is
+// byte-identical.
 
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";

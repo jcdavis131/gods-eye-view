@@ -514,11 +514,11 @@ function hospitalsResult(data: unknown, count: number, cut: boolean, age: number
         : [
             provenance(source("cms-provider-data"), {
               kind: "published",
-              seriesId: "Hospital General Information (xubh-q36u): hospital_overall_rating and its footnote, hospital_type, hospital_ownership, emergency_services, birthing-friendly; joined to HIFLD by street address + ZIP, one to one only, exactly or in a second pass without a PO box or drawer (lib/infra/data/cms-hospitals.json)",
+              seriesId: "Hospital General Information (xubh-q36u): hospital_overall_rating and its footnote, hospital_type, hospital_ownership, emergency_services, birthing-friendly; joined to HIFLD by street address + ZIP, one to one only, exactly or in a second pass with a PO box or drawer removed, ordinal street words as numbers and U S as US (lib/infra/data/cms-hospitals.json)",
               upstreamUrl: CMS_QUERY,
               period: "dataset modified 2026-07-22",
               retrievedAt: "2026-10-17T00:00:00.000Z",
-              method: "baked by scripts/bake-cms-hospitals.mjs; a key shared by two hospitals on either side is never attached, and a tenant listed alone at its host's address is refused (tenantConflict)",
+              method: "baked by scripts/bake-cms-hospitals.mjs; a key shared by two hospitals on either side is never attached, and a match whose HIFLD name or type marks a tenant of another hospital is refused (tenantConflict)",
               notes: ["Centers for Medicare & Medicaid Services, Care Compare (Hospital General Information); no licence stated"],
             }),
           ]),
