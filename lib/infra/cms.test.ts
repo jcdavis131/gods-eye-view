@@ -193,6 +193,14 @@ describe("the second pass (mailFreeKey)", () => {
     // Constructed rural-route inputs: a box on a route is a place, so two boxes on one route never share a key.
     expect(mailFreeKey("RR 2 BOX 100", "68001")).not.toBe(mailFreeKey("RR 2 BOX 300", "68001"));
     expect(mailFreeKey("HC 1 BOX 5", "68001")).toBe("HC 1 BOX 5|68001");
+    // Other route spellings (constructed) and two real CMS rows from the 2026-10-18 capture.
+    for (const route of ["R.R. 2 BOX 5", "RR2 BOX 5", "HCR 1 BOX 3", "HC1 BOX 3", "RFD 1 BOX 5", "RR #2 BOX 5", "STAR RT 1 BOX 5"]) {
+      expect(mailFreeKey(route, "68001"), route).toMatch(/BOX/);
+    }
+    expect(mailFreeKey("TWO HOSPITAL DR RD#3 BOX 188", "16214")).toBe("TWO HOSPITAL DR RD 3 BOX 188|16214");
+    expect(mailFreeKey("BOX 158 ROUTE 17M", "10958")).toBe("BOX 158 ROUTE 17M|10958");
+    expect(mailFreeKey("100 BOX ELDER RD", "84302")).toBe("100 BOX ELDER RD|84302");
+    expect(mailFreeKey("123 MAIN ST DRAWER 5", "68001")).toBe("123 MAIN ST|68001");
     expect(mailFreeKey("ROUTE 7 BOX R50", "39350")).toBe("ROUTE 7 BOX R50|39350");  // CMS 250127
   });
   it("keeps suites, floors and buildings: they tell co-located facilities apart", () => {

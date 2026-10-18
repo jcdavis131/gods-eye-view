@@ -100,14 +100,19 @@ const ORDINAL_WORDS: Readonly<Record<string, string>> = {
  * "US" and ordinal street words as numbers (NINETEENTH to 19TH). Suites, floors and buildings are kept:
  * they tell co-located facilities apart. Null when the address or ZIP is empty.
  */
+/** A rural route or delivery marker, after normAddress (which turns "R.R. #2" into "R R 2"). */
+const ROUTE = "(?:R R|RR|HCR|HC|RFD|RD|RT|RTE|ROUTE|RURAL ROUTE|STAR ROUTE|STAR RT)";
+
 export function mailFreeKey(address: unknown, zip: unknown): string | null {
   // A box or drawer marked as mail (PO, P O, POB) goes; so does a bare BOX or DRAWER n after a street
   // ("1653 TEMPLE AVE N BOX 710": 13 same-hospital matches on 2026-10-18 need it). A rural-route box
-  // (RR 2 BOX 100, HC 1 BOX 5, ROUTE 3 BOX 9) is the address itself, so it is kept and stays apart.
+  // (RR 2 BOX 100, R R 2, RR2, HC 1, HCR 1, RFD 1, RD 3, ROUTE 3 BOX 9, or BOX 158 ROUTE 17M with the
+  // box first) is the address itself, so it is kept and two route boxes never share a key.
   const a = normAddress(address)
     .replace(/\b(P O|PO) (BOX|DRAWER|DRWR) \S+/g, " ")
     .replace(/\bPOB \d+\S*/g, " ")
-    .replace(/(?<!\b(?:RR|HC|RT|RTE|ROUTE|RURAL ROUTE|STAR ROUTE) \d+\S* )\b(BOX|DRAWER) \d+\S*/g, " ")
+    // The box token is taken whole ((?=\s|$)), so a backtrack to "BOX 15" can never slip past the route check.
+    .replace(new RegExp(`(?<!\\b${ROUTE} ?\\d+\\S* )\\b(BOX|DRAWER) \\d\\S*(?=\\s|$)(?! ${ROUTE} ?\\d)`, "g"), " ")
     .replace(/\bU S\b/g, "US")
     .split(" ")
     .map((w) => ORDINAL_WORDS[w] ?? w)
