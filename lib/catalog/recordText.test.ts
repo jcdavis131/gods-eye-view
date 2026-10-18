@@ -219,6 +219,11 @@ describe("what the catalogue lets be embedded", () => {
     for (const c of COLLECTIONS) for (const f of out) expect(c.embedText, `${c.id}: ${f}`).not.toContain(f);
   });
 
+  it("keeps records-eval's pinned corpus: 18 record-vector cards, none of round 8's four among them", () => {
+    expect(RECORD_VECTOR_CARDS.size).toBe(18);
+    for (const id of ["ncei-storm-events-county", "hud-dda", "hud-lihtc", "cms-hospital-ratings"]) expect(RECORD_VECTOR_CARDS.has(id), id).toBe(false);
+  });
+
   it("says for every card whether its builder attaches record text, and why not", () => {
     for (const c of COLLECTIONS) {
       const has = RECORD_VECTOR_CARDS.has(c.id);

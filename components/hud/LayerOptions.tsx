@@ -16,6 +16,7 @@ import { BROADBAND_BIN_COLORS, BROADBAND_MEASURES, BROADBAND_NO_DATA_EDGE, binLa
 import { parseWrcMeasure, parseWrcScope, WRC_BIN_COLORS, WRC_BIN_LABELS, WRC_NO_RANK_EDGE, WRC_RANKS } from "@/lib/hazards/wrc";
 import { TRIBAL_COLOR } from "@/lib/land/tribal";
 import { HOUSING_BIN_COLORS, HOUSING_MEASURES, HOUSING_NO_DATA_EDGE, HOUSING_SUPPRESSED_FILL, housingBinLabels, parseHousingMeasure, QCT_EDGE, SUPPRESSED_LEGEND } from "@/lib/civic/housing";
+import { DDA_EDGE, housingPartsPref, LIHTC_COLOR, LIHTC_POINT_SIZES, LIHTC_UNIT_LABELS } from "@/lib/civic/taxcredit";
 
 /** Layers with controls here. */
 export const OPTION_LAYERS = new Set<LayerId>(["riskindex", "historic", "health", "vulnerability", "hospitals", "broadband", "wildfirerisk", "tribal", "housing"]);
@@ -222,6 +223,7 @@ function BroadbandPicker() {
 
 function HousingPicker() {
   const m = parseHousingMeasure(useSettings((s) => s.prefs.housingMeasure));
+  const parts = housingPartsPref(useSettings((s) => s.prefs.housingParts));
   const setPref = useSettings((s) => s.setPref);
   return (
     <>
@@ -261,6 +263,45 @@ function HousingPicker() {
         </li>
       </ul>
       <div>Housing Choice Voucher households per 2020 tract, through December 2025. The share is HUD&apos;s: vouchers over renter-occupied units (2020 Census). A Qualified Census Tract is a tax-credit designation, not a measure of conditions. Below 100 km, in a box around the view.</div>
+      <div className="mt-1 flex flex-wrap gap-1">
+        {(
+          [
+            ["dda", "Tax-credit areas (DDA)"],
+            ["lihtc", "Tax-credit properties (LIHTC)"],
+          ] as const
+        ).map(([id, label]) => {
+          const on = parts.includes(id);
+          return (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={on}
+              onClick={() => setPref("housingParts", (on ? parts.filter((p) => p !== id) : [...parts, id]).join(","))}
+              className={`border px-2 py-0.5 text-[10px] uppercase tracking-widest ${on ? "border-primary/60 bg-primary/10 text-primary" : "border-border text-foreground/80 hover:bg-accent"}`}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+      {parts.length > 0 && (
+        <ul className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
+          {parts.includes("dda") && (
+            <li className="flex items-center gap-1 text-[9px] text-muted-foreground">
+              <span className="inline-block size-2 shrink-0 border-2 border-dashed" style={{ borderColor: DDA_EDGE }} aria-hidden />
+              Difficult Development Area (HUD, titled 2026): metro ZIP area or non-metro county
+            </li>
+          )}
+          {parts.includes("lihtc") &&
+            LIHTC_UNIT_LABELS.map((l, i) => (
+              <li key={l} className="flex items-center gap-1 text-[9px] text-muted-foreground">
+                <span className="inline-block shrink-0 rounded-full border border-white" style={{ background: LIHTC_COLOR, width: LIHTC_POINT_SIZES[i], height: LIHTC_POINT_SIZES[i] }} aria-hidden />
+                {l} low-income units
+              </li>
+            ))}
+        </ul>
+      )}
+      {parts.includes("lihtc") && <div>HUD&apos;s LIHTC properties of five or more units at the address the state reported; smaller projects are a household&apos;s home and are never drawn. Coded fields are shown as HUD&apos;s codes.</div>}
     </>
   );
 }

@@ -99,6 +99,12 @@ export const SEARCHABLE_DETAILS: ReadonlySet<string> = new Set([
   "assessment unit id",
   // trust land: BIA's land area id (the feature is labelled by BIA's land area name, a place's)
   "lar id",
+  // housing tax credits (round 8): HUD's LIHTC project id and HUD's DDA code. No LIHTC project
+  // name or address is searchable: a LIHTC point carries nameNotSearchable, so its label (HUD's
+  // PROJECT as HUD publishes it, which can be a street address) is never matched, and PROJ_ADD is
+  // never on this list. A LIHTC project is found by its HUD id only; its address appears on click
+  "hud id",
+  "hud dda code",
   // PFAS in drinking water: EPA's public water system id. Never the system's name (some
   // are apartment complexes, nursing homes or rental parks)
   "pwsid",
@@ -130,11 +136,14 @@ export function searchableDetail(key: string): boolean {
  * How well a feature matches a lower-cased query: 3 for an exact name or id,
  * 2 for a prefix of either, 1 for a name that contains it or an allowlisted
  * dossier value that does, 0 for no match. The outline of the box a land
- * layer loaded is map furniture, never a match.
+ * layer loaded is map furniture, never a match. A feature whose name is a
+ * label only (nameNotSearchable: a LIHTC project's) is matched by its id and
+ * allowlisted fields, never by its name.
  */
 export function matchScore(p: BaseProps, needle: string): number {
   if (!needle || p.kind === "loaded-box") return 0;
-  const name = p.name.toLowerCase();
+  // A label-only name is "" here, which no (non-empty) needle equals, starts or is inside.
+  const name = p.nameNotSearchable ? "" : p.name.toLowerCase();
   const id = p.id.toLowerCase();
   if (name === needle || id === needle) return 3;
   if (name.startsWith(needle) || id.startsWith(needle)) return 2;

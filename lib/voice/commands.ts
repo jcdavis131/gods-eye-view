@@ -109,11 +109,19 @@ const LAYER_ALIASES: Record<string, LayerId> = {
   "qualified census tracts": "housing",
   "qualified census tract": "housing",
   qct: "housing",
+  "tax credit properties": "housing",
+  "tax-credit properties": "housing",
+  lihtc: "housing",
+  "difficult development areas": "housing",
+  "difficult development area": "housing",
+  dda: "housing",
   "landslide susceptibility": "landslidesusc",
   "landslide susceptible terrain": "landslidesusc",
   "trust land": "tribal",
   "bia land": "tribal",
   reservations: "tribal",
+  "hospital ratings": "hospitals",
+  "hospital star ratings": "hospitals",
   "trauma centers": "hospitals",
   "trauma centres": "hospitals",
   hospitals: "hospitals",
@@ -480,7 +488,8 @@ export const COMMANDS: CommandDef[] = [
         const p = f.properties;
         // The outline of a land layer's loaded box is not something to find.
         if (p.kind === "loaded-box") continue;
-        const name = p.name.toLowerCase().replace(/\s+/g, "");
+        // A label-only name (a LIHTC project's) is never matched: "" equals, starts and contains no query.
+        const name = p.nameNotSearchable ? "" : p.name.toLowerCase().replace(/\s+/g, "");
         const id = p.id.toLowerCase();
         let score = 0;
         if (name === q || id === q) score = 3;

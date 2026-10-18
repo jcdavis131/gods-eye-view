@@ -75,6 +75,10 @@ export const EMBED_TEXT = {
   "hud-hcv-tracts": [],
   "hud-qct": [],
   "usgs-landslide-susc": [],
+  "ncei-storm-events-county": [],
+  "hud-dda": [],
+  "hud-lihtc": [],
+  "cms-hospital-ratings": [],
 } satisfies Record<string, string[]>;
 
 export type CollectionId = keyof typeof EMBED_TEXT;
@@ -373,6 +377,10 @@ export const NO_RECORD_VECTORS: Readonly<Record<string, string>> = {
   "hud-hcv-tracts": "tract numbers only; no record text",
   "hud-qct": "tract numbers only; no record text",
   "usgs-landslide-susc": "picture layer; county shares are dossier numbers",
+  "ncei-storm-events-county": "dossier series baked from NCEI's files; one county's counts, no record text",
+  "hud-dda": "a designation outline; names and codes only",
+  "hud-lihtc": "record vectors deferred: records-eval is pinned on 18 cards and would need re-measuring (D8-2)",
+  "cms-hospital-ratings": "joined by address into the HIFLD hospital's click, as npl-status joins by EPA ID; the hifld-hospitals record text is unchanged, so records-eval stays pinned",
 };
 
 /** Fields that must never be embedded whatever a card says: the deny list, the dossier's "published name", and any *name field not reviewed. */

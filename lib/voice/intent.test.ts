@@ -151,6 +151,10 @@ describe("voice words for community health", () => {
     expect(layerOf("show section 8")).toMatchObject({ layer: "housing" });
     expect(layerOf("show qualified census tracts")).toMatchObject({ layer: "housing" });
     expect(layerOf("show housing")).toMatchObject({ layer: "realestate" });
+    expect(layerOf("show tax credit properties over austin")).toMatchObject({ layer: "housing", place: "austin" });
+    expect(layerOf("show lihtc")).toMatchObject({ layer: "housing" });
+    expect(layerOf("show difficult development areas")).toMatchObject({ layer: "housing" });
+    expect(layerOf("show hospital ratings over houston")).toMatchObject({ layer: "hospitals", place: "houston" });
     expect(layerOf("show landslide susceptibility over colorado")).toMatchObject({ layer: "landslidesusc", place: "colorado" });
     expect(layerOf("show landslides")).toMatchObject({ layer: "landslides" });
     expect(layerOf("show landslide risk")).not.toMatchObject({ layer: "landslidesusc" });

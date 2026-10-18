@@ -78,6 +78,7 @@ import {
   packNational,
   type HospitalStatus,
 } from "@/lib/infra/hospitals";
+import { CMS_RATINGS_CAVEAT, CMS_QUERY, type CmsBake } from "@/lib/infra/cms";
 
 export const maxDuration = 60;
 export const OPTIONS = options;
@@ -439,6 +440,12 @@ async function opDams(bbox: Bbox): Promise<OpResult> {
 
 // ---------------------------------------------------------------- hospitals (HIFLD via FEMA RAPT)
 
+/** The baked CMS join (round 8, about 400 kB, loaded on the first box-tier call): the full record carries CMS's star rating where one CMS row and one HIFLD row share an address. */
+let cmsData: Promise<CmsBake> | null = null;
+function cmsBake() {
+  cmsData ??= import("@/lib/infra/data/cms-hospitals.json").then((m) => (m.default ?? m) as unknown as CmsBake);
+  return cmsData;
+}
 const HOSPITALS_GATE = { gate: "fema-rapt-hospitals", minIntervalMs: 250, timeoutMs: 25_000, tries: 2 };
 
 /** Every hospital of a status, paged by FID until FEMA says the answer is whole. */
@@ -471,7 +478,8 @@ async function opHospitals(bbox: Bbox, status: HospitalStatus): Promise<OpResult
     DAY,
     async () => {
       const f = await boxQuery(box, { name: "hifld-hospitals", url: HOSPITALS_URL, gate: HOSPITALS_GATE.gate, where: hospitalWhere(status), outFields: HOSPITAL_FIELDS.join(","), orderBy: "FID" });
-      return { features: buildHospitals(f.features as Row[]), truncated: truncated(f) };
+      const cms = await cmsBake();
+      return { features: buildHospitals(f.features as Row[], false, { rows: cms.rows, modified: cms.meta.cmsModified }), truncated: truncated(f) };
     },
     INFRA_DEADLINE,
   );
@@ -485,7 +493,7 @@ function hospitalsResult(data: unknown, count: number, cut: boolean, age: number
     status === "open" ? "Open hospitals only (STATUS = 'OPEN'); ask status=all for the hospitals HIFLD lists as closed too." : "Open and closed hospitals, as HIFLD's STATUS says.",
   ];
   if (national) caveats.push("Every hospital in the United States and territories as packed rows (`columns`, then `rows`: ID, NAME, CITY, STATE, TYPE, STATUS, BEDS, TRAUMA, COUNTYFIPS, lon, lat, values as published); ask a box of 20 degrees or less for the full record as GeoJSON (clamped to 6 degrees around its centre).");
-  else caveats.push(BOX_CAVEAT);
+  else caveats.push(BOX_CAVEAT, CMS_RATINGS_CAVEAT);
   if (cut) caveats.push(national ? `FEMA's answer was still cut after ${HOSPITALS_MAX_PAGES} pages: some hospitals are missing from this answer.` : "The record limit was hit; ask a smaller box for every hospital.");
   return {
     data,
@@ -501,6 +509,19 @@ function hospitalsResult(data: unknown, count: number, cut: boolean, age: number
         revision: "FEMA's copy of HIFLD's hospital layer; each row carries its own SOURCEDATE",
         notes: national ? ["national"] : [`bbox ${box.join(",")}`],
       }),
+      ...(national
+        ? []
+        : [
+            provenance(source("cms-provider-data"), {
+              kind: "published",
+              seriesId: "Hospital General Information (xubh-q36u): hospital_overall_rating and its footnote, hospital_type, hospital_ownership, emergency_services, birthing-friendly; joined to HIFLD by exact street address + ZIP, one to one only (lib/infra/data/cms-hospitals.json)",
+              upstreamUrl: CMS_QUERY,
+              period: "dataset modified 2026-07-22",
+              retrievedAt: "2026-10-17T00:00:00.000Z",
+              method: "baked by scripts/bake-cms-hospitals.mjs; a key shared by two hospitals on either side is never attached",
+              notes: ["Centers for Medicare & Medicaid Services, Care Compare (Hospital General Information); no licence stated"],
+            }),
+          ]),
     ],
     caveats,
   };

@@ -1,7 +1,8 @@
 // /api/civic?op=housing with HUD's answers replaced by captures from 2026-10-17
 // (lib/civic/fixtures/hud-*, unmodified): named fields on both layers, the box clamped to 0.3
 // degrees, nothing outside the allow-list reaching the answer, the place answer, a 404, and bad
-// parameters never reaching HUD. No network.
+// parameters never reaching HUD. No network. Round 8: part=dda,lihtc (captures made with the
+// route's own query; see lib/civic/taxcredit.test.ts).
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import hcvAustin from "@/lib/civic/fixtures/hud-hcv-austin.json";
@@ -9,7 +10,10 @@ import qctAustin from "@/lib/civic/fixtures/hud-qct-austin.json";
 import hcvPlace from "@/lib/civic/fixtures/hud-hcv-place-48453002220.json";
 import qctPlace from "@/lib/civic/fixtures/hud-qct-place-48453002220.json";
 import hcvCtBox from "@/lib/civic/fixtures/hud-hcv-ct-box.json";
+import ddaAustin from "@/lib/civic/fixtures/hud-dda-austin.json";
+import lihtcAustin from "@/lib/civic/fixtures/hud-lihtc-austin.json";
 import { HCV_LAYER, QCT_LAYER } from "@/lib/civic/housing";
+import { DDA_LAYER, LIHTC_FIELDS, LIHTC_LAYER } from "@/lib/civic/taxcredit";
 
 vi.mock("@/lib/server/cache", () => ({
   cached: async <T,>(_k: string, _ttl: number, produce: () => Promise<T>) => ({ value: await produce(), age: 0, hit: false }),
@@ -107,6 +111,45 @@ describe("op=housing", () => {
     for (const qs of ["op=housing", "op=housing&bbox=1,2,3", "op=housing&bbox=-97,31,-98,30", "op=housing&level=place&fips=48453", "op=housing&level=county", "op=housing&level=place&fips=48453002220'"]) {
       const { status } = await get(qs);
       expect(status, qs).toBe(400);
+    }
+    expect(calls).toHaveLength(0);
+  });
+});
+
+describe("op=housing&part= (round 8: DDA and LIHTC)", () => {
+  const all = (u: string) =>
+    u.startsWith(`${HCV_LAYER}/query?`) ? hcvAustin : u.startsWith(`${QCT_LAYER}/query?`) ? qctAustin : u.startsWith(`${DDA_LAYER}/query?`) ? ddaAustin : u.startsWith(`${LIHTC_LAYER}/query?`) ? withExtra(lihtcAustin) : null;
+
+  it("asks LIHTC for the allow-list only, never the contact block, with N_UNITS >= 5 in the where", async () => {
+    answer = all;
+    const { status, body } = await get("op=housing&bbox=-98.5,29.5,-97.0,31.0&part=dda,lihtc");
+    expect(status).toBe(200);
+    expect(calls).toHaveLength(4);
+    const l = new URL(calls.find((c) => c.startsWith(LIHTC_LAYER))!);
+    expect(l.searchParams.get("outFields")).toBe(LIHTC_FIELDS.join(","));
+    expect(l.searchParams.get("where")).toBe("N_UNITS >= 5");
+    expect(decodeURIComponent(l.search)).not.toMatch(/CONTACT|COMPANY|CO_/);
+    expect(new URL(calls.find((c) => c.startsWith(DDA_LAYER))!).searchParams.get("outFields")).toBe("ZCTA5,DDA_CODE,DDA_TYPE,DDA_NAME");
+    const data = body.data as unknown as { dda: Fc; lihtc: Fc };
+    expect(data.dda.features).toHaveLength(8);
+    expect(data.lihtc.features).toHaveLength(134);
+    expect(JSON.stringify(body)).not.toContain("ZZLEAK");
+    expect(body.caveats.join(" ")).toMatch(/fewer than five units/);
+    expect(body.provenance.map((p) => p.source.id)).toEqual(["hud-egis", "hud-egis", "hud-egis", "hud-egis"]);
+  });
+
+  it("returns no count of withheld projects anywhere in the answer", async () => {
+    answer = all;
+    const { body } = await get("op=housing&bbox=-98.5,29.5,-97.0,31.0&part=lihtc");
+    const meta = JSON.stringify({ ...body, data: undefined, caveats: undefined });
+    expect(meta).not.toMatch(/held|withheld|small/i);
+  });
+
+  it("refuses part=hcv, part=qct and unknown parts without asking HUD", async () => {
+    answer = () => null;
+    for (const p of ["hcv", "qct", "dda,schools", ""]) {
+      const { status } = await get(`op=housing&bbox=-98.5,29.5,-97.0,31.0&part=${p}`);
+      expect(status, p).toBe(400);
     }
     expect(calls).toHaveLength(0);
   });

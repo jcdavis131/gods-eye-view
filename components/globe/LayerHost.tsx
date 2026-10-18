@@ -39,7 +39,7 @@ const OPTION_KEYS: Partial<Record<LayerDefinition["id"], Array<keyof Prefs>>> = 
   health: ["placesMeasure"],
   vulnerability: ["sviTheme"],
   broadband: ["broadbandMeasure"],
-  housing: ["housingMeasure"],
+  housing: ["housingMeasure", "housingParts"],
   wildfirerisk: ["wrcMeasure", "wrcScope"],
   hospitals: ["hospitalStatus"],
 };

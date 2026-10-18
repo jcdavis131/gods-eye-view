@@ -60,6 +60,19 @@ describe("op=hospitals", () => {
     expect(body.caveats.join(" ")).not.toMatch(/374/);
   });
 
+  it("a box (round 8): CMS's star rating rides in extra.cms only for the hospitals the bake attached, with CMS provenance", async () => {
+    answer = (u) => (u.startsWith(H) ? box : null);
+    const { body } = await get("op=hospitals&bbox=-97.8,30.2,-97.65,30.4");
+    const feats = body.data.features as unknown as Array<{ properties: { extra: { cms?: { ccn: string; rating: number | null } | null }; details: Record<string, string> } }>;
+    const attached = feats.filter((f) => f.properties.extra.cms);
+    expect(attached).toHaveLength(6);
+    expect(feats.filter((f) => f.properties.extra.cms === null)).toHaveLength(11);
+    for (const f of feats) expect(f.properties.details["CMS star rating"]).toBeDefined();
+    expect(body.provenance.map((p) => p.source.id)).toEqual(["hifld-hospitals", "cms-provider-data"]);
+    expect(body.caveats.join(" ")).toMatch(/joined to HIFLD's hospital by exact street address and ZIP code/);
+    expect(calls).toHaveLength(1);
+  });
+
   it("a wide box: every hospital nationally with the short record, paged until FEMA says the answer is whole", async () => {
     answer = (u) => {
       if (!u.startsWith(H)) return null;

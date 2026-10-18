@@ -338,3 +338,12 @@ describe("httpFetchJson", () => {
     expect(r.body).toEqual({ error: "non-JSON reply", text: "<html>nope</html>" });
   });
 });
+
+describe("county_history's hazards description (round 8)", () => {
+  it("lists NCEI storm events by type, says tornadoes are SPC's, and never invents a 0", () => {
+    const d = toolByName("county_history")!.description;
+    expect(d).toMatch(/NCEI Storm Events county-coded event counts per year by type since 1996/);
+    expect(d).toMatch(/tornadoes are SPC's/);
+    expect(d).toMatch(/null, never 0/);
+  });
+});

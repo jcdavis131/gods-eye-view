@@ -93,6 +93,15 @@ describe("the search allowlist", () => {
     expect(matchScore(props({ name: "Big Zone" }), "zone")).toBe(1);
     expect(matchScore(props({ name: "Loaded area", kind: "loaded-box", details: { zone: "AE" } }), "loaded")).toBe(0);
   });
+
+  it("never matches a label-only name (nameNotSearchable), but still the id and allowlisted fields", () => {
+    const p = props({ id: "housing:lihtc:WAA00000117", layer: "housing", kind: "lihtc", name: "803-28TH ST", nameNotSearchable: true, details: { "HUD id": "WAA00000117", address: "803 28TH ST, ANACORTES, WA 98221" } });
+    for (const q of ["803-28th st", "803", "28th st", "anacortes"]) expect(matchScore(p, q), q).toBe(0);
+    expect(matchScore(p, "waa00000117")).toBe(1);
+    expect(matchScore(p, "housing:lihtc:waa00000117")).toBe(3);
+    // the same props without the flag would be found by the name
+    expect(matchScore({ ...p, nameNotSearchable: undefined }, "803-28th st")).toBe(3);
+  });
 });
 
 describe("the search allowlist on infrastructure layers", () => {

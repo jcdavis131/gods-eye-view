@@ -38,6 +38,9 @@ import { TRIBAL_CAVEAT, TRIBAL_REFERENCE_ONLY } from "@/lib/land/tribal";
 import { FEMA_CREDIT, HISTORY_CAVEAT, USDM_CREDIT } from "@/lib/hazards/history";
 import { CT_HOUSING_NOTE, HOUSING_CAVEAT, QCT_YEAR_NOTE } from "@/lib/civic/housing";
 import { LANDSLIDE_SUSC_CAVEAT } from "@/lib/terrain/products";
+import { STORM_EVENTS_CAVEAT, STORM_GATE_NOTE } from "@/lib/hazards/storms";
+import { CT_TAX_CREDIT_NOTE, DDA_YEAR_NOTE, HOUSING_TAX_CREDIT_CAVEAT, LIHTC_CODE_NOTE } from "@/lib/civic/taxcredit";
+import { CMS_RATINGS_CAVEAT } from "@/lib/infra/cms";
 import { DENY_FIELD, EMBED_TEXT } from "./embedFields";
 
 export interface Exclusion {
@@ -88,7 +91,7 @@ export interface Collection {
   /** Sensitive-location and personal-data handling. */
   sensitivity: string;
   /** Curation round it entered. */
-  round: 1 | 2 | 3 | 4 | 5 | 6 | 7;
+  round: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 }
 
 /** Which shelf a layer's collections sit on (the /catalog page's grouping). */
@@ -112,6 +115,7 @@ const R4 = "2026-10-16";
 const R5 = "2026-10-16";
 const R6 = "2026-10-17";
 const R7 = "2026-10-17";
+const R8 = "2026-10-17";
 
 export const COLLECTIONS: readonly Collection[] = [
   // ------------------------------------------------------------ round 1: land and heritage
@@ -1021,7 +1025,7 @@ export const COLLECTIONS: readonly Collection[] = [
     freshness: { statement: "FEMA last edited the layer's data on 2026-04-22. HIFLD Open's own hospital service no longer exists, so this copy is not refreshed from it; each row carries the date its source published it.", readFrom: "FeatureServer layer 6 editingInfo.dataLastEditDate; SOURCEDATE min and max (outStatistics, 2026-10-16)", recordedOn: R5 },
     excluded: [
       { what: "TELEPHONE, TTL_STAFF, ALT_NAME and VAL_METHOD", why: "never requested: a contact field, a staff count and bookkeeping" },
-      { what: "CMS Hospital General Information (star ratings)", why: "no shared key, no coordinates and no CORS (re-probed 2026-10-16); an exact address match is deferred (D5-8)" },
+      { what: "CMS Hospital General Information (star ratings)", why: "not part of this record: the cms-hospital-ratings card (round 8) joins CMS's rows to these hospitals by exact address and ZIP in the box tier's click; this card's embedded record text is unchanged by it" },
       { what: "closed hospitals, by default", why: "374 rows are CLOSED; a 'Closed too' chip draws them grey" },
     ],
     caveats: [HOSPITALS_CAVEAT],
@@ -1288,7 +1292,7 @@ export const COLLECTIONS: readonly Collection[] = [
     freshness: { statement: "Annual; SPC publishes the year's final file in spring. The file read was last modified 2026-04-24.", readFrom: "Last-Modified header of 1950-2025_all_tornadoes.csv (2026-10-17)", recordedOn: R7 },
     excluded: [
       { what: "injury, fatality and loss columns", why: "not needed for a count; the counts are not a casualty record" },
-      { what: "NCEI Storm Events as the storms line", why: "42 % of its 2025 rows are forecast zones, not counties, and its scope changes in 1955 and 1996 (D7-1)" },
+      { what: "NCEI Storm Events' Tornado rows", why: "Storm Events files one row per county segment of a tornado; SPC's distinct tornadoes are the count here, and the ncei-storm-events-county card (round 8) leaves Tornado out" },
       { what: "the whole-track summary rows of multi-state tornadoes (670)", why: "the tornado's state segments name its counties; counting both would count it twice" },
       { what: "tornadoes with no county recorded (11 tornado-state records)", why: "counted in the bake's meta.noCounty, never placed" },
       { what: "codes that name no current county", why: "Connecticut's legacy counties and 16 others are listed by code in meta; only Census-documented renames (Dade to Miami-Dade, Shannon to Oglala Lakota) are mapped" },
@@ -1315,7 +1319,7 @@ export const COLLECTIONS: readonly Collection[] = [
     freshness: { statement: "Layer data last edited 2026-07-21; description: 'Date of Coverage: Up to 12/2025, Last Updated: 01/2026'.", readFrom: "FeatureServer layer 0 editingInfo.dataLastEditDate (1784657444163) and the layer description", recordedOn: R7 },
     excluded: [
       { what: "EANAME (HUD's entitlement-area name)", why: "a place name not needed for the count; never fetched" },
-      { what: "LIHTC properties", why: "the layer carries contact names and phone numbers (CONTACT, CO_TEL); never fetched" },
+      { what: "LIHTC properties' contact block", why: "the layer carries contact names and phone numbers (CONTACT, CO_TEL); never fetched. The properties themselves are the hud-lihtc card (round 8), from an allow-list" },
       { what: "Public Housing Developments", why: "near-personal shares at small developments; held" },
       { what: "a county roll-up or place tower", why: "56 % of tracts are suppressed or unpublished, so a sum would be a floor dressed as a total" },
       { what: "Connecticut as suppression", why: "HUD has a count for none of its 881 tracts, which is not the 10-or-fewer rule; drawn 'not published'" },
@@ -1342,7 +1346,7 @@ export const COLLECTIONS: readonly Collection[] = [
     freshness: { statement: `Layer data last edited 2025-09-22. ${QCT_YEAR_NOTE}`, readFrom: "FeatureServer layer 0 editingInfo.dataLastEditDate (1758570469600); the service name, the item snippet and description, and the layer description", recordedOn: R7 },
     excluded: [
       { what: "the QCT 2025 service (15,727 tracts)", why: "superseded by the list HUD titles 2026" },
-      { what: "Difficult Development Areas 2026 (2,902)", why: "a second designation for a later phase (D7-2)" },
+      { what: "Difficult Development Areas 2026 (2,902)", why: "a second designation: the hud-dda card (round 8), drawn by the same layer" },
       { what: "NAME (\"Census Tract 6.08\")", why: "a tract label; the GEOID is shown" },
     ],
     caveats: [QCT_YEAR_NOTE],
@@ -1378,6 +1382,117 @@ export const COLLECTIONS: readonly Collection[] = [
     ops: ["hazards?op=history"],
     sensitivity: "A modelled terrain surface and county shares; no property, person or site data. CC0 1.0.",
     round: 7,
+  },
+  // ------------------------------------------------------------ round 8: county storm events, housing tax credits, hospital star ratings
+  {
+    id: "ncei-storm-events-county",
+    title: "Storm events per county per year (NOAA NCEI Storm Events, county-coded rows, 1996 onward)",
+    layer: "riskindex",
+    sources: ["ncei-storm-events"],
+    what: "NCEI's Storm Events Database, baked into event reports per county per year per event type (lib/hazards/data/storm-events/<state>.json, scripts/bake-storm-events.mjs) from the 31 yearly details files 1996-2026: hail, thunderstorm wind, flash floods and every other type NWS logs by county, with tornadoes left to SPC's record. In the county's hazard history, as three bar series (hail, thunderstorm wind, flash floods) and a line naming the other types.",
+    recordIs: "How many reports of an event type NCEI files under the county in a year. A count of reports, not of storms: one thunderstorm makes many wind and hail reports, and reporting grew with population and spotter networks. Not a casualty or damage record.",
+    coverage: {
+      spatial: "The 50 states except Alaska, DC and Puerto Rico, by county; 3,182 current counties have at least one report; Connecticut's eight legacy counties are kept under their own codes and its planning regions get none; Alaska gets none, because every county-coded Alaska row (596) is under NCEI's own areas",
+      temporal: "1996 to 2026-06 (the newest compiled month of the c20260918 file)",
+      count: { value: 1035369, of: "county-coded, non-tornado rows in the 31 details files 1996-2026 (1,819,792 rows in all; 733,143 zone-coded and 43,765 county-coded Tornado rows are not attached); 1,032,287 attached to 3,190 county codes; 1,039 refused because the county code's name disagrees with CZ_NAME, 1,184 under codes that name no current county, 859 in American Samoa, Guam and the Virgin Islands", countedOn: R8 },
+    },
+    freshness: { statement: "NCEI recompiles the files on its own schedule (c stamps 20260323 for most years, 20260519 for 2017, 20260625 for 2022, 20260728 for 2024, 20260819 for 2025, 20260918 for 2026); the bake is per round, not monthly.", readFrom: "the c stamps in NCEI's csvfiles directory listing; meta.json records each file's name and sha256", recordedOn: R8 },
+    excluded: [
+      { what: "forecast-zone rows (CZ_TYPE Z, 733,143)", why: "zones cross county lines, and NWS publishes its zone-county table only for 2025 and 2026 (bp18mr25, bp16ap26); zone rows are tallied per year and type and never attached (D8-1)" },
+      { what: "1950-1995", why: "NCEI's scope before 1996 is tornado, hail and thunderstorm wind only, so a 1995-to-1996 jump would be the database's, not the weather's" },
+      { what: "Tornado rows", why: "SPC's tornado record (spc-tornado-county) owns tornadoes; Storm Events files a row per county segment, so two tornado counts would disagree" },
+      { what: "EPISODE_NARRATIVE and EVENT_NARRATIVE", why: "free text; never read" },
+      { what: "INJURIES_*, DEATHS_* and DAMAGE_*", why: "not needed for a count; the counts are not a casualty or loss record" },
+      { what: "the fatalities and locations files", why: "not needed for a county count" },
+      { what: "rows whose county code and CZ_NAME disagree", why: "Puerto Rico's multi-municipio areas (1996-2008), Oklahoma's 1996 and Georgia's 2025 rows filed under forecast-zone numbers: listed by year in meta.nameMismatch, never attached" },
+    ],
+    caveats: [STORM_EVENTS_CAVEAT, STORM_GATE_NOTE],
+    searchable: ["fips"],
+    embedText: EMBED_TEXT["ncei-storm-events-county"],
+    ops: ["hazards?op=history"],
+    sensitivity: "Counts of county-coded event reports per year; no narrative, casualty, damage or source text is carried.",
+    round: 8,
+  },
+  {
+    id: "hud-dda",
+    title: "Difficult Development Areas (HUD, titled 2026)",
+    layer: "housing",
+    sources: ["hud-egis"],
+    what: "HUD's Difficult Development Areas for the Low-Income Housing Tax Credit, from the Difficult_Development_Areas_2026 service: metro ZIP code areas (ZCTAs) and non-metro counties, drawn as violet dashed outlines over the voucher tracts when the 'Tax-credit areas (DDA)' chip is on; a click says which kind it is and names it as HUD does.",
+    recordIs: "An area HUD designates for the tax credit because construction, land and utility costs are high relative to area median income, so a project there can claim a larger basis: a designation, not a measure of conditions.",
+    coverage: {
+      spatial: "The 50 states, DC, Puerto Rico and the territories HUD lists; metro areas by ZCTA, non-metro areas by county (Connecticut's by planning region, NCNTY09160 and others); drawn below 100 km in a box of at most 0.3 degrees",
+      temporal: "the designation year HUD titles 2026",
+      count: { value: 2902, of: "areas in Difficult_Development_Areas_2026 layer 0 (returnCountOnly): 2,615 metro ZCTAs (DDA_TYPE SA) and 287 non-metro counties (NM); the older Difficult_Development_Areas service holds 2,958", countedOn: R8 },
+    },
+    freshness: { statement: `Layer data last edited 2025-09-22. ${DDA_YEAR_NOTE}`, readFrom: "FeatureServer layer 0 editingInfo.dataLastEditDate (2025-09-22) and the layer description (read 2026-10-17)", recordedOn: R8 },
+    excluded: [
+      { what: "the older Difficult_Development_Areas service (2,958)", why: "superseded by the list HUD titles 2026" },
+      { what: "a county place tower", why: "metro DDAs are ZIP code areas, so a county flag would mean different things in metro and non-metro counties" },
+    ],
+    caveats: [DDA_YEAR_NOTE, CT_TAX_CREDIT_NOTE],
+    searchable: ["ZCTA5", "DDA_CODE"],
+    embedText: EMBED_TEXT["hud-dda"],
+    ops: ["civic?op=housing"],
+    sensitivity: "Published designations of ZIP code areas and counties; no person data.",
+    round: 8,
+  },
+  {
+    id: "hud-lihtc",
+    title: "Low-Income Housing Tax Credit properties (HUD)",
+    layer: "housing",
+    sources: ["hud-egis"],
+    what: "HUD's national database of LIHTC projects, drawn as teal points sized by low-income units when the 'Tax-credit properties (LIHTC)' chip is on: projects of five or more units at the address the state allocating agency reported, with the project's name, address, units, years placed in service and allocated, and HUD's coded fields (nonprofit sponsor, credit type, construction type, target population, tax-exempt bond, DDA and QCT flags) shown as HUD's codes.",
+    recordIs: "A tax-credit rental project as the state agency reported it to HUD, located at the building with the most units. Not a vacancy or rent listing, and not a statement that the project is still in its compliance period.",
+    coverage: {
+      spatial: "The 50 states, DC, Puerto Rico and the territories HUD lists; drawn below 100 km in a box of at most 0.3 degrees; only projects HUD geocoded to a rooftop (R) or a ZIP+4 centroid (4) are drawn, as HUD's layer description asks",
+      temporal: "allocated through 2021, placed in service through 2022 (YR_ALLOC and YR_PIS maxima; 8888 and 9999 are HUD's codes, not years)",
+      count: { value: 50566, of: "projects in the LIHTC layer 0 (returnCountOnly): 45,765 with five or more units, of which 40,239 are geocoded R or 4 (drawn) and the rest to a block group, tract or ZIP centroid or not at all (counted, not drawn); 4,211 with one to four units (2,221 with one) and 590 with no unit count are never asked for; 2,367 have no coordinates", countedOn: R8 },
+    },
+    freshness: { statement: "Layer data last edited 2024-12-09; the newest YR_ALLOC is 2021 and the newest YR_PIS 2022.", readFrom: "FeatureServer layer 0 editingInfo.dataLastEditDate; YR_ALLOC and YR_PIS outStatistics (read 2026-10-17)", recordedOn: R8 },
+    excluded: [
+      { what: "CONTACT, COMPANY, CO_ADD, CO_CTY, CO_ST, CO_ZIP and CO_TEL", why: "the owner company, its contact person, their address and telephone: never requested (an allow-list, and a test denies them)" },
+      { what: "the geocoder bookkeeping (STD_*, DPV*, C1P*, MSG*, APT_*)", why: "not needed; never requested" },
+      { what: "projects of fewer than five units (4,211) and projects with no unit count (590)", why: "a small project is a household's home, so its point and address would say where a private person lives; the rule is in the upstream where (N_UNITS >= 5), and no answer counts withheld projects (Cam's decision, pending)" },
+      { what: "projects HUD located only to a block group, tract or ZIP centroid", why: "HUD's layer description says to map only R and 4; they are counted in the layer's note, not drawn at a centroid" },
+      { what: "meanings of HUD's codes", why: "HUD's LIHTC data dictionary is on huduser.gov, which did not answer keyless (2026-10-17), and the layer has no coded-value domains" },
+      { what: "HUD's Public Housing Developments and Multifamily Assisted properties", why: "contact fields and per-development resident race, income and disability shares; held (D8-6)" },
+      { what: "record vectors", why: "records-eval is pinned on 18 cards and would need re-measuring (D8-2)" },
+    ],
+    caveats: [HOUSING_TAX_CREDIT_CAVEAT, LIHTC_CODE_NOTE, CT_TAX_CREDIT_NOTE],
+    searchable: ["HUD_ID"],
+    embedText: EMBED_TEXT["hud-lihtc"],
+    ops: ["civic?op=housing"],
+    sensitivity:
+      "Tax-credit rental properties as state agencies reported them to HUD. Owner company, contact person, their address and telephone are never requested. A project of fewer than five units is a household's home and is not drawn; its row never reaches the server. No LIHTC project name or address is searchable: the point is labelled by PROJECT as HUD publishes it (HUD sometimes files the street address as the name, and the label is then that address), the label is never matched by the palette or voice, and PROJ_ADD is never a searchable key; search finds a project only by its HUD id (HUD_ID). The address (PROJ_ADD, city, state, ZIP) appears on click, by design: these are public records of rental buildings of five or more units. A project with no PROJECT is labelled \"LIHTC project · HUD id <HUD_ID>\". Neither the name nor the address is embedded.",
+    round: 8,
+  },
+  {
+    id: "cms-hospital-ratings",
+    title: "Hospital star ratings (CMS Care Compare), on the HIFLD hospital click",
+    layer: "hospitals",
+    sources: ["cms-provider-data"],
+    what: "CMS's Hospital General Information (Care Compare): each hospital's overall star rating (1-5) or CMS's 'Not Available' with its footnote, with CMS's hospital type, ownership, emergency services and birthing-friendly designation, baked into a join file (lib/infra/data/cms-hospitals.json, scripts/bake-cms-hospitals.mjs) and shown in the HIFLD hospital's full record below 300 km.",
+    recordIs: "CMS's overall rating as Care Compare published it, matched to a HIFLD hospital by exact street address and ZIP code because HIFLD carries no CMS certification number. A rating summarizes measures a hospital reported; it is not a measure of emergency capacity, and 'not rated' is not 'no match'.",
+    coverage: {
+      spatial: "The CMS hospitals that match one HIFLD hospital one to one by address and ZIP, in the 50 states, DC and the territories CMS lists",
+      temporal: null,
+      count: { value: 5419, of: "rows in Hospital General Information (5,419 CCNs; datastore count): 4,050 attached to a HIFLD hospital one to one (4,038 open, 2,429 of them rated; 12 to HIFLD rows not open), 224 address keys shared by more than one hospital on either side refused, and 2,245 'Not Available' ratings nationally", countedOn: R8 },
+    },
+    freshness: { statement: "CMS's metastore says the dataset was modified 2026-07-22 and states no update cadence; the bake records that date, and the click prints it.", readFrom: "metastore schemas/dataset/items/xubh-q36u modified and accrualPeriodicity (read 2026-10-17)", recordedOn: R8 },
+    excluded: [
+      { what: "telephone_number, facility_name and countyparish", why: "never requested: a contact field, and HIFLD's own record already labels and places the hospital" },
+      { what: "a match on house number and ZIP alone", why: "it attaches more (Texas: 450 against 338) but 29 of Texas's 450 attach the wrong hospital (a long-term-care unit to the general hospital around it)" },
+      { what: "addresses shared by two or more hospitals on either side (224 keys)", why: "a tenant unit would show its host's rating; listed in the bake's meta.sharedAddress, never attached" },
+      { what: "the measure groups (mortality, safety, readmission, patient experience, timeliness counts)", why: "not needed for the rating line; a later round may add them" },
+      { what: "a county place tower", why: "ratings cover 2,429 of 8,140 open hospitals and are skewed by type, so a county mean would mostly measure which hospitals CMS rates" },
+    ],
+    caveats: [CMS_RATINGS_CAVEAT],
+    searchable: ["facility_id"],
+    embedText: EMBED_TEXT["cms-hospital-ratings"],
+    ops: ["infra?op=hospitals"],
+    sensitivity: "Institutions' published quality ratings; no patient, staff or contact data. CMS's telephone column is never carried.",
+    round: 8,
   },
 ];
 

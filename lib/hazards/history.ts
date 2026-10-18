@@ -8,6 +8,7 @@
 //   NOAA NCEI Climate at a Glance, county series        annual mean temperature and precipitation
 //   NOAA SPC tornadoes 1950-2025                        baked: tornadoes per county per year
 //   USGS landslide susceptibility, county table          baked: share of susceptible terrain
+//   NOAA NCEI Storm Events, county-coded rows since 1996 baked: reports per year by type (round 8)
 //
 // Every number is published or a count of published rows. Missing is null
 // with a reason, never 0: a year with no FEMA row or no SPC tornado is absent
@@ -23,6 +24,8 @@ import type { Point, Series } from "@/lib/series/types";
 import { provenance, type Provenance } from "@/lib/provenance/types";
 import { source } from "@/lib/provenance/sources";
 import { BOUNDARY_CHANGED_SINCE_2010, CENSUS_CHANGES_2010, type LandslideBake, type SpcBake } from "./bake";
+import type { StormMeta, StormShard } from "./stormBake";
+import { STORM_ALASKA_LINE, STORM_CT_LINE, STORM_EVENTS_CAVEAT, STORM_GATE_NOTE, STORM_MAIN_TYPES, STORM_NAME_CHECK_NOTE, STORM_ZONE_SHARE_MAX, stormAsSeries, stormSeries, type StormsAnswer } from "./storms";
 
 /**
  * Cam's decision 1 (pending): whether a year with no FEMA declaration or no SPC tornado is a 0
@@ -131,6 +134,7 @@ export type MissingReason =
   | "join:boundary_changed_since_2010"
   | "source:not_in_release"
   | "source:not_published_for_puerto_rico"
+  | "join:ncei_areas_not_counties"
   | "source:failed";
 
 // ---------------------------------------------------------------- parsers
@@ -320,6 +324,7 @@ export function landslideLine(bake: Pick<LandslideBake, "counties" | "columns">,
 export const HISTORY_CAVEAT =
   "Disaster declarations are FEMA's record of federal declarations naming this county. A declaration is a federal decision, not a measure of damage. Drought is the U.S. Drought Monitor's weekly index (0-500) since 2000. Climate is NOAA's county series. Tornadoes are SPC's record since 1950, which undercounts weak tornadoes before the 1990s radar network, and tornadoes with no county recorded are left out. Landslide susceptibility is a USGS 2024 model of terrain, not a forecast. Connecticut is published by FEMA, NOAA and USGS in its old counties.";
 export const CT_HISTORY_LINE = "FEMA, NOAA and USGS publish Connecticut in its old counties, so only drought is shown for planning regions.";
+export { STORM_EVENTS_CAVEAT };
 export const ZERO_RULE_NOTE =
   "A year with no FEMA declaration or no SPC tornado is absent from those series, not 0, until the zero rule is decided (HISTORY_ZERO_FILL is off).";
 export const ZERO_RULE_ON_NOTE = "A year with no FEMA declaration (from 1953) or no SPC tornado (from 1950) is 0: both are the complete federal record (HISTORY_ZERO_FILL is on).";
@@ -344,6 +349,8 @@ export interface HistoryInputs {
   pcp: Part<{ title: string | null; units: string | null; points: Point[] }>;
   spc: SpcBake;
   landslide: LandslideBake;
+  /** The county's storm-events shard (one state's, lazily loaded) with the bake's meta; absent: not asked. */
+  storms?: Part<{ meta: StormMeta; shard: StormShard }>;
 }
 
 export interface HistoryDeclaration {
@@ -372,6 +379,8 @@ export interface HistoryData {
   declarationRows: number | null;
   droughtNow: DroughtNow | null;
   landslide: LandslideLine | null;
+  /** NCEI Storm Events reports per year by type (county-coded rows, tornadoes left to SPC); null when not asked, skipped or failed. */
+  storms: StormsAnswer | null;
   missing: Array<{ source: string; reason: MissingReason; detail?: string }>;
 }
 
@@ -382,7 +391,7 @@ export interface HistoryAnswer {
     years: number | null;
     notCounty: number;
     unmatched: string[];
-    ctRegime: { fema: string; usdm: string; cag: string; spc: string; landslide: string } | null;
+    ctRegime: { fema: string; usdm: string; cag: string; spc: string; landslide: string; storms?: string } | null;
     asOf: Record<string, string | null>;
   };
   provenance: Provenance[];
@@ -514,21 +523,84 @@ export function assembleHistory(i: HistoryInputs): HistoryAnswer {
   else if (ls.reason) missing.push({ source: "USGS landslide susceptibility", reason: ls.reason, detail: BOUNDARY_CHANGED_SINCE_2010[i.fips] });
   asOf.landslide = "2024-08-22";
 
+  // NCEI Storm Events (bake, per-state shard)
+  let storms: StormsAnswer | null = null;
+  if (i.storms) {
+    const st = assembleStorms({ fips: i.fips, now: i.now, years: i.years, zeroFill, storms: i.storms }, geo);
+    storms = st.storms;
+    series.push(...st.series);
+    provs.push(...st.provenance);
+    missing.push(...st.missing);
+    caveats.push(...st.caveats);
+    if (st.asOf) asOf.storms = st.asOf;
+  }
+
   let ctRegime: HistoryAnswer["meta"]["ctRegime"] = null;
   if (CT_REGION.test(i.fips)) {
-    ctRegime = { fema: "legacy counties", usdm: "planning regions", cag: "legacy counties", spc: "legacy counties", landslide: "legacy counties" };
+    ctRegime = { fema: "legacy counties", usdm: "planning regions", cag: "legacy counties", spc: "legacy counties", landslide: "legacy counties", ...(i.storms ? { storms: "legacy counties" } : {}) };
     caveats.push(CT_HISTORY_LINE);
+    if (i.storms) caveats.push(STORM_CT_LINE);
   }
   if (i.stusab === "PR") caveats.push("NOAA Climate at a Glance publishes no Puerto Rico county series, so climate is not shown.");
   if (i.stusab === "HI") caveats.push("NOAA Climate at a Glance's Hawaii county series start in 1991.");
 
   return {
-    data: { fips: i.fips, name: i.name, state: i.stusab, series, declarations, declarationRows, droughtNow, landslide: ls.line, missing },
+    data: { fips: i.fips, name: i.name, state: i.stusab, series, declarations, declarationRows, droughtNow, landslide: ls.line, storms, missing },
     meta: { zeroFill, years: i.years, notCounty, unmatched, ctRegime, asOf },
     provenance: provs,
     caveats,
   };
 }
+
+/** The storms part alone (op=history&part=storms) or inside the whole answer: the series, the provenance and the reasons. */
+export function assembleStorms(
+  i: { fips: string; now: number; years: number | null; zeroFill?: boolean; storms: Part<{ meta: StormMeta; shard: StormShard }> },
+  geo: Series["geo"],
+): { storms: StormsAnswer | null; series: Series[]; provenance: Provenance[]; missing: HistoryData["missing"]; caveats: string[]; asOf: string | null } {
+  const zeroFill = i.zeroFill ?? HISTORY_ZERO_FILL;
+  const out = { storms: null as StormsAnswer | null, series: [] as Series[], provenance: [] as Provenance[], missing: [] as HistoryData["missing"], caveats: [] as string[], asOf: null as string | null };
+  if (CT_REGION.test(i.fips)) {
+    out.missing.push({ source: "NCEI Storm Events", reason: "join:legacy_ct_counties" });
+    return out;
+  }
+  const p = i.storms;
+  if ("skip" in p) {
+    out.missing.push({ source: "NCEI Storm Events", reason: p.skip });
+    if (p.skip === "join:ncei_areas_not_counties") out.caveats.push(STORM_ALASKA_LINE);
+    return out;
+  }
+  if ("error" in p) {
+    out.missing.push({ source: "NCEI Storm Events", reason: "source:failed", detail: p.error.slice(0, 160) });
+    out.caveats.push(`NCEI Storm Events could not be read this time (${p.error.slice(0, 80)}): its series are unknown, not empty.`);
+    return out;
+  }
+  const { meta, shard } = p.value;
+  const cutYear = i.years == null ? -Infinity : new Date(i.now).getUTCFullYear() - i.years + 1;
+  const a = stormSeries(meta, shard, i.fips, zeroFill);
+  // Every type with a report in the county, and the three main types always (so a blank year is said even with no report).
+  const shown = a.types.filter((t) => t.points.length || (STORM_MAIN_TYPES as readonly string[]).includes(t.type));
+  const storms: StormsAnswer = { ...a, types: shown.map((t) => ({ ...t, points: t.points.filter(([y]) => y >= cutYear), blank: t.blank.filter(([y]) => y >= cutYear) })).map((t) => ({ ...t, total: t.points.reduce((x, [, n]) => x + n, 0) })) };
+  const prov = provenance(source("ncei-storm-events"), {
+    kind: "published",
+    seriesId: `Storm Events details files ${meta.firstYear}-${meta.lastYear}, county-coded rows per year per event type, Tornado excluded (lib/hazards/data/storm-events/${i.fips.slice(0, 2)}.json)`,
+    upstreamUrl: meta.dir,
+    retrievedAt: p.retrievedAt,
+    period: meta.lastYearMonth ? `${meta.firstYear}-01 to ${meta.lastYearMonth.slice(0, 4)}-${meta.lastYearMonth.slice(4)}` : undefined,
+    method: `reports per year where CZ_TYPE = C, EVENT_TYPE is not Tornado, and the county code and CZ_NAME agree with the county; a type's year is null ("zone-coded") where ${Math.round(STORM_ZONE_SHARE_MAX * 100)} % or more of its rows nationally were zone-coded; baked by scripts/bake-storm-events.mjs from ${meta.files.length} files (c stamps and sha256 in meta.json)`,
+    notes: [meta.credit],
+  });
+  out.storms = storms;
+  out.provenance.push(prov);
+  out.series.push(...stormAsSeries(storms, geo, prov));
+  out.asOf = meta.lastYearMonth;
+  out.caveats.push(STORM_EVENTS_CAVEAT, STORM_GATE_NOTE, STORM_NAME_CHECK_NOTE, zeroFill ? STORM_ZERO_ON_NOTE : STORM_ZERO_NOTE);
+  if (storms.break) out.caveats.push(`Storm events: ${storms.break.what}; the series counts the county as it was each year, so ${storms.break.year} is a break in the series.`);
+  if (!storms.types.some((t) => t.points.length)) out.caveats.push("NCEI records no county-coded storm event naming this county in these years outside tornadoes; with the zero rule off, that is shown as no bars, not as zeros.");
+  return out;
+}
+
+export const STORM_ZERO_NOTE = "A drawn year with no storm-event report for the county is absent, not 0, until the zero rule is decided (HISTORY_ZERO_FILL is off).";
+export const STORM_ZERO_ON_NOTE = "A drawn year with no storm-event report for the county is 0 (HISTORY_ZERO_FILL is on); a zone-coded year stays blank.";
 
 /** What a regime says about a county before anything is fetched: which upstreams publish nothing in its geography. */
 export function skips(fips: string, stusab: string): { fema: MissingReason | null; cag: MissingReason | null } {
