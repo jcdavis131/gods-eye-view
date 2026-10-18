@@ -37,6 +37,7 @@ import { RecordIndex, featureKey, type RecordHit } from "@/lib/embed/recordIndex
 // Minimum cosine for a record to be shown by meaning: 0.5, Cam's call on the records eval's run 4 (lib/embed/recordTau.ts).
 // The group stays flagged (semanticRecordsOn) until a blind query set passes.
 import { RECORD_TAU } from "@/lib/embed/recordTau";
+import { trackRecordOpen, trackResultOpen, trackSearch } from "@/lib/analytics/events";
 
 /** A catalogue card ranked by meaning (/api/catalog?op=search). */
 export interface CardSearchHit {
@@ -201,7 +202,19 @@ export default function SearchCommand() {
     };
   }, [q]);
 
+  // One 'search' event per palette session, sent as it closes: how many rows each group showed
+  // (bucketed) and which groups, never the query (lib/analytics/events.ts).
+  const reportSearch = () =>
+    trackSearch(q, {
+      objects: objects.length,
+      meaning: meaning.length,
+      catalog: cards.length,
+      plss: sections.length,
+      place: places.length,
+    });
+
   const close = () => {
+    reportSearch();
     setOpen(false);
     setQ("");
   };
@@ -210,6 +223,7 @@ export default function SearchCommand() {
     <Dialog
       open={open}
       onOpenChange={(o) => {
+        if (!o) reportSearch();
         setOpen(o);
         if (!o) setQ("");
       }}
@@ -240,7 +254,8 @@ export default function SearchCommand() {
                   key={`${p.layer}:${p.id}`}
                   value={`${p.layer}:${p.id}`}
                   onSelect={() => {
-                    flyToSelection({ layer: p.layer, id: p.id });
+                    trackResultOpen(p.layer);
+                    if (flyToSelection({ layer: p.layer, id: p.id })) trackRecordOpen(p.layer, "search");
                     close();
                   }}
                   className="font-mono text-[11px]"
@@ -265,7 +280,8 @@ export default function SearchCommand() {
                   key={`meaning:${p.layer}:${p.id}`}
                   value={`meaning:${p.layer}:${p.id}`}
                   onSelect={() => {
-                    flyToSelection({ layer: p.layer, id: p.id });
+                    trackResultOpen(p.layer);
+                    if (flyToSelection({ layer: p.layer, id: p.id })) trackRecordOpen(p.layer, "search");
                     close();
                   }}
                   className="font-mono text-[11px]"
@@ -291,6 +307,9 @@ export default function SearchCommand() {
                   key={`card:${c.id}`}
                   value={`card:${c.id}`}
                   onSelect={() => {
+                    // The catalogue card is the cited record (source, licence, freshness).
+                    trackResultOpen("catalog");
+                    trackRecordOpen(c.layer, "search");
                     window.open(`/catalog#${encodeURIComponent(c.id)}`, "_blank", "noopener,noreferrer");
                     close();
                   }}
@@ -307,6 +326,7 @@ export default function SearchCommand() {
                     key={`card-layer:${c.id}`}
                     value={`card-layer:${c.id}`}
                     onSelect={() => {
+                      trackResultOpen(def.id);
                       setLayer(def.id, true);
                       close();
                     }}
@@ -326,6 +346,7 @@ export default function SearchCommand() {
                 key={c.firstDivisionId ?? c.plssId}
                 value={`plss:${c.firstDivisionId ?? c.plssId}`}
                 onSelect={() => {
+                  trackResultOpen("plss");
                   setLayer("plss", true);
                   flyTo(c.lon, c.lat, { height: heightForPlss(c) });
                   close();
@@ -346,6 +367,7 @@ export default function SearchCommand() {
                 key={`${h.lat},${h.lon},${i}`}
                 value={`place:${i}:${h.name}`}
                 onSelect={() => {
+                  trackResultOpen("place");
                   flyTo(h.lon, h.lat, { height: heightForPlace(h) });
                   close();
                 }}

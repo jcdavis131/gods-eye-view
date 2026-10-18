@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "../globals.css";
 import { BASE_METADATA, BASE_DESCRIPTION } from "@/lib/seo/base";
+import EyeAnalytics from "@/components/analytics/EyeAnalytics";
 
 const mono = Geist_Mono({
   variable: "--font-geist-mono",
@@ -19,7 +20,8 @@ const display = Geist({
 
 // A second root layout, not a child of the globe's. Documents are long, they
 // scroll, and they ship no Cesium, no QueryClientProvider and no application
-// JavaScript at all.
+// JavaScript beyond the Web Analytics island (components/analytics/EyeAnalytics.tsx),
+// which counts the page path and nothing else.
 //
 // data-mode="desk" data-theme="light" are set here in the server-rendered HTML
 // rather than by lib/desk/store.ts, whose applyDeskDom also writes to the
@@ -60,6 +62,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
         style={{ height: "auto" }}
       >
         <div className="mx-auto w-full max-w-[64rem] px-4 py-8">{children}</div>
+        <EyeAnalytics />
       </body>
     </html>
   );

@@ -26,6 +26,7 @@ import { GLOBE_ERROR_EVENT } from "@/components/hud/TitleCard";
 import { arbitrateLabels } from "@/lib/globe/labelArbiter";
 import { useStrata } from "@/lib/fabric/strataStore";
 import { identifyZoning, startZoningOverlay } from "@/lib/zoning/pick";
+import { trackRecordOpen } from "@/lib/analytics/events";
 import { currentFabric } from "@/lib/fabric/strataClient";
 
 function isPickId(v: unknown): v is PickId {
@@ -381,6 +382,7 @@ export default function CesiumGlobe() {
           const hit = (ray && scene.globe.pick(ray, scene)) || viewer!.camera.pickEllipsoid(e.position, ellipsoid);
           if (hit) {
             const c = C.Cartographic.fromCartesian(hit);
+            trackRecordOpen("parcels", "map");
             void identifyParcel(C.Math.toDegrees(c.longitude), C.Math.toDegrees(c.latitude));
             return;
           }
@@ -395,6 +397,7 @@ export default function CesiumGlobe() {
           const hit = (ray && scene.globe.pick(ray, scene)) || viewer!.camera.pickEllipsoid(e.position, ellipsoid);
           if (hit) {
             const c = C.Cartographic.fromCartesian(hit);
+            trackRecordOpen("zoning", "map");
             void identifyZoning(C.Math.toDegrees(c.longitude), C.Math.toDegrees(c.latitude));
             return;
           }
@@ -403,6 +406,7 @@ export default function CesiumGlobe() {
         // point did not resolve, as before).
         if (isPickId(id) && id.layer !== "parcels") {
           const feature = getRenderer(id.layer)?.getFeature(id.id) ?? null;
+          trackRecordOpen(id.layer, "map");
           st.select({ layer: id.layer, id: id.id }, feature);
         } else if (groundClickWanted(st.layers, st.view.height)) {
           // Pictures (soils, land cover, hazard classes, slope, relief) have nothing to pick:
