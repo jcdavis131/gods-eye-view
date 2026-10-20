@@ -1269,3 +1269,122 @@ html:not(.dark) * {
   border-radius: 3px; padding: 2px 6px;
 }
 .chips-dot { width: 6px; height: 6px; border-radius: 9999px; flex-shrink: 0; }
+
+/* ------------------------------------------------------------------
+   Patent-motion grammar (scout/patent-motion-eye): ink-on-paper technical-
+   drawing motion language. Dark variant: cream linework on ink ground.
+   Tokens: --patent-ease is the ONLY curve for structural motion.
+   ------------------------------------------------------------------ */
+:root {
+  --patent-ink: #1b1712;
+  --patent-paper: #f5efe3;
+  --patent-accent: #c0392b;
+  --patent-ease: cubic-bezier(0.45, 0, 0.15, 1);
+  --patent-line: color-mix(in oklab, var(--patent-paper) 38%, transparent);
+}
+
+/* Thin patent plate frame: 1px cream hairline inside the HUD corner brackets. */
+.patent-plate {
+  border: 1px solid var(--patent-line);
+}
+
+/* Corner labels: letterspaced all-caps, mono. */
+.patent-corner {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: color-mix(in oklab, var(--patent-paper) 78%, transparent);
+  white-space: nowrap;
+}
+.patent-corner .patent-fig {
+  color: var(--patent-paper);
+}
+
+/* Live fact caption, bottom-right of the plate. Caption swap is instant. */
+.patent-caption {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: color-mix(in oklab, var(--patent-paper) 88%, transparent);
+  text-align: right;
+  max-width: 46vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Legend rows: numbered; hover lifts the row and inverts it to a cream pill
+   with ink text (dark-variant inversion of the patent ink pill). */
+.patent-legend-row {
+  position: relative;
+  transition: transform 240ms var(--patent-ease), background-color 240ms var(--patent-ease),
+    color 240ms var(--patent-ease);
+}
+.patent-legend-row:hover,
+.patent-legend-row:focus-visible {
+  transform: translateY(-6px);
+  z-index: 10;
+  background: var(--patent-paper);
+  border-radius: 9999px;
+}
+.patent-legend-row:hover .patent-legend-label,
+.patent-legend-row:focus-visible .patent-legend-label {
+  color: var(--patent-ink);
+}
+.patent-legend-row:hover .patent-legend-num,
+.patent-legend-row:focus-visible .patent-legend-num {
+  color: var(--patent-accent);
+}
+.patent-legend-row:hover .patent-legend-count,
+.patent-legend-row:focus-visible .patent-legend-count {
+  color: color-mix(in oklab, var(--patent-ink) 72%, transparent);
+}
+.patent-legend-num {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: color-mix(in oklab, var(--patent-paper) 52%, transparent);
+  transition: color 240ms var(--patent-ease);
+}
+.patent-legend-label {
+  transition: color 240ms var(--patent-ease);
+}
+.patent-legend-count {
+  transition: color 240ms var(--patent-ease);
+}
+
+/* Layer-transition plate dip: the viewport drifts up and settles back over
+   2s with the patent ease, masking the renderer's hard show/hide cut. The
+   layer state flips underneath; the eye sees a deliberate plate change. */
+@keyframes patent-plate-dip {
+  0% { transform: translateY(0); opacity: 1; }
+  50% { transform: translateY(-10px); opacity: 0.82; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+.patent-dip {
+  animation: patent-plate-dip 2000ms var(--patent-ease);
+}
+
+/* Gentle rest bob for plate ornaments (±4px, slow loop, seamless). */
+@keyframes patent-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+.patent-bob {
+  animation: patent-bob 6s var(--patent-ease) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .patent-dip,
+  .patent-bob {
+    animation: none;
+  }
+  .patent-legend-row,
+  .patent-legend-row:hover,
+  .patent-legend-row:focus-visible {
+    transform: none;
+    transition: none;
+  }
+}
