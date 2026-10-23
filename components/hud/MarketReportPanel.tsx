@@ -18,6 +18,7 @@ import { getRenderer } from "@/lib/globe/registry";
 import { flyToSelection } from "@/lib/globe/camera";
 import { formatLatLon } from "@/lib/globe/geo";
 import { useAreaContext, usePulse } from "./EconomyAsides";
+import { ForecastLine, SimilarPlaces } from "./MlPanels";
 
 function useReport(open: boolean): { report: MarketReport | null; refresh: () => void } {
   const view = useGlobe((s) => s.view);
@@ -215,6 +216,8 @@ export default function MarketReportPanel() {
               </div>
             )}
           </Section>
+          <ForecastLine fips={report.area && report.area.level === "county" ? report.area.geoid : null} />
+          <SimilarPlaces fips={report.area && report.area.level === "county" ? report.area.geoid : null} />
           <Section s={report.rent} />
           <section className="border-t border-border/60 px-3 py-2">
             <div className="hud-label">

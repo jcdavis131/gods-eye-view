@@ -11,6 +11,12 @@ export interface ChartSeries {
   color: string;
   unit: string;
   points: Point[];
+  /** Dashed line (used for forecasts: visually distinct from observed data). */
+  dash?: boolean;
+  /** Caption rendered under the chart; forecast series carry the model version, vintage and model-card link here. */
+  caption?: string;
+  /** Optional link rendered after the caption (e.g. the model card). */
+  captionLink?: { label: string; href: string };
 }
 
 export interface Extent {

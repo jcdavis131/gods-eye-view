@@ -15,17 +15,17 @@
 import type { Metadata } from "next";
 
 /** Canonical origin. Set NEXT_PUBLIC_SITE_URL in any deployment that is not production. */
-export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://eye.jcamd.com";
+export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://arxiviq.com";
 
 export const SITE_NAME = "Embedding Atlas";
 
 /**
- * The promise: what eye is for, in one sentence. It is the meta, Open Graph,
+ * The promise: what arxiviq is for, in one sentence. It is the meta, Open Graph,
  * Twitter and manifest description, the title card's line and the home page's
  * search label, so a stranger and a crawler read the same thing.
  */
 export const PROMISE =
-  "Ask eye about a US place and get a cited, dated public record: where it comes from, when it was read, and what it leaves out.";
+  "Ask arxiviq about a US place and get a cited, dated public record: where it comes from, when it was read, and what it leaves out.";
 
 export const BASE_DESCRIPTION = PROMISE;
 
