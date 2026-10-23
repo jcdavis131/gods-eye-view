@@ -63,6 +63,8 @@ const EXPECTED_TOOL_NAMES = [
   "live_events",
   "catalog_search",
   "place_export",
+  "momentum_forecast",
+  "similar_places",
   "openapi",
 ];
 

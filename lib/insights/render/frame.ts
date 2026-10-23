@@ -49,7 +49,7 @@ import { GRAIN, PALETTES, type Palette, type Theme } from "./tokens";
 /** The brand mark, left of the footer. */
 export const BRAND = "EMBEDDING ATLAS";
 /** The site the permalink lives on. */
-export const SITE = "eye.jcamd.com";
+export const SITE = "arxiviq.com";
 
 /** The chart's permanent page, as printed (no scheme). */
 export function permalink(spec: Pick<ChartSpec, "slug">): string {

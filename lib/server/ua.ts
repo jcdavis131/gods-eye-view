@@ -8,4 +8,4 @@
 // the live site, returned 200 from download.bls.gov and www.bls.gov when
 // probed on 2026-09-30. It carries no personal email: only SEC hosts ask for
 // one, and the EDGAR client builds its own header for them.
-export const USER_AGENT = "embedding-atlas/0.1 (+https://eye.jcamd.com; open-source globe)";
+export const USER_AGENT = "embedding-atlas/0.1 (+https://arxiviq.com; open-source globe)";
