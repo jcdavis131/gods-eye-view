@@ -38,7 +38,7 @@
     "cn": "^0.2.6",
     "geotiff": "^3.0.5",
     "lucide-react": "^1.44.0",
-    "next": "16.3.4",
+    "next": "16.4.1",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "satellite.js": "^7.1.0",
@@ -55,7 +55,7 @@
     "@types/react-dom": "^19",
     "@vitest/coverage-v8": "^3.2.7",
     "eslint": "^9",
-    "eslint-config-next": "16.3.4",
+    "eslint-config-next": "16.4.1",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^3.2.7"
